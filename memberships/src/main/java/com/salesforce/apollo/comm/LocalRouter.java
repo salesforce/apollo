@@ -29,9 +29,9 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.Context;
+import io.grpc.Contexts;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
-import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
-import io.grpc.ForwardingServerCall;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -59,12 +59,12 @@ public class LocalRouter extends Router {
                 @Override
                 public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
                                                                            CallOptions callOptions, Channel next) {
-                    return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                    ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
+                    return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                         @Override
                         public void start(Listener<RespT> responseListener, Metadata headers) {
-                            headers.put(MEMBER_ID_KEY, qb64(from.getId()));
-                            super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
-                            }, headers);
+                            headers.put(AUTHORIZATION_METADATA_KEY, qb64(from.getId()));
+                            super.start(responseListener, headers);
                         }
                     };
                 }
@@ -79,7 +79,7 @@ public class LocalRouter extends Router {
     private static final class ThreadIdentity implements ClientIdentity {
         @Override
         public X509Certificate getCert() {
-            Member member = CALLER.get();
+            Member member = CLIENT_ID_CONTEXT_KEY.get();
             if (member == null) {
                 return null;
             }
@@ -94,18 +94,18 @@ public class LocalRouter extends Router {
 
         @Override
         public Digest getFrom() {
-            Member member = CALLER.get();
+            Member member = CLIENT_ID_CONTEXT_KEY.get();
             return member == null ? null : member.getId();
         }
 
     }
 
-    public static ThreadLocal<Member>        CALLER         = new ThreadLocal<>();
-    public static final ThreadIdentity       LOCAL_IDENTITY = new ThreadIdentity();
-    public static final Metadata.Key<String> MEMBER_ID_KEY  = Metadata.Key.of("from.id",
-                                                                              Metadata.ASCII_STRING_MARSHALLER);
-    private static final Logger              log            = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<Digest, Member> serverMembers  = new ConcurrentHashMap<>();
+    public static final Metadata.Key<String> AUTHORIZATION_METADATA_KEY = Metadata.Key.of("Authorization",
+                                                                                          Metadata.ASCII_STRING_MARSHALLER);
+    public static final Context.Key<Member>  CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
+    public static final ThreadIdentity       LOCAL_IDENTITY             = new ThreadIdentity();
+    private static final Logger              log                        = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
@@ -128,8 +128,9 @@ public class LocalRouter extends Router {
                                            public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
                                                                                                         final Metadata requestHeaders,
                                                                                                         ServerCallHandler<ReqT, RespT> next) {
-                                               String id = requestHeaders.get(MEMBER_ID_KEY);
+                                               String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
                                                if (id == null) {
+                                                   log.error("No member id in call headers: {}", requestHeaders.keys());
                                                    throw new IllegalStateException("No member ID in call");
                                                }
                                                Member member = serverMembers.get(digest(id));
@@ -142,10 +143,8 @@ public class LocalRouter extends Router {
                                                    return new ServerCall.Listener<ReqT>() {
                                                    };
                                                }
-                                               CALLER.set(member);
-                                               return next.startCall(new ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(
-                                                       call) {
-                                               }, requestHeaders);
+                                               Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
+                                               return Contexts.interceptCall(ctx, call, requestHeaders, next);
                                            }
 
                                        })
@@ -156,6 +155,12 @@ public class LocalRouter extends Router {
     @Override
     public void close() {
         server.shutdownNow();
+        try {
+            server.awaitTermination();
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
+                    e);
+        }
         super.close();
         serverMembers.remove(member.getId());
     }

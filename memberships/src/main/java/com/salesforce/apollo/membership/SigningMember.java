@@ -11,6 +11,7 @@ import static com.salesforce.apollo.membership.Member.getMemberIdentifier;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
+import java.util.List;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
@@ -34,14 +35,18 @@ public interface SigningMember extends Member, ServerContextSupplier, ClientCont
         return sign(BbBackedInputStream.aggregate(message));
     }
 
-    default JohnHancock sign(ByteString... message) {
-        return sign(BbBackedInputStream.aggregate(message));
-    }
-
     default JohnHancock sign(ByteBuffer... message) {
         return sign(BbBackedInputStream.aggregate(message));
     }
 
+    default JohnHancock sign(ByteString... message) {
+        return sign(BbBackedInputStream.aggregate(message));
+    }
+
     JohnHancock sign(InputStream message);
+
+    default JohnHancock sign(List<ByteBuffer> buffers) {
+        return sign(BbBackedInputStream.aggregate(buffers));
+    }
 
 }

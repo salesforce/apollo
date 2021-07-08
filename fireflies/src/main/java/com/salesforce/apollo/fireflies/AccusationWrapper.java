@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.nio.ByteBuffer;
@@ -40,11 +39,11 @@ public class AccusationWrapper {
     }
 
     public Digest getAccused() {
-        return digest(accusation.getAccused());
+        return new Digest(accusation.getAccused());
     }
 
     public Digest getAccuser() {
-        return digest(accusation.getAccuser());
+        return new Digest(accusation.getAccuser());
     }
 
     public long getEpoch() {

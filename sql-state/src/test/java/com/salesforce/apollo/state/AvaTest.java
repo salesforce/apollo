@@ -32,6 +32,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -81,7 +82,8 @@ public class AvaTest {
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final Duration                         gossipDuration  = Duration.ofMillis(10);
 
-    private final static int testCardinality = 25;
+    private final static int      testCardinality = 25;
+    private static final Duration timeout         = Duration.ofSeconds(20);
 
     @BeforeAll
     public static void beforeClass() {
@@ -200,7 +202,7 @@ public class AvaTest {
                                             "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                             "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                             "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                      (h, t) -> txnProcessed.set(true));
+                                      (h, t) -> txnProcessed.set(true), timeout);
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
 
@@ -237,12 +239,17 @@ public class AvaTest {
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<Digest> key = new AtomicReference<>();
 
-            key.set(mutator.execute(update, (h, t) -> {
+            try {
+                key.set(mutator.execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+                submitted.add(key.get());
+            } catch (TimeoutException e1) {
                 outstanding.release();
-                submitted.remove(key.get());
                 submittedBunch.countDown();
-            }));
-            submitted.add(key.get());
+            }
         }));
 
         System.out.println("Awaiting " + bunchCount + " batches");
@@ -306,7 +313,7 @@ public class AvaTest {
                                                      Messenger.Parameters msgParameters) {
         Map<Member, AvaAdapter> adapters = new HashMap<>();
         members.stream().map(m -> {
-            ForkJoinPool fj = ForkJoinPool.commonPool();
+            ForkJoinPool fj = Router.createFjPool();
             AvaAdapter adapter = new AvaAdapter(processed);
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             System.out.println("DB URL: " + url);
@@ -317,6 +324,7 @@ public class AvaTest {
                                                     .setConsensus(adapter.getConsensus())
                                                     .setMember(m)
                                                     .setContext(view)
+                                                    .setDispatcher(fj)
                                                     .setMsgParameters(msgParameters)
                                                     .setMaxBatchByteSize(1024 * 1024 * 32)
                                                     .setMaxBatchSize(1000)

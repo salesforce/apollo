@@ -96,11 +96,7 @@ public class TickScheduler {
          * into the heap array. This eliminates the need to find a task upon
          * cancellation, greatly speeding up removal (down from O(n) to O(log n)), and
          * reducing garbage retention that would otherwise occur by waiting for the
-         * element to rise to top before clearing. But because the queue may also hold
-         * TimerScheduledFutures that are not Timers, we are not guaranteed to have such
-         * indices available, in which case we fall back to linear search. (We expect
-         * that most tasks will not be decorated, and that the faster cases will be much
-         * more common.)
+         * element to rise to top before clearing.
          *
          * All heap operations must record index changes -- mainly within siftUp and
          * siftDown. Upon removal, a task's heapIndex is set to -1. Note that Timers can

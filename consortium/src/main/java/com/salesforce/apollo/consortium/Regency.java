@@ -97,7 +97,7 @@ public class Regency {
     public void deliverStopData(StopData stopData, Member from, View view, Consortium consortium) {
         int elected = stopData.getCurrentRegent();
         Map<Member, StopData> regencyData = data.computeIfAbsent(elected,
-                                                                 k -> new ConcurrentHashMap<Member, StopData>());
+                                                                 k -> new ConcurrentHashMap<>());
         int majority = view.getContext().majority();
 
         Member regent = view.getContext().getRegent(elected);

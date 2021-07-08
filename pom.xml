@@ -9,21 +9,13 @@
 	<name>Apollo: Umbrella App</name>
 
 	<modules>
-		<!-- 
-		<module>apollo</module>
-		<module>apollo-web</module>
-		<module>func-testing</module>
-        <module>model</module>
-        <module>ghost</module>
-        <module>simple-ca</module>
-        <module>bootstrap-service</module>
-        <module>bootstrap-client</module>
-		-->
-		 
+		<!-- <module>apollo</module> <module>apollo-web</module> <module>func-testing</module> 
+			<module>model</module> <module>simple-ca</module> <module>bootstrap-service</module> 
+			<module>bootstrap-client</module> <module>slush</module> -->
+
 		<module>avalanche</module>
 		<module>fireflies</module>
 		<module>protocols</module>
-		<module>slush</module>
 		<module>sql-state</module>
 		<module>memberships</module>
 		<module>consortium</module>
@@ -31,6 +23,8 @@
 		<module>tron</module>
 		<module>stereotomy</module>
 		<module>utils</module>
+		<module>stereotomy-services</module>
+		<module>ghost</module>
 	</modules>
 
 	<properties>
@@ -50,8 +44,8 @@
 		<graalvm.version>20.1.0</graalvm.version>
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
-		<maven.compiler.source>15</maven.compiler.source>
-		<maven.compiler.target>15</maven.compiler.target>
+		<maven.compiler.source>16</maven.compiler.source>
+		<maven.compiler.target>16</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
 	</properties>
@@ -185,6 +179,11 @@
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>stereotomy</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>stereotomy-services</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -326,8 +325,8 @@
 			</dependency>
 			<dependency>
 				<groupId>org.mockito</groupId>
-				<artifactId>mockito-all</artifactId>
-				<version>2.0.2-beta</version>
+				<artifactId>mockito-core</artifactId>
+				<version>3.11.2</version>
 			</dependency>
 			<dependency>
 				<groupId>org.junit.jupiter</groupId>
@@ -405,7 +404,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<release>15</release>
+					<release>16</release>
 				</configuration>
 			</plugin>
 			<plugin>

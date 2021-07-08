@@ -30,6 +30,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -67,15 +68,13 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class MembershipTests {
+    private static final int                              CARDINALITY     = 10;
     private static Map<Digest, CertificateWithPrivateKey> certs;
-
-    private static final Message GENESIS_DATA = ByteMessage.newBuilder()
-                                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                           .build();
-
-    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-
-    private static final int CARDINALITY = 10;
+    private static final Message                          GENESIS_DATA    = ByteMessage.newBuilder()
+                                                                                       .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                                       .build();
+    private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final Duration                         gossipDuration  = Duration.ofMillis(5);
 
     @BeforeAll
     public static void beforeClass() {
@@ -86,10 +85,33 @@ public class MembershipTests {
                                                    cert -> cert));
     }
 
+    public static Digest submit(Consortium client, Semaphore outstanding, Set<Digest> submitted,
+                                final CountDownLatch submittedBunch, Duration timeout) throws InterruptedException {
+        outstanding.tryAcquire(10_000, TimeUnit.SECONDS);
+        AtomicReference<Digest> pending = new AtomicReference<>();
+        pending.set(client.submit((b, t) -> {
+            if (t != null) {
+                outstanding.release();
+                submittedBunch.countDown();
+                fail("Error in submitting txn: ", t);
+            }
+        }, (h, t) -> {
+            submitted.remove(pending.get());
+            outstanding.release();
+            submittedBunch.countDown();
+            if (t != null) {
+                fail("Error in submitting txn: ", t);
+            }
+        }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build()), timeout));
+        submitted.add(pending.get());
+        return pending.get();
+    }
+
     private Map<Digest, Router>           communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium> consortium     = new ConcurrentHashMap<>();
     private Context<Member>               context;
     private List<SigningMember>           members;
+    private ForkJoinPool                  dispatcher;
 
     @AfterEach
     public void after() {
@@ -99,6 +121,8 @@ public class MembershipTests {
         communications.clear();
         members.clear();
         context = null;
+        dispatcher.shutdown();
+        dispatcher = null;
     }
 
     @BeforeEach
@@ -106,7 +130,7 @@ public class MembershipTests {
 
         context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        dispatcher = Router.createFjPool();
         members = certs.values()
                        .stream()
                        .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
@@ -116,11 +140,9 @@ public class MembershipTests {
                        .collect(Collectors.toList());
         ServerConnectionCache.Builder builder = ServerConnectionCache.newBuilder().setTarget(30);
         members.forEach(node -> {
-            communications.put(node.getId(), new LocalRouter(node, builder, executor));
+            communications.put(node.getId(), new LocalRouter(node, builder, dispatcher));
         });
     }
-
-    private static final Duration gossipDuration = Duration.ofMillis(10);
 
     @Test
     public void testCheckpointBootstrap() throws Exception {
@@ -130,16 +152,36 @@ public class MembershipTests {
                                                                  .setFalsePositiveRate(0.25)
                                                                  .setBufferSize(500)
                                                                  .build();
+
+        List<CertifiedBlock> blocks = new ArrayList<>();
         Executor cPipeline = Executors.newSingleThreadExecutor();
+        AtomicInteger cLabel = new AtomicInteger();
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
+            Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
-                cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                    m.process(c);
-                    processed.get().countDown();
-                }));
+                blocks.add(c);
+                cPipeline.execute(() -> {
+                    CountDownLatch executed = new CountDownLatch(CARDINALITY);
+                    consortium.values().forEach(m -> {
+                        blockPool.execute(() -> {
+                            m.process(c);
+                            executed.countDown();
+                            processed.get().countDown();
+                        });
+                    });
+                    try {
+                        executed.await();
+                    } catch (InterruptedException e) {
+                        fail("Interrupted consensus", e);
+                    }
+                });
             }
             return hash;
         };
@@ -175,27 +217,18 @@ public class MembershipTests {
 
         Consortium client = consortium.values()
                                       .stream()
-                                      .filter(c -> !blueRibbon.contains(c) && !testSubject.equals(c))
+                                      .filter(c -> c.fsm.getCurrentState() == CollaboratorFsm.CLIENT)
                                       .findFirst()
                                       .get();
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         Set<Digest> submitted = new HashSet<>();
         int bunchCount = 500;
         System.out.println("Awaiting " + bunchCount + " transactions");
-        final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+
+        Duration timeout = Duration.ofSeconds(2);
         for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
-            AtomicReference<Digest> pending = new AtomicReference<>();
-            pending.set(client.submit(null, (h, t) -> {
-                submitted.remove(pending.get());
-                if (t != null) {
-                    t.printStackTrace();
-                    fail("Error in submitting txn: ", t);
-                }
-                outstanding.release();
-                submittedBunch.countDown();
-            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            submitted.add(pending.get());
+            submit(client, outstanding, submitted, submittedBunch, timeout);
         }
 
         boolean completed = submittedBunch.await(10, TimeUnit.SECONDS);
@@ -204,26 +237,16 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
+        testSubject.process(blocks.get(blocks.size() - 1));
 
         bunchCount = 100;
-        final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
+        submittedBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
-            AtomicReference<Digest> pending = new AtomicReference<>();
-            pending.set(client.submit(null, (h, t) -> {
-                submitted.remove(pending.get());
-                if (t != null) {
-                    t.printStackTrace();
-                    fail("Error in submitting txn: ", t);
-                }
-                outstanding.release();
-                nextBunch.countDown();
-            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            submitted.add(pending.get());
+            submit(client, outstanding, submitted, submittedBunch, timeout);
         }
 
-        completed = nextBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount() + " : " + submitted);
+        completed = submittedBunch.await(10, TimeUnit.SECONDS);
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
         completed = Utils.waitForCondition(10_000, () -> {
@@ -242,16 +265,35 @@ public class MembershipTests {
                                                                  .setFalsePositiveRate(0.000001)
                                                                  .setBufferSize(1500)
                                                                  .build();
+        List<CertifiedBlock> blocks = new ArrayList<>();
         Executor cPipeline = Executors.newSingleThreadExecutor();
+        AtomicInteger cLabel = new AtomicInteger();
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
+            Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
+            t.setDaemon(true);
+            return t;
+        });
         AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
-                cPipeline.execute(() -> consortium.values().parallelStream().forEach(m -> {
-                    m.process(c);
-                    processed.get().countDown();
-                }));
+                blocks.add(c);
+                cPipeline.execute(() -> {
+                    CountDownLatch executed = new CountDownLatch(consortium.size());
+                    consortium.values().forEach(m -> {
+                        blockPool.execute(() -> {
+                            m.process(c);
+                            executed.countDown();
+                            processed.get().countDown();
+                        });
+                    });
+                    try {
+                        executed.await();
+                    } catch (InterruptedException e) {
+                        fail("Interrupted consensus", e);
+                    }
+                });
             }
             return hash;
         };
@@ -283,66 +325,49 @@ public class MembershipTests {
                       .forEach(r -> r.start());
         consortium.values().stream().filter(c -> !c.equals(testSubject)).forEach(e -> e.start());
 
-        assertTrue(processed.get().await(30, TimeUnit.SECONDS));
+        assertTrue(processed.get().await(20, TimeUnit.SECONDS));
 
         Consortium client = consortium.values()
                                       .stream()
-                                      .filter(c -> !blueRibbon.contains(c) && !testSubject.equals(c))
+                                      .filter(c -> c.fsm.getCurrentState() == CollaboratorFsm.CLIENT)
                                       .findFirst()
                                       .get();
         Semaphore outstanding = new Semaphore(50); // outstanding, unfinalized txns
         int bunchCount = 150;
         System.out.println("Awaiting " + bunchCount + " transactions");
-        ArrayList<Digest> submitted = new ArrayList<>();
-        final CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        Set<Digest> submitted = new HashSet<>();
+        CountDownLatch submittedBunch = new CountDownLatch(bunchCount);
+        final Duration timeout = Duration.ofSeconds(2);
         for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
-            AtomicReference<Digest> pending = new AtomicReference<>();
-            pending.set(client.submit(null, (h, t) -> {
-                submitted.remove(pending.get());
-                if (t != null) {
-                    t.printStackTrace();
-                    fail("Error in submitting txn: ", t);
-                }
-                outstanding.release();
-                submittedBunch.countDown();
-            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            submitted.add(pending.get());
+            submit(client, outstanding, submitted, submittedBunch, timeout);
         }
 
         boolean completed = submittedBunch.await(10, TimeUnit.SECONDS);
         assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
-        testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
+        testSubject.start();
 
+        assertTrue(Utils.waitForCondition(2_000,
+                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
+
+        testSubject.process(blocks.get(blocks.size() - 1));
         bunchCount = 100;
-        final CountDownLatch nextBunch = new CountDownLatch(bunchCount);
         for (int i = 0; i < bunchCount; i++) {
-            outstanding.acquire();
-            AtomicReference<Digest> pending = new AtomicReference<>();
-            pending.set(client.submit(null, (h, t) -> {
-                submitted.remove(pending.get());
-                if (t != null) {
-                    t.printStackTrace();
-                    fail("Error in submitting txn: ", t);
-                }
-                outstanding.release();
-                nextBunch.countDown();
-            }, Any.pack(ByteTransaction.newBuilder().setContent(ByteString.copyFromUtf8("Hello world")).build())));
-            submitted.add(pending.get());
+            submit(client, outstanding, submitted, submittedBunch, timeout);
         }
 
-        completed = nextBunch.await(10, TimeUnit.SECONDS);
-        assertTrue(completed, "Did not process transaction bunch: " + nextBunch.getCount() + " : " + submitted);
+        completed = submittedBunch.await(10, TimeUnit.SECONDS);
+        assertTrue(completed, "Did not process transaction bunch: " + submittedBunch.getCount() + " : " + submitted);
         System.out.println("Completed additional " + bunchCount + " transactions");
 
-        completed = Utils.waitForCondition(10_000, () -> {
+        completed = Utils.waitForCondition(20_000, () -> {
             return testSubject.fsm.getCurrentState() == CollaboratorFsm.CLIENT;
         });
 
-        assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId());
+        assertTrue(completed, "Test subject did not successfully bootstrap: " + testSubject.getMember().getId()
+                + " pending blocks: " + testSubject.deferedBlocks());
     }
 
     private void gatherConsortium(Context<Member> view,
@@ -352,13 +377,14 @@ public class MembershipTests {
         members.stream()
                .map(m -> new Consortium(Parameters.newBuilder()
                                                   .setConsensus(consensus)
+                                                  .setDispatcher(Router.createFjPool())
                                                   .setMember(m)
                                                   .setContext(view)
                                                   .setMsgParameters(msgParameters)
                                                   .setMaxBatchByteSize(1024 * 1024)
                                                   .setMaxBatchSize(1000)
                                                   .setCommunications(communications.get(m.getId()))
-                                                  .setMaxBatchDelay(Duration.ofMillis(1000))
+                                                  .setMaxBatchDelay(Duration.ofMillis(100))
                                                   .setGossipDuration(gossipDuration)
                                                   .setViewTimeout(Duration.ofMillis(1500))
                                                   .setSynchronizeTimeout(Duration.ofMillis(1500))

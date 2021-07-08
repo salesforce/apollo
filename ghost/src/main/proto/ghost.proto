@@ -6,42 +6,72 @@ option java_outer_classname = "GhostProto";
 option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "util.proto";
 
 package ghost; 
 
-service TestIt {
-    rpc ping ( google.protobuf.Any ) returns (google.protobuf.Any) {}
-}
-
 service Ghost {
 
-    rpc get ( Get ) returns (google.protobuf.Any) {}
-    rpc put ( Entry ) returns (google.protobuf.Empty) {}
+    rpc get (Get) returns (Content) {}
+    rpc put (Entry) returns (google.protobuf.Empty) {}
+    rpc purge (Get) returns (google.protobuf.Empty) {}
+    
+    rpc lookup (Lookup) returns (Binding) {}
+    rpc bind (Bind) returns (google.protobuf.Empty) {}
+    rpc remove (Lookup) returns (google.protobuf.Empty) {}
 
     rpc intervals (Intervals) returns (Entries) {} 
 }
 
 message Entry {
-    bytes context = 1;
+    utils.Digeste context = 1;
+    Content content = 2;
+}
+
+message Content {
+    utils.StampedClock clock = 1;
     google.protobuf.Any value = 2;
+    utils.Digeste originator = 3;
+    utils.Sig signature = 4;
 }
 
 message Entries {
-    repeated google.protobuf.Any records = 1;
-}
-
-message Intervals {
-    bytes context = 1;
-    repeated Interval intervals = 2;
-    repeated bytes have = 3;
+    repeated Content content = 1;
+    repeated Binding binding =  2;
 }
 
 message Get {
-    bytes context = 1;
-    bytes id = 2;
-} 
+    utils.Digeste context = 1;
+    utils.Digeste cid = 2;
+}
+
+message Lookup {
+    utils.Digeste context = 1;
+    utils.Digeste key = 2;
+}
+
+message Bind {
+    utils.Digeste context = 1;
+    Binding binding = 2;
+}
+
+message Binding {
+    string key = 1;
+    google.protobuf.Any value = 2;
+    utils.StampedClock clock = 3;
+    utils.Digeste originator = 4;
+    utils.Sig signature = 5;
+}
+
+message Intervals {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated Interval intervals = 3;
+}
 
 message Interval {
-        bytes start = 1;
-        bytes end = 2;
+        utils.Digeste start = 1;
+        utils.Digeste end = 2;
+        utils.Biff contentsBff = 3;
+        utils.Biff bindingsBff = 4;
 }

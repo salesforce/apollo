@@ -38,6 +38,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -86,6 +87,7 @@ public class ConsortiumTest {
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final Duration                         gossipDuration  = Duration.ofMillis(10);
     private final static int                              testCardinality = 5;
+    private static final Duration                         timeout         = Duration.ofSeconds(20);
 
     @BeforeAll
     public static void beforeClass() {
@@ -162,7 +164,7 @@ public class ConsortiumTest {
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(testCardinality, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
@@ -238,7 +240,7 @@ public class ConsortiumTest {
                                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                           (h, t) -> txnProcessed.set(true));
+                                           (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -249,7 +251,7 @@ public class ConsortiumTest {
         System.out.println();
 
         long then = System.currentTimeMillis();
-        Semaphore outstanding = new Semaphore(2000); // outstanding, unfinalized txns
+        Semaphore outstanding = new Semaphore(4_000); // outstanding, unfinalized txns
         int bunchCount = 10_000;
         System.out.println("Submitting batches: " + bunchCount);
         Set<Digest> submitted = new HashSet<>();
@@ -279,11 +281,16 @@ public class ConsortiumTest {
                                      .stream()
                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                      .get(0);
-            key.set(new Mutator(c).execute(update, (h, t) -> {
+            try {
+                key.set(new Mutator(c).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+            } catch (TimeoutException e1) {
                 outstanding.release();
-                submitted.remove(key.get());
                 submittedBunch.countDown();
-            }));
+            }
             submitted.add(key.get());
         }));
 
@@ -319,7 +326,7 @@ public class ConsortiumTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         Random entropy = new Random(0x1638);
         members.stream().map(m -> {
-            ForkJoinPool fj = ForkJoinPool.commonPool();
+            ForkJoinPool fj = Router.createFjPool();
             String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
             frist.set(false);
             System.out.println("DB URL: " + url);
@@ -330,6 +337,7 @@ public class ConsortiumTest {
                                                     .setConsensus(consensus)
                                                     .setMember(m)
                                                     .setContext(view)
+                                                    .setDispatcher(fj)
                                                     .setMsgParameters(msgParameters)
                                                     .setMaxBatchByteSize(1024 * 1024 * 32)
                                                     .setMaxBatchSize(4000)

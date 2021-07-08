@@ -6,55 +6,74 @@
  */
 package com.salesforce.apollo.stereotomy.identifier;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
+import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
-import com.salesforce.apollo.stereotomy.specification.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**
  * @author hal.hildebrand
  *
  */
 public interface Identifier {
-    final ByteString EMPTY = ByteString.copyFrom(new byte[] { 0 });
-    Identifier       NONE  = new Identifier() {
+    final ByteString          EMPTY      = ByteString.copyFrom(new byte[] { 0 });
+    Identifier                NONE       = new Identifier() {
 
-                               @Override
-                               public byte identifierCode() {
-                                   return 0;
-                               }
+                                             @Override
+                                             public byte identifierCode() {
+                                                 return 0;
+                                             }
 
-                               @Override
-                               public boolean isNone() {
-                                   return true;
-                               }
+                                             @Override
+                                             public boolean isNone() {
+                                                 return true;
+                                             }
 
-                               @Override
-                               public boolean isTransferable() {
-                                   return false;
-                               }
+                                             @Override
+                                             public boolean isTransferable() {
+                                                 return false;
+                                             }
 
-                               @Override
-                               public ByteString toByteString() {
-                                   return EMPTY;
-                               }
+                                             @Override
+                                             public Ident toIdent() {
+                                                 return NONE_IDENT;
+                                             }
 
-                               public String toString() {
-                                   return "Identifier<NONE>";
-                               }
-                           };
+                                             @Override
+                                             public String toString() {
+                                                 return "Identifier<NONE>";
+                                             }
+                                         };
+    public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();
 
-    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
+    public static Identifier from(Ident identifier) {
+        if (identifier.hasBasic()) {
+            return new BasicIdentifier(identifier.getBasic());
+        }
+        if (identifier.hasSelfAddressing()) {
+            return new SelfAddressingIdentifier(digest(identifier.getSelfAddressing()));
+        }
+        if (identifier.hasSelfSigning()) {
+            return new SelfSigningIdentifier(signature(identifier.getSelfSigning()));
+        }
+        return Identifier.NONE;
+    }
+
+    public static Identifier identifier(IdentifierSpecification spec, ByteBuffer inceptionStatement) {
         var derivation = spec.getDerivation();
         if (derivation.isAssignableFrom(BasicIdentifier.class)) {
             return basic(spec.getKeys().get(0));
@@ -109,12 +128,12 @@ public interface Identifier {
         return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
     }
 
-    static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {
+    static SelfAddressingIdentifier selfAddressing(ByteBuffer inceptionStatement, DigestAlgorithm digestAlgorithm) {
         var digest = digestAlgorithm.digest(inceptionStatement);
         return new SelfAddressingIdentifier(digest);
     }
 
-    static SelfSigningIdentifier selfSigning(byte[] inceptionStatement, Signer signer) {
+    static SelfSigningIdentifier selfSigning(ByteBuffer inceptionStatement, Signer signer) {
         var signature = signer.sign(inceptionStatement);
         return new SelfSigningIdentifier(signature);
     }
@@ -124,7 +143,7 @@ public interface Identifier {
                          .putAllSignatures(signatures.entrySet()
                                                      .stream()
                                                      .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> e.getValue().toByteString())))
+                                                                               e -> e.getValue().toSig())))
                          .build();
     }
 
@@ -142,5 +161,5 @@ public interface Identifier {
 
     boolean isTransferable();
 
-    ByteString toByteString();
+    Ident toIdent();
 }

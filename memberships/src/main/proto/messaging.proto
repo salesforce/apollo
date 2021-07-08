@@ -6,41 +6,72 @@ option java_outer_classname = "MessagingProto";
 option objc_class_prefix = "Mp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
+import "util.proto";
 
-package apollo;
+package messaging;
 
 service Messaging {
     rpc gossip (MessageBff) returns (Messages) {}
     rpc update (Push) returns (google.protobuf.Empty) {}
 }
 
+service CausalMessaging {
+    rpc gossip (MessageBff) returns (CausalMessages) {}
+    rpc update (CausalPush) returns (google.protobuf.Empty) {}
+}
+
 message MessageBff {
-    bytes context = 1; 
+    utils.Digeste context = 1; 
     int32 ring = 3;
-    bytes digests = 4;
+    utils.Biff digests = 4;
 }
 
 message Push {
-    bytes context = 1;
+    utils.Digeste context = 1;
     int32 ring = 2;
     repeated  Message updates = 3;
 }
 
 message Message {
-    bytes source = 1;
+    utils.Digeste source = 1;
     int32 sequenceNumber = 2;
     int32 age = 3;
     int32 channel = 4;
-    bytes signature = 5;
-    bytes key = 6;
+    utils.Sig signature = 5;
+    utils.Digeste key = 6;
     google.protobuf.Any content = 7;
+}
+
+message Messages {
+    utils.Biff  bff = 1;
+    repeated  Message updates = 2;
+}
+
+message CausalPush {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated  CausalEnvelope updates = 3;
+}
+
+message CausalMessage {
+    utils.Digeste source = 1;
+    utils.IntStampedClock clock = 2;
+    google.protobuf.Any content = 3;
+    repeated utils.Digeste parents = 4;
+}
+
+message CausalEnvelope {
+    CausalMessage content = 1;
+    utils.Sig signature = 2;
+    int32 age = 3;
+    bool streamReset = 4;
+}
+
+message CausalMessages {
+    utils.Biff  bff = 1;
+    repeated  CausalEnvelope updates = 2;
 }
 
 message ByteMessage {
     bytes contents = 1;
-}
-
-message Messages {
-    bytes bff = 1;
-    repeated  Message updates = 2;
 }

@@ -6,20 +6,19 @@
  */
 package com.salesforce.apollo.ghost.communications;
 
-import java.util.List;
-
-import com.google.protobuf.Any;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
+import com.salesfoce.apollo.ghost.proto.Bind;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
-import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostBlockingStub;
-import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesfoce.apollo.ghost.proto.Intervals;
+import com.salesfoce.apollo.ghost.proto.Lookup;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -28,45 +27,67 @@ import com.salesforce.apollo.membership.Member;
  */
 public class GhostClientCommunications implements SpaceGhost {
 
-    public static CreateClientCommunications<GhostClientCommunications> getCreate() {
-        return (t, f, c) -> new GhostClientCommunications(c, (Participant) t);
+    public static CreateClientCommunications<SpaceGhost> getCreate() {
+        return (t, f, c) -> new GhostClientCommunications(c, t);
     }
 
-    private final ManagedServerConnection channel;
-    private final GhostBlockingStub       client;
-    private final Member                  member;
+    private final ManagedServerConnection   channel;
+    private final GhostGrpc.GhostFutureStub client;
+    private final Member                    member;
 
     public GhostClientCommunications(ManagedServerConnection channel, Member member) {
-//        assert !(member instanceof Node) : "whoops : " + member + " is not to defined for instance of Node";
         this.member = member;
         this.channel = channel;
-        this.client = GhostGrpc.newBlockingStub(channel.channel);
+        this.client = GhostGrpc.newFutureStub(channel.channel);
     }
 
     @Override
-    public Any get(Digest entry) {
-        return client.get(Get.newBuilder().setId(entry.toByteString()).build());
-    }
-
-    public Participant getMember() {
-        return (Participant) member;
+    public ListenableFuture<Empty> bind(Bind binding) {
+        return client.bind(binding);
     }
 
     @Override
-    public List<Any> intervals(List<Interval> intervals, List<Digest> have) {
-        Intervals.Builder builder = Intervals.newBuilder();
-        intervals.forEach(e -> builder.addIntervals(e));
-        Entries result = client.intervals(builder.build());
-        return result.getRecordsList();
+    public void close() {
+        channel.release();
     }
 
     @Override
-    public void put(Any any) {
-        client.put(Entry.newBuilder().setValue(any).build());
+    public ListenableFuture<Content> get(Get cid) {
+        return client.get(cid);
+    }
+
+    @Override
+    public Member getMember() {
+        return member;
+    }
+
+    @Override
+    public ListenableFuture<Entries> intervals(Intervals intervals) {
+        return client.intervals(intervals);
+    }
+
+    @Override
+    public ListenableFuture<Binding> lookup(Lookup query) {
+        return client.lookup(query);
+    }
+
+    @Override
+    public ListenableFuture<Empty> purge(Get key) {
+        return client.purge(key);
+    }
+
+    @Override
+    public ListenableFuture<Empty> put(Entry value) {
+        return client.put(value);
     }
 
     public void release() {
-        channel.release();
+        close();
+    }
+
+    @Override
+    public ListenableFuture<Empty> remove(Lookup query) {
+        return client.remove(query);
     }
 
     @Override

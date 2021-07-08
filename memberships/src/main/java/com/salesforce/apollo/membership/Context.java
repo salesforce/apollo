@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -91,8 +90,7 @@ public class Context<T extends Member> {
 
     public static final String SHA_256 = "sha-256";
 
-    private static final String CONTEXT_HASH_TEMPLATE = "%s-%s";
-    private static final String RING_HASH_TEMPLATE    = "%s-%s-%s";
+    private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     /**
      * @return the minimum t such that the probability of more than t out of 2t+1
@@ -112,7 +110,7 @@ public class Context<T extends Member> {
         if (epsilon > 1.0 || epsilon <= 0.0) {
             throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
         }
-        double e = epsilon / (double) cardinality;
+        double e = epsilon / cardinality;
         for (int t = 1; t <= cardinality; t++) {
             double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
             if (e >= pf) {
@@ -124,7 +122,6 @@ public class Context<T extends Member> {
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
-    private BiFunction<T, Integer, Digest>     hasher              = (m, ring) -> hashFor(m, ring);
     private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
     private final Digest                       id;
     private Logger                             log                 = LoggerFactory.getLogger(Context.class);
@@ -172,7 +169,7 @@ public class Context<T extends Member> {
         this.id = id;
         this.rings = new Ring[r];
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, hasher);
+            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
         }
     }
 
@@ -231,7 +228,7 @@ public class Context<T extends Member> {
      * with FF parameters, with the rings forming random graph connections segments.
      */
     public int diameter() {
-        return (cardinality());
+        return diameter(cardinality());
     }
 
     /**
@@ -249,9 +246,7 @@ public class Context<T extends Member> {
     public boolean equals(Object obj) {
         if (this == obj)
             return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
+        if ((obj == null) || (getClass() != obj.getClass()))
             return false;
         Context<?> other = (Context<?>) obj;
         if (id == null) {
@@ -308,6 +303,10 @@ public class Context<T extends Member> {
         return offline.containsKey(m.getId());
     }
 
+    public int majority() {
+        return getRingCount() - toleranceLevel();
+    }
+
     /**
      * Take a member offline
      */
@@ -349,7 +348,29 @@ public class Context<T extends Member> {
     public List<T> predecessors(Digest key, Predicate<T> test) {
         List<T> predecessors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T predecessor = ring.predecessor(contextHash(key, ring.getIndex()), test);
+            T predecessor = ring.predecessor(key, test);
+            if (predecessor != null) {
+                predecessors.add(predecessor);
+            }
+        }
+        return predecessors;
+    }
+
+    /**
+     * @return the predecessor on each ring for the provided key
+     */
+    public List<T> predecessors(T key) {
+        return predecessors(key, t -> true);
+    }
+
+    /**
+     * @return the predecessor on each ring for the provided key that pass the
+     *         provided predicate
+     */
+    public List<T> predecessors(T key, Predicate<T> test) {
+        List<T> predecessors = new ArrayList<>();
+        for (Ring<T> ring : rings) {
+            T predecessor = ring.predecessor(key, test);
             if (predecessor != null) {
                 predecessors.add(predecessor);
             }
@@ -403,7 +424,8 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest excluded) {
+    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
+        Member excluded = getMember(exc);
         return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
@@ -421,7 +443,29 @@ public class Context<T extends Member> {
     public List<T> successors(Digest key, Predicate<T> test) {
         List<T> successors = new ArrayList<>();
         for (Ring<T> ring : rings) {
-            T successor = ring.successor(contextHash(key, ring.getIndex()), test);
+            T successor = ring.successor(key, test);
+            if (successor != null) {
+                successors.add(successor);
+            }
+        }
+        return successors;
+    }
+
+    /**
+     * @return the list of successors to the key on each ring
+     */
+    public List<T> successors(T key) {
+        return successors(key, t -> true);
+    }
+
+    /**
+     * @return the list of successor to the key on each ring that pass the provided
+     *         predicate test
+     */
+    public List<T> successors(T key, Predicate<T> test) {
+        List<T> successors = new ArrayList<>();
+        for (Ring<T> ring : rings) {
+            T successor = ring.successor(key, test);
             if (successor != null) {
                 successors.add(successor);
             }
@@ -434,7 +478,7 @@ public class Context<T extends Member> {
      * members in the context, using the rings of the receiver as a gossip graph
      */
     public int timeToLive() {
-        return (toleranceLevel() * diameter()) + 1;
+        return (rings.length * diameter()) + 1;
     }
 
     /**
@@ -454,19 +498,15 @@ public class Context<T extends Member> {
         Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
             Digest[] s = new Digest[rings.length];
             for (int ring = 0; ring < rings.length; ring++) {
-                s[ring] = m.getId()
-                           .getAlgorithm()
-                           .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(m.getId()), ring).getBytes());
+                Digest key = m.getId();
+                s[ring] = key.getAlgorithm()
+                             .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
             }
             return s;
         });
         if (hSet == null) {
-            throw new IllegalArgumentException("T " + m.getId() + " is not part of this group " + id);
+            throw new IllegalArgumentException(m + " is not part of this group " + id);
         }
         return hSet[index];
-    }
-
-    private Digest contextHash(Digest key, int ring) {
-        return key.getAlgorithm().digest(String.format(CONTEXT_HASH_TEMPLATE, id, ring).getBytes());
     }
 }

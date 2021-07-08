@@ -13,16 +13,15 @@ import org.bouncycastle.asn1.x509.ReasonFlags;
  */
 public class CrlDistPointExtension extends CertExtension {
 
-  CrlDistPointExtension(final DistributionPoint... points) {
-    super(Extension.cRLDistributionPoints, false, new CRLDistPoint(points));
+  public static CrlDistPointExtension create(final DistributionPoint... points) {
+    return new CrlDistPointExtension(points);
   }
 
-  /**
-   * Creates a {@link CrlDistPointExtension} with only a {@code distributionPoint} URI (no {@code reasons}, no
-   * {@code cRLIssuer} specified).
-   */
-  public static CrlDistPointExtension create(final String uri) {
-    return create(NameType.URI, uri);
+  public static CrlDistPointExtension create(final DistributionPointName distributionPoint,
+      final ReasonFlags reasons,
+      final GeneralNames cRLIssuer) {
+    final DistributionPoint p = new DistributionPoint(distributionPoint, reasons, cRLIssuer);
+    return create(p);
   }
 
   /**
@@ -49,15 +48,16 @@ public class CrlDistPointExtension extends CertExtension {
     return create(dp, reasons, crl);
   }
 
-  public static CrlDistPointExtension create(final DistributionPointName distributionPoint,
-      final ReasonFlags reasons,
-      final GeneralNames cRLIssuer) {
-    final DistributionPoint p = new DistributionPoint(distributionPoint, reasons, cRLIssuer);
-    return create(p);
+  /**
+   * Creates a {@link CrlDistPointExtension} with only a {@code distributionPoint} URI (no {@code reasons}, no
+   * {@code cRLIssuer} specified).
+   */
+  public static CrlDistPointExtension create(final String uri) {
+    return create(NameType.URI, uri);
   }
 
-  public static CrlDistPointExtension create(final DistributionPoint... points) {
-    return new CrlDistPointExtension(points);
+  CrlDistPointExtension(final DistributionPoint... points) {
+    super(Extension.cRLDistributionPoints, false, new CRLDistPoint(points));
   }
 
 }

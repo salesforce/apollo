@@ -13,18 +13,18 @@
             </Pattern>
         </encoder>
     </appender>
-    <root level="INFO">
+    <root level="warn">
         <appender-ref ref="STDOUT" />
     </root>
-    <logger name="com.salesforce.apollo.membership.messaging" level="WARN"
+    <logger name="com.salesforce.apollo.membership.messaging.causal.CausalBuffer" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.membership.messaging.MemberOrder" level="WARN"
+    <logger name="com.salesforce.apollo.membership.messaging.MemberOrder" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.comm" level="WARN"
+    <logger name="com.salesforce.apollo.comm" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

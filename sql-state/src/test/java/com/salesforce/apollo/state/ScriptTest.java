@@ -49,7 +49,7 @@ public class ScriptTest {
         Digest hashBytes = DigestAlgorithm.DEFAULT.digest(transaction.toByteString());
         ExecutedTransaction txn = ExecutedTransaction.newBuilder()
                                                      .setTransaction(transaction)
-                                                     .setHash(hashBytes.toByteString())
+                                                     .setHash(hashBytes.toDigeste())
                                                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
         machine.getExecutor().execute(hashBytes, txn, (result, err) -> {

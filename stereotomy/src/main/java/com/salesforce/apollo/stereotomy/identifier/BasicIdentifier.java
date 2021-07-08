@@ -8,24 +8,23 @@ package com.salesforce.apollo.stereotomy.identifier;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Objects;
 
-import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.Ident;
+import com.salesfoce.apollo.utils.proto.PubKey;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class BasicIdentifier implements Identifier {
+    private final PublicKey publicKey;
 
-    private static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 2 });
-    private final PublicKey         publicKey;
-
-    public BasicIdentifier(ByteBuffer buff) {
-        this(publicKey(buff));
+    public BasicIdentifier(PubKey pk) {
+        this(publicKey(pk));
     }
 
     public BasicIdentifier(PublicKey publicKey) {
@@ -64,12 +63,12 @@ public class BasicIdentifier implements Identifier {
     }
 
     @Override
-    public ByteString toByteString() {
-        return IDENTIFIER.concat(bs(publicKey));
+    public String toString() {
+        return "B[" + shortQb64(publicKey) + "]";
     }
 
     @Override
-    public String toString() {
-        return "B[" + publicKey + "]";
+    public Ident toIdent() {
+        return Ident.newBuilder().setBasic(bs(publicKey)).build();
     }
 }

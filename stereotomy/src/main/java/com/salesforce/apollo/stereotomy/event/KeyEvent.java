@@ -19,8 +19,16 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KeyEvent {
 
+    public static final String DELEGATED_INCEPTION_TYPE       = "dip";
+    public static final String DELEGATED_ROTATION_TYPE        = "drt";
+    public static final String INCEPTION_TYPE                 = "icp";
+    public static final String INTERACTION_TYPE               = "ixn";
+    public static final String RECEIPT_FROM_BASIC_TYPE        = "rct";
+    public static final String RECEIPT_FROM_TRANSFERABLE_TYPE = "vrc";
+    public static final String ROTATION_TYPE                  = "rot";
+
     default EventCoordinates getCoordinates() {
-        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPriorEventDigest());
+        return new EventCoordinates(getIlk(), getIdentifier(), getPriorEventDigest(), getSequenceNumber());
     }
 
     Digest getPriorEventDigest();
@@ -40,4 +48,6 @@ public interface KeyEvent {
     Map<Integer, JohnHancock> getAuthentication();
 
     byte[] getBytes();
+
+    String getIlk();
 }

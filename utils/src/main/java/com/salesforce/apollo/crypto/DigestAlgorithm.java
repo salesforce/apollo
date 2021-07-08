@@ -146,10 +146,12 @@ public enum DigestAlgorithm {
             return new Digest(this, EMPTY);
         }
 
+        @Override
         public byte[] hashOf(byte[] bytes, int len) {
             return EMPTY;
         }
 
+        @Override
         public byte[] hashOf(InputStream is) {
             return EMPTY;
         }
@@ -215,22 +217,22 @@ public enum DigestAlgorithm {
 
     public static final DigestAlgorithm DEFAULT = BLAKE3_256;
 
+    public static final long MAX_UNSIGNED_LONG = -1L;
+
     private static final byte[]                   EMPTY          = new byte[0];
-    private static final byte[]                   LAST_32;
-    private static final byte[]                   LAST_64;
     private static final ThreadLocal<DigestCache> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache());
-    private static final byte[]                   ORIGIN_32      = new byte[32];
-    private static final byte[]                   ORIGIN_64      = new byte[64];
+    private static final long[]                   LAST_32        = new long[4];
+    private static final long[]                   LAST_64        = new long[8];
+    private static final long[]                   ORIGIN_32      = new long[4];
+    private static final long[]                   ORIGIN_64      = new long[8];
 
     static {
-        LAST_32 = new byte[32];
-        Arrays.fill(LAST_32, (byte) 255);
-        LAST_64 = new byte[64];
-        Arrays.fill(LAST_32, (byte) 255);
+        Arrays.fill(LAST_32, MAX_UNSIGNED_LONG);
+        Arrays.fill(LAST_64, MAX_UNSIGNED_LONG);
     }
 
-    public static DigestAlgorithm fromDigestCode(byte code) {
-        return switch (code) {
+    public static DigestAlgorithm fromDigestCode(int i) {
+        return switch (i) {
         case 0:
             yield NONE;
         case 1:
@@ -252,7 +254,7 @@ public enum DigestAlgorithm {
         case 9:
             yield SHA3_512;
         default:
-            throw new IllegalArgumentException("Unknown digest code: " + code);
+            throw new IllegalArgumentException("Unknown digest code: " + i);
         };
     }
 
@@ -282,6 +284,10 @@ public enum DigestAlgorithm {
 
     public Digest digest(List<ByteBuffer> buffers) {
         return digest(BbBackedInputStream.aggregate(buffers));
+    }
+
+    public Digest digest(String key) {
+        return digest(key.getBytes());
     }
 
     abstract public byte digestCode();

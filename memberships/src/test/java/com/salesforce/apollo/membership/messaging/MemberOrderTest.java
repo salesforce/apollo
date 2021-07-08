@@ -95,8 +95,8 @@ public class MemberOrderTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters                       parameters = Parameters.newBuilder()
-                                                                                 .setFalsePositiveRate(0.00125)
-                                                                                 .setBufferSize(1000)
+                                                                                 .setFalsePositiveRate(0.0125)
+                                                                                 .setBufferSize(1_500)
                                                                                  .build();
 
     @BeforeAll
@@ -122,13 +122,13 @@ public class MemberOrderTest {
     @Test
     public void smoke() {
         List<SigningMember> members = certs.values()
-                                           .parallelStream()
+                                           .stream()
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(30)
+                                           .limit(10)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size());
@@ -136,7 +136,7 @@ public class MemberOrderTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
@@ -172,11 +172,11 @@ public class MemberOrderTest {
                         countDown.release();
                     }
                 });
-                try {
-                    Thread.sleep(3);
-                } catch (InterruptedException e) {
-                }
             });
+            try {
+                Thread.sleep(100); // 10 msgs per second per node
+            } catch (InterruptedException e) {
+            }
         }
 
         boolean complete = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -199,20 +199,20 @@ public class MemberOrderTest {
     @Test
     public void testGaps() throws Exception {
         List<SigningMember> members = certs.values()
-                                           .parallelStream()
+                                           .stream()
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                    new Signer(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
-                                           .limit(30)
+                                           .limit(10)
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
         members.forEach(m -> context.activate(m));
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        ForkJoinPool executor = ForkJoinPool.commonPool();
+        ForkJoinPool executor = Router.createFjPool();
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
@@ -236,10 +236,6 @@ public class MemberOrderTest {
                                      .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                      .build(),
                           true);
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                }
             });
         }
 
@@ -266,11 +262,11 @@ public class MemberOrderTest {
                                                .setContents(ByteString.copyFromUtf8("Give me food, or give me slack, or kill me"))
                                                .build(),
                                     true);
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                }
             });
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+            }
         }
 
         complete = Utils.waitForCondition(30_000, 1_000, () -> {
@@ -304,7 +300,7 @@ public class MemberOrderTest {
             });
         }
 
-        complete = Utils.waitForCondition(15_000, 1_000, () -> {
+        complete = Utils.waitForCondition(65_000, 1_000, () -> {
             return liveRcvrs.stream()
                             .map(r -> r.validate(liveRcvrs, messageCount * 3))
                             .filter(result -> !result)

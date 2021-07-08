@@ -7,7 +7,6 @@
 package com.salesforce.apollo.consortium;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
@@ -25,12 +24,12 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.consortium.proto.Block;
 import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
 import com.salesfoce.apollo.consortium.proto.Reconfigure;
 import com.salesfoce.apollo.consortium.proto.Validate;
 import com.salesfoce.apollo.consortium.proto.ViewMember;
+import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -41,6 +40,7 @@ import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.Messenger;
+import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -54,8 +54,8 @@ public class ViewContext implements MembershipListener<Member> {
      * Answer the live successors of the hash on the base context view
      */
     public static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new Context<Member>(hash, baseContext.getRingCount());
-        Set<Member> successors = new HashSet<Member>();
+        Context<Member> newView = new Context<>(hash, baseContext.getRingCount());
+        Set<Member> successors = new HashSet<>();
         baseContext.successors(hash, m -> {
             if (successors.size() == baseContext.getRingCount()) {
                 return false;
@@ -131,7 +131,7 @@ public class ViewContext implements MembershipListener<Member> {
 
     public ViewContext(DigestAlgorithm digestAlgorithm, Reconfigure view, Context<Member> baseContext,
             SigningMember member, KeyPair consensusKeyPair) {
-        this(digestAlgorithm, digest(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
+        this(digestAlgorithm, Digest.from(view.getId()), baseContext, member, consensusKeyPair, view.getViewList());
     }
 
     public void activeAll() {
@@ -167,6 +167,7 @@ public class ViewContext implements MembershipListener<Member> {
         JohnHancock signature = new Signer(
                 0, consensusKeyPair.getPrivate())
                                                  .sign(digestAlgorithm.digest(block.getHeader().toByteString())
+                                                                      .toDigeste()
                                                                       .toByteString());
 
         if (log.isTraceEnabled()) {
@@ -182,9 +183,9 @@ public class ViewContext implements MembershipListener<Member> {
             return null;
         }
         Validate validation = Validate.newBuilder()
-                                      .setId(member.getId().toByteString())
-                                      .setHash(hash.toByteString())
-                                      .setSignature(signature.toByteString())
+                                      .setId(member.getId().toDigeste())
+                                      .setHash(hash.toDigeste())
+                                      .setSignature(signature.toSig())
                                       .build();
         return validation;
     }
@@ -221,17 +222,22 @@ public class ViewContext implements MembershipListener<Member> {
         return context.getRingCount();
     }
 
+    public ControllableIdentifier getIdentifier() {
+        // TODO
+        return null;
+    }
+
     public ViewMember getView() {
-        ByteString encoded = bs(consensusKeyPair.getPublic());
-        JohnHancock signed = member.sign(encoded);
+        PubKey encoded = bs(consensusKeyPair.getPublic());
+        JohnHancock signed = member.sign(encoded.toByteString());
         if (signed == null) {
             log.error("Unable to generate and sign consensus key on: {}", member);
             return null;
         }
         return ViewMember.newBuilder()
-                         .setId(member.getId().toByteString())
+                         .setId(member.getId().toDigeste())
                          .setConsensusKey(encoded)
-                         .setSignature(signed.toByteString())
+                         .setSignature(signed.toSig())
                          .build();
     }
 
@@ -285,7 +291,8 @@ public class ViewContext implements MembershipListener<Member> {
         SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.lookup(key);
 
         Digest headerHash = digestAlgorithm.digest(block.getHeader().toByteString());
-        boolean verified = signatureAlgorithm.verify(key, signature(v.getSignature()), headerHash.toByteString());
+        boolean verified = signatureAlgorithm.verify(key, signature(v.getSignature()),
+                                                     headerHash.toDigeste().toByteString());
         if (!verified) {
             log.error("Error validating block signature of {} did not match", memberID);
         }

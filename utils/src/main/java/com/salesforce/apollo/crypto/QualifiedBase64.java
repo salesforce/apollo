@@ -13,14 +13,14 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.EC_SECP256K1;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.utils.proto.Sig;
 
 public class QualifiedBase64 {
 
@@ -89,26 +89,16 @@ public class QualifiedBase64 {
         return bits / 6 + (bits % 6 != 0 ? 1 : 0);
     }
 
-    public static ByteString bs(PublicKey publicKey) {
-        var stdAlgo = SignatureAlgorithm.lookup(publicKey);
-        try {
-            ByteString bs = ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { stdAlgo.signatureCode() },
-                                                                              stdAlgo.encode(publicKey)));
-            return bs;
-        } catch (IOException e) {
-            throw new IllegalArgumentException("cannot encode public key", e);
-        }
+    public static PubKey bs(PublicKey publicKey) {
+        SignatureAlgorithm algo = SignatureAlgorithm.lookup(publicKey);
+        return PubKey.newBuilder()
+                     .setCode(algo.signatureCode())
+                     .setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
+                     .build();
     }
 
-    public static Digest digest(ByteBuffer buff) {
-        if (!buff.hasRemaining()) {
-            return Digest.NONE;
-        }
-        return new Digest(buff);
-    }
-
-    public static Digest digest(ByteString bs) {
-        return digest(bs.asReadOnlyByteBuffer());
+    public static Digest digest(Digeste d) {
+        return new Digest(d);
     }
 
     public static Digest digest(String qb64) {
@@ -162,15 +152,10 @@ public class QualifiedBase64 {
         };
     }
 
-    public static PublicKey publicKey(ByteBuffer buff) {
-        var algo = SignatureAlgorithm.fromSignatureCode(buff.get());
-        var bytes = new byte[buff.remaining()];
-        buff.get(bytes);
+    public static PublicKey publicKey(PubKey pk) {
+        var algo = SignatureAlgorithm.fromSignatureCode(pk.getCode());
+        var bytes = pk.getEncoded().toByteArray();
         return algo.publicKey(bytes);
-    }
-
-    public static PublicKey publicKey(ByteString bs) {
-        return publicKey(bs.asReadOnlyByteBuffer());
     }
 
     public static PublicKey publicKey(String qb64) {
@@ -242,12 +227,8 @@ public class QualifiedBase64 {
         return qb64(publicKey).substring(0, SHORTENED_LENGTH);
     }
 
-    public static JohnHancock signature(ByteBuffer buff) {
-        return new JohnHancock(buff);
-    }
-
-    public static JohnHancock signature(ByteString bs) {
-        return new JohnHancock(bs);
+    public static JohnHancock signature(Sig s) {
+        return new JohnHancock(s);
     }
 
     public static JohnHancock signature(String qb64) {

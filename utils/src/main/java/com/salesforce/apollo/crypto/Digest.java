@@ -10,7 +10,10 @@ import java.nio.ByteBuffer;
 
 import org.bouncycastle.util.encoders.Hex;
 
-import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.Digeste.Builder;
+import com.salesforce.apollo.utils.BUZ;
+import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
  * A computed digest
@@ -40,8 +43,8 @@ public class Digest implements Comparable<Digest> {
         return 0;
     }
 
-    public static Digest from(ByteString bs) {
-        return new Digest(bs);
+    public static Digest from(Digeste d) {
+        return new Digest(d);
     }
 
     public static Digest normalized(DigestAlgorithm digestAlgorithm, byte[] bs) {
@@ -58,6 +61,7 @@ public class Digest implements Comparable<Digest> {
     private final DigestAlgorithm algorithm;
 
     private final long[] hash;
+    private volatile int hashCode = 0;
 
     public Digest(byte code, long[] hash) {
         algorithm = DigestAlgorithm.fromDigestCode(code);
@@ -73,16 +77,12 @@ public class Digest implements Comparable<Digest> {
         }
     }
 
-    public Digest(ByteString encoded) {
-        this(encoded.asReadOnlyByteBuffer());
-    }
-
     public Digest(DigestAlgorithm algorithm, byte[] bytes) {
         assert bytes != null && algorithm != null;
 
         if (bytes.length != algorithm.digestLength()) {
-            throw new IllegalArgumentException(
-                    "Invalid bytes length.  Require: " + algorithm.digestLength() + " found: " + bytes.length);
+            throw new IllegalArgumentException("Invalid bytes length.  Require: " + algorithm.digestLength()
+            + " found: " + bytes.length);
         }
         this.algorithm = algorithm;
         int length = algorithm.longLength();
@@ -101,8 +101,20 @@ public class Digest implements Comparable<Digest> {
         this.hash = hash;
     }
 
+    public Digest(Digeste d) {
+        algorithm = DigestAlgorithm.fromDigestCode(d.getType());
+        hash = new long[d.getHashCount()];
+        int i = 0;
+        for (long l : d.getHashList()) {
+            hash[i++] = l;
+        }
+    }
+
     @Override
     public int compareTo(Digest id) {
+        if (id == this) {
+            return 0;
+        }
         for (int i = 0; i < hash.length; i++) {
             int compare = Long.compareUnsigned(hash[i], id.hash[i]);
             if (compare != 0) {
@@ -156,12 +168,22 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public int hashCode() {
+        final int current = hashCode;
+        if (current != 0) {
+            return current;
+        }
         for (long l : hash) {
             if (l != 0) {
-                return (int) (l & 0xFFFFFFFF);
+                int proposed = (int) (BUZ.buzhash(l) % Hash.MERSENNE_31);
+                if (proposed == 0) {
+                    hashCode = 31;
+                } else {
+                    hashCode = proposed;
+                }
+                return proposed;
             }
         }
-        return 0;
+        return hashCode = 31;
     }
 
     public Digest prefix(byte[]... prefixes) {
@@ -194,15 +216,12 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
-    public ByteString toByteString() {
-        ByteBuffer buffer = ByteBuffer.allocate(1 + hash.length * 8);
-        buffer.put(algorithm.digestCode());
-
+    public Digeste toDigeste() {
+        Builder builder = Digeste.newBuilder().setType(algorithm.digestCode());
         for (long l : hash) {
-            buffer.putLong(l);
+            builder.addHash(l);
         }
-        buffer.flip();
-        return ByteString.copyFrom(buffer);
+        return builder.build();
     }
 
     @Override

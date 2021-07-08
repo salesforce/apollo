@@ -20,9 +20,4 @@ public class InvalidKeyEventException extends RuntimeException {
         super(cause);
     }
 
-    @Override
-    public String getMessage() {
-        return "invalid event";
-    }
-
 }

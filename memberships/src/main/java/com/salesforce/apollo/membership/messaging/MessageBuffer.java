@@ -6,14 +6,10 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.nio.ByteBuffer;
-import java.security.Signature;
-import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -35,8 +31,9 @@ import com.salesfoce.apollo.messaging.proto.Push;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -45,31 +42,30 @@ import com.salesforce.apollo.utils.BloomFilter;
 public class MessageBuffer {
     private final static Logger log = LoggerFactory.getLogger(MessageBuffer.class);
 
-    public static byte[] sign(Digest hash, Signature signature) {
-        try {
-            signature.update(hash.getBytes());
-            return signature.sign();
-        } catch (SignatureException e) {
-            throw new IllegalStateException("Unable to sign message content", e);
-        }
+    public static JohnHancock signatureOf(SigningMember from, int sequenceNumber, Any content) {
+        List<ByteBuffer> buffers = forSigning(from, sequenceNumber, content);
+        return from.sign(buffers);
     }
 
-    static Digest idOf(DigestAlgorithm algorithm, int sequenceNumber, Digest from, Any content) {
-        byte[] bytes = qb64(from).getBytes();
-        ByteBuffer header = ByteBuffer.allocate(bytes.length + 4);
-        header.put(bytes);
+    private static List<ByteBuffer> forSigning(Member from, int sequenceNumber, Any content) {
+        ByteBuffer header = ByteBuffer.allocate(4);
         header.putInt(sequenceNumber);
         header.flip();
         List<ByteBuffer> buffers = new ArrayList<>();
+        buffers.add(from.getId().toDigeste().toByteString().asReadOnlyByteBuffer());
         buffers.add(header);
         buffers.addAll(content.toByteString().asReadOnlyByteBufferList());
+        return buffers;
+    }
 
-        return algorithm.digest(buffers);
+    public static boolean validate(JohnHancock sig, Member from, int sequenceNumber, Any content) {
+        List<ByteBuffer> buffers = forSigning(from, sequenceNumber, content);
+        return from.verify(sig, buffers);
     }
 
     private static Queue<Entry<Digest, Message>> findNHighest(Collection<Entry<Digest, Message>> msgs, int n) {
         Queue<Entry<Digest, Message>> nthHighest = new PriorityQueue<Entry<Digest, Message>>(
-                (a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge()));
+                Collections.reverseOrder((a, b) -> Integer.compare(a.getValue().getAge(), b.getValue().getAge())));
 
         for (Entry<Digest, Message> each : msgs) {
             nthHighest.add(each);
@@ -103,7 +99,7 @@ public class MessageBuffer {
         log.trace("Buffer free after compact: " + (bufferSize - state.size()));
     }
 
-    public BloomFilter<Digest> getBff(int seed, double p) {
+    public BloomFilter<Digest> getBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, bufferSize, p);
         state.keySet().forEach(h -> bff.add(h));
         return bff;
@@ -118,22 +114,23 @@ public class MessageBuffer {
      */
     public List<Message> merge(List<Message> updates, BiPredicate<Digest, Message> validator) {
         try {
-            return updates.parallelStream()
-                          .filter(message -> merge(digest(message.getKey()), message, validator))
+            return updates.stream()
+                          .filter(m -> m.getAge() <= tooOld + 1)
+                          .filter(message -> merge(new Digest(message.getKey()), message, validator))
                           .collect(Collectors.toList());
         } finally {
             gc();
         }
     }
 
-    public Messages process(BloomFilter<Digest> bff, int seed, double p) {
+    public Messages process(BloomFilter<Digest> bff, long seed, double p) {
         Messages.Builder builder = Messages.newBuilder();
         state.entrySet().forEach(entry -> {
             if (!bff.contains(entry.getKey())) {
                 builder.addUpdates(entry.getValue());
             }
         });
-        builder.setBff(getBff(seed, p).toBff().toByteString());
+        builder.setBff(getBff(seed, p).toBff());
         Messages gossip = builder.build();
         log.trace("updates: {}", gossip.getUpdatesCount());
         return gossip;
@@ -150,9 +147,9 @@ public class MessageBuffer {
      */
     public Message publish(Any msg, SigningMember from) {
         int sequenceNumber = lastSequenceNumber.getAndIncrement();
-        Digest id = idOf(digestAlgorithm, sequenceNumber, from.getId(), msg);
-        Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(),
-                                                                     from.sign(k.toByteString()), k));
+        JohnHancock sig = signatureOf(from, sequenceNumber, msg);
+        Digest id = digestAlgorithm.digest(sig.toByteString());
+        Message update = state.computeIfAbsent(id, k -> createUpdate(msg, sequenceNumber, from.getId(), sig, k));
         gc();
         log.trace("broadcasting: {}:{} on: {}", id, sequenceNumber, from);
         return update;
@@ -170,34 +167,25 @@ public class MessageBuffer {
         purgeTheAged();
     }
 
-    Digest idOf(int sequenceNumber, Digest from, Any content) {
-        return idOf(digestAlgorithm, sequenceNumber, from, content);
-    }
-
     private Message createUpdate(Any msg, int sequenceNumber, Digest from, JohnHancock signature, Digest hash) {
         return Message.newBuilder()
-                      .setSource(from.toByteString())
+                      .setSource(from.toDigeste())
                       .setSequenceNumber(sequenceNumber)
                       .setAge(0)
-                      .setKey(hash.toByteString())
-                      .setSignature(signature.toByteString())
+                      .setKey(hash.toDigeste())
+                      .setSignature(signature.toSig())
                       .setContent(msg)
                       .build();
     }
 
     private boolean merge(Digest hash, Message update, BiPredicate<Digest, Message> validator) {
-        if (update.getAge() > tooOld + 1) {
-            log.trace("dropped as too old: {}:{}", hash, update.getSequenceNumber());
-            return false;
-        }
-
-        if (!validator.test(hash, update)) {
-            return false;
-        }
         AtomicBoolean updated = new AtomicBoolean(false);
 
         state.compute(hash, (k, v) -> {
             if (v == null) {
+                if (!validator.test(hash, update)) {
+                    return null;
+                }
                 updated.set(true);
                 log.trace("added: {}:{}", k, update.getSequenceNumber());
                 return update;
@@ -216,7 +204,9 @@ public class MessageBuffer {
              .stream()
              .filter(e -> e.getValue().getAge() > tooOld)
              .peek(e -> log.trace("removing aged: {}:{}", e.getKey(), e.getValue().getAge()))
-             .forEach(e -> state.remove(e.getKey()));
+             .map(e -> e.getKey())
+             .collect(Collectors.toList())
+             .forEach(e -> state.remove(e));
     }
 
     private void removeOutOfDate() {

@@ -6,17 +6,19 @@
  */
 package com.salesforce.apollo.ghost;
 
-import java.util.ArrayList;
+import java.security.SecureRandom;
 import java.util.List;
-import java.util.Set;
+import java.util.NavigableSet;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.stream.Collectors;
 
-import com.google.protobuf.Any;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
+import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -24,63 +26,86 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  */
 public class MemoryStore implements Store {
 
-    private final ConcurrentNavigableMap<Digest, Any> data = new ConcurrentSkipListMap<>();
-    private final DigestAlgorithm digestAlgorithm;
+    private final DigestAlgorithm                         digestAlgorithm;
+    private final ConcurrentNavigableMap<Digest, Content> content = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<Digest, Binding> mutable = new ConcurrentSkipListMap<>();
 
     public MemoryStore(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
     }
 
     @Override
-    public void add(List<Any> entries, List<Digest> total) {
+    public void add(List<Content> entries) {
         entries.forEach(e -> {
             var key = digestAlgorithm.digest(e.toByteString());
-            data.put(key, e);
-            total.add(key);
+            content.put(key, e);
         });
     }
 
     @Override
-    public List<Any> entriesIn(CombinedIntervals combined, List<Digest> have) { // TODO refactor using IBLT or
-                                                                                // such
-        Set<Digest> canHas = new ConcurrentSkipListSet<>();
-        have.forEach(e -> canHas.add(e)); // really expensive
-        List<Any> entries = new ArrayList<>(); // TODO batching. we do need stinking batches for realistic scale
-        combined.getIntervals().forEach(i -> {
-            data.keySet()
-                .subSet(i.getBegin(), true, i.getEnd(), false)
-                .stream()
-                .filter(e -> !canHas.contains(e))
-                .forEach(e -> entries.add(data.get(e)));
+    public void bind(Digest key, Binding value) {
+        mutable.putIfAbsent(key, value);
+    }
+
+    @Override
+    public Entries entriesIn(CombinedIntervals combined, int maxEntries) {
+        Entries.Builder builder = Entries.newBuilder();
+        combined.getIntervals().forEach(interval -> {
+            content.keySet()
+                   .subSet(interval.getBegin(), true, interval.getEnd(), false)
+                   .stream()
+                   .filter(e -> !interval.contentsContains(e))
+                   .limit(maxEntries)
+                   .forEach(e -> builder.addContent(content.get(e)));
+            mutable.keySet()
+                   .subSet(interval.getBegin(), true, interval.getEnd(), false)
+                   .stream()
+                   .filter(e -> !interval.bindingsContains(e))
+                   .limit(maxEntries)
+                   .forEach(e -> builder.addBinding(mutable.get(e)));
         });
-        return entries;
+        return builder.build();
     }
 
     @Override
-    public Any get(Digest key) {
-        return data.get(key);
+    public Content get(Digest key) {
+        return content.get(key);
     }
 
     @Override
-    public List<Any> getUpdates(List<Digest> want) {
-        return want.stream().map(e -> data.get(e)).filter(e -> e != null).collect(Collectors.toList());
+    public Binding lookup(Digest key) {
+        return mutable.get(key);
     }
 
     @Override
-    public List<Digest> have(CombinedIntervals keyIntervals) {
-        return keyIntervals.getIntervals()
-                           .stream()
-                           .flatMap(i -> data.keySet().subSet(i.getBegin(), true, i.getEnd(), false).stream())
-                           .collect(Collectors.toList());
+    public void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy) {
+        keyIntervals.getIntervals().forEach(interval -> {
+            NavigableSet<Digest> immutableSubset = content.keySet()
+                                                          .subSet(interval.getBegin(), true, interval.getEnd(), false);
+            BloomFilter<Digest> immutableBff = new DigestBloomFilter(entropy.nextLong(), immutableSubset.size(), fpr);
+            immutableSubset.forEach(h -> immutableBff.add(h));
+            interval.setContentsBff(immutableBff);
+
+            NavigableSet<Digest> mutableSubset = mutable.keySet()
+                                                        .subSet(interval.getBegin(), true, interval.getEnd(), false);
+            BloomFilter<Digest> mutableBff = new DigestBloomFilter(entropy.nextLong(), mutableSubset.size(), fpr);
+            mutableSubset.forEach(h -> mutableBff.add(h));
+            interval.setBindingsBff(mutableBff);
+        });
     }
 
     @Override
-    public List<Digest> keySet() {
-        return data.keySet().stream().collect(Collectors.toList());
+    public void purge(Digest key) {
+        content.remove(key);
     }
 
     @Override
-    public void put(Digest key, Any value) {
-        data.putIfAbsent(key, value);
+    public void put(Digest key, Content value) {
+        content.putIfAbsent(key, value);
+    }
+
+    @Override
+    public void remove(Digest key) {
+        mutable.remove(key);
     }
 }

@@ -34,6 +34,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -47,6 +48,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.proto.DagEntry;
 import com.salesfoce.apollo.proto.DagEntry.EntryType;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.avalanche.Avalanche.Finalized;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -54,7 +56,7 @@ import com.salesforce.apollo.membership.ReservoirSampler;
 
 /**
  * Manages the unfinalized, working set of the Apollo DAG.
- * 
+ *
  * @author hhildebrand
  *
  */
@@ -75,11 +77,7 @@ public class WorkingSet {
         }
 
         public void topologicalSort(Map<Digest, DagInsert> set, Set<DagInsert> visited, List<DagInsert> stack) {
-            if (!visited.add(this)) {
-                return;
-            }
-
-            if (dagEntry.getLinksList() == null) {
+            if (!visited.add(this) || (dagEntry.getLinksList() == null)) {
                 return;
             }
 
@@ -385,8 +383,7 @@ public class WorkingSet {
                     }
                 }
             });
-            for (int i = 0; i < traversed.size(); i++) {
-                Node node = traversed.get(i);
+            for (Node node : traversed) {
                 write(() -> node.excise());
                 if (!node.isUnknown()) {
                     finalized.put(key, node.getEntry().toByteArray());
@@ -444,8 +441,8 @@ public class WorkingSet {
                 }
                 return true;
             } finally {
-                for (int i = 0; i < traversed.size(); i++) {
-                    traversed.get(i).unmark();
+                for (Node element : traversed) {
+                    element.unmark();
                 }
             }
         }
@@ -538,7 +535,7 @@ public class WorkingSet {
 
         /**
          * Mark the receiver.
-         * 
+         *
          * @return true if the receiver was unmarked, false if previously marked.
          */
         public boolean mark() {
@@ -901,30 +898,32 @@ public class WorkingSet {
         return entries.stream().map(entry -> insert(entry, discovered)).collect(Collectors.toList());
     }
 
-    public List<Digest> insertSerialized(List<ByteString> list, List<ByteString> transactions, long discovered) {
-        List<Digest> keys = new ArrayList<>();
-        for (int i = 0; i < list.size(); i++) {
-            Digest key = digest(list.get(i));
-            keys.add(key);
-            Node node = read(() -> unfinalized.get(key));
-            if (node == null || node.isUnknown()) {
-                ByteString t = transactions.get(i);
-                DagEntry entry;
-                try {
-                    entry = DagEntry.parseFrom(t);
-                } catch (InvalidProtocolBufferException e) {
-                    throw new IllegalArgumentException("Cannot parse dag entry", e);
-                }
-                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
-                Digest conflictSet = isNoOp ? key : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
-                                            : processor.validate(key, entry);
-                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
-                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
-                }
-                insert(key, entry, isNoOp, discovered, conflictSet);
-            }
+    public List<Digest> insertSerialized(List<Digeste> hashes, List<ByteString> transactions, long discovered) {
+        record Transaction(Digest hash, ByteString encoded) {
         }
-        return keys;
+        return IntStream.range(0, hashes.size())
+                        .mapToObj(i -> new Transaction(new Digest(hashes.get(i)), transactions.get(i)))
+                        .map(t -> {
+                            Node node = read(() -> unfinalized.get(t.hash));
+                            if (node == null || node.isUnknown()) {
+                                DagEntry entry;
+                                try {
+                                    entry = DagEntry.parseFrom(t.encoded);
+                                } catch (InvalidProtocolBufferException e) {
+                                    throw new IllegalArgumentException("Cannot parse dag entry", e);
+                                }
+                                boolean isNoOp = entry.getDescription() == EntryType.NO_OP;
+                                Digest conflictSet = isNoOp ? t.hash()
+                                                            : entry.getLinksCount() == 0 ? GENESIS_CONFLICT_SET
+                                                            : processor.validate(t.hash, entry);
+                                if (conflictSet.equals(GENESIS_CONFLICT_SET)) {
+                                    assert entry.getDescription() == EntryType.GENSIS : "Not in the genesis set";
+                                }
+                                insert(t.hash, entry, isNoOp, discovered, conflictSet);
+                            }
+                            return t.hash;
+                        })
+                        .collect(Collectors.toList());
     }
 
     public boolean isFinalized(Digest key) {
@@ -1146,10 +1145,7 @@ public class WorkingSet {
 
     boolean insert(Digest key, DagEntry entry, boolean noOp, long discovered, Digest cs) {
         Node existing = read(() -> unfinalized.get(key));
-        if (existing != null && !existing.isUnknown()) {
-            return true;
-        }
-        if (existing == null && finalized.containsKey(key)) {
+        if ((existing != null && !existing.isUnknown()) || (existing == null && finalized.containsKey(key))) {
             return true;
         }
 

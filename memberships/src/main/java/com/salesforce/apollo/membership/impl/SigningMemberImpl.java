@@ -16,7 +16,9 @@ import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -33,6 +35,14 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
 
     private PrivateKey certKey;
     private Signer     signer;
+
+    /**
+     * @param member
+     */
+    public SigningMemberImpl(CertificateWithPrivateKey cert) {
+        this(Member.getMemberIdentifier(cert.getX509Certificate()), cert.getX509Certificate(), cert.getPrivateKey(),
+                new Signer(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
+    }
 
     public SigningMemberImpl(Digest id, X509Certificate cert, PrivateKey certKey, Signer signer, PublicKey signerKey) {
         super(id, cert, signerKey);

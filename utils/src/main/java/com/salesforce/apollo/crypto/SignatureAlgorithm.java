@@ -159,6 +159,7 @@ public enum SignatureAlgorithm {
             return 33;
         }
 
+        @Override
         public JohnHancock sign(PrivateKey privateKey, InputStream is) {
             try {
                 var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());
@@ -413,10 +414,10 @@ public enum SignatureAlgorithm {
     @SuppressWarnings("unused")
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
 
-    public static SignatureAlgorithm fromSignatureCode(byte code) {
-        return switch (code) {
+    public static SignatureAlgorithm fromSignatureCode(int i) {
+        return switch (i) {
         case 0:
-            throw new IllegalArgumentException("Unknown signature code: " + code);
+            throw new IllegalArgumentException("Unknown signature code: " + i);
         case 1:
             yield EC_SECP256K1;
         case 2:
@@ -424,7 +425,7 @@ public enum SignatureAlgorithm {
         case 3:
             yield ED_448;
         default:
-            throw new IllegalArgumentException("Unknown signature code: " + code);
+            throw new IllegalArgumentException("Unknown signature code: " + i);
         };
     }
 

@@ -66,8 +66,10 @@ public class CombinedIntervals implements Predicate<Digest> {
     public List<Interval> toIntervals() {
         return intervals.stream()
                         .map(e -> Interval.newBuilder()
-                                          .setStart(e.getBegin().toByteString())
-                                          .setEnd(e.getEnd().toByteString())
+                                          .setStart(e.getBegin().toDigeste())
+                                          .setEnd(e.getEnd().toDigeste())
+                                          .setContentsBff(e.getContentsBff().toBff())
+                                          .setBindingsBff(e.getBindingsBff().toBff())
                                           .build())
                         .collect(Collectors.toList());
     }

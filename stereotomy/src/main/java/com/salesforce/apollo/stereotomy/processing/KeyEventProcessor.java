@@ -8,64 +8,75 @@ package com.salesforce.apollo.stereotomy.processing;
 
 import java.util.function.BiFunction;
 
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class KeyEventProcessor {
-    private final StateStore                               keyEventStore;
-    private final Validator                                validator;
-    private final Verifier                                 verifier;
+public class KeyEventProcessor implements Validator, Verifier {
+    private final KERL                                     kerl;
     private final BiFunction<KeyState, KeyEvent, KeyState> keyStateProcessor;
 
-    public KeyEventProcessor(StateStore keyEventStore, Verifier verifier, Validator validator,
-            BiFunction<KeyState, KeyEvent, KeyState> keyStateProcessor) {
-        this.keyEventStore = keyEventStore;
-        this.validator = validator;
-        this.verifier = verifier;
+    public KeyEventProcessor(KERL kerl) {
+        this(kerl, new KeyStateProcessor(kerl));
+    }
+
+    public KeyEventProcessor(KERL kerl, BiFunction<KeyState, KeyEvent, KeyState> keyStateProcessor) {
+        this.kerl = kerl;
         this.keyStateProcessor = keyStateProcessor;
+    }
+
+    public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
+        KeyEvent event = kerl.getKeyEvent(attachmentEvent.getCoordinates())
+                             .orElseThrow(() -> new MissingEventException(attachmentEvent,
+                                     attachmentEvent.getCoordinates()));
+        var state = kerl.getKeyState(attachmentEvent.getCoordinates())
+                        .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
+                                attachmentEvent.getCoordinates()));
+
+        @SuppressWarnings("unused")
+        var validControllerSignatures = verifyAuthentication(state, event, attachmentEvent.getAuthentication(), kerl);
+        @SuppressWarnings("unused")
+        var validWitnessReceipts = verifyEndorsements(state, event, attachmentEvent.getEndorsements());
+        @SuppressWarnings("unused")
+        var validOtherReceipts = verifyReceipts(event, attachmentEvent.getReceipts(), kerl);
+
+        // TODO remove invalid signatures before appending
+        kerl.append(attachmentEvent, state);
+    }
+
+    public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
+
+        validateKeyEventData(previousState, event, kerl);
+
+        KeyState newState = keyStateProcessor.apply(previousState, event);
+
+        // TODO remove invalid signatures before appending
+        kerl.append(event, newState);
+
+        return newState;
     }
 
     public KeyState process(KeyEvent event) throws KeyEventProcessingException {
         KeyState previousState = null;
 
         if (!(event instanceof InceptionEvent)) {
-            previousState = keyEventStore.getKeyState(event.getPrevious())
-                                         .orElseThrow(() -> new MissingEventException(event, event.getPrevious()));
+            previousState = kerl.getKeyState(event.getPrevious())
+                                .orElseThrow(() -> new MissingEventException(event, event.getPrevious()));
         }
 
-        validator.validateKeyEventData(previousState, event);
+        validateKeyEventData(previousState, event, kerl);
 
         KeyState newState = keyStateProcessor.apply(previousState, event);
 
         // TODO remove invalid signatures before appending
-        keyEventStore.append(event, newState);
+        kerl.append(event, newState);
 
         return newState;
-    }
-
-    public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
-        KeyEvent event = keyEventStore.getKeyEvent(attachmentEvent.getCoordinates())
-                                      .orElseThrow(() -> new MissingEventException(attachmentEvent,
-                                              attachmentEvent.getCoordinates()));
-        var state = keyEventStore.getKeyState(attachmentEvent.getCoordinates())
-                                 .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
-                                         attachmentEvent.getCoordinates()));
-
-        @SuppressWarnings("unused")
-        var validControllerSignatures = verifier.verifyAuthentication(state, event, attachmentEvent.getAuthentication());
-        @SuppressWarnings("unused")
-        var validWitnessReceipts = verifier.verifyEndorsements(state, event, attachmentEvent.getEndorsements());
-        @SuppressWarnings("unused")
-        var validOtherReceipts = verifier.verifyReceipts(event, attachmentEvent.getReceipts());
-
-        // TODO remove invalid signatures before appending
-        keyEventStore.append(attachmentEvent, state);
     }
 }

@@ -9,20 +9,20 @@ import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 
 public class ProviderUtils {
-    
+
     static final String PROVIDER_NAME_BC     = BouncyCastleProvider.PROVIDER_NAME;
     static final String PROVIDER_NAME_BCJSSE = BouncyCastleJsseProvider.PROVIDER_NAME;
 
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
-    private static Provider PROVIDER_BC;
-    private static Provider PROVIDER_JSSE;
+    private static Provider            PROVIDER_BC;
+    private static Provider            PROVIDER_JSSE;
 
     static {
         setup();
         PROVIDER_BC = Security.getProvider(PROVIDER_NAME_BC);
         PROVIDER_JSSE = Security.getProvider(PROVIDER_NAME_BCJSSE);
     }
-    
+
     public static Provider getProviderBC() {
         if (!initialized.get()) {
             throw new IllegalStateException("Provider has not been initialized");
@@ -35,18 +35,6 @@ public class ProviderUtils {
             throw new IllegalStateException("Provider has not been initialized");
         }
         return PROVIDER_JSSE;
-    }
-
-    private static void setup() {
-        if (!initialized.compareAndSet(false, true)) {
-            return;
-        }
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-        setupHighPriority(false);
-        for (Provider p : Security.getProviders()) {
-            System.out.println(p);
-        }
     }
 
     static Provider createProviderBC() {
@@ -169,5 +157,15 @@ public class ProviderUtils {
         }
 
         setup(false, false, fips);
+    }
+
+    private static void setup() {
+        if (!initialized.compareAndSet(false, true)) {
+            return;
+        }
+        setupHighPriority(false);
+        for (Provider p : Security.getProviders()) {
+            System.out.println(p);
+        }
     }
 }

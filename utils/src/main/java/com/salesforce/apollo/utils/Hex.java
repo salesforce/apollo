@@ -28,10 +28,6 @@ public final class Hex {
         'F' - 'A' + 1);
   }
 
-  private Hex() {
-    throw new IllegalStateException("Do not instantiate.");
-  }
-
   public static String hex(byte[] bytes) {
     var hex = new char[2 * bytes.length];
 
@@ -74,6 +70,10 @@ public final class Hex {
 
   public static long unhexLong(String hex) {
     return Long.parseLong(hex, 16);
+  }
+
+  private Hex() {
+    throw new IllegalStateException("Do not instantiate.");
   }
 
 }

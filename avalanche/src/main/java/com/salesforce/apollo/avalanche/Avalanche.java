@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.avalanche;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -32,8 +32,6 @@ import java.util.stream.Collectors;
 import org.apache.commons.math3.util.Pair;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
-import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,67 +46,28 @@ import com.salesfoce.apollo.proto.DagEntry.EntryType;
 import com.salesfoce.apollo.proto.QueryResult;
 import com.salesfoce.apollo.proto.QueryResult.Vote;
 import com.salesfoce.apollo.proto.SuppliedDagNodes;
+import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.avalanche.WorkingSet.FinalizationData;
 import com.salesforce.apollo.avalanche.communications.AvalancheClient;
 import com.salesforce.apollo.avalanche.communications.AvalancheServer;
+import com.salesforce.apollo.avalanche.communications.AvalancheService;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.DigestType;
 import com.salesforce.apollo.utils.Utils;
 
 /**
- * Implementation of the Avalanche consensus protocol.
- * 
+ * Implementation of the AvalancheService consensus protocol.
+ *
  * @author hal.hildebrand
  * @since 220
  */
 public class Avalanche {
-
-    public static class DigestType implements DataType {
-
-        @Override
-        public int compare(Object a, Object b) {
-            return ((Digest) a).compareTo(((Digest) b));
-        }
-
-        @Override
-        public int getMemory(Object obj) {
-            return ((Digest) obj).getAlgorithm().digestLength() + 1;
-        }
-
-        @Override
-        public Digest read(ByteBuffer buff) {
-            return new Digest(buff);
-        }
-
-        @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object obj) {
-            Digest digest = (Digest) obj;
-            buff.put(digest.getAlgorithm().digestCode());
-            for (long l : digest.getLongs()) {
-                buff.putLong(l);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-    }
 
     public static class Finalized {
         public final DagEntry entry;
@@ -122,7 +81,7 @@ public class Avalanche {
 
     public class Service {
 
-        public QueryResult onQuery(List<ByteString> list, List<ByteString> txns, List<Digest> wanted) {
+        public QueryResult onQuery(List<Digeste> list, List<ByteString> txns, List<Digest> wanted) {
             if (!running.get()) {
                 ArrayList<Vote> results = new ArrayList<>();
                 for (int i = 0; i < txns.size(); i++) {
@@ -169,22 +128,22 @@ public class Avalanche {
     private final static Logger log                = LoggerFactory.getLogger(Avalanche.class);
     private final static String STORE_MAP_TEMPLATE = "%s-%s-blocks";
 
-    private final CommonCommunications<AvalancheClient, Service> comm;
-    private final Context<? extends Member>                      context;
-    private final WorkingSet                                     dag;
-    private final int                                            invalidThreshold;
-    private final AvalancheMetrics                               metrics;
-    private final SigningMember                                  node;
-    private final AvalancheParameters                            parameters;
-    private final BlockingDeque<Digest>                          parentSample = new LinkedBlockingDeque<>();
-    private final Processor                                      processor;
-    private final Executor                                       queryExecutor;
-    private volatile ScheduledFuture<?>                          queryFuture;
-    private final AtomicLong                                     queryRounds  = new AtomicLong();
-    private final int                                            required;
-    private final AtomicBoolean                                  running      = new AtomicBoolean();
-    private volatile ScheduledFuture<?>                          scheduledNoOpsCull;
-    private final Service                                        service      = new Service();
+    private final CommonCommunications<AvalancheService, Service> comm;
+    private final Context<? extends Member>                       context;
+    private final WorkingSet                                      dag;
+    private final int                                             invalidThreshold;
+    private final AvalancheMetrics                                metrics;
+    private final SigningMember                                   node;
+    private final AvalancheParameters                             parameters;
+    private final BlockingDeque<Digest>                           parentSample = new LinkedBlockingDeque<>();
+    private final Processor                                       processor;
+    private final Executor                                        queryExecutor;
+    private volatile ScheduledFuture<?>                           queryFuture;
+    private final AtomicLong                                      queryRounds  = new AtomicLong();
+    private final int                                             required;
+    private final AtomicBoolean                                   running      = new AtomicBoolean();
+    private volatile ScheduledFuture<?>                           scheduledNoOpsCull;
+    private final Service                                         service      = new Service();
 
     public Avalanche(SigningMember node, Context<? extends Member> context, Router communications,
             AvalancheParameters p, AvalancheMetrics metrics, Processor processor, MVStore store,
@@ -194,10 +153,11 @@ public class Avalanche {
         this.node = node;
         this.context = context;
         this.queryExecutor = queryExecutor;
+        AvalancheService localLoopback = AvalancheService.getLocalLoopback(node);
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new AvalancheServer(communications.getClientIdentityProvider(), metrics,
                                                   r),
-                                          AvalancheClient.getCreate(metrics));
+                                          AvalancheClient.getCreate(metrics, queryExecutor), localLoopback);
         MVMap.Builder<Digest, byte[]> builder = new MVMap.Builder<Digest, byte[]>().keyType(new DigestType());
 
         this.dag = new WorkingSet(processor, parameters,
@@ -274,7 +234,7 @@ public class Avalanche {
 
     /**
      * Submit a transaction to the group.
-     * 
+     *
      * @param data - the transaction content
      * @return the Digest of the transaction, null if invalid
      */
@@ -284,7 +244,7 @@ public class Avalanche {
 
     /**
      * Submit a transaction to the group.
-     * 
+     *
      * @param data        - the transaction content
      * @param conflictSet - the conflict set key for this transaction
      * @return the Digest of the transaction, null if invalid
@@ -338,7 +298,7 @@ public class Avalanche {
                                                .setData(Any.pack(ByteMessage.newBuilder()
                                                                             .setContents(ByteString.copyFrom(dummy))
                                                                             .build()));
-            parents.forEach(e -> builder.addLinks(e.toByteString()));
+            parents.forEach(e -> builder.addLinks(e.toDigeste()));
             DagEntry dagEntry = builder.build();
             assert dagEntry.getLinksCount() > 0 : "Whoopsie";
             dag.insert(dagEntry, System.currentTimeMillis());
@@ -358,7 +318,7 @@ public class Avalanche {
             return;
         }
         Member member = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
-        AvalancheClient connection = comm.apply(member, getNode());
+        AvalancheService connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection requesting DAG from {} for {} entries", member, wanted.size());
         }
@@ -368,7 +328,10 @@ public class Avalanche {
             try {
                 suppliedDagNodes = entries.get();
             } catch (Exception e) {
-                connection.release();
+                try {
+                    connection.close();
+                } catch (IOException e1) {
+                }
                 log.trace("Error requesting DAG {} for {}", member, wanted.size(), e);
                 return;
             }
@@ -376,8 +339,8 @@ public class Avalanche {
             try {
                 dag.insertSerialized(suppliedDagNodes.getEntriesList()
                                                      .stream()
-                                                     .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                                     .map(e -> e.toByteString())
+                                                     .map(e -> parameters.digestAlgorithm.digest(e))
+                                                     .map(e -> e.toDigeste())
                                                      .collect(Collectors.toList()),
                                      suppliedDagNodes.getEntriesList(), System.currentTimeMillis());
                 if (metrics != null) {
@@ -385,7 +348,10 @@ public class Avalanche {
                     metrics.getSatisfiedRate().mark(suppliedDagNodes.getEntriesList().size());
                 }
             } finally {
-                connection.release();
+                try {
+                    connection.close();
+                } catch (IOException e) {
+                }
             }
         }, queryExecutor);
     }
@@ -406,8 +372,8 @@ public class Avalanche {
         log.trace("queried: {} for: {} result: {}", m, query.size(), result.getResultList().size());
         dag.insertSerialized(result.getWantedList()
                                    .stream()
-                                   .map(e -> DigestAlgorithm.DEFAULT.digest(e))
-                                   .map(e -> e.toByteString())
+                                   .map(e -> parameters.digestAlgorithm.digest(e))
+                                   .map(e -> e.toDigeste())
                                    .collect(Collectors.toList()),
                              result.getWantedList(), System.currentTimeMillis());
         if (want.size() > 0 && metrics != null && m == wanted) {
@@ -452,8 +418,10 @@ public class Avalanche {
         Member wanted = new ArrayList<Member>(sample).get(Utils.bitStreamEntropy().nextInt(sample.size()));
         AtomicInteger completed = new AtomicInteger(sample.size());
         List<Boolean> queryResults = new ArrayList<>();
-        for (int i = 0; i < sample.size(); i++) {
-            Member member = sample.get(i);
+        for (Member member : sample) {
+            if (node.equals(member)) {
+                System.out.println("wtf");
+            }
             queryExecutor.execute(() -> query(member, query, invalid, votes, futureSailor, completed, queryResults,
                                               want, wanted));
         }
@@ -463,7 +431,7 @@ public class Avalanche {
     private void query(Member member, List<Pair<Digest, ByteString>> query, AtomicInteger[] invalid,
                        AtomicInteger[] votes, CompletableFuture<List<Boolean>> futureSailor, AtomicInteger completed,
                        List<Boolean> queryResults, Collection<Digest> want, Member wanted) {
-        AvalancheClient connection = comm.apply(member, getNode());
+        AvalancheService connection = comm.apply(member, getNode());
         if (connection == null) {
             log.info("No connection querying {} for {} queries", member, query.size());
             for (int j = 0; j < query.size(); j++) {
@@ -517,7 +485,6 @@ public class Avalanche {
      */
     private int query(Runnable reschedule) {
         List<? extends Member> sample = context.sample(parameters.core.k, Utils.bitStreamEntropy(), node.getId());
-
         if (sample.isEmpty()) {
             reschedule.run();
             return 0;
@@ -526,6 +493,9 @@ public class Avalanche {
             log.trace("not enough members in sample: {} < {}", sample.size(), parameters.core.k);
             reschedule.run();
             return 0;
+        }
+        if (sample.contains(node)) {
+            System.out.println("WTF");
         }
         queryRounds.incrementAndGet();
         Timer.Context timer = metrics == null ? null : metrics.getQueryTimer().time();
@@ -603,7 +573,7 @@ public class Avalanche {
                     }), period.toMillis(), TimeUnit.MILLISECONDS);
                 }) == 0);
             } catch (Throwable t) {
-                log.error("Error performing Avalanche batch round", t);
+                log.error("Error performing AvalancheService batch round", t);
             }
         });
     }
@@ -637,7 +607,7 @@ public class Avalanche {
         try {
 
             DagEntry.Builder builder = DagEntry.newBuilder().setDescription(type).setData(Any.pack(data));
-            parents.stream().map(e -> e.toByteString()).forEach(e -> builder.addLinks(e));
+            parents.stream().map(e -> e.toDigeste()).forEach(e -> builder.addLinks(e));
             DagEntry dagEntry = builder.build();
 
             Digest key = dag.insert(dagEntry, conflictSet, System.currentTimeMillis());

@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
 import java.io.InputStream;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
@@ -33,7 +31,7 @@ import com.salesforce.apollo.membership.Member;
 
 /**
  * A member of the view
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
@@ -101,14 +99,17 @@ public class Participant implements Member {
         }
     }
 
+    @Override
     public int compareTo(Member o) {
         return wrapped.compareTo(o);
     }
 
+    @Override
     public boolean equals(Object obj) {
         return wrapped.equals(obj);
     }
 
+    @Override
     public X509Certificate getCertificate() {
         return wrapped.getCertificate();
     }
@@ -120,10 +121,12 @@ public class Participant implements Member {
         return failedAt;
     }
 
+    @Override
     public Digest getId() {
         return wrapped.getId();
     }
 
+    @Override
     public int hashCode() {
         return wrapped.hashCode();
     }
@@ -142,13 +145,14 @@ public class Participant implements Member {
         return "Member[" + getId() + "]";
     }
 
+    @Override
     public boolean verify(JohnHancock signature, InputStream message) {
         return wrapped.verify(signature, message);
     }
 
     /**
      * Add an accusation to the member
-     * 
+     *
      * @param accusation
      */
     void addAccusation(AccusationWrapper accusation) {
@@ -209,9 +213,9 @@ public class Participant implements Member {
         NoteWrapper current = note;
         return current == null ? null
                 : EncodedCertificate.newBuilder()
-                                    .setId(getId().toByteString())
+                                    .setId(getId().toDigeste())
                                     .setEpoch(current.getEpoch())
-                                    .setHash(qb64(certificateHash))
+                                    .setHash(certificateHash.toDigeste())
                                     .setContent(ByteString.copyFrom(derEncodedCertificate))
                                     .build();
     }

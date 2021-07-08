@@ -495,7 +495,7 @@ public final class Fsm<Context, Transitions> {
         try {
             return call.call();
         } catch (RuntimeException e) {
-            throw (RuntimeException) e;
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {

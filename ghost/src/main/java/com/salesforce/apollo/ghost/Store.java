@@ -6,10 +6,13 @@
  */
 package com.salesforce.apollo.ghost;
 
+import java.security.SecureRandom;
 import java.util.List;
 
-import com.google.protobuf.Any;
-import com.salesforce.apollo.crypto.Digest; 
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
+import com.salesfoce.apollo.ghost.proto.Entries;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -17,18 +20,22 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Store {
 
-	public List<Any> entriesIn(CombinedIntervals combinedIntervals, List<Digest> have);
+    public Entries entriesIn(CombinedIntervals combinedIntervals, int maxEntries);
 
-	public List<Digest> have(CombinedIntervals keyIntervals);
+    void add(List<Content> entries);
 
-	public List<Digest> keySet();
+    void bind(Digest key, Binding binding);
 
-	void add(List<Any> entries, List<Digest> total);
+    Content get(Digest cid);
 
-	Any get(Digest key);
+    Binding lookup(Digest key);
 
-	List<Any> getUpdates(List<Digest> want);
+    void populate(CombinedIntervals keyIntervals, double fpr, SecureRandom entropy);
 
-	void put(Digest key, Any value);
+    void purge(Digest cid);
+
+    void put(Digest cid, Content content);
+
+    void remove(Digest key);
 
 }

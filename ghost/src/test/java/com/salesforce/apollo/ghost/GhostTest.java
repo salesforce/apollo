@@ -5,152 +5,215 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.ghost;
- 
+
 import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class GhostTest {
- 
+
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters parameters = new FirefliesParameters(ca.getX509Certificate());
+    private static Duration                               gossipDelay     = Duration.ofMillis(10_000);
+    private static final int                              testCardinality = 100;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 101)
+        certs = IntStream.range(0, testCardinality)
                          .parallel()
                          .mapToObj(i -> getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberId(cert.getX509Certificate()),
-                                                   cert -> new CertificateWithPrivateKey(cert.getX509Certificate(),
-                                                           cert.getPrivateKey())));
+                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert -> cert));
     }
 
-    private final List<Router> comms = new ArrayList<>();
-    private List<View>         views;
+    private final List<Router> communications = new ArrayList<>();
+    private List<Ghost>        ghosties;
 
     @AfterEach
     public void after() {
-        if (views != null) {
-            views.forEach(e -> e.getService().stop());
+        if (ghosties != null) {
+            ghosties.forEach(e -> e.stop());
         }
-        comms.forEach(e -> e.close());
+        communications.forEach(e -> e.close());
     }
 
-    // @Test
-    public void smoke() throws Exception {
-        Random entropy = new Random(0x666);
-
-        List<X509Certificate> seeds = new ArrayList<>();
-        List<Node> members = certs.values()
-                                  .parallelStream()
-                                  .map(cert -> new Node(cert, parameters))
-                                  .collect(Collectors.toList());
+    @Test
+    public void lookupBind() throws Exception {
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(cert -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert.getX509Certificate(), cert.getPrivateKey(),
+                                                   new Signer(0, cert.getPrivateKey()),
+                                                   cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
+        members.forEach(e -> context.activate(e));
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getCertificate())) {
-                seeds.add(cert.getCertificate());
-            }
-        }
-
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
 
         ForkJoinPool executor = new ForkJoinPool();
-        views = members.stream().map(node -> {
-            Router com = new LocalRouter(node, ServerConnectionCache.newBuilder(), executor);
-            comms.add(com);
-            View view = new View(Digest.ORIGIN, node, com, null);
-            return view;
+
+        List<Ghost> ghosties = members.stream().map(member -> {
+            LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            communications.add(comms);
+            comms.start();
+            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
         }).collect(Collectors.toList());
+        ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
-        long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds, scheduler));
-
-        Utils.waitForCondition(30_000, 3_000, () -> {
-            return views.stream()
-                        .map(view -> view.getLive().size() != views.size() ? view : null)
-                        .filter(view -> view != null)
-                        .count() == 0;
-        });
-
-        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
-
-        Iterator<Router> communications = comms.iterator();
-        List<Ghost> ghosties = views.stream()
-                                    .map(view -> new Ghost(new GhostParameters(), communications.next(), view,
-                                            new MemoryStore(DigestAlgorithm.DEFAULT)))
-                                    .collect(Collectors.toList());
-        ghosties.forEach(e -> e.getService().start());
-        assertEquals(ghosties.size(),
-                     ghosties.parallelStream()
-                             .map(g -> Utils.waitForCondition(150_000, () -> g.joined()))
-                             .filter(e -> e)
-                             .count(),
-                     "Not all nodes joined the cluster");
-        int rounds = 3;
-        Map<Digest, DagEntry> stored = new HashMap<>();
-        for (int i = 0; i < rounds; i++) {
+        int msgs = 10;
+        Map<String, Any> stored = new HashMap<>();
+        Duration timeout = Duration.ofSeconds(1);
+        AtomicInteger count = new AtomicInteger();
+        for (int i = 0; i < msgs; i++) {
+            int index = i;
             for (Ghost ghost : ghosties) {
-                Builder builder = DagEntry.newBuilder()
-                                          .setData(Any.pack(ByteMessage.newBuilder()
-                                                                       .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
-                                                                                                                          ghost.getNode()
-                                                                                                                               .getId(),
-                                                                                                                          i)))
-                                                                       .build()));
-                DagEntry entry = builder.build();
-                stored.put(ghost.putDagEntry(entry), entry);
+                String key = "prefix - " + i + " - " + ghost.getMember().getId();
+                Any entry = Any.pack(ByteMessage.newBuilder()
+                                                .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                   ghost.getMember()
+                                                                                                        .getId(),
+                                                                                                   index)))
+                                                .build());
+                ghost.bind(key, entry, timeout);
+                stored.put(key, entry);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
             }
         }
+        System.out.println();
+        System.out.println("Finished " + msgs * members.size() + " random puts, performing gets");
 
-        Thread.sleep(3000);
-        for (Entry<Digest, DagEntry> entry : stored.entrySet()) {
+        count.set(0);
+        for (Entry<String, Any> entry : stored.entrySet()) {
             for (Ghost ghost : ghosties) {
-                DagEntry found = ghost.getDagEntry(entry.getKey());
+                Binding found = ghost.lookup(entry.getKey(), timeout).get();
                 assertNotNull(found);
-                assertArrayEquals(entry.getValue().getData().toByteArray(), found.getData().toByteArray());
+                assertEquals(entry.getValue(), found.getValue());
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
             }
         }
+
+        System.out.println("done");
+    }
+
+    @Test
+    public void putGet() throws Exception {
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(cert -> new SigningMemberImpl(
+                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                   cert.getX509Certificate(), cert.getPrivateKey(),
+                                                   new Signer(0, cert.getPrivateKey()),
+                                                   cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
+        assertEquals(certs.size(), members.size());
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
+        members.forEach(e -> context.activate(e));
+
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(testCardinality);
+
+        ForkJoinPool executor = new ForkJoinPool();
+
+        List<Ghost> ghosties = members.stream().map(member -> {
+            LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
+            communications.add(comms);
+            comms.start();
+            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
+        }).collect(Collectors.toList());
+        ghosties.forEach(e -> e.start(scheduler, gossipDelay));
+
+        int msgs = 10;
+        Map<Digest, Any> stored = new HashMap<>();
+        Duration timeout = Duration.ofSeconds(1);
+        AtomicInteger count = new AtomicInteger();
+        for (int i = 0; i < msgs; i++) {
+            int index = i;
+            for (Ghost ghost : ghosties) {
+                Any entry = Any.pack(ByteMessage.newBuilder()
+                                                .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
+                                                                                                   ghost.getMember()
+                                                                                                        .getId(),
+                                                                                                   index)))
+                                                .build());
+                Digest put = ghost.put(entry, timeout);
+                stored.put(put, entry);
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
+            }
+        }
+        System.out.println();
+        System.out.println("Finished " + msgs * members.size() + " random puts, performing gets");
+
+        count.set(0);
+        for (Entry<Digest, Any> entry : stored.entrySet()) {
+            for (Ghost ghost : ghosties) {
+                Content found = ghost.get(entry.getKey(), timeout).get();
+                assertNotNull(found);
+                assertEquals(entry.getValue(), found.getValue());
+                if (count.incrementAndGet() % 100 == 0) {
+                    System.out.print('.');
+                    if (count.get() % 8000 == 0) {
+                        System.out.println();
+                    }
+                }
+            }
+        }
+
+        System.out.println("done");
     }
 }

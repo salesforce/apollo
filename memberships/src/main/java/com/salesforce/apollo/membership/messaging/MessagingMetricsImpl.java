@@ -32,16 +32,16 @@ public class MessagingMetricsImpl implements MessagingMetrics {
     public MessagingMetricsImpl(MetricRegistry registry) {
         inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
         outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
-        outboundGossip = registry.histogram("Outbound Messaging Gossip Bytes");
-        gossipResponse = registry.histogram("Outbound Messaging Gossip Response Bytes");
-        outboundGossipRate = registry.meter("Outbound Messaging Gossip Rate");
-        outboundUpdate = registry.histogram("Outbound Messaging Update Bytes");
-        outboundUpdateRate = registry.meter("Outbound Messaging Update Rate");
-        inboundUpdateRate = registry.meter("Inbound Messaging Update Rate");
-        inboundUpdate = registry.histogram("Inbound Messaging Update Bytes");
-        inboundGossipRate = registry.meter("Inbound Messaging Gossip Rate");
+        outboundGossip = registry.histogram("Outbound CausalMessaging Gossip Bytes");
+        gossipResponse = registry.histogram("Outbound CausalMessaging Gossip Response Bytes");
+        outboundGossipRate = registry.meter("Outbound CausalMessaging Gossip Rate");
+        outboundUpdate = registry.histogram("Outbound CausalMessaging Update Bytes");
+        outboundUpdateRate = registry.meter("Outbound CausalMessaging Update Rate");
+        inboundUpdateRate = registry.meter("Inbound CausalMessaging Update Rate");
+        inboundUpdate = registry.histogram("Inbound CausalMessaging Update Bytes");
+        inboundGossipRate = registry.meter("Inbound CausalMessaging Gossip Rate");
         inboundGossip = registry.histogram("Inbound Messagging Gossip Bytes");
-        gossipReply = registry.histogram("Inbound Messaging Gossip Reply Bytes");
+        gossipReply = registry.histogram("Inbound CausalMessaging Gossip Reply Bytes");
     }
 
     @Override

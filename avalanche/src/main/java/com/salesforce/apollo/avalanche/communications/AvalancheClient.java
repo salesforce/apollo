@@ -11,7 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 
 import org.apache.commons.math3.util.Pair;
 
@@ -34,10 +34,10 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class AvalancheClient implements Avalanche {
+public class AvalancheClient implements AvalancheService {
 
-    public static CreateClientCommunications<AvalancheClient> getCreate(AvalancheMetrics metrics) {
-        return (t, f, c) -> new AvalancheClient(c, t, metrics);
+    public static CreateClientCommunications<AvalancheService> getCreate(AvalancheMetrics metrics, Executor executor) {
+        return (t, f, c) -> new AvalancheClient(c, t, metrics, executor);
 
     }
 
@@ -45,14 +45,22 @@ public class AvalancheClient implements Avalanche {
     private final AvalancheGrpc.AvalancheFutureStub client;
     private final Member                            member;
     private final AvalancheMetrics                  metrics;
+    private final Executor                          executor;
 
-    public AvalancheClient(ManagedServerConnection conn, Member member, AvalancheMetrics metrics) {
+    public AvalancheClient(ManagedServerConnection conn, Member member, AvalancheMetrics metrics, Executor executor) {
         this.channel = conn;
         this.member = member;
         this.client = AvalancheGrpc.newFutureStub(conn.channel).withCompression("gzip");
         this.metrics = metrics;
+        this.executor = executor;
     }
 
+    @Override
+    public void close() {
+        channel.release();
+    }
+
+    @Override
     public Participant getMember() {
         return (Participant) member;
     }
@@ -60,12 +68,12 @@ public class AvalancheClient implements Avalanche {
     @Override
     public ListenableFuture<QueryResult> query(Digest context, List<Pair<Digest, ByteString>> transactions,
                                                Collection<Digest> wanted) {
-        Builder builder = Query.newBuilder().setContext(context.toByteString());
+        Builder builder = Query.newBuilder().setContext(context.toDigeste());
         transactions.forEach(t -> {
-            builder.addHashes(t.getFirst().toByteString());
+            builder.addHashes(t.getFirst().toDigeste());
             builder.addTransactions(t.getSecond());
         });
-        wanted.forEach(e -> builder.addWanted(e.toByteString()));
+        wanted.forEach(e -> builder.addWanted(e.toDigeste()));
         try {
             Query query = builder.build();
             ListenableFuture<QueryResult> result = client.query(query);
@@ -82,7 +90,7 @@ public class AvalancheClient implements Avalanche {
                     } catch (InterruptedException | ExecutionException e1) {
                         // ignored for metrics gathering
                     }
-                }, ForkJoinPool.commonPool());
+                }, executor);
 
             }
             return result;
@@ -92,12 +100,12 @@ public class AvalancheClient implements Avalanche {
     }
 
     public void release() {
-        channel.release();
+        close();
     }
 
     @Override
     public ListenableFuture<SuppliedDagNodes> requestDAG(Digest context, Collection<Digest> want) {
-        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toByteString());
+        com.salesfoce.apollo.proto.DagNodes.Builder builder = DagNodes.newBuilder().setContext(context.toDigeste());
         want.forEach(e -> builder.addEntries(qb64(e)));
         try {
             DagNodes request = builder.build();
@@ -114,7 +122,7 @@ public class AvalancheClient implements Avalanche {
                     } catch (InterruptedException | ExecutionException e1) {
                         // ignored for metrics gathering
                     }
-                }, ForkJoinPool.commonPool());
+                }, executor);
             }
             return requested;
         } catch (Throwable e) {

@@ -11,6 +11,7 @@ import static java.util.Comparator.comparingInt;
 import static java.util.Map.Entry.comparingByKey;
 
 import java.security.KeyPair;
+import java.security.PublicKey;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,25 +31,9 @@ public class InMemoryKeyStore implements StereotomyKeyStore {
     private final Map<KeyCoordinates, KeyPair> nextKeys = new HashMap<>();
 
     @Override
-    public void storeKey(KeyCoordinates coordinates, KeyPair keyPair) {
-        this.keys.put(coordinates, keyPair);
-    }
-
-    @Override
     public Optional<KeyPair> getKey(KeyCoordinates keyCoordinates) {
         // TODO digest algorithm agility--need to re-hash if not found
         return Optional.ofNullable(this.keys.get(keyCoordinates));
-    }
-
-    @Override
-    public Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates) {
-        // TODO digest algorithm agility--need to re-hash if not found
-        return Optional.ofNullable(this.keys.remove(keyCoordinates));
-    }
-
-    @Override
-    public void storeNextKey(KeyCoordinates coordinates, KeyPair keyPair) {
-        this.nextKeys.put(coordinates, keyPair);
     }
 
     @Override
@@ -58,9 +43,8 @@ public class InMemoryKeyStore implements StereotomyKeyStore {
     }
 
     @Override
-    public Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates) {
-        // TODO digest algorithm agility--need to re-hash if not found
-        return Optional.ofNullable(this.nextKeys.remove(keyCoordinates));
+    public Optional<PublicKey> getPublicKey(KeyCoordinates keyCoordinates) {
+        return getKey(keyCoordinates).stream().map(kp -> kp.getPublic()).findFirst();
     }
 
     public void printContents() {
@@ -68,7 +52,7 @@ public class InMemoryKeyStore implements StereotomyKeyStore {
         System.out.println("====== IDENTIFIER KEY STORE ======");
         System.out.println("KEYS:");
 
-        Comparator<KeyCoordinates> keyIdentifierComparator = comparing(k -> ((KeyCoordinates) k).getEstablishmentEvent()
+        Comparator<KeyCoordinates> keyIdentifierComparator = comparing(k -> k.getEstablishmentEvent()
                                                                                                 .getIdentifier()
                                                                                                 .toString());
         var keySequenceNumberComparator = comparing(k -> ((KeyCoordinates) k).getEstablishmentEvent()
@@ -96,6 +80,28 @@ public class InMemoryKeyStore implements StereotomyKeyStore {
 
         System.out.println("=========================");
         System.out.println();
+    }
+
+    @Override
+    public Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates) {
+        // TODO digest algorithm agility--need to re-hash if not found
+        return Optional.ofNullable(this.keys.remove(keyCoordinates));
+    }
+
+    @Override
+    public Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates) {
+        // TODO digest algorithm agility--need to re-hash if not found
+        return Optional.ofNullable(this.nextKeys.remove(keyCoordinates));
+    }
+
+    @Override
+    public void storeKey(KeyCoordinates coordinates, KeyPair keyPair) {
+        this.keys.put(coordinates, keyPair);
+    }
+
+    @Override
+    public void storeNextKey(KeyCoordinates coordinates, KeyPair keyPair) {
+        this.nextKeys.put(coordinates, keyPair);
     }
 
 }

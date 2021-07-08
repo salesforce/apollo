@@ -19,5 +19,6 @@ public interface AttachmentEvent extends KeyEvent {
 
     Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
 
+    @Override
     Map<Integer, JohnHancock> getAuthentication();
 }

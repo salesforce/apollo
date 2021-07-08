@@ -142,8 +142,8 @@ abstract public class AvalancheFunctionalTest {
         }).collect(Collectors.toList());
 
         // # of txns per node
-        int target = 10000;
-        int outstanding = 400;
+        int target = 1_000;
+        int outstanding = 100;
 
         ScheduledExecutorService avaScheduler = Executors.newScheduledThreadPool(2);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
@@ -185,7 +185,7 @@ abstract public class AvalancheFunctionalTest {
                                                          .map(a -> new Transactioneer(a, target, latch))
                                                          .collect(Collectors.toList());
 
-        transactioneers.parallelStream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
+        transactioneers.stream().forEach(t -> t.transact(Duration.ofSeconds(120), outstanding, scheduler));
 
         boolean finalized = latch.await(360, TimeUnit.SECONDS);
 

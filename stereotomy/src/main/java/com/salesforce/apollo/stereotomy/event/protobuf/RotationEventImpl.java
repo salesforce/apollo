@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.sealOf;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.List;
@@ -32,7 +31,7 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
 
     @Override
     public List<Seal> getSeals() {
-        return event.getSpecification().getSealsList().stream().map(s -> sealOf(s)).collect(Collectors.toList());
+        return event.getSpecification().getSealsList().stream().map(s -> Seal.from(s)).collect(Collectors.toList());
     }
 
     @Override

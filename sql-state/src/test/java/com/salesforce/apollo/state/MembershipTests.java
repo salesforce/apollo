@@ -37,6 +37,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -85,11 +86,12 @@ public class MembershipTests {
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Message                          GENESIS_DATA    = batch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"));
     private static final Digest                           GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-    private final static int                              MAX_CARDINALITY = 11;
+    private final static int                              CARDINALITY     = 11;
+    private static final Duration                         timeout         = Duration.ofSeconds(20);
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, MAX_CARDINALITY)
+        certs = IntStream.range(0, CARDINALITY)
                          .parallel()
                          .mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
@@ -101,10 +103,10 @@ public class MembershipTests {
     private File                               checkpointDirBase;
     private Map<Digest, Router>                communications = new ConcurrentHashMap<>();
     private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
-    private List<SigningMember>                members;
-    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
     private Context<Member>                    context;
+    private List<SigningMember>                members;
     private ScheduledExecutorService           scheduler;
+    private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() {
@@ -152,22 +154,23 @@ public class MembershipTests {
 
     @Test
     public void testCheckpointBootstrap() throws Exception {
-        int testCardinality = 3;
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
+        List<CertifiedBlock> blocks = new ArrayList<>();
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
         });
-        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
-                    CountDownLatch executed = new CountDownLatch(testCardinality);
+                    CountDownLatch executed = new CountDownLatch(CARDINALITY);
                     consortium.values().forEach(m -> {
                         blockPool.execute(() -> {
                             m.process(c);
@@ -185,7 +188,7 @@ public class MembershipTests {
             return hash;
         };
 
-        gatherConsortium(Duration.ofMillis(150), processed, consensus);
+        gatherConsortium(Duration.ofMillis(10), processed, consensus);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(GENESIS_VIEW_ID, context).allMembers().forEach(e -> {
@@ -213,7 +216,7 @@ public class MembershipTests {
 
         System.out.println("genesis processing complete");
 
-        processed.set(new CountDownLatch(testCardinality));
+        processed.set(new CountDownLatch(CARDINALITY));
         BitsStreamGenerator entropy = new MersenneTwister();
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
@@ -231,7 +234,7 @@ public class MembershipTests {
                                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                           (h, t) -> txnProcessed.set(true));
+                                           (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -272,11 +275,15 @@ public class MembershipTests {
                                       .filter(c -> !c.equals(testSubject))
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
-            key.set(new Mutator(cl).execute(update, (h, t) -> {
-                outstanding.release();
-                submitted.remove(key.get());
-                submittedBunch.countDown();
-            }));
+            try {
+                key.set(new Mutator(cl).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+            } catch (TimeoutException e) {
+                e.printStackTrace();
+            }
             submitted.add(key.get());
         }));
 
@@ -285,6 +292,9 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
+        assertTrue(Utils.waitForCondition(2_000,
+                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
+        testSubject.process(blocks.get(blocks.size() - 1));
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);
@@ -310,11 +320,15 @@ public class MembershipTests {
                                       .filter(c -> !c.equals(testSubject))
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
-            key.set(new Mutator(cl).execute(update, (h, t) -> {
-                outstanding.release();
-                submitted.remove(key.get());
-                remaining.countDown();
-            }));
+            try {
+                key.set(new Mutator(cl).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    remaining.countDown();
+                }, timeout));
+            } catch (TimeoutException e) {
+                e.printStackTrace();
+            }
             submitted.add(key.get());
         }));
 
@@ -329,7 +343,7 @@ public class MembershipTests {
 
         long lastBlock = blueRibbon.stream().mapToLong(c -> c.getCurrrent().height()).findFirst().getAsLong();
 
-        completed = Utils.waitForCondition(10_000, () -> {
+        completed = Utils.waitForCondition(10_000, 1_000, () -> {
             return testSubject.getCurrrent().height() == lastBlock;
         });
 
@@ -354,22 +368,23 @@ public class MembershipTests {
 
     @Test
     public void testGenesisBootstrap() throws Exception {
-        int testCardinality = 3;
         Executor cPipeline = Executors.newSingleThreadExecutor();
 
+        List<CertifiedBlock> blocks = new ArrayList<>();
         AtomicInteger cLabel = new AtomicInteger();
-        Executor blockPool = Executors.newFixedThreadPool(15, r -> {
+        Executor blockPool = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread t = new Thread(r, "Consensus [" + cLabel.getAndIncrement() + "]");
             t.setDaemon(true);
             return t;
         });
-        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(testCardinality));
+        AtomicReference<CountDownLatch> processed = new AtomicReference<>(new CountDownLatch(CARDINALITY));
         Set<Digest> decided = Collections.newSetFromMap(new ConcurrentHashMap<>());
         BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus = (c, f) -> {
             Digest hash = DigestAlgorithm.DEFAULT.digest(c.getBlock().toByteString());
             if (decided.add(hash)) {
+                blocks.add(c);
                 cPipeline.execute(() -> {
-                    CountDownLatch executed = new CountDownLatch(testCardinality);
+                    CountDownLatch executed = new CountDownLatch(CARDINALITY);
                     consortium.values().forEach(m -> {
                         blockPool.execute(() -> {
                             m.process(c);
@@ -387,7 +402,7 @@ public class MembershipTests {
             return hash;
         };
 
-        gatherConsortium(Duration.ofMillis(150), processed, consensus);
+        gatherConsortium(Duration.ofMillis(10), processed, consensus);
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(GENESIS_VIEW_ID, context).allMembers().forEach(e -> {
@@ -415,7 +430,7 @@ public class MembershipTests {
 
         System.out.println("genesis processing complete");
 
-        processed.set(new CountDownLatch(testCardinality));
+        processed.set(new CountDownLatch(CARDINALITY));
         BitsStreamGenerator entropy = new MersenneTwister();
         AtomicBoolean txnProcessed = new AtomicBoolean();
 
@@ -432,7 +447,7 @@ public class MembershipTests {
                                              "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                              "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                              "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"),
-                                       (h, t) -> txnProcessed.set(true));
+                                       (h, t) -> txnProcessed.set(true), timeout);
 
         System.out.println("Submitted transaction: " + hash + ", awaiting processing of next block");
         assertTrue(processed.get().await(30, TimeUnit.SECONDS), "Did not process transaction block");
@@ -473,11 +488,15 @@ public class MembershipTests {
                                        .filter(c -> !c.equals(testSubject))
                                        .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                        .get(0);
-            key.set(new Mutator(cli).execute(update, (h, t) -> {
-                outstanding.release();
-                submitted.remove(key.get());
-                submittedBunch.countDown();
-            }));
+            try {
+                key.set(new Mutator(cli).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    submittedBunch.countDown();
+                }, timeout));
+            } catch (TimeoutException e) {
+                e.printStackTrace();
+            }
             submitted.add(key.get());
         }));
 
@@ -486,6 +505,9 @@ public class MembershipTests {
 
         testSubject.start();
         communications.get(testSubject.getMember().getId()).start();
+        assertTrue(Utils.waitForCondition(2_000,
+                                          () -> testSubject.fsm.getCurrentState() == CollaboratorFsm.RECOVERING));
+        testSubject.process(blocks.get(blocks.size() - 1));
 
         bunchCount = 150;
         System.out.println("Submitting batches: " + bunchCount);
@@ -511,11 +533,15 @@ public class MembershipTests {
                                        .filter(c -> !c.equals(testSubject))
                                        .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                        .get(0);
-            key.set(new Mutator(cln).execute(update, (h, t) -> {
-                outstanding.release();
-                submitted.remove(key.get());
-                remaining.countDown();
-            }));
+            try {
+                key.set(new Mutator(cln).execute(update, (h, t) -> {
+                    outstanding.release();
+                    submitted.remove(key.get());
+                    remaining.countDown();
+                }, timeout));
+            } catch (TimeoutException e) {
+                e.printStackTrace();
+            }
             submitted.add(key.get());
         }));
 
@@ -574,7 +600,7 @@ public class MembershipTests {
     private Parameters parameters(SigningMember m, BiFunction<CertifiedBlock, CompletableFuture<?>, Digest> consensus,
                                   TransactionExecutor executor, Messenger.Parameters msgParameters,
                                   Duration gossipDuration, ScheduledExecutorService scheduler) {
-        ForkJoinPool fj = ForkJoinPool.commonPool();
+        ForkJoinPool fj = Router.createFjPool();
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), Utils.bitStreamEntropy().nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -583,6 +609,7 @@ public class MembershipTests {
         return Parameters.newBuilder()
                          .setConsensus(consensus)
                          .setMember(m)
+                         .setDispatcher(fj)
                          .setContext(context)
                          .setMsgParameters(msgParameters)
                          .setMaxBatchByteSize(1024 * 1024 * 32)

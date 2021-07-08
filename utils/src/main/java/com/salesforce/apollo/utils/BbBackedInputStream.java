@@ -49,31 +49,6 @@ public class BbBackedInputStream extends InputStream {
         return aggregate(new ByteString[] { byteString });
     }
 
-    public static InputStream aggregateStreams(final List<InputStream> a) {
-        return new SequenceInputStream(new Enumeration<InputStream>() {
-            List<InputStream> current = a;
-
-            @Override
-            public boolean hasMoreElements() {
-                return !current.isEmpty();
-            }
-
-            @Override
-            public InputStream nextElement() {
-                if (current.isEmpty()) {
-                    throw new NoSuchElementException();
-                }
-                InputStream is = current.get(0);
-                if (current.size() == 1) {
-                    current = Collections.emptyList();
-                } else {
-                    current = current.subList(1, current.size());
-                }
-                return is;
-            }
-        });
-    }
-
     @SafeVarargs
     public static InputStream aggregate(List<ByteBuffer>... buffers) {
         return new SequenceInputStream(new Enumeration<InputStream>() {
@@ -108,6 +83,31 @@ public class BbBackedInputStream extends InputStream {
     public static InputStream aggregate(List<ByteString> buffers) {
         return aggregate(buffers.stream().map(e -> e.asReadOnlyByteBuffer()).collect(Collectors.toList()));
 
+    }
+
+    public static InputStream aggregateStreams(final List<InputStream> a) {
+        return new SequenceInputStream(new Enumeration<InputStream>() {
+            List<InputStream> current = a;
+
+            @Override
+            public boolean hasMoreElements() {
+                return !current.isEmpty();
+            }
+
+            @Override
+            public InputStream nextElement() {
+                if (current.isEmpty()) {
+                    throw new NoSuchElementException();
+                }
+                InputStream is = current.get(0);
+                if (current.size() == 1) {
+                    current = Collections.emptyList();
+                } else {
+                    current = current.subList(1, current.size());
+                }
+                return is;
+            }
+        });
     }
 
     private final ByteBuffer buf;

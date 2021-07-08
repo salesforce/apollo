@@ -10,23 +10,65 @@ import java.util.function.Predicate;
 
 import com.salesfoce.apollo.ghost.proto.Interval;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class KeyInterval implements Predicate<Digest> {
-    private final Digest begin;
-    private final Digest end;
+    private final Digest        begin;
+    private BloomFilter<Digest> bindingsBff;
+    private BloomFilter<Digest> contentsBff;
+    private final Digest        end;
 
     public KeyInterval(Digest begin, Digest end) {
-        assert begin.compareTo(end) < 0 : begin + " >= " + end;
-        this.begin = begin;
-        this.end = end;
+        this(begin, null, end, null);
     }
 
     public KeyInterval(Interval interval) {
-        this(new Digest(interval.getStart()), new Digest(interval.getEnd()));
+        this(new Digest(interval.getStart()), BloomFilter.from(interval.getBindingsBff()),
+                new Digest(interval.getEnd()), BloomFilter.from(interval.getContentsBff()));
+    }
+
+    private KeyInterval(Digest begin, BloomFilter<Digest> bindingsBff, Digest end, BloomFilter<Digest> contentsBff) {
+        assert begin.compareTo(end) < 0 : begin + " >= " + end;
+        this.begin = begin;
+        this.end = end;
+        this.contentsBff = contentsBff;
+        this.bindingsBff = bindingsBff;
+    }
+
+    public boolean bindingsContains(Digest e) {
+        return bindingsBff.contains(e);
+    }
+
+    public boolean contentsContains(Digest e) {
+        return contentsBff.contains(e);
+    }
+
+    public Digest getBegin() {
+        return begin;
+    }
+
+    public BloomFilter<Digest> getBindingsBff() {
+        return contentsBff;
+    }
+
+    public BloomFilter<Digest> getContentsBff() {
+        return contentsBff;
+    }
+
+    public Digest getEnd() {
+        return end;
+    }
+
+    public void setBindingsBff(BloomFilter<Digest> bindingsBff) {
+        this.bindingsBff = bindingsBff;
+    }
+
+    public void setContentsBff(BloomFilter<Digest> contentsBff) {
+        this.contentsBff = contentsBff;
     }
 
     @Override
@@ -34,20 +76,12 @@ public class KeyInterval implements Predicate<Digest> {
         return begin.compareTo(t) > 0 && end.compareTo(t) > 0;
     }
 
-    public Digest getBegin() {
-        return begin;
-    }
-
-    public Digest getEnd() {
-        return end;
-    }
-
     public Interval toInterval() {
-        return Interval.newBuilder().setStart(begin.toByteString()).setEnd(end.toByteString()).build();
+        return Interval.newBuilder().setStart(begin.toDigeste()).setEnd(end.toDigeste()).build();
     }
 
     @Override
     public String toString() {
-        return String.format("KeyInterval [begin=%s, end=%s]", begin, end);
+        return String.format("[%s, %s]", begin, end);
     }
 }

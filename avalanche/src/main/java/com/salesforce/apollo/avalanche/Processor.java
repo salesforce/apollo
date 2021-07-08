@@ -66,7 +66,7 @@ public interface Processor {
 
         /**
          * Create the genesis block for this view
-         * 
+         *
          * @param data    - the genesis transaction content
          * @param timeout -how long to wait for finalization of the transaction
          * @return a CompleteableFuture indicating whether the transaction is finalized
@@ -116,7 +116,7 @@ public interface Processor {
 
         /**
          * Submit a transaction to the group.
-         * 
+         *
          * @param data    - the transaction content
          * @param timeout -how long to wait for finalization of the transaction
          * @param future  - optional future to be notified of finalization
@@ -146,7 +146,7 @@ public interface Processor {
 
         /**
          * Timeout the pending transaction
-         * 
+         *
          * @param key
          */
         private void timeout(Digest key) {
@@ -167,7 +167,7 @@ public interface Processor {
 
     /**
      * Validate the entry.
-     * 
+     *
      * @return Digest of the conflict set for the entry, or null if invalid.
      */
     Digest validate(Digest key, DagEntry entry);

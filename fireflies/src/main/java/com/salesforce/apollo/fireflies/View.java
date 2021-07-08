@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -55,15 +56,14 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.cert.CaValidator;
-import com.salesforce.apollo.fireflies.communications.FfClient;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.impl.MemberImpl;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
@@ -75,7 +75,7 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
  * garbage collection. It's all very complicated. These complications and many
  * others are detailed in the wonderful
  * <a href= "https://ymsir.com/papers/fireflies-tocs.pdf">Fireflies paper</a>.
- * 
+ *
  * @author hal.hildebrand
  * @since 220
  */
@@ -97,9 +97,7 @@ public class View {
         public boolean equals(Object obj) {
             if (this == obj)
                 return true;
-            if (obj == null)
-                return false;
-            if (getClass() != obj.getClass())
+            if ((obj == null) || (getClass() != obj.getClass()))
                 return false;
             AccTag other = (AccTag) obj;
             if (id == null) {
@@ -178,14 +176,14 @@ public class View {
         /**
          * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
          * 2 * tolerance + 1 gossip rounds across all rings.
-         * 
+         *
          * @param completion TODO
          */
         public void gossip(Runnable completion) {
             if (!started.get()) {
                 return;
             }
-            FfClient link = nextRing();
+            Fireflies link = nextRing();
 
             if (link == null) {
                 log.debug("No members to gossip with on ring: {}", lastRing);
@@ -218,7 +216,7 @@ public class View {
                 return;
             }
 
-            FfClient link = linkFor(successor);
+            Fireflies link = linkFor(successor);
             if (link == null) {
                 log.info("Accusing: {} on: {}", successor.getId(), ring);
                 accuseOn(successor, ring);
@@ -232,7 +230,7 @@ public class View {
          * inbound gossip digest. Respond with the Gossip that represents the digests
          * newer or not known in this view, as well as updates from this node based on
          * out of date information in the supplied digests.
-         * 
+         *
          * @param ring        - the index of the gossip ring the inbound member is
          *                    gossiping from
          * @param digests     - the inbound gossip
@@ -269,7 +267,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            int seed = Utils.secureEntropy().nextInt();
+            long seed = Utils.secureEntropy().nextLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
@@ -332,7 +330,7 @@ public class View {
         /**
          * The third and final message in the anti-entropy protocol. Process the inbound
          * update from another member.
-         * 
+         *
          * @param ring
          * @param update
          * @param from
@@ -345,8 +343,8 @@ public class View {
         /**
          * @return the next ClientCommunications in the next ring
          */
-        FfClient nextRing() {
-            FfClient link = null;
+        Fireflies nextRing() {
+            Fireflies link = null;
             int last = lastRing;
             int current = (last + 1) % getParameters().rings;
             for (int i = 0; i < getParameters().rings; i++) {
@@ -377,18 +375,19 @@ public class View {
     }
 
     public static EndpointProvider getStandardEpProvider(Node node) {
-        return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE, CaValidator.NONE);
+        return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE,
+                CertificateValidator.NONE);
     }
 
     /**
      * Check the validity of a mask. A mask is valid if the following conditions are
      * satisfied:
-     * 
+     *
      * <pre>
      * - The mask is of length 2t+1
      * - the mask has exactly t + 1 enabled elements.
      * </pre>
-     * 
+     *
      * @param mask
      * @return
      */
@@ -399,7 +398,7 @@ public class View {
     /**
      * Communications with other members
      */
-    private final CommonCommunications<FfClient, Service> comm;
+    private final CommonCommunications<Fireflies, Service> comm;
 
     /**
      * View context
@@ -458,8 +457,10 @@ public class View {
         this.metrics = metrics;
         this.node = node;
         this.fjPool = fjPool;
-        this.comm = communications.create(node, id, service, r -> new FfServer(service,
-                communications.getClientIdentityProvider(), metrics, r), getCreate(metrics));
+        this.comm = communications.create(node, id, service,
+                                          r -> new FfServer(service, communications.getClientIdentityProvider(),
+                                                  metrics, r),
+                                          getCreate(metrics, fjPool), Fireflies.getLocalLoopback(node));
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
@@ -563,7 +564,7 @@ public class View {
     /**
      * Accuse the member on the list of rings. If the member has disabled the ring
      * in its mask, do not issue the accusation
-     * 
+     *
      * @param member
      * @param ring
      */
@@ -581,7 +582,7 @@ public class View {
 
     /**
      * Add an inbound accusation to the view.
-     * 
+     *
      * @param accusation
      */
     void add(AccusationWrapper accusation) {
@@ -622,7 +623,7 @@ public class View {
 
     /**
      * Add an accusation into the view,
-     * 
+     *
      * @param accusation
      * @param accuser
      * @param accused
@@ -657,7 +658,7 @@ public class View {
 
     /**
      * Add a new inbound certificate
-     * 
+     *
      * @param cert
      * @return the added member or the real member associated with this certificate
      */
@@ -676,7 +677,7 @@ public class View {
 
     /**
      * add an inbound note to the view
-     * 
+     *
      * @param note
      */
     boolean add(NoteWrapper note) {
@@ -723,7 +724,7 @@ public class View {
 
     /**
      * Add a new member to the view
-     * 
+     *
      * @param member
      */
     Participant add(Participant member) {
@@ -741,7 +742,7 @@ public class View {
 
     /**
      * add an inbound member certificate to the view
-     * 
+     *
      * @param cert
      */
     void add(X509Certificate cert) {
@@ -754,12 +755,12 @@ public class View {
      * gossip protocol of Fireflies provides redirects to what actual members
      * believe the view should be gossiping with, and so new members quickly
      * converge on a common, valid view of the membership
-     * 
+     *
      * @param seed
      */
     void addSeed(Participant seed) {
         Note seedNote = Note.newBuilder()
-                            .setId(seed.getId().toByteString())
+                            .setId(seed.getId().toDigeste())
                             .setEpoch(-1)
                             .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
                                                                                 Utils.secureEntropy())
@@ -773,7 +774,7 @@ public class View {
     /**
      * deserialize the DER encoded certificate. Validate it is signed by the pinned
      * CA certificate trusted.
-     * 
+     *
      * @param encoded
      * @return the deserialized certificate, or null if invalid or not correctly
      *         signed.
@@ -790,7 +791,7 @@ public class View {
         try {
             getParameters().certificateValidator.validateClient(new X509Certificate[] { certificate });
         } catch (CertificateException e) {
-            log.warn("Invalid cert: {}", certificate.getSubjectDN(), e);
+            log.warn("Invalid cert: {}", certificate.getSubjectX500Principal(), e);
             return null;
         }
 
@@ -800,13 +801,13 @@ public class View {
     /**
      * <pre>
      * The member goes from an accused to not accused state. As such,
-     * it may invalidate other accusations. 
+     * it may invalidate other accusations.
      * Let m_j be m's first live successor on ring r.
      * All accusations for members q between m and m_j:
-     *   If q between accuser and accused: invalidate accusation.  
+     *   If q between accuser and accused: invalidate accusation.
      *   If accused now is cleared, rerun for this member.
      * </pre>
-     * 
+     *
      * @param m
      */
     void checkInvalidations(Participant m) {
@@ -828,13 +829,11 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     Digests commonDigests() {
-        int seed = Utils.secureEntropy().nextInt();
+        long seed = Utils.secureEntropy().nextLong();
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff()
-                                                                                                  .toByteString())
-                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff().toByteString())
-                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff()
-                                                                                                    .toByteString())
+                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
                       .build();
     }
 
@@ -843,7 +842,7 @@ public class View {
         member.setFailed(true);
     }
 
-    BloomFilter<Digest> getAccusationsBff(int seed, double p) {
+    BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
                 getParameters().cardinality * getParameters().rings, p);
         context.getActive()
@@ -854,7 +853,7 @@ public class View {
         return bff;
     }
 
-    BloomFilter<Digest> getCertificatesBff(int seed, double p) {
+    BloomFilter<Digest> getCertificatesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values().stream().map(m -> m.getCertificateHash()).filter(e -> e != null).forEach(n -> bff.add(n));
         return bff;
@@ -864,7 +863,7 @@ public class View {
         return getParameters().hashAlgorithm;
     }
 
-    BloomFilter<Digest> getNotesBff(int seed, double p) {
+    BloomFilter<Digest> getNotesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
         view.values().stream().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
@@ -872,7 +871,7 @@ public class View {
 
     /**
      * for testing
-     * 
+     *
      * @return
      */
     Map<Digest, FutureRebutal> getPendingRebutals() {
@@ -881,18 +880,21 @@ public class View {
 
     /**
      * Gossip with the member
-     * 
+     *
      * @param ring       - the index of the gossip ring the gossip is originating
      *                   from in this view
      * @param link       - the outbound communications to the paired member
      * @param completion
      * @throws Exception
      */
-    void gossip(int ring, FfClient link, Runnable completion) {
-        Participant member = link.getMember();
+    void gossip(int ring, Fireflies link, Runnable completion) {
+        Participant member = (Participant) link.getMember();
         NoteWrapper n = node.getNote();
         if (n == null) {
-            link.release();
+            try {
+                link.close();
+            } catch (IOException e) {
+            }
             completion.run();
             return;
         }
@@ -905,7 +907,10 @@ public class View {
                 gossip = futureSailor.get();
             } catch (Throwable e) {
                 log.debug("Exception gossiping with {}", link.getMember(), e);
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e1) {
+                }
                 if (completion != null) {
                     completion.run();
                 }
@@ -918,7 +923,10 @@ public class View {
                           gossip.getAccusations().getUpdatesCount());
             }
             if (gossip.getRedirect()) {
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e) {
+                }
                 redirect(member, gossip, ring);
                 if (completion != null) {
                     completion.run();
@@ -928,7 +936,10 @@ public class View {
                 if (!isEmpty(update)) {
                     link.update(context.getId(), ring, update);
                 }
-                link.release();
+                try {
+                    link.close();
+                } catch (IOException e) {
+                }
                 if (completion != null) {
                     completion.run();
                 }
@@ -939,7 +950,7 @@ public class View {
     /**
      * If member currently is accused on ring, keep the new accusation only if it is
      * from a closer predecessor.
-     * 
+     *
      * @param q
      * @param ring
      * @param check
@@ -975,7 +986,7 @@ public class View {
      * @return the communication link for this ring, based on current membership
      *         state
      */
-    FfClient linkFor(Integer ring) {
+    Fireflies linkFor(Integer ring) {
         Participant successor = context.ring(ring).successor(node, m -> !m.isFailed());
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {}", ring, context.ring(ring).size());
@@ -1013,27 +1024,30 @@ public class View {
      * fundamental to a good quality mesh. But on the off chance there's an overlap
      * in the rings, we need to only monitor each link only once, or it skews the
      * failure detection with the short interval.
-     * 
+     *
      * @param link     - the ClientCommunications link to check
      * @param lastRing - the ring for this link
      */
-    void monitor(FfClient link, int lastRing) {
+    void monitor(Fireflies link, int lastRing) {
         try {
             link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
         } catch (Exception e) {
             log.debug("Exception pinging {} : {} : {}", link.getMember().getId(), e.toString(),
                       e.getCause().getMessage());
-            accuseOn(link.getMember(), lastRing);
+            accuseOn((Participant) link.getMember(), lastRing);
         } finally {
-            link.release();
+            try {
+                link.close();
+            } catch (IOException e) {
+            }
         }
     }
 
     /**
      * Drive one round of the View. This involves a round of gossip() and a round of
      * monitor().
-     * 
+     *
      * @param scheduler
      * @param d
      */
@@ -1083,13 +1097,13 @@ public class View {
      * the list of digests the view requires, as well as proposed updates based on
      * the inbound digets that the view has more recent information. Do not forward
      * accusations from crashed members
-     * 
+     *
      * @param digests
      * @param p
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, int seed, double p) {
+    AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, long seed, double p) {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1098,13 +1112,13 @@ public class View {
                .flatMap(m -> m.getAccusations())
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
-        builder.setBff(getAccusationsBff(seed, p).toBff().toByteString());
+        builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
         log.trace("process accusations produded updates: {}", gossip.getUpdatesCount());
         return gossip;
     }
 
-    CertificateGossip processCertificateDigests(Digest from, BloomFilter<Digest> bff, int seed, double p) {
+    CertificateGossip processCertificateDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         log.trace("process cert digests");
         CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1116,7 +1130,7 @@ public class View {
             .map(m -> m.getEncodedCertificate())
             .filter(cert -> cert != null)
             .forEach(cert -> builder.addUpdates(cert));
-        builder.setBff(getCertificatesBff(seed, p).toBff().toByteString());
+        builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
         log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
         return gossip;
@@ -1127,13 +1141,13 @@ public class View {
      * the view's state and the digests of the gossip. Update the reply with the
      * list of digests the view requires, as well as proposed updates based on the
      * inbound digets that the view has more recent information
-     * 
+     *
      * @param from
      * @param digests
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, int seed, double p) {
+    NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1144,7 +1158,7 @@ public class View {
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
-        builder.setBff(getNotesBff(seed, p).toBff().toByteString());
+        builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
         return gossip;
@@ -1153,7 +1167,7 @@ public class View {
     /**
      * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
      * state change driving the view.
-     * 
+     *
      * @param gossip
      */
     void processUpdates(Gossip gossip) {
@@ -1164,7 +1178,7 @@ public class View {
     /**
      * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
      * state change driving the view.
-     * 
+     *
      * @param certificatUpdates
      * @param noteUpdates
      * @param accusationUpdates
@@ -1191,7 +1205,7 @@ public class View {
 
     /**
      * recover a member from the failed state
-     * 
+     *
      * @param member
      */
     void recover(Participant member) {
@@ -1206,7 +1220,7 @@ public class View {
 
     /**
      * Redirect the member to the successor from this view's perspective
-     * 
+     *
      * @param member
      * @param ring
      * @param successor
@@ -1237,7 +1251,7 @@ public class View {
     /**
      * Process the gossip response, providing the updates requested by the the other
      * member and processing the updates provided by the other member
-     * 
+     *
      * @param gossip
      * @return the Update based on the processing of the reply from the other member
      */
@@ -1248,7 +1262,7 @@ public class View {
 
     /**
      * Initiate a timer to track the accussed member
-     * 
+     *
      * @param m
      */
     void startRebutalTimer(Participant m) {
@@ -1270,7 +1284,7 @@ public class View {
 
     /**
      * Update the member with a new certificate
-     * 
+     *
      * @param member
      * @param cert
      */
@@ -1282,7 +1296,7 @@ public class View {
     /**
      * Process the gossip reply. Return the gossip with the updates determined from
      * the inbound digests.
-     * 
+     *
      * @param gossip
      * @return
      */
@@ -1317,7 +1331,7 @@ public class View {
         return builder.build();
     }
 
-    private FfClient linkFor(Participant m) {
+    private Fireflies linkFor(Participant m) {
         try {
             return comm.apply(m, node);
         } catch (Throwable e) {

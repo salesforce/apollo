@@ -17,11 +17,15 @@ import java.sql.SQLException;
 import java.sql.SQLType;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -118,12 +122,8 @@ public class Mutator {
             return new Completion<>();
         }
 
-        public Digest submit() {
-            return node.submit(null, (r, t) -> process(r, t), build());
-        }
-
-        public Digest submit(BiConsumer<Boolean, Throwable> onSubmit) {
-            return node.submit(onSubmit, (r, t) -> process(r, t), build());
+        public Digest submit(BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
+            return node.submit(onSubmit, (r, t) -> process(r, t), build(), timeout);
         }
 
         private Message build() {
@@ -395,68 +395,203 @@ public class Mutator {
         return new BatchBuilder(node);
     }
 
-    public Digest execute(Batch batch) {
-        return node.submit(null, null, batch);
-    }
-
-    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor) {
-        return node.submit(null, processor, batch);
+    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor, BiConsumer<Digest, Throwable> onSubmit,
+                          Duration timeout) {
+        return node.submit(onSubmit, processor, batch, timeout);
     }
 
     public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, batch);
+                          Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), processor, batch, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
-    public Digest execute(BatchUpdate batchUpdate) {
-        return node.submit(null, null, batchUpdate);
-    }
-
-    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor) {
-        return node.submit(null, processor, batchUpdate);
+    public Digest execute(Batch batch, Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), null, batch, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
     public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, batchUpdate);
+                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, batchUpdate, timeout);
     }
 
-    public <T> Digest execute(Call call) {
-        return node.submit(null, null, call);
+    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor,
+                          Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), processor, batchUpdate, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
-    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor) {
-        return node.submit(null, processor, call);
+    public Digest execute(BatchUpdate batchUpdate, Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), defaultSubmit(submitted), batchUpdate, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
     public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, call);
+                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, call, timeout);
     }
 
-    public Digest execute(Script script) {
-        return node.submit(null, null, script);
+    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor,
+                          Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), processor, call, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
-    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor) {
-        return node.submit(null, processor, script);
+    public <T> Digest execute(Call call, Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), null, call, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
+    }
+
+    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor, BiConsumer<Digest, Throwable> onSubmit,
+                              Duration timeout) {
+        return node.submit(onSubmit, processor, script, timeout);
     }
 
     public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor,
-                              BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, script);
+                              Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), processor, script, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
-    public Digest execute(Statement statement) {
-        return node.submit(null, null, statement);
-    }
-
-    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor) {
-        return node.submit(null, processor, statement);
+    public Digest execute(Script script, Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), null, script, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
     }
 
     public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor,
-                          BiConsumer<Boolean, Throwable> onSubmit) {
-        return node.submit(onSubmit, processor, statement);
+                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
+        return node.submit(onSubmit, processor, statement, timeout);
+    }
+
+    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor,
+                          Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), processor, statement, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
+    }
+
+    public Digest execute(Statement statement, Duration timeout) throws TimeoutException {
+        CompletableFuture<Digest> submitted = new CompletableFuture<>();
+        node.submit(defaultSubmit(submitted), null, statement, timeout);
+        try {
+            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e);
+            throw toe;
+        } catch (ExecutionException e) {
+            TimeoutException toe = new TimeoutException("Execution error");
+            toe.initCause(e.getCause());
+            throw toe;
+        }
+    }
+
+    private BiConsumer<Digest, Throwable> defaultSubmit(CompletableFuture<Digest> submitted) {
+        return (b, t) -> {
+            if (t != null) {
+                submitted.completeExceptionally(t);
+                return;
+            }
+            submitted.complete(b);
+        };
     }
 }

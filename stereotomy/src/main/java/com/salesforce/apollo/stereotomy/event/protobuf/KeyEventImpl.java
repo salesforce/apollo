@@ -50,8 +50,13 @@ abstract public class KeyEventImpl implements KeyEvent {
     }
 
     @Override
+    public final byte[] getBytes() {
+        return toByteString().toByteArray();
+    }
+
+    @Override
     public Format getFormat() {
-        return Format.valueOf(common.getFormat());
+        return Format.valueOf(header.getVersion().getFormat());
     }
 
     @Override
@@ -60,10 +65,13 @@ abstract public class KeyEventImpl implements KeyEvent {
     }
 
     @Override
+    public String getIlk() {
+        return header.getIlk();
+    }
+
+    @Override
     public EventCoordinates getPrevious() {
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates previous = common.getPrevious();
-        return new EventCoordinates(identifier(previous.getIdentifier()), previous.getSequenceNumber(),
-                digest(previous.getDigest()));
+        return EventCoordinates.from(common.getPrevious());
     }
 
     @Override
@@ -95,11 +103,6 @@ abstract public class KeyEventImpl implements KeyEvent {
     @Override
     public Digest hash(DigestAlgorithm digest) {
         return new Digest(digest, digest.hashOf(toByteString()));
-    }
-
-    @Override
-    public final byte[] getBytes() {
-        return toByteString().toByteArray();
     }
 
     protected abstract ByteString toByteString();

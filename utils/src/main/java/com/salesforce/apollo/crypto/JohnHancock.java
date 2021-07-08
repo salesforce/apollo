@@ -14,6 +14,7 @@ import java.util.Objects;
 import org.bouncycastle.util.encoders.Hex;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -27,17 +28,31 @@ public class JohnHancock {
         return new JohnHancock(bs);
     }
 
-    final byte[]                     bytes;
-    private final SignatureAlgorithm algorithm;
-
-    public JohnHancock(ByteString bs) {
-        this(bs.asReadOnlyByteBuffer());
+    public static JohnHancock from(Sig signature) {
+        return new JohnHancock(signature);
     }
+
+    public static JohnHancock of(Sig signature) {
+        return new JohnHancock(signature);
+    }
+
+    final byte[] bytes;
+
+    private final SignatureAlgorithm algorithm;
 
     public JohnHancock(ByteBuffer buff) {
         this.algorithm = SignatureAlgorithm.fromSignatureCode(buff.get());
         bytes = new byte[algorithm.signatureLength()];
         buff.get(bytes);
+    }
+
+    public JohnHancock(ByteString bs) {
+        this(bs.asReadOnlyByteBuffer());
+    }
+
+    public JohnHancock(Sig sig) {
+        this.algorithm = SignatureAlgorithm.fromSignatureCode(sig.getCode());
+        bytes = sig.getSignature().toByteArray();
     }
 
     public JohnHancock(SignatureAlgorithm algorithm, byte[] bytes) {
@@ -78,12 +93,25 @@ public class JohnHancock {
         try {
             return ByteString.readFrom(BbBackedInputStream.aggregate(new byte[] { algorithm.signatureCode() }, bytes));
         } catch (IOException e) {
-            throw new IllegalStateException("Cannot serialize to ByteString", e);
+            throw new IllegalStateException("Cannot deserialize to ByteString", e);
         }
+    }
+
+    public Digest toDigest(DigestAlgorithm digestAlgorithm) {
+        if (digestAlgorithm.digestLength() * 2 != algorithm.signatureLength()) {
+            throw new IllegalArgumentException("Cannot convert to a hash, as digest and signature length are not compatible");
+        }
+        Digest a = new Digest(digestAlgorithm, Arrays.copyOf(bytes, digestAlgorithm.digestLength()));
+        Digest b = new Digest(digestAlgorithm, Arrays.copyOfRange(bytes, digestAlgorithm.digestLength(), bytes.length));
+        return a.xor(b);
+    }
+
+    public Sig toSig() {
+        return Sig.newBuilder().setCode(algorithm.signatureCode()).setSignature(ByteString.copyFrom(bytes)).build();
     }
 
     @Override
     public String toString() {
-        return "Sig[algorithm[" + algorithm + ":" + Hex.toHexString(bytes).substring(0, 12);
+        return "Sig[" + Hex.toHexString(bytes).substring(0, 12) + ":" + algorithm.signatureCode() + "]";
     }
 }

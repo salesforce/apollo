@@ -5,93 +5,150 @@ option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
 option java_outer_classname = "StereotomyProto";
 option objc_class_prefix = "Stereo";
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+import "util.proto";
 
 package stereotomy;
 
+// The KERI Identifier
+message Ident {
+    oneof type {
+        utils.PubKey basic = 1; 
+        utils.Digeste selfAddressing = 2;
+        utils.Sig selfSigning = 3;
+        AID autonomous = 4;
+        bool NONE = 5;
+    }
+}
+
+// Coordinates of an event
+message EventCoords {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    string ilk = 3;
+    utils.Digeste digest = 4;
+}
+
+// Location of an event
+message EventLoc {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    utils.Digeste digest = 3;
+}
+
+// Location of the delegating event
+message DelegatingEventCoords {
+    Ident identifier = 1;
+    int64 sequenceNumber = 2;
+    EventCoords previous = 3;
+    string ilk = 4;
+}
+
+// Coordinates of a key
+message KeyCoords {
+    EventCoords establishment = 1;
+    int32 keyIndex = 2;
+}
+
+// Sealed content for events
+message Sealed {
+    oneof type {
+        EventCoords eventCoordinates = 1;
+        DelegatingEventCoords delegatingLocation = 2;
+        utils.Digeste digest = 3;
+        EventLoc event = 4;
+        bytes bits = 5;
+    }
+}
+
+// Autonomous Identifier
+message AID {
+    Ident prefix = 1;
+    string url = 2;
+}
+
+// Common header for events
 message Header {
     int64 sequenceNumber = 1;
-    bytes identifier = 2;
-    bytes priorEventDigest = 3;
+    Ident identifier = 2;
+    utils.Digeste priorEventDigest = 3;
     Version version = 4;
-    string eventType = 5;
+    string ilk = 5;
 }
 
+// Common configuration, signature authentication and coordinates of the previous event
 message EventCommon {
-    string format = 1;
-    bytes configuration = 2;
-    EventCoordinates previous = 3;
-    map<int32, bytes> authentication = 4;
+    utils.Digeste configuration = 2;
+    EventCoords previous = 3;
+    map<int32, utils.Sig> authentication = 4;
 }
 
+// The interaction specification and common event structure
 message InteractionEvent {
     InteractionSpec specification = 1;
     EventCommon common = 2;
 }
 
+// Specification of an interaction
 message InteractionSpec {
     Header header = 1;
-    repeated Seal seals = 2;
+    repeated Sealed seals = 2;
 }
 
+// An attactment to an event in the KEL
 message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
-    EventCoordinates coordinates = 3;
-    map<int32, bytes> endorsements = 5; 
+    EventCoords coordinates = 3;
+    map<int32, utils.Sig> endorsements = 5; 
     repeated Receipt receipts = 6;
 }
 
+// The establishment criteria and record of a key
 message Establishment {
     SigningThreshold signingThreshold = 1;
-    repeated bytes keys = 2;
-    bytes nextKeysDigest = 3;
+    repeated utils.PubKey keys = 2;
+    utils.Digeste nextKeysDigest = 3;
     int32 witnessThreshold = 4;
 }
 
+// The rotation of a key
 message RotationEvent {
     RotationSpec specification = 1; 
     EventCommon common = 2;
-    EventCoordinates delegatingEvent = 3;
+    Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
+// The specification of the rotation of a key
 message RotationSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated bytes witnessesRemoved = 3;
-    repeated bytes witnessesAdded = 41;
-    repeated Seal seals = 5;
+    repeated Ident witnessesRemoved = 3;
+    repeated Ident witnessesAdded = 41;
+    repeated Sealed seals = 5;
 }
 
+// The birth of a key
 message InceptionEvent {
     IdentifierSpec specification = 1;
     EventCommon common = 2;
-    EventCoordinates delegatingEvent = 3;
-    bytes identifier = 4;
+    DelegatingEventCoords delegatingEvent = 3;
+    Ident identifier = 4;
+    Sealed delegatingSeal = 5; // Delegated inception event
 }
 
+// The specification of an identififer
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
-    repeated bytes witnesses = 3;
+    repeated Ident witnesses = 3;
     repeated string configuration = 4;
 }
 
-message EventCoordinates {
-    int64 sequenceNumber = 1;
-    bytes identifier = 2;
-    bytes digest = 3;
-}
-
-message Seal {
-    oneof type {
-        bytes digest = 1;
-        EventCoordinates coordinates = 2;
-    }
-}
-
 message Receipt {
-    EventCoordinates coordinates = 1;
-    map<int32, bytes> signatures = 2;
+    EventCoords coordinates = 1;
+    map<int32, utils.Sig> signatures = 2;
 }
 
 message Weight {
@@ -109,26 +166,35 @@ message SigningThreshold {
 }
 
 message Version {
-    int32 major = 1;
-    int32 minor = 2;
+    string format = 1;
+    int32 major = 2;
+    int32 minor = 3;
 }
 
-
-message StoredKeyState {
-    bytes identifier = 1;
-    bytes digest = 2;
-    EventCoordinates coordinates = 3;
-    EventCoordinates lastEvent = 4;
-    EventCoordinates lastEstablishmentEvent = 5;
-    bytes delegatingIdentifier = 6;
-    repeated bytes keys = 7;
-    bytes nextKeyConfigurationDigest = 8;
+// This is the Jesus Nut.  KeyState represents the materialized state of an identifier and corresponding public/private keys, KEL and KERL
+message KeyState {
+    Ident identifier = 1;
+    utils.Digeste digest = 2;
+    EventCoords coordinates = 3;
+    EventCoords lastEvent = 4;
+    EventCoords lastEstablishmentEvent = 5;
+    Ident delegatingIdentifier = 6;
+    repeated utils.PubKey keys = 7;
+    utils.Digeste nextKeyConfigurationDigest = 8;
     repeated string configurationTraits = 9;
     SigningThreshold signingThreshold = 10;
-    repeated bytes witnesses = 11;
+    repeated Ident witnesses = 11;
     int32 witnessThreshold = 12;
 }
 
 message Signatures {
-    map<int32, bytes> signatures = 1;
+    map<int32, utils.Sig> signatures = 1;
+}
+
+// A binding
+message Bound {
+    Ident prefix = 1;
+    google.protobuf.Any value = 2;
+    utils.Sig signature = 3;
+    bool timeout = 4;
 }

@@ -25,7 +25,7 @@ import com.salesforce.apollo.membership.Member;
  */
 public class BootstrapClient implements BootstrapService {
 
-    public static CreateClientCommunications<BootstrapClient> getCreate(ConsortiumMetrics metrics) {
+    public static CreateClientCommunications<BootstrapService> getCreate(ConsortiumMetrics metrics) {
         return (t, f, c) -> new BootstrapClient(c, t, metrics);
 
     }
@@ -58,11 +58,17 @@ public class BootstrapClient implements BootstrapService {
         return client.fetchViewChain(replication);
     }
 
+    @Override
     public Member getMember() {
         return member;
     }
 
     public void release() {
+        close();
+    }
+
+    @Override
+    public void close() {
         channel.release();
     }
 

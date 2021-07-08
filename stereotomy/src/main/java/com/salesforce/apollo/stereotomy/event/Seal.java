@@ -6,7 +6,11 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.EventLoc;
+import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -14,6 +18,8 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface Seal {
     interface CoordinatesSeal extends Seal {
+        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 1 });
+
         static CoordinatesSeal construct(EventCoordinates coordinates) {
             return new CoordinatesSeal() {
 
@@ -21,13 +27,52 @@ public interface Seal {
                 public EventCoordinates getEvent() {
                     return coordinates;
                 }
+
+                @Override
+                public byte sealCode() {
+                    return 1;
+                }
+
+                @Override
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setEventCoordinates(coordinates.toEventCoords()).build();
+                }
             };
         }
 
         EventCoordinates getEvent();
     }
 
+    interface DelegatingLocationSeal extends Seal {
+        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 2 });
+
+        static DelegatingLocationSeal construct(DelegatingEventCoordinates coordinates) {
+            return new DelegatingLocationSeal() {
+
+                @Override
+                public DelegatingEventCoordinates getCoordinates() {
+                    return coordinates;
+                }
+
+                @Override
+                public byte sealCode() {
+                    return 2;
+                }
+
+                @Override
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setDelegatingLocation(coordinates.toCoords()).build();
+                }
+            };
+        }
+
+        DelegatingEventCoordinates getCoordinates();
+
+    }
+
     interface DigestSeal extends Seal {
+        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 3 });
+
         static DigestSeal construct(Digest digest) {
             return new DigestSeal() {
 
@@ -35,9 +80,86 @@ public interface Seal {
                 public Digest getDigest() {
                     return digest;
                 }
+
+                @Override
+                public byte sealCode() {
+                    return 3;
+                }
+
+                @Override
+                public Sealed toSealed() {
+                    return Sealed.newBuilder().setDigest(digest.toDigeste()).build();
+                }
             };
         }
 
         Digest getDigest();
     }
+
+    interface EventSeal extends Seal {
+        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 4 });
+
+        static EventSeal construct(Identifier prefix, Digest digest, long sequenceNumber) {
+            return new EventSeal() {
+
+                @Override
+                public Digest getDigest() {
+                    return digest;
+                }
+
+                @Override
+                public Identifier getPrefix() {
+                    return prefix;
+                }
+
+                @Override
+                public long getSequenceNumber() {
+                    return sequenceNumber;
+                }
+
+                @Override
+                public byte sealCode() {
+                    return 4;
+                }
+
+                @Override
+                public Sealed toSealed() {
+                    return Sealed.newBuilder()
+                                 .setEvent(EventLoc.newBuilder()
+                                                   .setIdentifier(prefix.toIdent())
+                                                   .setSequenceNumber(sequenceNumber))
+                                 .setDigest(digest.toDigeste())
+                                 .build();
+                }
+            };
+        }
+
+        Digest getDigest();
+
+        Identifier getPrefix();
+
+        long getSequenceNumber();
+    }
+
+    static Seal from(Sealed s) {
+        if (s.hasEventCoordinates()) {
+            return CoordinatesSeal.construct(new EventCoordinates(s.getEventCoordinates()));
+        }
+        if (s.hasDelegatingLocation()) {
+            return DelegatingLocationSeal.construct(new DelegatingEventCoordinates(s.getDelegatingLocation()));
+        }
+        if (s.hasDigest()) {
+            return DigestSeal.construct(Digest.from(s.getDigest()));
+        }
+        if (s.hasEvent()) {
+            EventLoc event = s.getEvent();
+            return EventSeal.construct(Identifier.from(event.getIdentifier()), new Digest(event.getDigest()),
+                                       event.getSequenceNumber());
+        }
+        throw new IllegalArgumentException("Unknown seal type");
+    }
+
+    byte sealCode();
+
+    Sealed toSealed();
 }

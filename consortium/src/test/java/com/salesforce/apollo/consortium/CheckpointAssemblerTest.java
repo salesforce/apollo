@@ -10,7 +10,7 @@ import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,9 +46,11 @@ import com.salesfoce.apollo.consortium.proto.Checkpoint;
 import com.salesfoce.apollo.consortium.proto.CheckpointReplication;
 import com.salesfoce.apollo.consortium.proto.CheckpointSegments;
 import com.salesfoce.apollo.consortium.proto.Slice;
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.consortium.Consortium.BootstrappingService;
+import com.salesforce.apollo.consortium.Consortium.Bootstrapping;
 import com.salesforce.apollo.consortium.comms.BootstrapClient;
+import com.salesforce.apollo.consortium.comms.BootstrapService;
 import com.salesforce.apollo.consortium.support.CheckpointAssembler;
 import com.salesforce.apollo.consortium.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
@@ -59,8 +61,8 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.utils.BloomFilter;
 import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -147,7 +149,7 @@ public class CheckpointAssemblerTest {
             @Override
             public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<CheckpointSegments> futureSailor = SettableFuture.create();
-                CheckpointReplication rep = invocation.getArgumentAt(0, CheckpointReplication.class);
+                CheckpointReplication rep = invocation.getArgument(0, CheckpointReplication.class);
                 List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 10, entropy);
                 System.out.println("Fetched: " + fetched.size());
                 futureSailor.set(CheckpointSegments.newBuilder().addAllSegments(fetched).build());
@@ -155,12 +157,12 @@ public class CheckpointAssemblerTest {
             }
         });
         @SuppressWarnings("unchecked")
-        CommonCommunications<BootstrapClient, BootstrappingService> comm = mock(CommonCommunications.class);
+        CommonCommunications<BootstrapService, Bootstrapping> comm = mock(CommonCommunications.class);
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.00125,
-                DigestAlgorithm.DEFAULT);
+                DigestAlgorithm.DEFAULT, Router.createFjPool());
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10));

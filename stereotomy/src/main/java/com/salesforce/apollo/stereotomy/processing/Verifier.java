@@ -15,25 +15,23 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.store.StateStore;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class Verifier {
-    private static final Logger log = LoggerFactory.getLogger(Verifier.class);
+public interface Verifier {
+    static final Logger log = LoggerFactory.getLogger(Verifier.class);
 
-    private StateStore keyEventStore;
-
-    public HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
-                                                              Map<Integer, JohnHancock> signatures) {
-        Optional<KeyEvent> lookup = keyEventStore.getKeyEvent(state.getLastEstablishmentEvent());
+    default HashMap<Integer, JohnHancock> verifyAuthentication(KeyState state, KeyEvent event,
+                                                               Map<Integer, JohnHancock> signatures, KEL kel) {
+        Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
         if (lookup.isEmpty()) {
             throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
         }
@@ -67,8 +65,8 @@ public class Verifier {
         return verifiedSignatures;
     }
 
-    public Map<Integer, JohnHancock> verifyEndorsements(KeyState state, KeyEvent event,
-                                                        Map<Integer, JohnHancock> receipts) {
+    default Map<Integer, JohnHancock> verifyEndorsements(KeyState state, KeyEvent event,
+                                                         Map<Integer, JohnHancock> receipts) {
         var validReceipts = new HashMap<Integer, JohnHancock>();
         for (var kv : receipts.entrySet()) {
             var witnessIndex = kv.getKey();
@@ -96,22 +94,22 @@ public class Verifier {
         return validReceipts;
     }
 
-    public Map<EventCoordinates, Map<Integer, JohnHancock>> verifyReceipts(KeyEvent event,
-                                                                           Map<EventCoordinates, Map<Integer, JohnHancock>> otherReceipts) {
+    default Map<EventCoordinates, Map<Integer, JohnHancock>> verifyReceipts(KeyEvent event,
+                                                                            Map<EventCoordinates, Map<Integer, JohnHancock>> otherReceipts,
+                                                                            KEL kel) {
         var verified = new HashMap<EventCoordinates, Map<Integer, JohnHancock>>();
         for (var kv : otherReceipts.entrySet()) {
             // TODO escrow or something
-            Optional<KeyState> keyState = this.keyEventStore.getKeyState(kv.getKey());
+            Optional<KeyState> keyState = kel.getKeyState(kv.getKey());
 
             if (keyState.isEmpty()) {
                 continue;
             }
 
-            var verifiedSignatures = this.verifyAuthentication(keyState.get(), event, kv.getValue());
+            var verifiedSignatures = verifyAuthentication(keyState.get(), event, kv.getValue(), kel);
             verified.put(kv.getKey(), verifiedSignatures);
         }
 
         return verified;
     }
-
 }

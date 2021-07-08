@@ -54,7 +54,7 @@ public class UpdaterTest {
         updater.getExecutor()
                .execute(DigestAlgorithm.DEFAULT.getOrigin(),
                         ExecutedTransaction.newBuilder()
-                                           .setHash(Digest.NONE.toByteString())
+                                           .setHash(Digest.NONE.toDigeste())
                                            .setTransaction(transaction)
                                            .build(),
                         null);

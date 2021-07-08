@@ -6,12 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
-
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.Seal.DelegatingLocationSeal;
 
 /**
  * @author hal.hildebrand
@@ -24,12 +21,7 @@ public class DelegatedInceptionEventImpl extends InceptionEventImpl implements D
     }
 
     @Override
-    public DelegatingEventCoordinates getDelegatingEvent() {
-        EventCoordinates coordinates = getCoordinates();
-        com.salesfoce.apollo.stereotomy.event.proto.EventCoordinates delegated = event.getDelegatingEvent();
-        return new DelegatingEventCoordinates(coordinates.getIdentifier(), coordinates.getSequenceNumber(),
-                new EventCoordinates(identifier(delegated.getIdentifier()), delegated.getSequenceNumber(),
-                        digest(delegated.getDigest())));
-
+    public DelegatingLocationSeal getDelegatingSeal() { 
+        return (DelegatingLocationSeal) Seal.from(event.getDelegatingSeal());
     }
 }

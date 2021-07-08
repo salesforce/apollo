@@ -14,11 +14,13 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.Map;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -68,9 +70,11 @@ public interface Member extends Comparable<Member> {
         return new InetSocketAddress(hostName, port);
     }
 
+    @Override
     int compareTo(Member o);
 
     // The id of a member uniquely identifies it
+    @Override
     boolean equals(Object obj);
 
     /**
@@ -83,6 +87,11 @@ public interface Member extends Comparable<Member> {
      */
     Digest getId();
 
+    default SelfAddressingIdentifier getIdentifier() {
+        return new SelfAddressingIdentifier(getId());
+    }
+
+    @Override
     int hashCode();
 
     /**
@@ -101,5 +110,9 @@ public interface Member extends Comparable<Member> {
     }
 
     boolean verify(JohnHancock signature, InputStream message);
+
+    default boolean verify(JohnHancock sig, List<ByteBuffer> buffers) {
+        return verify(sig, BbBackedInputStream.aggregate(buffers));
+    }
 
 }

@@ -18,7 +18,6 @@ import java.security.spec.ECPrivateKeySpec;
 import java.security.spec.ECPublicKeySpec;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,12 +26,6 @@ import com.salesforce.apollo.utils.Hex;
 public class EcDSAOperationsTests {
 
     ECParameterSpec parameterSpec;
-
-    @BeforeAll
-    public static void beforeClass() {
-        // secp256k1 is considered "unsecure" so you have enable it like this:
-        System.setProperty("jdk.sunec.disableNative", "false");
-    }
 
     @BeforeEach
     public void setUp() throws GeneralSecurityException {
@@ -73,11 +66,11 @@ public class EcDSAOperationsTests {
         var result = (ECPublicKey) ops.publicKey(encoded);
 
         assertEquals("EC", result.getAlgorithm());
-        
+
         assertEquals(this.parameterSpec.getCofactor(), result.getParams().getCofactor());
         assertEquals(this.parameterSpec.getCurve(), result.getParams().getCurve());
         assertEquals(this.parameterSpec.getGenerator(), result.getParams().getGenerator());
-        assertEquals(this.parameterSpec.getOrder(), result.getParams().getOrder()); 
+        assertEquals(this.parameterSpec.getOrder(), result.getParams().getOrder());
 
         var expectedPoint = new ECPoint(
                 new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0", 16),
@@ -103,7 +96,7 @@ public class EcDSAOperationsTests {
         assertEquals(this.parameterSpec.getCofactor(), decoding.getParams().getCofactor());
         assertEquals(this.parameterSpec.getCurve(), decoding.getParams().getCurve());
         assertEquals(this.parameterSpec.getGenerator(), decoding.getParams().getGenerator());
-        assertEquals(this.parameterSpec.getOrder(), decoding.getParams().getOrder()); 
+        assertEquals(this.parameterSpec.getOrder(), decoding.getParams().getOrder());
 
         assertEquals(w, decoding.getW());
     }

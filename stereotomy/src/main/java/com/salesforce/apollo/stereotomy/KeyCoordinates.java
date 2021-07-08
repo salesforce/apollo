@@ -10,28 +10,15 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KeyCoords;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class KeyCoordinates {
-
-    public static KeyCoordinates convert(KeyCoordinates coordinates) {
-        if (coordinates instanceof KeyCoordinates) {
-            return (KeyCoordinates) coordinates;
-        }
-
-        return new KeyCoordinates(coordinates.getEstablishmentEvent(), coordinates.getKeyIndex());
-    }
-
-    public static KeyCoordinates of(BasicIdentifier basicIdentifier) {
-        EventCoordinates coordinates = EventCoordinates.of(basicIdentifier);
-        return new KeyCoordinates(coordinates, 0);
-    }
 
     public static KeyCoordinates of(EstablishmentEvent establishmentEvent, int keyIndex) {
         EventCoordinates coordinates = EventCoordinates.of(establishmentEvent);
@@ -41,6 +28,13 @@ public class KeyCoordinates {
     private final EventCoordinates establishmentEvent;
     private final int              keyIndex;
 
+    public KeyCoords toKeyCoords() {
+        return KeyCoords.newBuilder()
+                        .setEstablishment(establishmentEvent.toEventCoords())
+                        .setKeyIndex(keyIndex)
+                        .build();
+    }
+
     public KeyCoordinates(EventCoordinates establishmentEvent, int keyIndex) {
         if (keyIndex < 0) {
             throw new IllegalArgumentException("keyIndex must be >= 0");
@@ -48,6 +42,11 @@ public class KeyCoordinates {
 
         this.establishmentEvent = requireNonNull(establishmentEvent, "establishmentEvent");
         this.keyIndex = keyIndex;
+    }
+
+    public KeyCoordinates(KeyCoords coordinates) {
+        establishmentEvent = new EventCoordinates(coordinates.getEstablishment());
+        keyIndex = coordinates.getKeyIndex();
     }
 
     @Override
