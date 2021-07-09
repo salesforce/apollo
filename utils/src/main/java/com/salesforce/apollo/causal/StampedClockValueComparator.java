@@ -26,7 +26,7 @@ import java.util.Comparator;
  * <p>
  *
  */
-public class StampedClockValueComparator<T extends Comparable<T>, S> implements Comparator<StampedClockValue<T, S>> {
+public class StampedClockValueComparator<T extends Comparable<T>> implements Comparator<StampedClockValue<T>> {
     private final double fpr;
 
     /**
@@ -54,7 +54,7 @@ public class StampedClockValueComparator<T extends Comparable<T>, S> implements 
      * function returns -1.
      */
     @Override
-    public int compare(StampedClockValue<T, S> a, StampedClockValue<T, S> b) {
+    public int compare(StampedClockValue<T> a, StampedClockValue<T> b) {
         var comparison = a.compareTo(fpr, b);
         if (comparison > 0) {
             return 1;

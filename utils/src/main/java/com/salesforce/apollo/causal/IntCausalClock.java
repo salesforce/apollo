@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 
 import com.salesfoce.apollo.utils.proto.Clock;
-import com.salesfoce.apollo.utils.proto.IntStampedClock;
+import com.salesfoce.apollo.utils.proto.StampedClock;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -21,7 +21,8 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Lock lock)
-                            implements CausalClock<Integer, IntStampedClock> {
+                            implements CausalClock<Integer> {
+     
 
     @Override
     public Integer instant() {
@@ -44,14 +45,13 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public IntStampedClock toStampedClock() {
-        return locked(() -> IntStampedClock.newBuilder().setStamp(sequenceNumber.get()).setClock(clock.toClock())
-                                           .build(),
+    public StampedClock toStampedClock() {
+        return locked(() -> StampedClock.newBuilder().setInt(sequenceNumber.get()).setClock(clock.toClock()).build(),
                       lock);
     }
 
     @Override
-    public StampedClockValue<Integer, IntStampedClock> observe(Digest digest) {
+    public StampedClockValue<Integer> observe(Digest digest) {
         return locked(() -> {
             clock.add(digest);
             return new IntStampedClockValue(clock.toBloomClockValue(), sequenceNumber.get());
@@ -59,7 +59,7 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public StampedClockValue<Integer, IntStampedClock> merge(StampedClockValue<Integer, IntStampedClock> b) {
+    public StampedClockValue<Integer> merge(StampedClockValue<Integer> b) {
         return locked(() -> {
             clock.merge(b);
             int sequence = Math.max(sequenceNumber.get(), b.instant());
@@ -69,14 +69,14 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
     }
 
     @Override
-    public IntStampedClock stamp() {
-        return locked(() -> IntStampedClock.newBuilder().setStamp(sequenceNumber.incrementAndGet())
-                                           .setClock(clock.toClock()).build(),
+    public StampedClock stamp() {
+        return locked(() -> StampedClock.newBuilder().setInt(sequenceNumber.incrementAndGet()).setClock(clock.toClock())
+                                        .build(),
                       lock);
     }
 
     @Override
-    public StampedClockValue<Integer, IntStampedClock> current() {
+    public StampedClockValue<Integer> current() {
         return locked(() -> new IntStampedClockValue(clock.toBloomClockValue(), sequenceNumber.get()), lock);
     }
 

@@ -55,7 +55,7 @@ message CausalPush {
 
 message CausalMessage {
     utils.Digeste source = 1;
-    utils.IntStampedClock clock = 2;
+    utils.StampedClock clock = 2;
     google.protobuf.Any content = 3;
     repeated utils.Digeste parents = 4;
 }

@@ -19,7 +19,6 @@ import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
 import com.salesforce.apollo.comm.RoutableService;
-import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
 import io.grpc.stub.StreamObserver;
@@ -29,10 +28,10 @@ import io.grpc.stub.StreamObserver;
  * @since 220
  */
 public class GhostServerCommunications extends GhostImplBase {
-    private final ClientIdentity           identity;
-    private final RoutableService<Service> router;
+    private final ClientIdentity                identity;
+    private final RoutableService<GhostService> router;
 
-    public GhostServerCommunications(ClientIdentity identity, RoutableService<Service> router) {
+    public GhostServerCommunications(ClientIdentity identity, RoutableService<GhostService> router) {
         this.identity = identity;
         this.router = router;
     }

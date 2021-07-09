@@ -14,7 +14,7 @@ import com.salesfoce.apollo.utils.proto.Clock;
  */
 public interface ClockValue {
 
-    public static BloomClockValue of(Clock clock) {
+    static BloomClockValue of(Clock clock) {
         byte[] counts = clock.getCounts().toByteArray();
         return new BloomClockValue(clock.getPrefix(), counts);
     }

@@ -20,7 +20,6 @@ import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
 import com.salesforce.apollo.comm.Link;
-import com.salesforce.apollo.ghost.Ghost.Service;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -28,7 +27,7 @@ import com.salesforce.apollo.membership.Member;
  * @since 220
  */
 public interface SpaceGhost extends Link {
-    static SpaceGhost localLoopbackFor(Member member, Service service) {
+    static SpaceGhost localLoopbackFor(Member member, GhostService service) {
         return new SpaceGhost() {
 
             @Override

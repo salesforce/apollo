@@ -70,21 +70,16 @@ message Clock {
     bytes counts = 2;
 }
 
+
 message StampedClock {
-    Clock clock = 1; 
-    google.protobuf.Timestamp stamp = 2;
+    oneof stamp {
+        google.protobuf.Timestamp timestamp = 1;
+        uint32 int = 2;
+        uint64 long = 3;
+    }
+    Clock clock = 5;
 }
-
-message IntStampedClock {
-    uint32 stamp = 1;
-    Clock clock = 2; 
-}
-
-message LongStampedClock {
-    uint64 stamp = 1;
-    Clock clock = 2; 
-}
-
+ 
 message BloomeClock {
     uint64 prefix = 1; 
     int32 k = 2;

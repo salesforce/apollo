@@ -7,6 +7,7 @@ option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
+import "messaging.proto";
 
 package ghost; 
 
@@ -25,13 +26,13 @@ service Ghost {
 
 message Entry {
     utils.Digeste context = 1;
-    Content content = 2;
+    Content sealed = 2;
 }
 
-message Content {
-    utils.StampedClock clock = 1;
-    google.protobuf.Any value = 2;
-    utils.Digeste originator = 3;
+message Content { 
+    google.protobuf.Any value = 1;
+    utils.Sig valueSignature = 2;
+    messaging.CausalMessage metadata = 3;
     utils.Sig signature = 4;
 }
 
@@ -57,9 +58,7 @@ message Bind {
 
 message Binding {
     string key = 1;
-    google.protobuf.Any value = 2;
-    utils.StampedClock clock = 3;
-    utils.Digeste originator = 4;
+    messaging.CausalMessage content = 2;
     utils.Sig signature = 5;
 }
 

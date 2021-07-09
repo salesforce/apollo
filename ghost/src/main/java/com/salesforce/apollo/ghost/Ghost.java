@@ -13,7 +13,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -23,8 +22,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -37,7 +34,6 @@ import com.google.common.collect.Multiset;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Any;
 import com.google.protobuf.Empty;
-import com.google.protobuf.Timestamp;
 import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Content;
@@ -46,9 +42,8 @@ import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.utils.proto.StampedClock;
-import com.salesforce.apollo.causal.BloomClock;
-import com.salesforce.apollo.causal.ClockValue;
+import com.salesfoce.apollo.messaging.proto.CausalMessage;
+import com.salesforce.apollo.causal.CausalClock;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
@@ -56,6 +51,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
+import com.salesforce.apollo.ghost.communications.GhostService;
 import com.salesforce.apollo.ghost.communications.SpaceGhost;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -69,48 +65,54 @@ import io.grpc.StatusRuntimeException;
 /**
  * Spaaaaaaaaaaaace Ghooooooooossssssstttttt.
  * <p>
- * A distributed, content addresssable hash table. Keys of this DHT are the hash
- * of the content's bytes.
+ * Provides both a distributed, content addresssable hash table as well as a
+ * more general model for mutable keys.
  * <p>
- * Builds on the membership gossip service (and swiss army knife) to implement a
- * one hop imutable DHT with eventually consistent mutable bindings. Stored
- * content is only addressible by the hash of the content. Thus, content is
- * immutable (although we allow deletes, because GC). Mutable bindings are
- * eventually consistent
+ * Builds on the Apollo membership causal messaging service (and swiss army
+ * knife) to implement a one hop imutable DHT with eventually consistent mutable
+ * bindings. Immutable stored content is only addressible by the hash of the
+ * content. Thus, content is immutable (although we allow deletes, because GC).
+ * Mutable bindings are eventually consistent and resolved with CRDTs.
  * <p>
  * Ghost reuses the t+1 rings of the Memberships context as the redundant
  * storage rings for content. The hash keys of the content map to each ring
- * differently, and so each Ghost instance stores t+1 intervals - perhaps
+ * differently, and so each Ghost instance stores 2 * t+1 intervals - perhaps
  * overlapping - of the current content set of the system wide DHT.
  * <p>
- * Content is stored redundantly on t+1 rings and Ghost emits n (where n <= t+1)
- * parallel communications for key lookup. If the key is stored, the first
- * responder with verified (hash(content) == lookup key) of the parallel query
- * is returned. If the key is not present, the client only waits for the
- * indicated timeout, rather than the sum of timeouts from t+1 serial queries.
+ * Content is stored redundantly on these 2 * t+1 rings and Ghost emits n (where
+ * n <= t+1) parallel communications for key lookup. Upon lookup of immutable
+ * content, the first responder with verified (hash(content) == lookup key) of
+ * the parallel query is returned. If the key is not present, the client only
+ * waits for the indicated timeout, rather than the sum of timeouts from t+1
+ * serial queries.
  * <p>
- * Immutable ontent storage operations must complete a majority of writes out of
- * t+1 rings to return without error. As the key of any immutable content is its
- * hash, content is immutable, so any put() operation may be retried, as put()
- * is idempotent. Note that idempotent push() does not mean zero overhead for
- * redundant pushes. There still will be communication overhead of at least the
- * majority of ghost nodes on the various rings.
+ * Immutable content storage operations must complete a majority of writes out
+ * of 2 * t+1 rings to return without error. As the key of any immutable content
+ * is its hash, content is immutable, so any put() operation may be retried, as
+ * put() is idempotent. Note that idempotent push() does not mean zero overhead
+ * for redundant pushes. There still will be communication overhead of at least
+ * the majority of ghost nodes on the various rings.
  * <p>
  * To compensate for the wild, wild west of dynamic membership, Ghost gossips
  * with its n successors on each of the t+1 rings of the context. Because all
  * content is stored redundantly, all lookups for validated, previously stored
- * content will be available whp, assuming non catastrophic loss/gain in
- * membership. The reuse of the t+1 rings of the underlying context for storage
- * redundancy sets the upper bounds on the "catastrophic" cardinality and allows
- * Ghost to update the storage for dynamic rebalancing during membership
- * changes. As long as at least 1 of the t+1 members remain as the storage node
- * for a given content hash key during the context membership change on a
- * querying node, the DHT will return the result.
+ * content will be available whp, assuming catastrophic loss/gain in membership
+ * less than or equal to the parameterized byzantine probability. The reuse of
+ * the 2 * t+1 rings of the underlying Firefiles Context for storage redundancy
+ * sets the upper bounds on the "catastrophic" cardinality based on the
+ * calculated ring structure from Fireflies and allows Ghost to update the
+ * storage for dynamic rebalancing during membership changes with up to 1/3
+ * membership total membership byzantine failures across the entire system, not
+ * across the ring set - this is a key property of Fireflies. As long as at
+ * least 1 of the 2 * t+1 members, out of the entire population of members,
+ * remains as the storage node for a given content hash key during the context
+ * membership change on a querying node, the Ghost DHT will return the correct
+ * result.
  * 
  * @author hal.hildebrand
  * @since 220
  */
-public class Ghost {
+public class Ghost<InstantType extends Comparable<InstantType>> {
 
     public static class GhostParameters {
         public static class Builder {
@@ -177,8 +179,9 @@ public class Ghost {
         }
     }
 
-    public class Service {
+    public class Service implements GhostService {
 
+        @Override
         public void bind(Bind bind) {
             Binding binding = bind.getBinding();
             Digest key = parameters.digestAlgorithm.digest(binding.getKey());
@@ -186,6 +189,7 @@ public class Ghost {
             log.trace("Bind: {} on: {}", key, member);
         }
 
+        @Override
         public Content get(Get get) {
             Digest key = Digest.from(get.getCid());
             Content content = store.get(key);
@@ -193,6 +197,7 @@ public class Ghost {
             return content;
         }
 
+        @Override
         public Entries intervals(Intervals request, Digest from) {
             if (from == null) {
                 log.warn("Intervals gossip from unknown member on: {}", member);
@@ -210,105 +215,66 @@ public class Ghost {
                 return Entries.getDefaultInstance();
             }
             log.trace("Intervals gossip from: {} on: {}", from, member);
-            return store.entriesIn(new CombinedIntervals(
-                    request.getIntervalsList().stream().map(e -> new KeyInterval(e)).collect(Collectors.toList())),
+            return store.entriesIn(new CombinedIntervals(request.getIntervalsList().stream()
+                                                                .map(e -> new KeyInterval(e))
+                                                                .collect(Collectors.toList())),
                                    parameters.maxEntries);
         }
 
+        @Override
         public Binding lookup(Lookup query) {
             Binding binding = store.lookup(Digest.from(query.getKey()));
             log.trace("Lookup: {} non NULL: {} on: {}", query.getKey(), binding != null, member);
             return binding;
         }
 
+        @Override
         public void purge(Get get) {
             Digest key = new Digest(get.getCid());
             store.purge(key);
             log.trace("Purge: {} on: {}", key, member);
         }
 
+        @Override
         public void put(Entry entry) {
-            Content content = entry.getContent();
+            Content content = entry.getSealed();
             Digest cid = parameters.digestAlgorithm.digest(content.getValue().toByteString());
             store.put(cid, content);
             log.trace("Put: {} on: {}", cid, member);
         }
 
+        @Override
         public void remove(Lookup query) {
             store.remove(Digest.from(query.getKey()));
             log.trace("Remove: {} on: {}", query.getKey(), member);
         }
     }
 
-    record CausalityClock(Lock lock, BloomClock clock, java.time.Clock wallClock) {
-
-        ClockValue current() {
-            return locked(() -> clock.current());
-        }
-
-        ClockValue merge(ClockValue b) {
-            return locked(() -> clock.merge(b));
-        }
-
-        ClockValue merge(StampedClock b) {
-            return merge(ClockValue.of(b.getClock()));
-        }
-
-        StampedClock.Builder stamp(Digest digest) {
-            return locked(() -> {
-                clock.add(digest);
-                Instant now = wallClock.instant();
-                return StampedClock.newBuilder()
-                                   .setClock(clock.toClock())
-                                   .setStamp(Timestamp.newBuilder()
-                                                      .setSeconds(now.getEpochSecond())
-                                                      .setNanos(now.getNano()));
-            });
-
-        }
-
-        private <T> T locked(Callable<T> call) {
-            lock.lock();
-            try {
-                return call.call();
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            } finally {
-                lock.unlock();
-            }
-        }
-    }
-
     public static final int JOIN_MESSAGE_CHANNEL = 3;
 
-    private static final Logger                             log     = LoggerFactory.getLogger(Ghost.class);
-    private final CausalityClock                            clock;
-    private final CommonCommunications<SpaceGhost, Service> communications;
-    private final Context<Member>                           context;
-    private final RingCommunications<SpaceGhost>            gossiper;
-    private final SigningMember                             member;
-    private final GhostParameters                           parameters;
-    private final Service                                   service = new Service();
-    private final AtomicBoolean                             started = new AtomicBoolean();
-    private final Store                                     store;
-
-    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, MVStore store) {
-        this(member, p, c, context, store, new BloomClock());
-    }
+    private static final Logger                                  log     = LoggerFactory.getLogger(Ghost.class);
+    private final CausalClock<InstantType>                       clock;
+    private final CommonCommunications<SpaceGhost, GhostService> communications;
+    private final Context<Member>                                context;
+    private final RingCommunications<SpaceGhost>                 gossiper;
+    private final SigningMember                                  member;
+    private final GhostParameters                                parameters;
+    private final GhostService                                   service = new Service();
+    private final AtomicBoolean                                  started = new AtomicBoolean();
+    private final Store                                          store;
 
     public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, MVStore store,
-            BloomClock clock) {
-        this(member, p, c, context, new GhostStore(context.getId(), p.digestAlgorithm, store), clock,
-                java.time.Clock.systemUTC());
+                 CausalClock<InstantType> clock) {
+        this(member, p, c, context, new GhostStore(context.getId(), p.digestAlgorithm, store), clock);
     }
 
-    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s, BloomClock clock,
-            java.time.Clock wallClock) {
+    public Ghost(SigningMember member, GhostParameters p, Router c, Context<Member> context, Store s,
+                 CausalClock<InstantType> clock) {
         this.member = member;
         parameters = p;
         this.context = context;
         store = s;
-        this.clock = new CausalityClock(new ReentrantLock(), clock, wallClock);
+        this.clock = clock;
         communications = c.create(member, context.getId(), service,
                                   r -> new GhostServerCommunications(c.getClientIdentityProvider(), r), getCreate(),
                                   SpaceGhost.localLoopbackFor(member, service));
@@ -329,18 +295,20 @@ public class Ghost {
 
         // Bind the key and value at the current Bloom Clock value and wall clock
         // instant
-        Binding binding = Binding.newBuilder()
-                                 .setKey(key)
-                                 .setValue(value)
-                                 .setClock(clock.stamp(parameters.digestAlgorithm.digest(value.toByteString())))
-                                 .build();
+        @SuppressWarnings("unused")
+        Digest digest = parameters.digestAlgorithm.digest(value.toByteString());
+        CausalMessage content = CausalMessage.newBuilder().setContent(value).setSource(member.getId().toDigeste())
+                                             .setClock(clock.stamp()).build();
+        // Sign, seal... TODO
+        Binding binding = Binding.newBuilder().setKey(key).setContent(content).build();
 
         new RingIterator<>(context, member, communications,
-                parameters.executor).iterate(hash, () -> majorityComplete(key, majority),
-                                             (link, r) -> bind(link, key, binding), () -> failedMajority(key, majority),
-                                             (tally, futureSailor, link, r) -> bind(futureSailor, isTimedOut, key,
-                                                                                    tally, link),
-                                             null);
+                           parameters.executor).iterate(hash, () -> majorityComplete(key, majority),
+                                                        (link, r) -> bind(link, key, binding),
+                                                        () -> failedMajority(key, majority),
+                                                        (tally, futureSailor, link, r) -> bind(futureSailor, isTimedOut,
+                                                                                               key, tally, link),
+                                                        null);
 
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -374,9 +342,9 @@ public class Ghost {
         CompletableFuture<Content> result = new CompletableFuture<>();
         Get get = Get.newBuilder().setContext(context.getId().toDigeste()).setCid(key.toDigeste()).build();
         new RingIterator<>(context, member, communications,
-                parameters.executor).iterate(key, (link, r) -> link.get(get),
-                                             (tally, futureSailor, link, r) -> get(futureSailor, key, result,
-                                                                                   isTimedOut, link));
+                           parameters.executor).iterate(key, (link, r) -> link.get(get),
+                                                        (tally, futureSailor, link, r) -> get(futureSailor, key, result,
+                                                                                              isTimedOut, link));
         try {
             return Optional.ofNullable(result.get(timeout.toMillis(), TimeUnit.MILLISECONDS));
         } catch (InterruptedException e) {
@@ -397,7 +365,7 @@ public class Ghost {
     /**
      * @return the network service singleton
      */
-    public Service getService() {
+    public GhostService getService() {
         return service;
     }
 
@@ -436,15 +404,14 @@ public class Ghost {
         Multiset<Binding> votes = HashMultiset.create();
 
         new RingIterator<>(context, member, communications,
-                parameters.executor).iterate(hash, (link, r) -> link.lookup(lookup),
-                                             (tally, futureSailor, link, r) -> lookup(futureSailor, key, votes, result,
-                                                                                      isTimedOut, link),
-                                             () -> result.completeExceptionally(new TimeoutException(
-                                                     "Failed to acheieve majority aggrement for: " + key + " on: "
-                                                             + context.getId() + " votes: "
-                                                             + votes.stream()
-                                                                    .map(a -> votes.count(a))
-                                                                    .collect(Collectors.toList()))));
+                           parameters.executor).iterate(hash, (link, r) -> link.lookup(lookup),
+                                                        (tally, futureSailor, link, r) -> lookup(futureSailor, key,
+                                                                                                 votes, result,
+                                                                                                 isTimedOut, link),
+                                                        () -> result.completeExceptionally(new TimeoutException("Failed to acheieve majority aggrement for: "
+                                                        + key + " on: " + context.getId() + " votes: "
+                                                        + votes.stream().map(a -> votes.count(a))
+                                                               .collect(Collectors.toList()))));
         try {
             return Optional.ofNullable(result.get(timeout.toMillis(), TimeUnit.MILLISECONDS));
         } catch (InterruptedException e) {
@@ -475,17 +442,18 @@ public class Ghost {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
 
         // Bind the content at current Bloom Clock value and wall clock instant
-        Entry entry = Entry.newBuilder()
-                           .setContext(context.getId().toDigeste())
-                           .setContent(Content.newBuilder().setClock(clock.stamp(key)).setValue(value))
+        Entry entry = Entry.newBuilder().setContext(context.getId().toDigeste())
+                           .setSealed(Content.newBuilder().setValue(value)
+                                             .setMetadata(CausalMessage.newBuilder().setClock(clock.stamp())).build())
                            .build();
 
         new RingIterator<>(context, member, communications,
-                parameters.executor).iterate(key, () -> majorityComplete(key, majority),
-                                             (link, r) -> put(link, key, entry), () -> failedMajority(key, majority),
-                                             (tally, futureSailor, link, r) -> put(futureSailor, isTimedOut, key, tally,
-                                                                                   link),
-                                             null);
+                           parameters.executor).iterate(key, () -> majorityComplete(key, majority),
+                                                        (link, r) -> put(link, key, entry),
+                                                        () -> failedMajority(key, majority),
+                                                        (tally, futureSailor, link, r) -> put(futureSailor, isTimedOut,
+                                                                                              key, tally, link),
+                                                        null);
 
         try {
             Boolean completed = majority.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -553,14 +521,14 @@ public class Ghost {
     }
 
     private void failedMajority(Digest key, CompletableFuture<Boolean> majority) {
-        majority.completeExceptionally(new TimeoutException(
-                String.format("Failed majority put: %s  on: %s", key, member)));
+        majority.completeExceptionally(new TimeoutException(String.format("Failed majority put: %s  on: %s", key,
+                                                                          member)));
         log.info("Failed majority put: {}  on: {}", key, member);
     }
 
     private void failedMajority(String key, CompletableFuture<Boolean> majority) {
-        majority.completeExceptionally(new TimeoutException(
-                String.format("Failed majority bind: %s  on: %s", key, member)));
+        majority.completeExceptionally(new TimeoutException(String.format("Failed majority bind: %s  on: %s", key,
+                                                                          member)));
         log.info("Failed majority bind: {}  on: {}", key, member);
     }
 
@@ -634,11 +602,8 @@ public class Ghost {
         log.trace("Ghost gossip on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
                   keyIntervals);
         store.populate(keyIntervals, parameters.fpr, Utils.secureEntropy());
-        return link.intervals(Intervals.newBuilder()
-                                       .setContext(context.getId().toDigeste())
-                                       .setRing(ring)
-                                       .addAllIntervals(keyIntervals.toIntervals())
-                                       .build());
+        return link.intervals(Intervals.newBuilder().setContext(context.getId().toDigeste()).setRing(ring)
+                                       .addAllIntervals(keyIntervals.toIntervals()).build());
     }
 
     private boolean lookup(Optional<ListenableFuture<Binding>> futureSailor, String key, Multiset<Binding> votes,

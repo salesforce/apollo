@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -33,6 +34,8 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ghost.proto.Binding;
 import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
+import com.salesforce.apollo.causal.BloomClock;
+import com.salesforce.apollo.causal.IntCausalClock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -58,15 +61,13 @@ public class GhostTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, testCardinality)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
+        certs = IntStream.range(0, testCardinality).parallel().mapToObj(i -> getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
     private final List<Router> communications = new ArrayList<>();
-    private List<Ghost>        ghosties;
+    private List<Ghost<?>>     ghosties;
 
     @AfterEach
     public void after() {
@@ -78,13 +79,12 @@ public class GhostTest {
 
     @Test
     public void lookupBind() throws Exception {
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(cert -> new SigningMemberImpl(
-                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
-                                                   cert.getX509Certificate().getPublicKey()))
+        List<SigningMember> members = certs.values().stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new Signer(0, cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
@@ -94,11 +94,12 @@ public class GhostTest {
 
         ForkJoinPool executor = new ForkJoinPool();
 
-        List<Ghost> ghosties = members.stream().map(member -> {
+        List<Ghost<Integer>> ghosties = members.stream().map(member -> {
             LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
+            return new Ghost<Integer>(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null),
+                                      new IntCausalClock(new BloomClock(), new AtomicInteger(), new ReentrantLock()));
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
@@ -108,7 +109,7 @@ public class GhostTest {
         AtomicInteger count = new AtomicInteger();
         for (int i = 0; i < msgs; i++) {
             int index = i;
-            for (Ghost ghost : ghosties) {
+            for (Ghost<?> ghost : ghosties) {
                 String key = "prefix - " + i + " - " + ghost.getMember().getId();
                 Any entry = Any.pack(ByteMessage.newBuilder()
                                                 .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
@@ -131,10 +132,10 @@ public class GhostTest {
 
         count.set(0);
         for (Entry<String, Any> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
+            for (Ghost<Integer> ghost : ghosties) {
                 Binding found = ghost.lookup(entry.getKey(), timeout).get();
                 assertNotNull(found);
-                assertEquals(entry.getValue(), found.getValue());
+                assertEquals(entry.getValue(), found.getContent().getContent());
                 if (count.incrementAndGet() % 100 == 0) {
                     System.out.print('.');
                     if (count.get() % 8000 == 0) {
@@ -149,13 +150,12 @@ public class GhostTest {
 
     @Test
     public void putGet() throws Exception {
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(cert -> new SigningMemberImpl(
-                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
-                                                   cert.getX509Certificate().getPublicKey()))
+        List<SigningMember> members = certs.values().stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new Signer(0, cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.1, testCardinality);
@@ -165,11 +165,12 @@ public class GhostTest {
 
         ForkJoinPool executor = new ForkJoinPool();
 
-        List<Ghost> ghosties = members.stream().map(member -> {
+        List<Ghost<Integer>> ghosties = members.stream().map(member -> {
             LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(30), executor);
             communications.add(comms);
             comms.start();
-            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
+            return new Ghost<Integer>(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null),
+                                      new IntCausalClock(new BloomClock(), new AtomicInteger(), new ReentrantLock()));
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
@@ -179,7 +180,7 @@ public class GhostTest {
         AtomicInteger count = new AtomicInteger();
         for (int i = 0; i < msgs; i++) {
             int index = i;
-            for (Ghost ghost : ghosties) {
+            for (Ghost<Integer> ghost : ghosties) {
                 Any entry = Any.pack(ByteMessage.newBuilder()
                                                 .setContents(ByteString.copyFromUtf8(String.format("Member: %s round: %s",
                                                                                                    ghost.getMember()
@@ -201,7 +202,7 @@ public class GhostTest {
 
         count.set(0);
         for (Entry<Digest, Any> entry : stored.entrySet()) {
-            for (Ghost ghost : ghosties) {
+            for (Ghost<Integer> ghost : ghosties) {
                 Content found = ghost.get(entry.getKey(), timeout).get();
                 assertNotNull(found);
                 assertEquals(entry.getValue(), found.getValue());

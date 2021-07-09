@@ -32,7 +32,7 @@ import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.CausalEnvelope;
 import com.salesfoce.apollo.messaging.proto.CausalEnvelopeOrBuilder;
 import com.salesfoce.apollo.messaging.proto.CausalMessage;
-import com.salesfoce.apollo.utils.proto.IntStampedClock;
+import com.salesfoce.apollo.utils.proto.StampedClock;
 import com.salesforce.apollo.causal.BloomClock;
 import com.salesforce.apollo.causal.ClockValueComparator;
 import com.salesforce.apollo.causal.IntCausalClock;
@@ -218,7 +218,7 @@ public class CausalBuffer {
         clock.reset();
     }
 
-    public StampedClockValue<Integer, IntStampedClock> current() {
+    public StampedClockValue<Integer> current() {
         return clock.current();
     }
 
@@ -287,7 +287,7 @@ public class CausalBuffer {
     public StampedMessage send(Any content, SigningMember member) {
         Digest prev = previous.get();
 
-        IntStampedClock stamp = clock.stamp();
+        StampedClock stamp = clock.stamp();
         CausalMessage message = CausalMessage.newBuilder().setSource(member.getId().toDigeste()).setClock(stamp)
                                              .setContent(content).addParents(prev.toDigeste()).build();
         var sig = member.sign(message.toByteString());
