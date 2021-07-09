@@ -96,3 +96,9 @@ message IntStampedBloomeClock {
     int32 stamp = 2;
 }
 
+message CausalMessage {
+    Digeste source = 1;
+    StampedClock clock = 2;
+    google.protobuf.Any content = 3;
+    repeated Digeste parents = 4;
+}

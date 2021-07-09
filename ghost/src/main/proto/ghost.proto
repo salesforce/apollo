@@ -7,11 +7,12 @@ option objc_class_prefix = "Gp";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
-import "messaging.proto";
 
 package ghost; 
 
 service Ghost {
+
+    rpc ghosting(GhostChat) returns (utils.CausalMessage) {}
 
     rpc get (Get) returns (Content) {}
     rpc put (Entry) returns (google.protobuf.Empty) {}
@@ -24,6 +25,11 @@ service Ghost {
     rpc intervals (Intervals) returns (Entries) {} 
 }
 
+message GhostChat {
+    utils.Digeste context = 1;
+    utils.CausalMessage chatter = 2;
+}
+
 message Entry {
     utils.Digeste context = 1;
     Content sealed = 2;
@@ -32,7 +38,7 @@ message Entry {
 message Content { 
     google.protobuf.Any value = 1;
     utils.Sig valueSignature = 2;
-    messaging.CausalMessage metadata = 3;
+    utils.CausalMessage metadata = 3;
     utils.Sig signature = 4;
 }
 
@@ -58,7 +64,7 @@ message Bind {
 
 message Binding {
     string key = 1;
-    messaging.CausalMessage content = 2;
+    utils.CausalMessage content = 2;
     utils.Sig signature = 5;
 }
 

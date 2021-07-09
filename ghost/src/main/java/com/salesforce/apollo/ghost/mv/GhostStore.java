@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ghost;
+package com.salesforce.apollo.ghost.mv;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -21,13 +21,18 @@ import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.ghost.mv.BindingType;
-import com.salesforce.apollo.ghost.mv.ContentType;
+import com.salesforce.apollo.ghost.CombinedIntervals;
+import com.salesforce.apollo.ghost.KeyInterval;
+import com.salesforce.apollo.ghost.Store;
 import com.salesforce.apollo.utils.DigestType;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
+ * Implementation of the Ghost Store using the most excellent MVStore. Provides
+ * large scale - up to 7TB - of log structured merge storage with excellent
+ * caching and performance.
+ * 
  * @author hal.hildebrand
  *
  */
@@ -116,7 +121,7 @@ public class GhostStore implements Store {
 
     private void bindingsIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
         Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(bindings.getRootPage(), interval.getBegin(),
-                interval.getEnd());
+                                                                   interval.getEnd());
         while (cursor.hasNext()) {
             Digest key = cursor.next();
             if (!interval.bindingsContains(key)) {
@@ -133,7 +138,7 @@ public class GhostStore implements Store {
 
     private void contentsIn(int maxEntries, Entries.Builder builder, KeyInterval interval) {
         Cursor<Digest, byte[]> cursor = new Cursor<Digest, byte[]>(contents.getRootPage(), interval.getBegin(),
-                interval.getEnd());
+                                                                   interval.getEnd());
         while (cursor.hasNext()) {
             Digest key = cursor.next();
             if (!interval.bindingsContains(key)) {
@@ -151,7 +156,7 @@ public class GhostStore implements Store {
     private BloomFilter<Digest> populateImmutable(double fpr, SecureRandom entropy, KeyInterval interval) {
         List<Digest> subSet = new ArrayList<>();
         new Cursor<Digest, byte[]>(contents.getRootPage(), interval.getBegin(),
-                interval.getEnd()).forEachRemaining(key -> subSet.add(key));
+                                   interval.getEnd()).forEachRemaining(key -> subSet.add(key));
         BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextLong(), subSet.size(), fpr);
         subSet.forEach(h -> bff.add(h));
         return bff;
@@ -160,7 +165,7 @@ public class GhostStore implements Store {
     private BloomFilter<Digest> populateMutable(double fpr, SecureRandom entropy, KeyInterval interval) {
         List<Digest> subSet = new ArrayList<>();
         new Cursor<Digest, byte[]>(bindings.getRootPage(), interval.getBegin(),
-                interval.getEnd()).forEachRemaining(key -> subSet.add(key));
+                                   interval.getEnd()).forEachRemaining(key -> subSet.add(key));
         BloomFilter<Digest> bff = new DigestBloomFilter(entropy.nextLong(), subSet.size(), fpr);
         subSet.forEach(h -> bff.add(h));
         return bff;

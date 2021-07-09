@@ -53,15 +53,8 @@ message CausalPush {
     repeated  CausalEnvelope updates = 3;
 }
 
-message CausalMessage {
-    utils.Digeste source = 1;
-    utils.StampedClock clock = 2;
-    google.protobuf.Any content = 3;
-    repeated utils.Digeste parents = 4;
-}
-
 message CausalEnvelope {
-    CausalMessage content = 1;
+    utils.CausalMessage content = 1;
     utils.Sig signature = 2;
     int32 age = 3;
     bool streamReset = 4;

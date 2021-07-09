@@ -15,9 +15,11 @@ import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
+import com.salesfoce.apollo.utils.proto.CausalMessage;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
@@ -37,9 +39,17 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
+    public void ghosting(GhostChat request, StreamObserver<CausalMessage> responseObserver) {
+        router.evaluate(responseObserver, digest(request.getContext()), s -> {
+            responseObserver.onNext(s.ghosting(request, identity.getFrom()));
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
     public void get(Get request, StreamObserver<Content> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            responseObserver.onNext(s.get(request));
+            responseObserver.onNext(s.get(request, identity.getFrom()));
             responseObserver.onCompleted();
         });
     }
@@ -56,7 +66,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void put(Entry request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.put(request);
+            s.put(request, identity.getFrom());
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });
@@ -65,7 +75,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void purge(Get request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.purge(request);
+            s.purge(request, identity.getFrom());
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });
@@ -74,7 +84,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void lookup(Lookup request, StreamObserver<Binding> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            responseObserver.onNext(s.lookup(request));
+            responseObserver.onNext(s.lookup(request, identity.getFrom()));
             responseObserver.onCompleted();
         });
     }
@@ -82,7 +92,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void bind(Bind request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.bind(request);
+            s.bind(request, identity.getFrom());
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });
@@ -91,7 +101,7 @@ public class GhostServerCommunications extends GhostImplBase {
     @Override
     public void remove(Lookup request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.remove(request);
+            s.remove(request, identity.getFrom());
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });

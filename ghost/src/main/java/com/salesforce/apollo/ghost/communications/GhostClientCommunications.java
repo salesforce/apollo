@@ -14,9 +14,11 @@ import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
+import com.salesfoce.apollo.utils.proto.CausalMessage;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -59,6 +61,11 @@ public class GhostClientCommunications implements SpaceGhost {
     @Override
     public Member getMember() {
         return member;
+    }
+
+    @Override
+    public ListenableFuture<CausalMessage> ghosting(GhostChat chatter) {
+        return client.ghosting(chatter);
     }
 
     @Override

@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.CausalEnvelope;
 import com.salesfoce.apollo.messaging.proto.CausalEnvelopeOrBuilder;
-import com.salesfoce.apollo.messaging.proto.CausalMessage;
+import com.salesfoce.apollo.utils.proto.CausalMessage;
 import com.salesfoce.apollo.utils.proto.StampedClock;
 import com.salesforce.apollo.causal.BloomClock;
 import com.salesforce.apollo.causal.ClockValueComparator;

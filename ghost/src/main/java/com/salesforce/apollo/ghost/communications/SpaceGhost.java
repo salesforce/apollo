@@ -17,8 +17,10 @@ import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
+import com.salesfoce.apollo.utils.proto.CausalMessage;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
 
@@ -32,7 +34,7 @@ public interface SpaceGhost extends Link {
 
             @Override
             public ListenableFuture<Empty> bind(Bind binding) {
-                service.bind(binding);
+                service.bind(binding, member.getId());
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
@@ -45,13 +47,21 @@ public interface SpaceGhost extends Link {
             @Override
             public ListenableFuture<Content> get(Get cid) {
                 SettableFuture<Content> f = SettableFuture.create();
-                f.set(service.get(cid));
+                f.set(service.get(cid, member.getId()));
                 return f;
             }
 
             @Override
             public Member getMember() {
                 return member;
+            }
+
+            @Override
+            public ListenableFuture<CausalMessage> ghosting(GhostChat chatter) {
+                var response = service.ghosting(chatter, member.getId());
+                SettableFuture<CausalMessage> f = SettableFuture.create();
+                f.set(response);
+                return f;
             }
 
             @Override
@@ -63,7 +73,7 @@ public interface SpaceGhost extends Link {
 
             @Override
             public ListenableFuture<Binding> lookup(Lookup query) {
-                Binding value = service.lookup(query);
+                Binding value = service.lookup(query, member.getId());
                 SettableFuture<Binding> f = SettableFuture.create();
                 f.set(value);
                 return f;
@@ -71,7 +81,7 @@ public interface SpaceGhost extends Link {
 
             @Override
             public ListenableFuture<Empty> purge(Get cid) {
-                service.purge(cid);
+                service.purge(cid, member.getId());
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
@@ -79,7 +89,7 @@ public interface SpaceGhost extends Link {
 
             @Override
             public ListenableFuture<Empty> put(Entry content) {
-                service.put(content);
+                service.put(content, member.getId());
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
@@ -87,7 +97,7 @@ public interface SpaceGhost extends Link {
 
             @Override
             public ListenableFuture<Empty> remove(Lookup query) {
-                service.remove(query);
+                service.remove(query, member.getId());
                 SettableFuture<Empty> f = SettableFuture.create();
                 f.set(Empty.getDefaultInstance());
                 return f;
@@ -98,6 +108,8 @@ public interface SpaceGhost extends Link {
     ListenableFuture<Empty> bind(Bind binding);
 
     ListenableFuture<Content> get(Get cid);
+
+    ListenableFuture<CausalMessage> ghosting(GhostChat chatter);
 
     ListenableFuture<Entries> intervals(Intervals intervals);
 

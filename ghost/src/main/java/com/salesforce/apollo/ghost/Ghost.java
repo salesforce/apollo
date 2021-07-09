@@ -11,6 +11,7 @@ import static com.salesforce.apollo.ghost.communications.GhostClientCommunicatio
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -40,9 +41,10 @@ import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
 import com.salesfoce.apollo.ghost.proto.Get;
+import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.messaging.proto.CausalMessage;
+import com.salesfoce.apollo.utils.proto.CausalMessage;
 import com.salesforce.apollo.causal.CausalClock;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
@@ -53,6 +55,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ghost.communications.GhostServerCommunications;
 import com.salesforce.apollo.ghost.communications.GhostService;
 import com.salesforce.apollo.ghost.communications.SpaceGhost;
+import com.salesforce.apollo.ghost.mv.GhostStore;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -182,7 +185,7 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
     public class Service implements GhostService {
 
         @Override
-        public void bind(Bind bind) {
+        public void bind(Bind bind, Digest from) {
             Binding binding = bind.getBinding();
             Digest key = parameters.digestAlgorithm.digest(binding.getKey());
             store.bind(key, binding);
@@ -190,11 +193,17 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         }
 
         @Override
-        public Content get(Get get) {
+        public Content get(Get get, Digest from) {
             Digest key = Digest.from(get.getCid());
             Content content = store.get(key);
             log.trace("Get: {} non NULL: {} on: {}", key, content != null, member);
             return content;
+        }
+
+        @Override
+        public CausalMessage ghosting(GhostChat chatter, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         @Override
@@ -222,21 +231,21 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         }
 
         @Override
-        public Binding lookup(Lookup query) {
+        public Binding lookup(Lookup query, Digest from) {
             Binding binding = store.lookup(Digest.from(query.getKey()));
             log.trace("Lookup: {} non NULL: {} on: {}", query.getKey(), binding != null, member);
             return binding;
         }
 
         @Override
-        public void purge(Get get) {
+        public void purge(Get get, Digest from) {
             Digest key = new Digest(get.getCid());
             store.purge(key);
             log.trace("Purge: {} on: {}", key, member);
         }
 
         @Override
-        public void put(Entry entry) {
+        public void put(Entry entry, Digest from) {
             Content content = entry.getSealed();
             Digest cid = parameters.digestAlgorithm.digest(content.getValue().toByteString());
             store.put(cid, content);
@@ -244,13 +253,11 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         }
 
         @Override
-        public void remove(Lookup query) {
+        public void remove(Lookup query, Digest from) {
             store.remove(Digest.from(query.getKey()));
             log.trace("Remove: {} on: {}", query.getKey(), member);
         }
     }
-
-    public static final int JOIN_MESSAGE_CHANNEL = 3;
 
     private static final Logger                                  log     = LoggerFactory.getLogger(Ghost.class);
     private final CausalClock<InstantType>                       clock;
@@ -286,6 +293,14 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
      * values for the same key.
      */
     public void bind(String key, Any value, Duration timeout) throws TimeoutException {
+        bind(key, value, Collections.emptyList(), timeout);
+    }
+
+    /**
+     * Bind the value with the key. This is an updatable operation with different
+     * values for the same key.
+     */
+    public void bind(String key, Any value, List<Digest> parents, Duration timeout) throws TimeoutException {
         Digest hash = parameters.digestAlgorithm.digest(key);
         log.trace("Starting Put {}   on: {}", key, member);
 
@@ -298,6 +313,7 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         @SuppressWarnings("unused")
         Digest digest = parameters.digestAlgorithm.digest(value.toByteString());
         CausalMessage content = CausalMessage.newBuilder().setContent(value).setSource(member.getId().toDigeste())
+                                             .addAllParents(parents.stream().map(e -> e.toDigeste()).toList())
                                              .setClock(clock.stamp()).build();
         // Sign, seal... TODO
         Binding binding = Binding.newBuilder().setKey(key).setContent(content).build();
@@ -430,10 +446,26 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
      * stored the value
      * 
      * @param value
+     * @param duration - ye olde thymeout
      * @return - the Digest of the value
      * @throws TimeoutException
      */
     public Digest put(Any value, Duration timeout) throws TimeoutException {
+        return put(value, Collections.emptyList(), Any.getDefaultInstance(), timeout);
+    }
+
+    /**
+     * Insert the value into the Ghost DHT. Return when a majority of rings have
+     * stored the value
+     * 
+     * @param value
+     * @param parents  - the list of digests refering to parent content
+     * @param metadata - the metadata associated with a value
+     * @param duration - ye olde thymeout
+     * @return - the Digest of the value
+     * @throws TimeoutException
+     */
+    public Digest put(Any value, List<Digest> parents, Any metadata, Duration timeout) throws TimeoutException {
         Digest key = parameters.digestAlgorithm.digest(value.toByteString());
         log.trace("Starting Put {}   on: {}", key, member);
 
@@ -444,7 +476,13 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         // Bind the content at current Bloom Clock value and wall clock instant
         Entry entry = Entry.newBuilder().setContext(context.getId().toDigeste())
                            .setSealed(Content.newBuilder().setValue(value)
-                                             .setMetadata(CausalMessage.newBuilder().setClock(clock.stamp())).build())
+                                             .setMetadata(CausalMessage.newBuilder()
+                                                                       .addAllParents(parents.stream()
+                                                                                             .map(e -> e.toDigeste())
+                                                                                             .toList())
+                                                                       .setSource(member.getId().toDigeste())
+                                                                       .setClock(clock.stamp()))
+                                             .build())
                            .build();
 
         new RingIterator<>(context, member, communications,
@@ -573,11 +611,8 @@ public class Ghost<InstantType extends Comparable<InstantType>> {
         try {
             Entries entries = futureSailor.get().get();
             if (entries.getContentCount() > 0 || entries.getBindingCount() > 0) {
-                log.info("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
-                         entries.getContentCount(), entries.getContentCount(), link.getMember(), member);
-            } else if (log.isDebugEnabled()) {
-                log.debug("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
-                          entries.getContentCount(), entries.getBindingCount(), link.getMember(), member);
+                log.trace("Received: {} immutable and {} mutable entries in Ghost gossip from: {} on: {}",
+                          entries.getContentCount(), entries.getContentCount(), link.getMember(), member);
             }
             store.add(entries.getContentList());
         } catch (InterruptedException | ExecutionException e) {
