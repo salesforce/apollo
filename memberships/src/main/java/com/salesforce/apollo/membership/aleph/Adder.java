@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2021, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+package com.salesforce.apollo.membership.aleph;
+
+/**
+ * @author hal.hildebrand
+ *
+ */
+public interface Adder {
+     static Adder newAdder(Dag dg, Config config, Syncer syncer, Alerter alert) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    void close();
+
+}

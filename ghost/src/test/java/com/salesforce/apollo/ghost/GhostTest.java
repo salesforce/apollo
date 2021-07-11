@@ -135,7 +135,7 @@ public class GhostTest {
             for (Ghost<Integer> ghost : ghosties) {
                 Binding found = ghost.lookup(entry.getKey(), timeout).get();
                 assertNotNull(found);
-                assertEquals(entry.getValue(), found.getContent().getContent());
+                assertEquals(entry.getValue(), found.getValue());
                 if (count.incrementAndGet() % 100 == 0) {
                     System.out.print('.');
                     if (count.get() % 8000 == 0) {

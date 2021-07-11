@@ -8,6 +8,7 @@ package com.salesforce.apollo.ghost.communications;
 
 import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.ClockMongering;
 import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
@@ -15,7 +16,7 @@ import com.salesfoce.apollo.ghost.proto.Get;
 import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.utils.proto.CausalMessage;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -24,11 +25,11 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public interface GhostService {
 
-    void bind(Bind bind, Digest from);
+    Sig bind(Bind bind, Digest from);
 
     Content get(Get get, Digest from);
 
-    CausalMessage ghosting(GhostChat chatter, Digest from);
+    ClockMongering ghosting(GhostChat chatter, Digest from);
 
     Entries intervals(Intervals request, Digest from);
 
@@ -36,7 +37,7 @@ public interface GhostService {
 
     void purge(Get get, Digest from);
 
-    void put(Entry entry, Digest from);
+    Sig put(Entry entry, Digest from);
 
     void remove(Lookup query, Digest from);
 

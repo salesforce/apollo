@@ -11,6 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.ClockMongering;
 import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
@@ -19,7 +20,7 @@ import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc.GhostImplBase;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.utils.proto.CausalMessage;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
@@ -39,7 +40,7 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void ghosting(GhostChat request, StreamObserver<CausalMessage> responseObserver) {
+    public void ghosting(GhostChat request, StreamObserver<ClockMongering> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
             responseObserver.onNext(s.ghosting(request, identity.getFrom()));
             responseObserver.onCompleted();
@@ -64,10 +65,10 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void put(Entry request, StreamObserver<Empty> responseObserver) {
+    public void put(Entry request, StreamObserver<Sig> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.put(request, identity.getFrom());
-            responseObserver.onNext(Empty.getDefaultInstance());
+            var sig = s.put(request, identity.getFrom());
+            responseObserver.onNext(sig);
             responseObserver.onCompleted();
         });
     }
@@ -90,10 +91,10 @@ public class GhostServerCommunications extends GhostImplBase {
     }
 
     @Override
-    public void bind(Bind request, StreamObserver<Empty> responseObserver) {
+    public void bind(Bind request, StreamObserver<Sig> responseObserver) {
         router.evaluate(responseObserver, digest(request.getContext()), s -> {
-            s.bind(request, identity.getFrom());
-            responseObserver.onNext(Empty.getDefaultInstance());
+            var sig = s.bind(request, identity.getFrom());
+            responseObserver.onNext(sig);
             responseObserver.onCompleted();
         });
     }

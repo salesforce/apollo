@@ -12,14 +12,14 @@ package ghost;
 
 service Ghost {
 
-    rpc ghosting(GhostChat) returns (utils.CausalMessage) {}
+    rpc ghosting(GhostChat) returns (ClockMongering) {}
 
     rpc get (Get) returns (Content) {}
-    rpc put (Entry) returns (google.protobuf.Empty) {}
+    rpc put (Entry) returns (utils.Sig) {}
     rpc purge (Get) returns (google.protobuf.Empty) {}
     
     rpc lookup (Lookup) returns (Binding) {}
-    rpc bind (Bind) returns (google.protobuf.Empty) {}
+    rpc bind (Bind) returns (utils.Sig) {}
     rpc remove (Lookup) returns (google.protobuf.Empty) {}
 
     rpc intervals (Intervals) returns (Entries) {} 
@@ -27,19 +27,35 @@ service Ghost {
 
 message GhostChat {
     utils.Digeste context = 1;
-    utils.CausalMessage chatter = 2;
+    repeated Sealed events = 2;
+}
+
+message ClockMongering {
+    utils.CausalMessage chatter = 1;
+    utils.Sig signature = 2;
+}
+
+message Event {
+    utils.Digeste source = 1;
+    utils.StampedClock clock = 2;
+    utils.Digeste digest = 3;
+    repeated utils.Digeste parents = 4;
+    string key = 5;
+}
+
+message Sealed {
+    Event event = 1;
+    utils.Sig signature = 2;
 }
 
 message Entry {
     utils.Digeste context = 1;
-    Content sealed = 2;
+    Content content = 2;
 }
 
-message Content { 
-    google.protobuf.Any value = 1;
-    utils.Sig valueSignature = 2;
-    utils.CausalMessage metadata = 3;
-    utils.Sig signature = 4;
+message Content {
+    Sealed metadata = 1;
+    google.protobuf.Any value = 2;
 }
 
 message Entries {
@@ -55,6 +71,7 @@ message Get {
 message Lookup {
     utils.Digeste context = 1;
     utils.Digeste key = 2;
+    utils.StampedClock clock = 3;
 }
 
 message Bind {
@@ -64,8 +81,8 @@ message Bind {
 
 message Binding {
     string key = 1;
-    utils.CausalMessage content = 2;
-    utils.Sig signature = 5;
+    google.protobuf.Any value = 2;
+    Sealed metadata = 3;
 }
 
 message Intervals {

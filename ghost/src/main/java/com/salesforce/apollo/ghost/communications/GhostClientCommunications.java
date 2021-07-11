@@ -10,6 +10,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ghost.proto.Bind;
 import com.salesfoce.apollo.ghost.proto.Binding;
+import com.salesfoce.apollo.ghost.proto.ClockMongering;
 import com.salesfoce.apollo.ghost.proto.Content;
 import com.salesfoce.apollo.ghost.proto.Entries;
 import com.salesfoce.apollo.ghost.proto.Entry;
@@ -18,7 +19,7 @@ import com.salesfoce.apollo.ghost.proto.GhostChat;
 import com.salesfoce.apollo.ghost.proto.GhostGrpc;
 import com.salesfoce.apollo.ghost.proto.Intervals;
 import com.salesfoce.apollo.ghost.proto.Lookup;
-import com.salesfoce.apollo.utils.proto.CausalMessage;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -44,7 +45,7 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public ListenableFuture<Empty> bind(Bind binding) {
+    public ListenableFuture<Sig> bind(Bind binding) {
         return client.bind(binding);
     }
 
@@ -64,7 +65,7 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public ListenableFuture<CausalMessage> ghosting(GhostChat chatter) {
+    public ListenableFuture<ClockMongering> ghosting(GhostChat chatter) {
         return client.ghosting(chatter);
     }
 
@@ -84,7 +85,7 @@ public class GhostClientCommunications implements SpaceGhost {
     }
 
     @Override
-    public ListenableFuture<Empty> put(Entry value) {
+    public ListenableFuture<Sig> put(Entry value) {
         return client.put(value);
     }
 

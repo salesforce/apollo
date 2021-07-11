@@ -171,7 +171,9 @@ message Version {
     int32 minor = 3;
 }
 
-// This is the Jesus Nut.  KeyState represents the materialized state of an identifier and corresponding public/private keys, KEL and KERL
+// This is the Jesus Nut.  KeyState represents the materialized 
+// state of an identifier and corresponding public/private keys,
+// KEL and KERL
 message KeyState {
     Ident identifier = 1;
     utils.Digeste digest = 2;

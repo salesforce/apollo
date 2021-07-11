@@ -68,3 +68,6 @@ message CausalMessages {
 message ByteMessage {
     bytes contents = 1;
 }
+
+message Unit {
+}
