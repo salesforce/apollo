@@ -57,7 +57,7 @@ public class DagTest {
     }
     
     @Test
-    public checkReflexivityOfAbove() {
+    public void checkReflexivityOfAbove() {
         
     }
 }

@@ -1,0 +1,13 @@
+10
+0-0-0
+1-0-0
+// first parent used by our self-forking evidence
+0-1-0 0-0-0 1-0-0
+1-1-0 1-0-0 0-1-0
+// this parent is referenced implicitly by our self-forking evidence
+0-2-0 0-1-0 1-1-0
+// this unit allows us to exploit the checkSelfForkingEvidence function that uses only size of the combined floors
+1-2-0 1-1-0 0-2-0
+// a forking unit that is a self-forking evidence, but for which checking just size of the combined floors of its parents is not enough to
+// prove that it is a self-forking evidence
+0-2-1 0-1-0 1-2-0
