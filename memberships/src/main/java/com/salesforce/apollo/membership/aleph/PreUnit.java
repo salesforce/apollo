@@ -6,16 +6,158 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import static com.salesforce.apollo.membership.aleph.Crown.crownFromParents;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import com.google.protobuf.Any;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
 
 /**
  * @author hal.hildebrand
  *
  */
 public interface PreUnit {
+
+    static Unit newFreeUnit(short creator, int epoch, List<Unit> parents, int level, Any data, byte[] rsBytes,
+                            Signer signer, DigestAlgorithm algo) {
+        var crown = crownFromParents(parents, algo);
+        var height = crown.heights().get(creator) + 1;
+        var id = id(height, creator, epoch);
+        var hash = computeHash(algo, id, crown, data, rsBytes);
+        var signature = signer.sign(hash.toByteBuffer());
+        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
+                             new HashMap<>());
+        u.computeFloor();
+        return u;
+
+    }
+
+    record freeUnit(PreUnit p, List<Unit> parents, int level, Map<Short, List<Unit>> floor) implements Unit {
+
+        @Override
+        public short creator() {
+            return p.creator();
+        }
+
+        @Override
+        public Any data() {
+            return p.data();
+        }
+
+        @Override
+        public int epoch() {
+            return p.epoch();
+        }
+
+        @Override
+        public Digest hash() {
+            return p.hash();
+        }
+
+        @Override
+        public int height() {
+            return p.height();
+        }
+
+        @Override
+        public byte[] randomSourceData() {
+            return p.randomSourceData();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return p.signature();
+        }
+
+        @Override
+        public Crown view() {
+            return p.view();
+        }
+
+        @Override
+        public boolean aboveWithinProc(Unit v) {
+            if (creator() != v.creator()) {
+                return false;
+            }
+            Unit w;
+            for (w = this; w != null && w.height() > v.height(); w = w.predecessor())
+                ;
+            if (w == null) {
+                return false;
+            }
+            return w.hash().equals(v.hash());
+        }
+
+        @Override
+        public List<Unit> floor(short pid) {
+            var fl = floor.get(pid);
+            if (fl != null) {
+                return fl;
+            }
+            if (parents.get(pid) == null) {
+                return null;
+            }
+            return parents.subList(pid, pid + 1);
+        }
+
+        private void computeFloor() {
+            if (dealing()) {
+                return;
+            }
+            for (short pid = 0; pid < parents.size(); pid++) {
+                var maximal = Unit.maximalByPid(parents, pid);
+                if (maximal.size() > 1 || maximal.size() == 1 && !maximal.get(0).equals(parents.get(pid))) {
+                    floor.put(pid, maximal);
+                }
+            }
+        }
+    }
+
+    record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown, Any data,
+                   byte[] rsData)
+                  implements PreUnit {
+
+        @Override
+        public byte[] randomSourceData() {
+            return rsData;
+        }
+
+        @Override
+        public Crown view() {
+            return crown;
+        }
+    }
+
     public record DecodedId(int height, short creator, int epoch) {}
+
+    static Digest computeHash(DigestAlgorithm algo, long id, Crown crown, Any data, byte[] rsData) {
+        var buffers = new ArrayList<ByteBuffer>();
+        ByteBuffer idBuff = ByteBuffer.allocate(8);
+        idBuff.putLong(id);
+        idBuff.flip();
+
+        buffers.add(idBuff);
+        buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
+        buffers.add(ByteBuffer.wrap(rsData));
+
+        for (int h : crown.heights()) {
+            ByteBuffer heightBuff = ByteBuffer.allocate(4);
+            heightBuff.putInt(h);
+            heightBuff.flip();
+            buffers.add(heightBuff);
+        }
+        buffers.add(crown.controlHash().toByteBuffer());
+
+        return algo.digest(buffers);
+    }
 
     static DecodedId decode(long id) {
         var height = (int) (id & (1 << 16 - 1));
@@ -29,6 +171,16 @@ public interface PreUnit {
         result += ((long) creator) << 16;
         result += ((long) epoch) << 32;
         return result;
+    }
+
+    static PreUnit newPreUnit(long id, Crown crown, Any data, byte[] rsData, JohnHancock signature,
+                              DigestAlgorithm algo) {
+        var t = decode(id);
+        if (t.height != crown.heights().get(t.creator) + 1) {
+            throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
+        }
+        return new preUnit(t.creator, t.epoch, t.height, signature, computeHash(algo, id, crown, data, rsData), crown,
+                           data, rsData);
     }
 
     short creator();
@@ -62,4 +214,10 @@ public interface PreUnit {
     JohnHancock signature();
 
     Crown view();
+
+    default Unit from(List<Unit> parents) {
+        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents), new HashMap<>());
+        u.computeFloor();
+        return u;
+    }
 }

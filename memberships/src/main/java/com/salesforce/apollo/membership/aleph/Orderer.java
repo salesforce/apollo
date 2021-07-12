@@ -6,11 +6,14 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
-import java.util.List;
+import static com.salesforce.apollo.membership.aleph.Dag.newDag;
 
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.membership.aleph.Dag.DagInfo;
+import java.time.Clock;
+import java.util.List;
+import java.util.function.Consumer;
+
 import com.salesforce.apollo.membership.aleph.RandomSource.RandomSourceFactory;
+import com.salesforce.apollo.membership.aleph.linear.ExtenderService;
 
 /**
  * Orderer orders ordered orders into ordered order.
@@ -18,37 +21,62 @@ import com.salesforce.apollo.membership.aleph.RandomSource.RandomSourceFactory;
  * @author hal.hildebrand
  *
  */
-public interface Orderer {
-    // AddPreunits sends to orderer preunits received from other committee member.
-    void addPreunits(short orderer, List<PreUnit> preunits);
+public class Orderer {
+    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs) {}
 
-    // UnitsByID finds units with given IDs in Orderer.
-    // Returns nil on the corresponding position if the requested unit is not
-    // present.
-    // In case of forks returns all known units with a particular ID.
-    List<Unit> unitsById(List<Long> units);
+    record epochWithNewer(epoch epoch, boolean newer) {}
 
-    // UnitsByHash finds units with given IDs in Orderer.
-    // Returns nil on the corresponding position if the requested unit is not
-    // present.
-    List<Unit> unitsByHash(List<Digest> digests);
+    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, Consumer<Unit> unitBelt, Clock clock) {
+        Dag dg = newDag(config, id);
+        RandomSource rs = rsf.newRandomSource(dg);
+        ExtenderService ext = new ExtenderService(dg, rs, config);
+        dg.afterInsert(u -> {
+            ext.chooseNextTimingUnits();
+            // don't put our own units on the unit belt, creator already knows about them.
+            if (u.creator() != config.pid()) {
+                unitBelt.accept(u);
+            }
+        });
+        return new epoch(id, dg, new Adder(dg, clock), ext, rs);
+    }
 
-    // MaxUnits returns maximal units per process for the given epoch. Returns nil
-    // if epoch not known.
-    SlottedUnits maxUnits(int epoch);
+    private Config conf;
 
-    // GetInfo returns DagInfo of the newest epoch.
-    DagInfo[] getInfo();
+    private epoch                current;
+    private epoch                previous;
+    private Consumer<List<Unit>> toPreblock;
+    private Consumer<Unit>       lastTiming;
+    private int currentProcessing = 0;
 
-    // Delta returns all the units present in orderer that are above heights
-    // indicated by provided DagInfo. That includes also all units from newer
-    // epochs.
-    List<Unit> delta(DagInfo[] heights);
+    // handleTimingRounds waits for ordered round of units produced by Extenders and
+    // produces Preblocks based on them. Since Extenders in multiple epochs can
+    // supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
+    // Preblocks are produced in ascending order with respect to epochs. For the
+    // last ordered round of the epoch, the timing unit defining it is sent to the
+    // creator (to produce signature shares.)
+    public void handleTimingRound(List<Unit> round) {
+        var timingUnit = round.get(round.size() - 1);
+        var epoch = timingUnit.epoch();
+        if (timingUnit.level() == conf.lastLevel()) {
+            lastTiming.accept(timingUnit);
+        }
+        if (epoch > currentProcessing && timingUnit.level() <= conf.lastLevel()) {
+            toPreblock.accept(round);
+        }
+        currentProcessing = epoch;
+    }
 
-    // Start starts the orderer using provided RandomSourceFactory, Syncer, and
-    // Alerter.
-    void start(RandomSourceFactory factory, Syncer syncer, Alerter alerter);
-
-    void stop();
+    private epochWithNewer getEpoch(int epoch) {
+        if (current == null || epoch > current.id) {
+            return new epochWithNewer(null, true);
+        }
+        if (epoch == current.id()) {
+            return new epochWithNewer(current, false);
+        }
+        if (epoch == previous.id()) {
+            return new epochWithNewer(previous, false);
+        }
+        return new epochWithNewer(null, false);
+    }
 
 }

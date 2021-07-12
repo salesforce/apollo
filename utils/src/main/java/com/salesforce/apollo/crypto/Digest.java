@@ -225,6 +225,10 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
+    public ByteBuffer toByteBuffer() {
+        return ByteBuffer.wrap(getBytes());
+    }
+
     public Digeste toDigeste() {
         Builder builder = Digeste.newBuilder().setType(algorithm.digestCode());
         for (long l : hash) {

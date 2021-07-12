@@ -6,9 +6,10 @@
  */
 package com.salesforce.apollo.membership.aleph.linear;
 
-import java.util.Queue;
+import java.util.List;
+import java.util.Map;
 
-import com.salesforce.apollo.membership.aleph.Config;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.aleph.Dag;
 import com.salesforce.apollo.membership.aleph.RandomSource;
 import com.salesforce.apollo.membership.aleph.Unit;
@@ -17,18 +18,5 @@ import com.salesforce.apollo.membership.aleph.Unit;
  * @author hal.hildebrand
  *
  */
-public class ExtenderService {
-    public ExtenderService(Dag dag, RandomSource rs, Config config) {
-        // TODO Auto-generated method stub 
-    }
-
-    public void close() {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public void chooseNextTimingUnits() {
-        // TODO Auto-generated method stub
-        
-    }
+public class superMajorityDecider {
 }

@@ -11,6 +11,7 @@ import static com.salesforce.apollo.membership.aleph.PreUnit.decode;
 import static com.salesforce.apollo.membership.aleph.SlottedUnits.newSlottedUnits;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,15 @@ import com.salesforce.apollo.crypto.Digest;
 public interface Dag {
 
     record DagInfo(int epoch, List<Integer> heights) {}
+
+    public interface Decoded {
+
+        default List<Unit> parents() {
+            return Collections.emptyList();
+        }
+    }
+
+    record decoded(List<Unit> parents) implements Decoded {}
 
     record fiberMap(Map<Integer, SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
 
@@ -132,9 +142,13 @@ public interface Dag {
     record dag(short nProc, int epoch, ConcurrentMap<Digest, Unit> units, fiberMap levelUnits, fiberMap heightUnits,
                SlottedUnits maxUnits, List<BiConsumer<Unit, Dag>> checks, List<Consumer<Unit>> preInsert,
                List<Consumer<Unit>> postInsert)
-              implements Dag
+              implements Dag {
 
-    {
+        private record AmbiguousParents(List<List<Unit>> units) implements Decoded {}
+
+        private record DuplicateUnit(Unit u) implements Decoded {}
+
+        private record UnknownParents(int unknown) implements Decoded {}
 
         @Override
         public void addCheck(BiConsumer<Unit, Dag> checker) {
@@ -153,20 +167,40 @@ public interface Dag {
 
         @Override
         public Unit build(PreUnit base, List<Unit> parents) {
-            // TODO Auto-generated method stub
-            return null;
+            return base.from(parents);
         }
 
         @Override
         public void check(Unit u) {
-            // TODO Auto-generated method stub
-
+            for (var check : checks) {
+                check(u);
+            }
         }
 
         @Override
-        public List<Unit> decodeParents(PreUnit unit) {
-            // TODO Auto-generated method stub
-            return null;
+        public Decoded decodeParents(PreUnit pu) {
+            var u = get(pu.hash());
+            if (u != null) {
+                return new DuplicateUnit(u);
+            }
+            var heights = pu.view().heights();
+            var possibleParents = heightUnits.get(heights);
+            if (possibleParents.unknown > 0) {
+                return new UnknownParents(possibleParents.unknown);
+            }
+            var parents = new ArrayList<Unit>();
+
+            int i = 0;
+            for (List<Unit> units : possibleParents.result) {
+                if (heights.get(i) == -1) {
+                    continue;
+                }
+                if (units.size() > 1) {
+                    return new AmbiguousParents(possibleParents.result);
+                }
+                parents.set(i, units.get(0));
+            }
+            return new decoded(parents);
         }
 
         @Override
@@ -195,8 +229,59 @@ public interface Dag {
         }
 
         @Override
-        public void insert(Unit u) {
-            // TODO Auto-generated method stub
+        public void insert(Unit v) {
+            var unit = v.embed(this);
+            for (var hook : preInsert) {
+                hook.accept(unit);
+            }
+            updateUnitsOnHeight(unit);
+            updateUnitsOnLevel(unit);
+            units.put(unit.hash(), unit);
+            for (var hook : postInsert) {
+                hook.accept(unit);
+            }
+        }
+
+        void updateUnitsOnHeight(Unit u) {
+            var height = u.height();
+            var creator = u.creator();
+            if (height >= heightUnits.len.get()) {
+                heightUnits.extendBy(10);
+            }
+            var su = heightUnits.getFiber(height);
+
+            var oldUnitsOnHeightByCreator = su.get(creator);
+            var unitsOnHeightByCreator = new ArrayList<>(oldUnitsOnHeightByCreator);
+            unitsOnHeightByCreator.add(u);
+            su.set(creator, unitsOnHeightByCreator);
+
+        }
+
+        void updateMaximal(Unit u) {
+            var creator = u.creator();
+            var maxByCreator = maxUnits.get(creator);
+            var newMaxByCreator = new ArrayList<Unit>();
+            // The below code works properly assuming that no unit in the dag created by
+            // creator is >= u
+            for (var v : maxByCreator) {
+                if (!u.above(v)) {
+                    newMaxByCreator.add(v);
+                }
+            }
+            newMaxByCreator.add(u);
+            maxUnits.set(creator, newMaxByCreator);
+
+        }
+
+        void updateUnitsOnLevel(Unit u) {
+            if (u.level() >= levelUnits.len.get()) {
+                levelUnits.extendBy(10);
+            }
+            var su = levelUnits.getFiber(u.level());
+            var creator = u.creator();
+            var primesByCreator = new ArrayList<Unit>(su.get(creator));
+            primesByCreator.add(u);
+            su.set(creator, primesByCreator);
 
         }
 
@@ -250,7 +335,7 @@ public interface Dag {
                        new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
     }
 
-    static fiberMap newFiberMap(short width, int initialLength) {
+    private static fiberMap newFiberMap(short width, int initialLength) {
         var newMap = new fiberMap(new HashMap<>(), width, new AtomicInteger(initialLength),
                                   new ReentrantReadWriteLock());
         for (int i = 0; i < initialLength; i++) {
@@ -270,7 +355,7 @@ public interface Dag {
     void check(Unit u);
 
     // return a slce of parents of the specified unit if control hash matches
-    List<Unit> decodeParents(PreUnit unit);
+    Decoded decodeParents(PreUnit unit);
 
     int epoch();
 
@@ -285,6 +370,19 @@ public interface Dag {
     boolean isQuorum(short cardinality);
 
     SlottedUnits maximalUnitsPerProcess();
+
+    default int maxLevel() {
+        AtomicInteger maxLevel = new AtomicInteger(-1);
+        maximalUnitsPerProcess().iterate(units -> {
+            for (Unit v : units) {
+                if (v.level() > maxLevel.get()) {
+                    maxLevel.set(v.level());
+                }
+            }
+            return true;
+        });
+        return maxLevel.get();
+    }
 
     default DagInfo maxView() {
         var maxes = maximalUnitsPerProcess();

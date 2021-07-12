@@ -10,47 +10,98 @@ import static com.salesforce.apollo.membership.aleph.Dag.minimalQuorum;
 
 import java.util.List;
 
+import com.google.protobuf.Any;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
+
 /**
  * @author hal.hildebrand
  *
  */
 public interface Unit extends PreUnit {
-    // Is the receiver above the specified unit?
-    default boolean above(Unit v) {
-        if (v == null) {
-            return false;
-        }
-        if (equals(v)) {
-            return true;
+
+    record unitInDag(Unit unit, int forkingHeight) implements Unit {
+
+        @Override
+        public short creator() {
+            return unit.creator();
         }
 
-        for (Unit w : floor(v.creator())) {
-            if (w.aboveWithinProc(v)) {
+        @Override
+        public Any data() {
+            return unit.data();
+        }
+
+        @Override
+        public int epoch() {
+            return unit.epoch();
+        }
+
+        @Override
+        public Digest hash() {
+            return unit.hash();
+        }
+
+        @Override
+        public int height() {
+            return unit.height();
+        }
+
+        @Override
+        public byte[] randomSourceData() {
+            return unit.randomSourceData();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return unit.signature();
+        }
+
+        @Override
+        public Crown view() {
+            return unit.view();
+        }
+
+        @Override
+        public boolean aboveWithinProc(Unit v) {
+            if (unit.height() < v.height() || unit.creator() != v.creator()) {
+                return false;
+            }
+            if (v.height() < commonForkHeight((unitInDag) v)) {
                 return true;
             }
+            // Either we have a fork or a different type of unit, either way no optimization
+            // is possible.
+            return unit.aboveWithinProc(v);
+
         }
-        return false;
-    }
 
-    boolean aboveWithinProc(Unit unit);
-
-    // checks whether the receiver is below any of the specified units
-    default boolean belowAny(List<Unit> units) {
-        for (Unit v : units) {
-            if (v != null && v.above(this)) {
-                return true;
+        int commonForkHeight(unitInDag v) {
+            if (forkingHeight < v.forkingHeight) {
+                return forkingHeight;
             }
+            return v.forkingHeight;
         }
-        return false;
+
+        @Override
+        public List<Unit> floor(short slice) {
+            return unit.floor(slice);
+        }
+
+        @Override
+        public int level() {
+            return unit.level();
+        }
+
+        @Override
+        public List<Unit> parents() {
+            return unit.parents();
+        }
     }
 
-    List<Unit> floor(short slice);
-
-    long level();
-
-    default long levelFromParents(List<Unit> parents) {
+    static int levelFromParents(List<Unit> parents) {
         var nProc = (short) parents.size();
-        var level = 0L;
+        var level = 0;
         var onLevel = (short) 0;
         for (Unit p : parents) {
             if (p == null) {
@@ -72,7 +123,7 @@ public interface Unit extends PreUnit {
 
     // Computes all maximal units produced by a pid present in parents and their
     // floors
-    default List<Unit> maximalByPid(List<Unit> parents, short pid) {
+    static List<Unit> maximalByPid(List<Unit> parents, short pid) {
         if (parents.get(pid) == null) {
             return null;
         }
@@ -110,6 +161,78 @@ public interface Unit extends PreUnit {
 
         return maximal;
     }
+
+    // Is the receiver above the specified unit?
+    default boolean above(Unit v) {
+        if (v == null) {
+            return false;
+        }
+        if (equals(v)) {
+            return true;
+        }
+
+        for (Unit w : floor(v.creator())) {
+            if (w.aboveWithinProc(v)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean aboveWithinProc(Unit unit);
+
+    // checks whether the receiver is below any of the specified units
+    default boolean belowAny(List<Unit> units) {
+        for (Unit v : units) {
+            if (v != null && v.above(this)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // this implementation works as long as there is no race for writing/reading to
+    // dag.maxUnits, i.e. as long as units created by one process are added
+    // atomically
+    default int computeForkingHeight(Dag dag) {
+        if (dealing()) {
+            if (dag.maximalUnitsPerProcess().get(creator()).size() > 0) {
+                return -1;
+            } else {
+                return Integer.MAX_VALUE;
+            }
+        }
+        unitInDag predecessor = (unitInDag) predecessor();
+        if (predecessor != null) {
+            var found = false;
+            for (Unit v : dag.maximalUnitsPerProcess().get(creator())) {
+                if (v.equals(predecessor)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                return predecessor.forkingHeight;
+            } else {
+                // there is already a unit that has 'predecessor' as a predecessor, hence u is a
+                // fork
+                if (predecessor.forkingHeight < predecessor.height()) {
+                    return predecessor.forkingHeight;
+                } else {
+                    return predecessor.height();
+                }
+            }
+        }
+        return 0;
+    }
+
+    default Unit embed(Dag dag) {
+        return new unitInDag(this, computeForkingHeight(dag));
+    }
+
+    List<Unit> floor(short slice);
+
+    int level();
 
     List<Unit> parents();
 

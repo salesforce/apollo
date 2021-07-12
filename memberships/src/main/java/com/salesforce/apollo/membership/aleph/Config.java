@@ -6,10 +6,15 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
+
 /**
  * @author hal.hildebrand
  *
  */
-public record Config(short nProc, int epochLength, short pid) {
+public record Config(short nProc, int epochLength, short pid, int zeroVotRoundForCommonVote, int firstDecidedRound,
+                     int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
+                     DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs) {
 
 }

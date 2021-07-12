@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.membership.aleph;
+package com.salesforce.apollo.membership.aleph.linear;
 
 /**
- * Alerter is responsible for raising alerts about forks and handling communication about commitments in case of fork.
  * @author hal.hildebrand
  *
  */
-public interface Alerter { }
+public record TimingRound() {
+}
