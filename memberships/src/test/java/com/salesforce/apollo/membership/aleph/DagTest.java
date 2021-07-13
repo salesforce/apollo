@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
@@ -32,7 +35,9 @@ public class DagTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var units = collectUnits(d.dag());
-        var u = units.get(0).get(0).get(0);
+        var u = units.get((short) 0).get(0).get(0);
+        assertNotNull(u);
+        assertTrue(u.above(u));
     }
 
     // collectUnits runs dfs from maximal units in the given dag and returns a map
@@ -45,7 +50,7 @@ public class DagTest {
         }
         dag.maximalUnitsPerProcess().iterate(units -> {
             for (Unit u : units) {
-                if (!seenUnits.add(u.hash())) {
+                if (!seenUnits.contains(u.hash())) {
                     traverse(u, seenUnits, result);
                 }
             }
@@ -56,10 +61,7 @@ public class DagTest {
 
     private void traverse(Unit u, HashSet<Digest> seenUnits, HashMap<Short, Map<Integer, List<Unit>>> result) {
         seenUnits.add(u.hash());
-        if (result.get(u.creator()).get(u.height()) != null) {
-            result.get(u.creator()).put(u.height(), new ArrayList<>());
-        }
-        result.get(u.creator()).get(u.height()).add(u);
+        result.get(u.creator()).computeIfAbsent(u.height(), k -> new ArrayList<>()).add(u);
         for (Unit uParent : u.parents()) {
             if (uParent == null) {
                 continue;

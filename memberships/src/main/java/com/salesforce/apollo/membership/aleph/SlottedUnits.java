@@ -41,6 +41,9 @@ public interface SlottedUnits {
 
         @Override
         public void set(short pid, List<Unit> units) {
+            if (pid >= mxs.size()) {
+                return;
+            }
             Lock lock = mxs.get(pid).writeLock();
             lock.lock();
             try {

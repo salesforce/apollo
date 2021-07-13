@@ -240,6 +240,7 @@ public interface Dag {
             updateUnitsOnHeight(unit);
             updateUnitsOnLevel(unit);
             units.put(unit.hash(), unit);
+            updateMaximal(v);
             for (var hook : postInsert) {
                 hook.accept(unit);
             }
