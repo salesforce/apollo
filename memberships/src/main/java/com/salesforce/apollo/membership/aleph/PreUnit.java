@@ -121,9 +121,9 @@ public interface PreUnit {
         }
     }
 
-    record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown, Any data,
-                   byte[] rsData)
-                  implements PreUnit {
+    public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
+                          Any data, byte[] rsData)
+                         implements PreUnit {
 
         @Override
         public byte[] randomSourceData() {

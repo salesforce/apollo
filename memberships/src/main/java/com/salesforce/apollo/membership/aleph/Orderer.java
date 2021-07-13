@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.aleph.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.membership.aleph.linear.ExtenderService;
 
@@ -37,16 +38,15 @@ public class Orderer {
                 unitBelt.accept(u);
             }
         });
-        return new epoch(id, dg, new Adder(dg, clock), ext, rs);
+        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs);
     }
 
-    private Config conf;
-
+    private Config               conf;
     private epoch                current;
     private epoch                previous;
     private Consumer<List<Unit>> toPreblock;
     private Consumer<Unit>       lastTiming;
-    private int currentProcessing = 0;
+    private int                  currentProcessing = 0;
 
     // handleTimingRounds waits for ordered round of units produced by Extenders and
     // produces Preblocks based on them. Since Extenders in multiple epochs can
@@ -66,6 +66,7 @@ public class Orderer {
         currentProcessing = epoch;
     }
 
+    @SuppressWarnings("unused")
     private epochWithNewer getEpoch(int epoch) {
         if (current == null || epoch > current.id) {
             return new epochWithNewer(null, true);

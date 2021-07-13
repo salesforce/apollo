@@ -40,15 +40,16 @@ public record Crown(List<Integer> heights, Digest controlHash) {
                 hashes.add(u.hash());
             }
         }
-        return new Crown(heights, combine(hashes));
+        return new Crown(heights, combine(algo, hashes));
     }
 
     public static Crown newCrown(List<Integer> heights, Digest hash) {
         return new Crown(heights, hash);
     }
 
-    public static Crown emptyCrown(short nProc) {
+    public static Crown emptyCrown(short nProc, DigestAlgorithm digestAlgorithm) {
         return new Crown(IntStream.range(0, nProc).mapToObj(e -> -1).collect(Collectors.toList()),
-                         combine(IntStream.range(0, nProc).mapToObj(e -> (Digest) null).collect(Collectors.toList())));
+                         combine(digestAlgorithm,
+                                 IntStream.range(0, nProc).mapToObj(e -> (Digest) null).collect(Collectors.toList())));
     }
 }

@@ -42,12 +42,13 @@ public interface Dag {
         }
     }
 
-    record decoded(List<Unit> parents) implements Decoded {}
+    public record DecodedR(List<Unit> parents) implements Decoded {}
 
     record fiberMap(Map<Integer, SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
 
         public SlottedUnits getFiber(int value) {
             final Lock lock = mx.readLock();
+            lock.lock();
             try {
                 return content.get(value);
             } finally {
@@ -57,6 +58,7 @@ public interface Dag {
 
         public int length() {
             final Lock lock = mx.readLock();
+            lock.lock();
             try {
                 return len.get();
             } finally {
@@ -66,6 +68,7 @@ public interface Dag {
 
         public void extendBy(int nValues) {
             final Lock lock = mx.writeLock();
+            lock.lock();
             try {
                 for (int i = 0; i < len.get() + nValues; i++) {
                     content.put(i, newSlottedUnits(width));
@@ -200,7 +203,7 @@ public interface Dag {
                 }
                 parents.set(i, units.get(0));
             }
-            return new decoded(parents);
+            return new DecodedR(parents);
         }
 
         @Override
@@ -242,7 +245,7 @@ public interface Dag {
             }
         }
 
-        void updateUnitsOnHeight(Unit u) {
+        private void updateUnitsOnHeight(Unit u) {
             var height = u.height();
             var creator = u.creator();
             if (height >= heightUnits.len.get()) {
@@ -257,7 +260,7 @@ public interface Dag {
 
         }
 
-        void updateMaximal(Unit u) {
+        private void updateMaximal(Unit u) {
             var creator = u.creator();
             var maxByCreator = maxUnits.get(creator);
             var newMaxByCreator = new ArrayList<Unit>();
@@ -273,7 +276,7 @@ public interface Dag {
 
         }
 
-        void updateUnitsOnLevel(Unit u) {
+        private void updateUnitsOnLevel(Unit u) {
             if (u.level() >= levelUnits.len.get()) {
                 levelUnits.extendBy(10);
             }

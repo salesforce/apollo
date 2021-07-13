@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,15 +17,27 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.aleph.DagFactory.DagAdder;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class DagTest {
+
+    @Test
+    public void checkReflexivityOfAbove() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/one_unit.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+        var u = units.get(0).get(0).get(0);
+    }
+
     // collectUnits runs dfs from maximal units in the given dag and returns a map
     // creator => (height => slice of units by this creator on this height)
-    HashMap<Short, Map<Integer, List<Unit>>> collectUnits(Dag dag) {
+    private HashMap<Short, Map<Integer, List<Unit>>> collectUnits(Dag dag) {
         var seenUnits = new HashSet<Digest>();
         var result = new HashMap<Short, Map<Integer, List<Unit>>>();
         for (short pid = 0; pid < dag.nProc(); pid++) {
@@ -54,10 +68,5 @@ public class DagTest {
                 traverse(u, seenUnits, result);
             }
         }
-    }
-    
-    @Test
-    public void checkReflexivityOfAbove() {
-        
     }
 }

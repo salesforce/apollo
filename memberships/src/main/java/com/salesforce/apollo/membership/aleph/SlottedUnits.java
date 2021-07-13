@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
 /**
@@ -61,7 +62,13 @@ public interface SlottedUnits {
     }
 
     static SlottedUnits newSlottedUnits(short n) {
-        return new slottedUnits(new ArrayList<>(), new ArrayList<>());
+        List<List<Unit>> contents = new ArrayList<>();
+        List<ReadWriteLock> locks = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            contents.add(new ArrayList<>());
+            locks.add(new ReentrantReadWriteLock());
+        }
+        return new slottedUnits(contents, locks);
     }
 
     // Return all units in this container created by the process identified by the

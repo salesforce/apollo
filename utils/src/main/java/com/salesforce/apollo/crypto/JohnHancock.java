@@ -11,11 +11,10 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
-import org.bouncycastle.util.encoders.Hex;
-
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.Hex;
 
 /**
  * A signature
@@ -112,6 +111,7 @@ public class JohnHancock {
 
     @Override
     public String toString() {
-        return "Sig[" + Hex.toHexString(bytes).substring(0, 12) + ":" + algorithm.signatureCode() + "]";
+        String hex = Hex.hex(bytes);
+        return "Sig[" + (hex.isEmpty() ? "<null>" : hex.substring(0, 12)) + ":" + algorithm.signatureCode() + "]";
     }
 }

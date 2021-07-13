@@ -30,10 +30,6 @@ public class Digest implements Comparable<Digest> {
                                   .map(e -> ByteBuffer.wrap(e.getBytes())).toList());
     }
 
-    public static Digest combine(List<Digest> digests) {
-        return combine(digests.get(0).algorithm, digests);
-    }
-
     public static int compare(byte[] o1, byte[] o2) {
         if (o1 == null) {
             return o2 == null ? 0 : -1;
