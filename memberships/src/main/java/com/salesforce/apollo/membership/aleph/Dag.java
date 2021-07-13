@@ -23,6 +23,8 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
 
@@ -191,10 +193,11 @@ public interface Dag {
             if (possibleParents.unknown > 0) {
                 return new UnknownParents(possibleParents.unknown);
             }
-            var parents = new ArrayList<Unit>();
+            List<Unit> parents = IntStream.range(0, nProc).mapToObj(e -> (Unit) null).collect(Collectors.toList());
 
-            int i = 0;
+            int i = -1;
             for (List<Unit> units : possibleParents.result) {
+                i++;
                 if (heights.get(i) == -1) {
                     continue;
                 }
@@ -240,7 +243,7 @@ public interface Dag {
             updateUnitsOnHeight(unit);
             updateUnitsOnLevel(unit);
             units.put(unit.hash(), unit);
-            updateMaximal(v);
+            updateMaximal(unit);
             for (var hook : postInsert) {
                 hook.accept(unit);
             }

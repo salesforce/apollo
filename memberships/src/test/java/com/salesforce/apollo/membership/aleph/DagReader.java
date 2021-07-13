@@ -26,12 +26,14 @@ import com.salesforce.apollo.membership.aleph.PreUnit.preUnit;
  */
 public class DagReader {
 
+    private final static String KEY_TEMPLATE = "%s-%s-%s";
+
     public static DagAdder readDag(InputStream is, DagFactory df) {
         @SuppressWarnings("resource")
         Scanner scanner = new Scanner(is);
         short n = (short) scanner.nextShort();
         DagAdder da = df.createDag(n);
-        var preUnitHashes = new HashMap<int[], Digest>();
+        var preUnitHashes = new HashMap<String, Digest>();
         JohnHancock signature = new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]);
         var rsData = new byte[0];
         while (scanner.hasNextLine()) {
@@ -64,8 +66,7 @@ public class DagReader {
                     puHeight = height;
                     puVersion = version;
                 } else {
-                    int[] key = new int[] { creator, height, version };
-                    Digest hash = preUnitHashes.get(key);
+                    Digest hash = preUnitHashes.get(String.format(KEY_TEMPLATE, creator, height, version));
                     if (hash == null) {
                         throw new IllegalStateException("Trying to set parent to non-existing unit");
                     }
@@ -75,26 +76,25 @@ public class DagReader {
                     parents.set(creator, hash);
                     parentsHeights.set(creator, height);
                 }
-                var pu = newPreUnit(puCreator,
-                                    new Crown(parentsHeights,
-                                              Digest.combine(DigestAlgorithm.DEFAULT, parents)),
-                                    Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
-                da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
-                preUnitHashes.put(new int[] { puCreator, puHeight, puVersion }, pu.hash());
             }
+            var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
+                                Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
+            da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
+            preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
         }
         return da;
     }
 
     private static PreUnit newPreUnit(short puCreator, Crown crown, Any defaultInstance, byte[] rsData,
                                       JohnHancock signature, DigestAlgorithm default1) {
-        return newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, signature, default1);
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, signature, default1);
+        return newsie;
     }
 
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, Any defaultInstance,
                                                byte[] rsData, JohnHancock signature, DigestAlgorithm default1) {
-        return new preUnit(puCreator, crown.heights().get(puCreator) + 1, epoch,
-                           signature, PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
+        return new preUnit(puCreator, epoch, crown.heights().get(puCreator) + 1, signature,
+                           PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
                            defaultInstance, rsData);
     }
 }

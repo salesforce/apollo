@@ -8,6 +8,7 @@ package com.salesforce.apollo.membership.aleph;
 
 import static com.salesforce.apollo.membership.aleph.Dag.minimalQuorum;
 
+import java.util.Collections;
 import java.util.List;
 
 import com.google.protobuf.Any;
@@ -21,6 +22,22 @@ import com.salesforce.apollo.crypto.JohnHancock;
 public interface Unit extends PreUnit {
 
     record unitInDag(Unit unit, int forkingHeight) implements Unit {
+
+        @Override
+        public int hashCode() {
+            return unit.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof unitInDag uid) {
+                if (unit.equals(uid)) {
+                    return true;
+                }
+                return forkingHeight == uid.forkingHeight;
+            }
+            return unit.equals(obj);
+        }
 
         @Override
         public short creator() {
@@ -67,8 +84,10 @@ public interface Unit extends PreUnit {
             if (unit.height() < v.height() || unit.creator() != v.creator()) {
                 return false;
             }
-            if (v.height() < commonForkHeight((unitInDag) v)) {
-                return true;
+            if (v instanceof unitInDag uid) {
+                if (v.height() < commonForkHeight(uid)) {
+                    return true;
+                }
             }
             // Either we have a fork or a different type of unit, either way no optimization
             // is possible.
@@ -125,7 +144,7 @@ public interface Unit extends PreUnit {
     // floors
     static List<Unit> maximalByPid(List<Unit> parents, short pid) {
         if (parents.get(pid) == null) {
-            return null;
+            return Collections.emptyList();
         }
         var maximal = parents.subList(pid, parents.size());
         for (Unit parent : parents) {

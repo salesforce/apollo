@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,7 +30,28 @@ import com.salesforce.apollo.membership.aleph.DagFactory.DagAdder;
 public class DagTest {
 
     @Test
-    public void checkReflexivityOfAbove() throws Exception {
+    public void lackOfSymmetryOfAbove() throws Exception {
+        DagAdder d = null;
+        try (
+        FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+        var u0 = units.get((short) 0).get(0).get(0);
+        var u1 = units.get((short) 1).get(0).get(0);
+        var u01 = units.get((short) 0).get(1).get(0);
+        assertNotNull(u0);
+        assertNotNull(u1);
+        assertNotNull(u01);
+
+        assertTrue(u01.above(u0));
+        assertTrue(u01.above(u1));
+        assertFalse(u0.above(u01));
+        assertFalse(u1.above(u01));
+    }
+
+    @Test
+    public void reflexivityOfAbove() throws Exception {
         DagAdder d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/one_unit.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
@@ -43,15 +65,15 @@ public class DagTest {
     // collectUnits runs dfs from maximal units in the given dag and returns a map
     // creator => (height => slice of units by this creator on this height)
     private HashMap<Short, Map<Integer, List<Unit>>> collectUnits(Dag dag) {
-        var seenUnits = new HashSet<Digest>();
+        var traversed = new HashSet<Digest>();
         var result = new HashMap<Short, Map<Integer, List<Unit>>>();
         for (short pid = 0; pid < dag.nProc(); pid++) {
             result.put(pid, new HashMap<>());
         }
         dag.maximalUnitsPerProcess().iterate(units -> {
             for (Unit u : units) {
-                if (!seenUnits.contains(u.hash())) {
-                    traverse(u, seenUnits, result);
+                if (!traversed.contains(u.hash())) {
+                    traverse(u, traversed, result);
                 }
             }
             return true;
@@ -59,15 +81,15 @@ public class DagTest {
         return result;
     }
 
-    private void traverse(Unit u, HashSet<Digest> seenUnits, HashMap<Short, Map<Integer, List<Unit>>> result) {
-        seenUnits.add(u.hash());
+    private void traverse(Unit u, HashSet<Digest> traversed, HashMap<Short, Map<Integer, List<Unit>>> result) {
+        traversed.add(u.hash());
         result.get(u.creator()).computeIfAbsent(u.height(), k -> new ArrayList<>()).add(u);
         for (Unit uParent : u.parents()) {
             if (uParent == null) {
                 continue;
             }
-            if (!seenUnits.add(uParent.hash())) {
-                traverse(u, seenUnits, result);
+            if (!traversed.contains(uParent.hash())) {
+                traverse(uParent, traversed, result);
             }
         }
     }

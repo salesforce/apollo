@@ -10,6 +10,7 @@ import static com.salesforce.apollo.membership.aleph.Crown.crownFromParents;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,21 +27,17 @@ import com.salesforce.apollo.crypto.Signer;
  */
 public interface PreUnit {
 
-    static Unit newFreeUnit(short creator, int epoch, List<Unit> parents, int level, Any data, byte[] rsBytes,
-                            Signer signer, DigestAlgorithm algo) {
-        var crown = crownFromParents(parents, algo);
-        var height = crown.heights().get(creator) + 1;
-        var id = id(height, creator, epoch);
-        var hash = computeHash(algo, id, crown, data, rsBytes);
-        var signature = signer.sign(hash.toByteBuffer());
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
-                             new HashMap<>());
-        u.computeFloor();
-        return u;
-
-    }
-
     record freeUnit(PreUnit p, List<Unit> parents, int level, Map<Short, List<Unit>> floor) implements Unit {
+
+        @Override
+        public boolean equals(Object obj) {
+            return p.equals(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return p.hashCode();
+        }
 
         @Override
         public short creator() {
@@ -103,7 +100,7 @@ public interface PreUnit {
                 return fl;
             }
             if (parents.get(pid) == null) {
-                return null;
+                return Collections.emptyList();
             }
             return parents.subList(pid, pid + 1);
         }
@@ -124,6 +121,22 @@ public interface PreUnit {
     public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
                           Any data, byte[] rsData)
                          implements PreUnit {
+
+        @Override
+        public int hashCode() {
+            return hash.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof Unit u)) {
+                return false;
+            }
+            return hash.equals(u.hash());
+        }
 
         @Override
         public byte[] randomSourceData() {
@@ -173,6 +186,20 @@ public interface PreUnit {
         return result;
     }
 
+    static Unit newFreeUnit(short creator, int epoch, List<Unit> parents, int level, Any data, byte[] rsBytes,
+                            Signer signer, DigestAlgorithm algo) {
+        var crown = crownFromParents(parents, algo);
+        var height = crown.heights().get(creator) + 1;
+        var id = id(height, creator, epoch);
+        var hash = computeHash(algo, id, crown, data, rsBytes);
+        var signature = signer.sign(hash.toByteBuffer());
+        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
+                             new HashMap<>());
+        u.computeFloor();
+        return u;
+
+    }
+
     static PreUnit newPreUnit(long id, Crown crown, Any data, byte[] rsData, JohnHancock signature,
                               DigestAlgorithm algo) {
         var t = decode(id);
@@ -197,6 +224,12 @@ public interface PreUnit {
         return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
     }
 
+    default Unit from(List<Unit> parents) {
+        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents), new HashMap<>());
+        u.computeFloor();
+        return u;
+    }
+
     Digest hash();
 
     int height();
@@ -214,10 +247,4 @@ public interface PreUnit {
     JohnHancock signature();
 
     Crown view();
-
-    default Unit from(List<Unit> parents) {
-        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents), new HashMap<>());
-        u.computeFloor();
-        return u;
-    }
 }
