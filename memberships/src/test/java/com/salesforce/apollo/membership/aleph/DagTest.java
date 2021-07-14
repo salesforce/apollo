@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.membership.aleph;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -28,6 +30,65 @@ import com.salesforce.apollo.membership.aleph.DagFactory.DagAdder;
  *
  */
 public class DagTest {
+    // @Test TODO, resolution of forking (with alerts or RBAC)
+    public void correctForkedDealingUnits() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/forked_dealing.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+        var u0 = units.get((short) 0).get(0).get(0);
+        var u1 = units.get((short) 0).get(0).get(1);
+
+        assertNotNull(u0);
+        assertNotNull(u1);
+
+        assertTrue(u0.above(u1));
+        assertTrue(u1.above(u0));
+    }
+
+    @Test
+    public void floorsOnDealing() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+        var u = units.get((short) 0).get(0).get(0);
+        assertNotNull(u);
+        assertTrue(u.above(u));
+    }
+
+    @Test
+    public void floorsOnSeeingFork() throws Exception {
+        DagAdder d = null;
+        try {
+            try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/fork_accepted.txt"))) {
+                d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+            }
+            fail("Should not have succeeded due to fork");
+        } catch (IllegalStateException e) {
+            assertEquals("Trying to set parent to non-existing unit", e.getMessage());
+        }
+    }
+
+    @Test
+    public void floorsOnSingleUwithTwoParents() throws Exception {
+        DagAdder d = null;
+        try (
+        FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+
+        var floor0 = units.get((short) 0).get(1).get(0).floor((short) 0);
+        var floor1 = units.get((short) 0).get(1).get(0).floor((short) 1);
+        assertEquals(1, floor0.size());
+        assertEquals(units.get((short) 0).get(0).get(0), floor0.get(0));
+        assertEquals(1, floor1.size());
+        assertEquals(units.get((short) 1).get(0).get(0), floor1.get(0));
+    }
+
     @Test
     public void lackOfSymmetryOfAbove() throws Exception {
         DagAdder d = null;
@@ -49,16 +110,19 @@ public class DagTest {
         assertFalse(u1.above(u01));
     }
 
-    @Test
+    // @Test TODO needs work
     public void reflexivityOfAbove() throws Exception {
         DagAdder d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/one_unit.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var units = collectUnits(d.dag());
-        var u = units.get((short) 0).get(0).get(0);
-        assertNotNull(u);
-        assertTrue(u.above(u));
+        for (short pid = 0; pid < d.dag().nProc(); pid++) {
+            for (short pid2 = 0; pid2 < d.dag().nProc(); pid2++) {
+                var myFloor = units.get(pid).get(0).get(0).floor(pid2);
+                assertEquals(0, myFloor.size());
+            }
+        }
     }
 
     @Test

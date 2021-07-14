@@ -12,6 +12,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Scanner;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.protobuf.Any;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -25,6 +28,7 @@ import com.salesforce.apollo.membership.aleph.PreUnit.preUnit;
  *
  */
 public class DagReader {
+    private final static Logger log = LoggerFactory.getLogger(DagReader.class);
 
     private final static String KEY_TEMPLATE = "%s-%s-%s";
 
@@ -82,9 +86,10 @@ public class DagReader {
                                 Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
             var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
             if (errors != null) {
-                throw new IllegalStateException("Unable to insert node: " + pu + " : " + errors);
+                log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
+            } else {
+                preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
             }
-            preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
         }
         return da;
     }
