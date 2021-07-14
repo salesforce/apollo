@@ -21,6 +21,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.membership.aleph.Dag.AmbiguousParents;
 
 /**
  * 
@@ -32,7 +33,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  * a) DecodeParents b) BuildUnit c) Check d) Insert
  * 
  * @author hal.hildebrand
- *
+ *XXXX
  */
 public class AdderImpl implements Adder {
 
@@ -129,6 +130,14 @@ public class AdderImpl implements Adder {
         // 1. Decode Parents
         var decoded = dag.decodeParents(wp.pu());
         var parents = decoded.parents();
+        if (decoded.inError()) {
+            if (decoded instanceof AmbiguousParents ap) {
+                parents = new ArrayList<>();
+                for (var us: ap.units()) {
+                    var parent = disambiguate(us, wp.pu());
+                }
+            }
+        }
         if (!Digest.combine(digestAlgorithm, parents.stream().map(e -> e.hash()).toList())
                    .equals(wp.pu().view().controlHash())) {
             wp.failed().set(true);
@@ -144,6 +153,11 @@ public class AdderImpl implements Adder {
 
         // 4. Insert
         dag.insert(freeUnit);
+    }
+
+    private Unit disambiguate(List<Unit> us, PreUnit pu) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     // checkIfMissing sets the children() attribute of a newly created

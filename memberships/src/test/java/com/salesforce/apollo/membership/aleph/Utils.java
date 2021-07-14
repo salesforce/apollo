@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.aleph.Dag.Decoded;
 
 /**
  * @author hal.hildebrand
@@ -48,11 +49,17 @@ public interface Utils {
                     failed.set(i, true);
                     continue;
                 }
-                List<Unit> parents = dag.decodeParents(pu).parents();
+                Decoded decodedParents = dag.decodeParents(pu);
+                if (decodedParents.inError()) {
+                    errors.put(pu.hash(), decodedParents.classification());
+                    failed.set(i, true);
+                    continue;
+                }
+                List<Unit> parents = decodedParents.parents();
                 var freeUnit = dag.build(pu, parents);
                 dag.insert(freeUnit);
             }
-            return errors;
+            return errors.isEmpty() ? null : errors;
         }
     }
 }

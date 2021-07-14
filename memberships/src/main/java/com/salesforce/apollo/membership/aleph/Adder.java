@@ -20,7 +20,7 @@ import com.salesforce.apollo.crypto.Digest;
 public interface Adder {
 
     enum Correctness {
-        CORRECT, DATA_ERROR, DUPLICATE_UNIT, DUPLICATE_PRE_UNIT, UNKNOWN_PARENTS;
+        ABIGUOUS_PARENTS, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
     record waitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents, AtomicInteger waitingParents,

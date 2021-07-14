@@ -8,6 +8,7 @@ package com.salesforce.apollo.membership.aleph;
 
 import static com.salesforce.apollo.membership.aleph.Dag.minimalQuorum;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -146,7 +147,8 @@ public interface Unit extends PreUnit {
         if (parents.get(pid) == null) {
             return Collections.emptyList();
         }
-        var maximal = parents.subList(pid, parents.size());
+        var maximal = new ArrayList<Unit>();
+        maximal.add(parents.get(pid));
         for (Unit parent : parents) {
             if (parent == null) {
                 continue;

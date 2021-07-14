@@ -32,6 +32,7 @@ public class DagReader {
         @SuppressWarnings("resource")
         Scanner scanner = new Scanner(is);
         short n = (short) scanner.nextShort();
+        scanner.nextLine();
         DagAdder da = df.createDag(n);
         var preUnitHashes = new HashMap<String, Digest>();
         JohnHancock signature = new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]);
@@ -79,7 +80,10 @@ public class DagReader {
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
                                 Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
-            da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
+            var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
+            if (errors != null) {
+                throw new IllegalStateException("Unable to insert node: " + pu + " : " + errors);
+            }
             preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
         }
         return da;

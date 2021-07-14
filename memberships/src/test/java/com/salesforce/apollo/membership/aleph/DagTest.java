@@ -28,7 +28,6 @@ import com.salesforce.apollo.membership.aleph.DagFactory.DagAdder;
  *
  */
 public class DagTest {
-
     @Test
     public void lackOfSymmetryOfAbove() throws Exception {
         DagAdder d = null;
@@ -60,6 +59,29 @@ public class DagTest {
         var u = units.get((short) 0).get(0).get(0);
         assertNotNull(u);
         assertTrue(u.above(u));
+    }
+
+    @Test
+    public void transitivityOfAbove() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/six_units.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = collectUnits(d.dag());
+        var u0 = units.get((short) 0).get(0).get(0);
+        var u01 = units.get((short) 0).get(1).get(0);
+        var u02 = units.get((short) 0).get(2).get(0);
+        var u21 = units.get((short) 2).get(1).get(0);
+        assertNotNull(u0);
+        assertNotNull(u01);
+        assertNotNull(u02);
+        assertNotNull(u21);
+
+        assertTrue(u01.above(u0));
+        assertTrue(u02.above(u01));
+        assertTrue(u02.above(u0));
+        assertTrue(u21.above(u01));
+        assertTrue(u21.above(u0));
     }
 
     // collectUnits runs dfs from maximal units in the given dag and returns a map

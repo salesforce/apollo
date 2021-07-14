@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.aleph.Adder.Correctness;
 
 /**
  * @author hal.hildebrand
@@ -38,13 +39,25 @@ public interface Dag {
     record DagInfo(int epoch, List<Integer> heights) {}
 
     public interface Decoded {
+        default Correctness classification() {
+            return Correctness.CORRECT;
+        }
+
+        default boolean inError() {
+            return true;
+        }
 
         default List<Unit> parents() {
             return Collections.emptyList();
         }
     }
 
-    public record DecodedR(List<Unit> parents) implements Decoded {}
+    public record DecodedR(List<Unit> parents) implements Decoded {
+        @Override
+        public boolean inError() {
+            return false;
+        }
+    }
 
     record fiberMap(Map<Integer, SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
 
@@ -72,7 +85,7 @@ public interface Dag {
             final Lock lock = mx.writeLock();
             lock.lock();
             try {
-                for (int i = 0; i < len.get() + nValues; i++) {
+                for (int i = len.get(); i < len.get() + nValues; i++) {
                     content.put(i, newSlottedUnits(width));
                 }
                 len.addAndGet(nValues);
@@ -90,7 +103,8 @@ public interface Dag {
             if (heights.size() != width) {
                 throw new IllegalStateException("Wrong number of heights passed to fiber map");
             }
-            var result = new ArrayList<List<Unit>>();
+            List<List<Unit>> result = IntStream.range(0, width).mapToObj(e -> new ArrayList<Unit>())
+                                               .collect(Collectors.toList());
             var unknown = 0;
             final Lock lock = mx.readLock();
             lock.lock();
@@ -102,7 +116,7 @@ public interface Dag {
                     }
                     var su = content.get(h);
                     if (su != null) {
-                        result.add(su.get(pid));
+                        result.set(pid, (su.get(pid)));
                     }
                     if (result.get(pid).isEmpty()) {
                         unknown++;
@@ -144,16 +158,34 @@ public interface Dag {
         }
     }
 
+    record AmbiguousParents(List<List<Unit>> units) implements Decoded {
+
+        @Override
+        public Correctness classification() {
+            return Correctness.ABIGUOUS_PARENTS;
+        }
+    }
+
+    record DuplicateUnit(Unit u) implements Decoded {
+
+        @Override
+        public Correctness classification() {
+            return Correctness.DUPLICATE_UNIT;
+        }
+    }
+
+    record UnknownParents(int unknown) implements Decoded {
+
+        @Override
+        public Correctness classification() {
+            return Correctness.UNKNOWN_PARENTS;
+        }
+    }
+
     record dag(short nProc, int epoch, ConcurrentMap<Digest, Unit> units, fiberMap levelUnits, fiberMap heightUnits,
                SlottedUnits maxUnits, List<BiConsumer<Unit, Dag>> checks, List<Consumer<Unit>> preInsert,
                List<Consumer<Unit>> postInsert)
               implements Dag {
-
-        private record AmbiguousParents(List<List<Unit>> units) implements Decoded {}
-
-        private record DuplicateUnit(Unit u) implements Decoded {}
-
-        private record UnknownParents(int unknown) implements Decoded {}
 
         @Override
         public void addCheck(BiConsumer<Unit, Dag> checker) {
