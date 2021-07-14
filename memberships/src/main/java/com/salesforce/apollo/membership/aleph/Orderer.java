@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.salesforce.apollo.membership.aleph.Adder.AdderImpl;
 import com.salesforce.apollo.membership.aleph.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.membership.aleph.linear.ExtenderService;
 

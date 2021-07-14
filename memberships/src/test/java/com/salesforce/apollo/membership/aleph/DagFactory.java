@@ -8,6 +8,7 @@ package com.salesforce.apollo.membership.aleph;
 
 import java.time.Clock;
 
+import com.salesforce.apollo.membership.aleph.Adder.AdderImpl;
 import com.salesforce.apollo.membership.aleph.Utils.TestAdder;
 
 /**
