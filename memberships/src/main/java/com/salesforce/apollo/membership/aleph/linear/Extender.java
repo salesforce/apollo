@@ -17,6 +17,7 @@ import com.salesforce.apollo.membership.aleph.Config;
 import com.salesforce.apollo.membership.aleph.Dag;
 import com.salesforce.apollo.membership.aleph.RandomSource;
 import com.salesforce.apollo.membership.aleph.Unit;
+import com.salesforce.apollo.membership.aleph.linear.UnanimousVoter.SuperMajorityDecider;
 
 /**
  * Extender is a type that implements an algorithm that extends order of units
@@ -37,7 +38,7 @@ public class Extender {
         crpIterator = new CommonRandomPermutation(dag, rs, conf.crpFixedPrefix(), digestAlgorithm);
     }
 
-    private final Map<Digest, superMajorityDecider> deciders = new HashMap<>();
+    private final Map<Digest, SuperMajorityDecider> deciders = new HashMap<>();
     private final Dag                               dag;
     private final RandomSource                      randomSource;
     List<Unit>                                      lastTUs;
