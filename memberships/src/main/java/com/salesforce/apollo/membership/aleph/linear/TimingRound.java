@@ -68,7 +68,7 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm di
             if (checkIfAlreadyOrdered(uParent, prevTUs)) {
                 continue;
             }
-            if (!seenUnits.get(uParent.hash())) {
+            if (!seenUnits.getOrDefault(uParent.hash(), false)) {
                 traverse(uParent, prevTUs, unitToLayer, seenUnits, result);
             }
             if (unitToLayer.get(uParent.hash()) > minLayerBelow) {

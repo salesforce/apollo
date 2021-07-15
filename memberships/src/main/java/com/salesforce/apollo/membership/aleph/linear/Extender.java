@@ -79,7 +79,7 @@ public class Extender {
             SuperMajorityDecider decider = getDecider(uc);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
-                lastTUs = lastTUs.subList(1, lastTUs.size());
+                lastTUs = lastTUs.isEmpty() ? lastTUs : lastTUs.subList(1, lastTUs.size());
                 lastTUs.add(currentTU);
                 currentTU = uc;
                 lastDecideResult = true;

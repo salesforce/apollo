@@ -34,7 +34,7 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
     private record votingResult(short popular, short unpopular) {}
 
     public static class SuperMajorityDecider {
-        private Vote                 decision;
+        private Vote                 decision = Vote.UNDECIDED;
         private int                  decisionLevel;
         private final UnanimousVoter v;
 
