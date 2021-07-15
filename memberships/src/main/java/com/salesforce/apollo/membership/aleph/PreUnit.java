@@ -116,6 +116,10 @@ public interface PreUnit {
                 }
             }
         }
+
+        public String toString() {
+            return "freeUnit[" + creator() + ":" + level() + "(" + height() + ")" + ":" + epoch() + "]";
+        }
     }
 
     public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
@@ -146,6 +150,10 @@ public interface PreUnit {
         @Override
         public Crown view() {
             return crown;
+        }
+
+        public String toString() {
+            return "preUnit[" + creator() + ":" + height() + ":" + epoch() + "]";
         }
     }
 

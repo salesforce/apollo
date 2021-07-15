@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
 
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.aleph.Dag;
 import com.salesforce.apollo.membership.aleph.RandomSource;
@@ -43,7 +44,8 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
     public boolean iterate(int level, Unit previousTU, Function<Unit, Boolean> work) {
         var split = splitProcesses(dag.nProc(), crpFixedPrefix, level, previousTU);
 
-        for (var u : defaultPermutation(dag, level, split.prefix)) {
+        List<Unit> defaultPermutation = defaultPermutation(dag, level, split.prefix);
+        for (var u : defaultPermutation) {
             if (!work.apply(u)) {
                 return true;
             }
@@ -76,7 +78,7 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
             return new split(pids.subList(0, prefixLen), pids.subList(prefixLen, pids.size()));
 
         }
-        for (short pid : pids) {
+        for (short pid : new ArrayList<>(pids)) {
             pids.set(pid, (short) ((pids.get(pid) + tu.creator()) % nProc));
         }
         return new split(pids.subList(0, prefixLen), pids.subList(prefixLen, pids.size()));
@@ -86,7 +88,7 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
     private List<Unit> defaultPermutation(Dag dag, int level, List<Short> pids) {
         var permutation = new ArrayList<Unit>();
 
-        for (short pid = 0; pid < pids.size(); pid++) {
+        for (short pid : pids) {
             permutation.addAll(dag.unitsOnLevel(level).get(pid));
         }
 
@@ -98,10 +100,10 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
 
     private rp randomPermutation(RandomSource rs, Dag dag, int level, List<Short> pids, DigestAlgorithm algo) {
         var permutation = new ArrayList<Unit>();
-        var priority = new HashMap<Unit, byte[]>();
+        var priority = new HashMap<Digest, Digest>();
 
         var allUnitsOnLevel = dag.unitsOnLevel(level);
-        for (short pid = 0; pid < pids.size(); pid++) {
+        for (short pid : pids) {
             var units = allUnitsOnLevel.get(pid);
             if (units.isEmpty()) {
                 continue;
@@ -110,41 +112,19 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
             if (randomBytes == null) {
                 return new rp(Collections.emptyList(), false);
             }
-            // NOTE: it is risky to directly append to this returned value, so we need to
-            // copy it first
+
             try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
                 baos.write(randomBytes);
                 for (var u : units) {
                     baos.write(u.hash().getBytes());
-                    priority.put(u, algo.digest(baos.toByteArray()).getBytes());
+                    priority.put(u.hash(), algo.digest(baos.toByteArray()));
                 }
             } catch (IOException e) {
                 throw new IllegalStateException("Fatal issue when creating random permutation", e);
             }
             permutation.addAll(units);
         }
-        Collections.sort(permutation, (a, b) -> {
-            if (a.equals(b)) {
-                return 0;
-            }
-            if (priority.get(b) == null) {
-                return -1;
-            }
-            byte[] aBytes = priority.get(a);
-            if (aBytes == null) {
-                return 1;
-            }
-            byte[] bBytes = priority.get(b);
-            for (int x = 0; x < aBytes.length; x++) {
-                if (aBytes[x] < bBytes[x]) {
-                    return -1;
-                }
-                if (aBytes[x] > bBytes[x]) {
-                    return 1;
-                }
-            }
-            throw new IllegalStateException("Units are of equal priority a: " + a.hash() + " b: " + b.hash());
-        });
+        Collections.sort(permutation, (a, b) -> priority.get(a.hash()).compareTo(priority.get(b.hash())));
 
         return new rp(permutation, true);
 

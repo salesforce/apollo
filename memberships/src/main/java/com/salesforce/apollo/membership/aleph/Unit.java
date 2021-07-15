@@ -32,10 +32,7 @@ public interface Unit extends PreUnit {
         @Override
         public boolean equals(Object obj) {
             if (obj instanceof unitInDag uid) {
-                if (unit.equals(uid)) {
-                    return true;
-                }
-                return forkingHeight == uid.forkingHeight;
+                return (unit.equals(uid));
             }
             return unit.equals(obj);
         }
@@ -116,6 +113,10 @@ public interface Unit extends PreUnit {
         @Override
         public List<Unit> parents() {
             return unit.parents();
+        }
+
+        public String toString() {
+            return "unitInDag[" + creator() + ":" + level() + ":" + epoch() + "]";
         }
     }
 
