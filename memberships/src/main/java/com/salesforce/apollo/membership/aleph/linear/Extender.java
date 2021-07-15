@@ -10,6 +10,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -18,6 +22,7 @@ import com.salesforce.apollo.membership.aleph.Dag;
 import com.salesforce.apollo.membership.aleph.RandomSource;
 import com.salesforce.apollo.membership.aleph.Unit;
 import com.salesforce.apollo.membership.aleph.linear.UnanimousVoter.SuperMajorityDecider;
+import com.salesforce.apollo.membership.aleph.linear.UnanimousVoter.Vote;
 
 /**
  * Extender is a type that implements an algorithm that extends order of units
@@ -27,11 +32,12 @@ import com.salesforce.apollo.membership.aleph.linear.UnanimousVoter.SuperMajorit
  *
  */
 public class Extender {
-    public Extender(Dag dag, RandomSource rs, Config conf) {
+    public Extender(Dag dag, RandomSource rs, Config conf, DigestAlgorithm digestAlgorithm) {
+        this.digestAlgorithm = digestAlgorithm;
         this.dag = dag;
         randomSource = rs;
         lastTUs = new ArrayList<>();
-        zeroVotRoundForCommonVote = conf.zeroVotRoundForCommonVote();
+        zeroVoteRoundForCommonVote = conf.zeroVotRoundForCommonVote();
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
@@ -41,15 +47,15 @@ public class Extender {
     private final Map<Digest, SuperMajorityDecider> deciders = new HashMap<>();
     private final Dag                               dag;
     private final RandomSource                      randomSource;
-    List<Unit>                                      lastTUs;
-    Unit                                            currentTU;
-    boolean                                         lastDecideResult;
-    int                                             zeroVotRoundForCommonVote;
-    int                                             firstDecidedRound;
-    int                                             orderStartLevel;
-    int                                             commonVoteDeterministicPrefix;
-    CommonRandomPermutation                         crpIterator;
-    DigestAlgorithm                                 digestAlgorithm;
+    private List<Unit>                              lastTUs;
+    private Unit                                    currentTU;
+    private boolean                                 lastDecideResult;
+    private int                                     zeroVoteRoundForCommonVote;
+    private int                                     firstDecidedRound;
+    private int                                     orderStartLevel;
+    private int                                     commonVoteDeterministicPrefix;
+    private CommonRandomPermutation                 crpIterator;
+    private final DigestAlgorithm                   digestAlgorithm;
 
     public TimingRound nextRound() {
         if (lastDecideResult) {
@@ -68,11 +74,40 @@ public class Extender {
         }
 
         var previousTU = currentTU;
-        var decided = false;
-        var randomBytesPresent = crpIterator.iterate(level, previousTU, unit -> {
-
-            return false;
+        var decided = new AtomicBoolean();
+        var randomBytesPresent = crpIterator.iterate(level, previousTU, uc -> {
+            SuperMajorityDecider decider = getDecider(uc);
+            var decision = decider.decideUnitIsPopular(dagMaxLevel);
+            if (decision.decision() == Vote.POPULAR) {
+                lastTUs = lastTUs.subList(1, lastTUs.size());
+                lastTUs.add(currentTU);
+                currentTU = uc;
+                lastDecideResult = true;
+                deciders.clear();
+                decided.set(true);
+                return false;
+            }
+            if (decision.decision() == Vote.UNDECIDED) {
+                return false;
+            }
+            return true;
         });
-        return null;
+        if (!randomBytesPresent) {
+            log.info("Missing random bytes");
+        }
+        if (!decided.get()) {
+            return null;
+        }
+        return new TimingRound(currentTU, lastTUs, digestAlgorithm);
+    }
+
+    private static Logger log = LoggerFactory.getLogger(Extender.class);
+
+    private SuperMajorityDecider getDecider(Unit uc) {
+        return deciders.computeIfAbsent(uc.hash(),
+                                        h -> new SuperMajorityDecider(new UnanimousVoter(dag, randomSource, uc,
+                                                                                         zeroVoteRoundForCommonVote,
+                                                                                         commonVoteDeterministicPrefix,
+                                                                                         new HashMap<>())));
     }
 }

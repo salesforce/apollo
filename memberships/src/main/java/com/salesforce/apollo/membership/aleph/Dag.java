@@ -410,6 +410,7 @@ public interface Dag {
 
     SlottedUnits maximalUnitsPerProcess();
 
+    // returns the maximal level of a unit in the dag.
     default int maxLevel() {
         AtomicInteger maxLevel = new AtomicInteger(-1);
         maximalUnitsPerProcess().iterate(units -> {
