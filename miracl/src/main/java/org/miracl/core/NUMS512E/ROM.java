@@ -1,0 +1,41 @@
+/*
+ * Copyright (c) 2012-2020 MIRACL UK Ltd.
+ *
+ * This file is part of MIRACL Core
+ * (see https://github.com/miracl/core).
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* Fixed Data in ROM - Field and Curve parameters */
+
+
+package org.miracl.core.NUMS512E;
+
+public class ROM
+{
+// Base  bits= 60
+public static final long[] Modulus= {0xFFFFFFFFFFFFDC7L,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFL};
+public static final long[] R2modp= {0x100000000000000L,0x4F0BL,0x0L,0x0L,0x0L,0x0L,0x0L,0x0L,0x0L};
+public static final long[] ROI= {0xFFFFFFFFFFFFDC6L,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFL};
+public static final long MConst= 0x239L;
+
+public static final int CURVE_Cof_I= 4;
+public static final long[] CURVE_Cof= {0x4L,0x0L,0x0L,0x0L,0x0L,0x0L,0x0L,0x0L,0x0L};
+public static final int CURVE_B_I= -78296;
+public static final long[] CURVE_B= {0xFFFFFFFFFFECBEFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFL};
+public static final long[] CURVE_Order= {0x7468CF51BEED46DL,0x4605786DEFECFF6L,0xFD8C970B686F52AL,0x636D2FCF91BA9E3L,0xFFFFFFFFFFFB4F0L,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0x3FFFFFFFL};
+public static final long[] CURVE_Gx= {0x5B9AB2999EC57FEL,0xE525427CC4F015CL,0xDC992568904AD0FL,0xC14EEE46730F78BL,0xEBE273B81474621L,0x9F4DC4A38227A17L,0x888D3C5332FD1E7L,0x128DB69C7A18CB7L,0xDF8E316DL};
+public static final long[] CURVE_Gy= {0x26DDEC0C1E2F5E1L,0x66D38A9BF1D01F3L,0xA06862AECC1FD02L,0x53F2E9963562601L,0xB95909E834120CAL,0x26D8259D22A92B6L,0x7A82A256EE476F7L,0x9D49CA7198B0F57L,0x6D09BFF3L};
+public static final long[] CURVE_HTPC= {0xFFFFFFFFFFFFDC6L,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFFFFFFFFL,0xFFFFFFFFL};
+}
