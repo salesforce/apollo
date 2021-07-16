@@ -25,6 +25,7 @@
 		<module>utils</module>
 		<module>stereotomy-services</module>
 		<module>ghost</module>
+		<module>miracl</module>
 	</modules>
 
 	<properties>
@@ -191,6 +192,11 @@
 				<artifactId>utils</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>miracl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
