@@ -68,15 +68,3 @@ message CausalMessages {
 message ByteMessage {
     bytes contents = 1;
 }
-
-message EpochProof {
-    Proof msg = 1;
-    utils.Sig signature = 2;
-}
-
-message Proof {
-    int32 height = 1;
-    int32 creator = 2;
-    int32 epoch = 3;
-    utils.Digeste hash = 4;
-}

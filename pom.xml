@@ -26,6 +26,7 @@
 		<module>stereotomy-services</module>
 		<module>ghost</module>
 		<module>miracl</module>
+		<module>ethereal</module>
 	</modules>
 
 	<properties>

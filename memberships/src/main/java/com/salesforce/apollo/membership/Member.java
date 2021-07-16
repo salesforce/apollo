@@ -20,7 +20,6 @@ import java.util.Map;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -86,10 +85,6 @@ public interface Member extends Comparable<Member> {
      * @return the unique id of this member
      */
     Digest getId();
-
-    default SelfAddressingIdentifier getIdentifier() {
-        return new SelfAddressingIdentifier(getId());
-    }
 
     @Override
     int hashCode();
