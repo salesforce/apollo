@@ -19,7 +19,7 @@ import com.salesforce.apollo.crypto.Signer;
 public record Config(short nProc, int epochLength, short pid, int zeroVotRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiConsumer<Unit, Dag>> checks) {
+                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -47,6 +47,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         private int                         orderStartLevel = 6;
         private short                       pid;
         private Signer                      signer;
+        private WeakThresholdKey            wtk;
         private int                         zeroVotRoundForCommonVote;
 
         public Builder() {
@@ -92,7 +93,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         public Config build() {
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks);
+                              canSkipLevel, numberOfEpochs, checks, wtk);
         }
 
         public List<BiConsumer<Unit, Dag>> getChecks() {
@@ -141,6 +142,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
 
         public Signer getSigner() {
             return signer;
+        }
+
+        public WeakThresholdKey getWtk() {
+            return wtk;
         }
 
         public int getZeroVotRoundForCommonVote() {
@@ -220,6 +225,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
 
         public Builder setSigner(Signer signer) {
             this.signer = signer;
+            return this;
+        }
+
+        public Builder setWtk(WeakThresholdKey wtk) {
+            this.wtk = wtk;
             return this;
         }
 

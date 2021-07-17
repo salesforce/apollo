@@ -6,10 +6,13 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
+import java.util.function.Function;
+
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.WeakThresholdKey;
@@ -23,6 +26,32 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  *
  */
 public interface EpochProofBuilder {
+
+    public static Function<Integer, EpochProofBuilder> newProofBuilder(Config conf) {
+        return epoch -> new epochProofImpl(conf, epoch);
+    }
+
+    record epochProofImpl(Config conf, int epoch) implements EpochProofBuilder {
+
+        @Override
+        public Any buildShare(Unit timingUnit) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        @Override
+        public Any tryBuilding(Unit unit) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        @Override
+        public boolean verify(Unit unit) {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
+    }
 
     // EpochProof checks if the given preunit is a proof that a new epoch started.
     static boolean epochProof(PreUnit pu, WeakThresholdKey wtk) {

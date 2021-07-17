@@ -14,10 +14,6 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>memberships</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>miracl</artifactId>
-		</dependency>
 
 		<!-- Test Only Deps below this line -->
 		<dependency>

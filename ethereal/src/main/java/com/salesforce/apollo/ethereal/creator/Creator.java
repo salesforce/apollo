@@ -10,14 +10,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.SubmissionPublisher;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
+import com.salesforce.apollo.ethereal.WeakThresholdKey;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -57,19 +60,34 @@ public class Creator {
         }
     }
 
-    private List<Unit>                           candidates;
-    private Config                               conf;
-    private DataSource                           ds;
-    private int                                  epoch;
-    private EpochProofBuilder                    epochProof;
-    private Function<Integer, EpochProofBuilder> epochProofBuilder;
-    private Map<Short, Boolean>                  frozen;
-    private int                                  level;
-    private int                                  maxLvl;
-    private short                                onMaxLvl;
-    private int                                  quorum;
-    private RandomSourceData                     rsData;
-    private Consumer<Unit>                       send;
+    @FunctionalInterface
+    public interface RsData {
+        byte[] rsData(int level, List<Unit> parents, int epoch);
+    }
+
+    private List<Unit>                                 candidates;
+    private final Config                               conf;
+    private final DataSource                           ds;
+    private int                                        epoch;
+    private EpochProof                                 epochProof;
+    private final Function<Integer, EpochProofBuilder> epochProofBuilder;
+    private Map<Short, Boolean>                        frozen;
+    private int                                        level;
+    private int                                        maxLvl;
+    private short                                      onMaxLvl;
+    private int                                        quorum;
+    private final RsData                               rsData;
+    private final Consumer<Unit>                       send;
+
+    public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
+                   Function<Integer, EpochProofBuilder> epochProofBuilder) {
+        this.conf = config;
+        this.ds = ds;
+        this.rsData = rsData;
+        this.epochProofBuilder = epochProofBuilder;
+        this.send = send;
+
+    }
 
     public void process(Unit candidate, Unit timingUnit) {
         // Step 1: update candidates with all units waiting on the unit belt
@@ -219,6 +237,16 @@ public class Creator {
                 level++;
             }
         }
+    }
+
+    public void creatUnits(SubmissionPublisher<Unit> unitBelt, SubmissionPublisher<Unit> lastTiming) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
+        // TODO Auto-generated method stub
+        return false;
     }
 
 }

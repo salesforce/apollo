@@ -193,11 +193,11 @@
 				<artifactId>utils</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>miracl</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>miracl</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -290,37 +290,6 @@
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
 				<version>${liquibase.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.zaxxer</groupId>
-				<artifactId>HikariCP</artifactId>
-				<version>3.4.5</version>
-			</dependency>
-			<dependency>
-				<groupId>com.fasterxml.uuid</groupId>
-				<artifactId>java-uuid-generator</artifactId>
-				<version>4.0.1</version>
-			</dependency>
-			<dependency>
-				<groupId>commons-codec</groupId>
-				<artifactId>commons-codec</artifactId>
-				<version>1.15</version>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.commons</groupId>
-				<artifactId>commons-dbcp2</artifactId>
-				<version>2.7.0</version>
-				<exclusions>
-					<exclusion>
-						<groupId>commons-logging</groupId>
-						<artifactId>commons-logging</artifactId>
-					</exclusion>
-				</exclusions>
-			</dependency>
-			<dependency>
-				<groupId>com.github.javaparser</groupId>
-				<artifactId>javaparser-symbol-solver-core</artifactId>
-				<version>3.19.0</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->

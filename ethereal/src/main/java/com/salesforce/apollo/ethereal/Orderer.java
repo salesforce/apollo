@@ -9,11 +9,29 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.Dag.newDag;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Flow.Subscriber;
+import java.util.concurrent.Flow.Subscription;
+import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
+import org.slf4j.Logger;
+
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
+import com.salesforce.apollo.ethereal.Adder.Correctness;
+import com.salesforce.apollo.ethereal.Dag.DagInfo;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
+import com.salesforce.apollo.ethereal.creator.Creator;
+import com.salesforce.apollo.ethereal.creator.Creator.RsData;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
@@ -23,11 +41,82 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
  *
  */
 public class Orderer {
-    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs) {}
+    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs) {
 
-    record epochWithNewer(epoch epoch, boolean newer) {}
+        public void close() {
+            // TODO Auto-generated method stub
 
-    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, Consumer<Unit> unitBelt, Clock clock) {
+        }
+
+        public boolean wantsMoreUnits() {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
+        public Collection<? extends Unit> allUnits() {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public Collection<? extends Unit> unitsAbove(List<Integer> heights) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+    }
+
+    record epochWithNewer(epoch epoch, boolean newer) {
+
+        public void noMoreUnits() {
+            // TODO Auto-generated method stub
+
+        }
+    }
+
+    // A consumer of ordered round of units produced by Extenders and
+    // produces Preblocks based on them. Since Extenders in multiple epochs can
+    // supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
+    // Preblocks are produced in ascending order with respect to epochs. For the
+    // last ordered round of the epoch, the timing unit defining it is sent to the
+    // creator (to produce signature shares.)
+    private class OrderedRoundConsumer implements Subscriber<List<Unit>> {
+        private volatile int current;
+
+        @Override
+        public void onComplete() {
+        }
+
+        @Override
+        public void onError(Throwable e) {
+            log.error("Error from producer", e);
+        }
+
+        @Override
+        public void onNext(List<Unit> round) {
+            var timingUnit = round.get(round.size() - 1);
+            var epoch = timingUnit.epoch();
+
+            if (timingUnit.level() == conf.lastLevel()) {
+                lastTiming.submit(timingUnit);
+                finishEpoch(epoch);
+            }
+            if (epoch > current && timingUnit.level() <= conf.lastLevel()) {
+                toPreblock.accept(round);
+                log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+            }
+            current = epoch;
+        }
+
+        @Override
+        public void onSubscribe(Subscription subscription) {
+            current = 0;
+        }
+
+    }
+
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
+
+    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SubmissionPublisher<Unit> unitBelt,
+                                 Clock clock) {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config);
@@ -35,38 +124,199 @@ public class Orderer {
             ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
-                unitBelt.accept(u);
+                unitBelt.submit(u);
             }
         });
         return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs);
     }
 
-    private Config               conf;
-    private epoch                current;
-    private epoch                previous;
-    private Consumer<List<Unit>> toPreblock;
-    private Consumer<Unit>       lastTiming;
-    private int                  currentProcessing = 0;
+    private final Clock                           clock;
+    private Config                                conf;
+    private Creator                               creator;
+    private epoch                                 current;
+    private final DataSource                      ds;
+    private final SubmissionPublisher<Unit>       lastTiming;
+    private final ReadWriteLock                   mx = new ReentrantReadWriteLock();
+    private final SubmissionPublisher<List<Unit>> orderedUnits;
+    private epoch                                 previous;
+    private RandomSourceFactory                   rsf;
+    private final SubmissionPublisher<Unit>       synchronizer;
+    private final Consumer<List<Unit>>            toPreblock;
+    private final SubmissionPublisher<Unit>       unitBelt;
 
-    // handleTimingRounds waits for ordered round of units produced by Extenders and
-    // produces Preblocks based on them. Since Extenders in multiple epochs can
-    // supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
-    // Preblocks are produced in ascending order with respect to epochs. For the
-    // last ordered round of the epoch, the timing unit defining it is sent to the
-    // creator (to produce signature shares.)
-    public void handleTimingRound(List<Unit> round) {
-        var timingUnit = round.get(round.size() - 1);
-        var epoch = timingUnit.epoch();
-        if (timingUnit.level() == conf.lastLevel()) {
-            lastTiming.accept(timingUnit);
-        }
-        if (epoch > currentProcessing && timingUnit.level() <= conf.lastLevel()) {
-            toPreblock.accept(round);
-        }
-        currentProcessing = epoch;
+    public Orderer(SubmissionPublisher<Unit> unitBelt, DataSource ds, SubmissionPublisher<List<Unit>> orderedUnits,
+                   Consumer<List<Unit>> toPreblock, SubmissionPublisher<Unit> lastTiming, Clock clock,
+                   SubmissionPublisher<Unit> synchronizer) {
+        this.ds = ds;
+        this.lastTiming = lastTiming;
+        this.orderedUnits = orderedUnits;
+        this.synchronizer = synchronizer;
+        this.toPreblock = toPreblock;
+        this.unitBelt = unitBelt;
+        this.clock = clock;
     }
 
-    @SuppressWarnings("unused")
+    // AddPreunits sends preunits received from other committee members to their
+    // corresponding epochs.
+    // It assumes preunits are ordered by ascending epochID and, within each epoch,
+    // they are topologically sorted.
+    public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        var errors = new HashMap<Digest, Correctness>();
+        while (preunits.size() > 0) {
+            var epoch = preunits.get(0).epoch();
+            var end = 0;
+            while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
+                end++;
+            }
+            epoch ep = retrieveEpoch(preunits.get(0), source);
+            if (ep != null) {
+                errors.putAll(ep.adder().addPreunits(source, preunits.subList(end, preunits.size())));
+            }
+            preunits = preunits.subList(end, preunits.size());
+        }
+        return errors;
+    }
+
+    // GetInfo returns DagInfo of the dag from the most recent epoch.
+    public DagInfo[] getInfo() {
+        final Lock lock = mx.readLock();
+        lock.lock();
+        try {
+            var result = new DagInfo[2];
+            if (previous != null && !previous.wantsMoreUnits()) {
+                result[0] = previous.dag.maxView();
+            }
+            if (current != null && !current.wantsMoreUnits()) {
+                result[1] = current.dag().maxView();
+            }
+            return result;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // Delta returns all units present in the orderer that are newer than units
+    // described by the given DagInfo. This includes all units from the epoch given
+    // by the DagInfo above provided heights as well as ALL units from newer epochs.
+    public List<Unit> delta(DagInfo[] info) {
+        final Lock lock = mx.readLock();
+        lock.lock();
+        try {
+            List<Unit> result = new ArrayList<Unit>();
+            Consumer<DagInfo> deltaResolver = dagInfo -> {
+                if (dagInfo == null) {
+                    return;
+                }
+                if (previous != null && dagInfo.epoch() == previous.id()) {
+                    result.addAll(previous.unitsAbove(dagInfo.heights()));
+                }
+                if (current != null && dagInfo.epoch() == current.id()) {
+                    result.addAll(current.unitsAbove(dagInfo.heights()));
+                }
+            };
+            deltaResolver.accept(info[0]);
+            deltaResolver.accept(info[1]);
+            if (current != null) {
+                if (info[0] != null && info[0].epoch() < current.id && info[1] != null
+                && info[1].epoch() < current.id()) {
+                    result.addAll(current.allUnits());
+                }
+            }
+            return result;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // MaxUnits returns maximal units per process from the chosen epoch.
+    public SlottedUnits maxUnits(int epoch) {
+        var ep = getEpoch(epoch);
+        if (ep != null) {
+            return ep.epoch.dag.maximalUnitsPerProcess();
+        }
+        return null;
+    }
+
+    public void start(RandomSourceFactory rsf) {
+        this.rsf = rsf;
+        creator = new Creator(conf, ds, u -> {
+            insert(u);
+            synchronizer.submit(u);
+        }, rsData(), EpochProofBuilder.newProofBuilder(conf));
+
+        newEpoch(0);
+
+        // Start creator
+        creator.creatUnits(unitBelt, lastTiming);
+
+        // Start preblock builder
+        orderedUnits.subscribe(new OrderedRoundConsumer());
+    }
+
+    public void stop() {
+        if (previous != null) {
+            previous.close();
+        }
+        if (current != null) {
+            current.close();
+        }
+        orderedUnits.close();
+        unitBelt.close();
+        log.info("Orderer stopped");
+    }
+
+    // UnitsByHash allows to access units present in the orderer using their hashes.
+    // The length of the returned slice is equal to the number of argument hashes.
+    // For non-present units the returned slice contains nil on the corresponding
+    // position.
+    public List<Unit> unitsByHash(List<Digest> ids) {
+        List<Unit> result;
+        final Lock lock = mx.readLock();
+        lock.lock();
+        try {
+            result = current != null ? current.dag.get(ids) : new ArrayList<>();
+            if (previous != null) {
+                for (int i = 0; i < result.size(); i++) {
+                    if (result.get(i) != null) {
+                        result.set(i, previous.dag.get(ids.get(i)));
+                    }
+                }
+            }
+        } finally {
+            lock.unlock();
+        }
+        return result;
+    }
+
+    // UnitsByID allows to access units present in the orderer using their ids. The
+    // returned slice contains only existing units (no nil entries for non-present
+    // units) and can contain multiple units with the same id (forks). Because of
+    // that the length of the result can be different than the number of arguments.
+    public List<Unit> unitsByID(List<Long> ids) {
+        var result = new ArrayList<Unit>();
+        final Lock lock = mx.readLock();
+        lock.lock();
+        try {
+            for (var id : ids) {
+                var epoch = PreUnit.decode(id).epoch();
+                epochWithNewer ep = getEpoch(epoch);
+                if (ep != null) {
+                    result.addAll(ep.epoch.dag().get(id));
+                }
+            }
+            return result;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void finishEpoch(int epoch) {
+        var ep = getEpoch(epoch);
+        if (ep != null) {
+            ep.noMoreUnits();
+        }
+    }
+
     private epochWithNewer getEpoch(int epoch) {
         if (current == null || epoch > current.id) {
             return new epochWithNewer(null, true);
@@ -80,4 +330,90 @@ public class Orderer {
         return new epochWithNewer(null, false);
     }
 
+    // insert puts the provided unit directly into the corresponding epoch. If such
+    // epoch does not exist, creates it. All correctness checks (epoch proof, adder,
+    // dag checks) are skipped. This method is meant for our own units only.
+    private void insert(Unit unit) {
+        if (unit.creator() != conf.pid()) {
+            log.warn("Invalid unit creator: {}", unit.creator());
+            return;
+        }
+        var rslt = getEpoch(unit.epoch());
+        epoch ep = null;
+        if (rslt.newer) {
+            ep = newEpoch(unit.epoch());
+        }
+        if (ep != null) {
+            ep.dag.insert(unit);
+            log.info("Inserted Unit creator: {} epoch: {} height: {} level: {}", unit.creator(), unit.epoch(),
+                     unit.height(), unit.level());
+        } else {
+            log.info("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {}", unit.creator(),
+                     unit.epoch(), unit.height(), unit.level());
+        }
+    }
+
+    // newEpoch creates and returns a new epoch object with the given EpochID. If
+    // such epoch already exists, returns it.
+    private epoch newEpoch(int epoch) {
+        final Lock lock = mx.writeLock();
+        lock.lock();
+        try {
+            if (current == null || epoch > current.id()) {
+                if (previous != null) {
+                    previous.close();
+                }
+                previous = current;
+                current = newEpoch(epoch, conf, rsf, unitBelt, clock);
+                return current;
+            }
+            if (epoch == current.id()) {
+                return current;
+            }
+            if (epoch == previous.id()) {
+                return previous;
+            }
+            return null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // retrieveEpoch returns an epoch for the given preunit. If the preunit comes
+    // from a future epoch, it is checked for new epoch proof. If failed, requests
+    // gossip with source of the preunit.
+    private epoch retrieveEpoch(PreUnit pu, short source) {
+        var epochId = pu.epoch();
+        var e = getEpoch(epochId);
+        var epoch = e.epoch;
+        if (e.newer) {
+            if (creator.epochProof(pu, conf.WTKey())) {
+                epoch = newEpoch(epochId);
+            } else {
+//                ord.syncer.RequestGossip(source)
+            }
+        }
+        return epoch;
+    }
+
+    // rsData produces random source data for a unit with provided level, parents
+    // and epoch.
+    private RsData rsData() {
+        return (level, parents, epoch) -> {
+            byte[] result = null;
+            if (level == 0) {
+                result = rsf.dealingData(epoch);
+            } else {
+                epochWithNewer ep = getEpoch(epoch);
+                if (ep != null) {
+                    result = ep.epoch.rs().dataToInclude(parents, level);
+                }
+            }
+            if (result != null) {
+                log.error("where orderer.rsData");
+                return new byte[0];
+            }
+            return result;
+        };
+    }
 }
