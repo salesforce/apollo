@@ -21,6 +21,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor) {
+    
+    public static Config empty() {
+        return Builder.empty().build();
+    }
 
     public static Builder newBuilder() {
         return new Builder();

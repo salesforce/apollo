@@ -10,13 +10,22 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.Flow.Subscriber;
+import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.Any;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
+import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.WeakThresholdKey;
@@ -42,7 +51,54 @@ public class Creator {
         byte[] rsData(int level, List<Unit> parents, int epoch);
     }
 
+    private class BeltSubscriber implements Subscriber<Unit> {
+
+        private final Queue<Unit> lastTiming;
+        private Subscription      subscription;
+
+        public BeltSubscriber(Queue<Unit> lastTiming) {
+            this.lastTiming = lastTiming;
+        }
+
+        @Override
+        public void onComplete() {
+            log.info("Creator complete");
+        }
+
+        @Override
+        public void onError(Throwable e) {
+            log.error("Error in unit belt", e);
+        }
+
+        @Override
+        public void onNext(Unit u) {
+            mx.lock();
+            try {
+                // Step 1: update candidates with all units waiting on the unit belt
+                update(u);
+                while (ready()) {
+                    // Step 2: get parents and level using current strategy
+                    var built = buildParents();
+                    // Step 3: create unit
+                    createUnit(built.parents, built.level, getData(built.level, lastTiming));
+                }
+            } finally {
+                mx.unlock();
+                subscription.request(1);
+            }
+        }
+
+        @Override
+        public void onSubscribe(Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(1);
+        }
+
+    }
+
     private record built(List<Unit> parents, int level) {}
+
+    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     // MakeConsistent ensures that the set of parents follows "parent consistency
     // rule". Modifies the provided unit slice in place. Parent consistency rule
@@ -73,11 +129,11 @@ public class Creator {
     private Map<Short, Boolean>                        frozen;
     private int                                        level;
     private int                                        maxLvl;
+    private final Lock                                 mx = new ReentrantLock();
     private short                                      onMaxLvl;
     private int                                        quorum;
     private final RsData                               rsData;
-
-    private final Consumer<Unit> send;
+    private final Consumer<Unit>                       send;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -89,25 +145,21 @@ public class Creator {
 
     }
 
-    public void creatUnits(SubmissionPublisher<Unit> unitBelt, SubmissionPublisher<Unit> lastTiming) {
-        // TODO Auto-generated method stub
-
+    /**
+     * CreateUnits executes the main loop of the creator. Units appearing on
+     * unitBelt are examined and stored to be used as parents of future units. When
+     * there are enough new parents, a new unit is produced. lastTiming is a channel
+     * on which the last timing unit of each epoch is expected to appear. This
+     * method is stopped by closing unitBelt channel.
+     */
+    public void creatUnits(SubmissionPublisher<Unit> unitBelt, Queue<Unit> lastTiming) {
+        newEpoch(epoch, Any.getDefaultInstance());
+        unitBelt.subscribe(new BeltSubscriber(lastTiming));
     }
 
     public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
         // TODO Auto-generated method stub
         return false;
-    }
-
-    public void process(Unit candidate, Unit timingUnit) {
-        // Step 1: update candidates with all units waiting on the unit belt
-        update(candidate);
-        if (ready()) {
-            // Step 2: get parents and level using current strategy
-            var built = buildParents();
-            // Step 3: create unit
-            createUnit(built.parents, built.level, getData(built.level, timingUnit));
-        }
     }
 
     private built buildParents() {
@@ -131,11 +183,16 @@ public class Creator {
     // either nil or, if available, an encoded threshold signature share of hash and
     // id of the last timing unit (obtained from preblockMaker on lastTiming
     // channel)
-    private Any getData(int level, Unit timingUnit) {
+    private Any getData(int level, Queue<Unit> lastTiming) {
         if (level <= conf.lastLevel()) {
             if (ds != null) {
                 return ds.getData();
             }
+            return Any.getDefaultInstance();
+        }
+        Unit timingUnit = lastTiming.poll();
+        if (timingUnit == null) {
+            return Any.getDefaultInstance();
         }
 
         if (timingUnit.epoch() == epoch) {
@@ -145,6 +202,7 @@ public class Creator {
             }
             return epochProof.buildShare(timingUnit);
         }
+        log.warn("Creator received timing unit from newer epoch: {} that it has seen", timingUnit.epoch());
 
         return Any.getDefaultInstance();
     }

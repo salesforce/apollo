@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
@@ -23,6 +24,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
+import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.slf4j.Logger;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -39,7 +41,7 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
  * Ethereal pipeline
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -84,6 +86,7 @@ public class Orderer {
     // creator (to produce signature shares.)
     private class OrderedRoundConsumer implements Subscriber<List<Unit>> {
         private volatile int current;
+        private Subscription subscription;
 
         @Override
         public void onComplete() {
@@ -96,23 +99,29 @@ public class Orderer {
 
         @Override
         public void onNext(List<Unit> round) {
-            var timingUnit = round.get(round.size() - 1);
-            var epoch = timingUnit.epoch();
+            try {
+                var timingUnit = round.get(round.size() - 1);
+                var epoch = timingUnit.epoch();
 
-            if (timingUnit.level() == config.lastLevel()) {
-                lastTiming.submit(timingUnit);
-                finishEpoch(epoch);
+                if (timingUnit.level() == config.lastLevel()) {
+                    lastTiming.add(timingUnit);
+                    finishEpoch(epoch);
+                }
+                if (epoch > current && timingUnit.level() <= config.lastLevel()) {
+                    toPreblock.accept(round);
+                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+                }
+                current = epoch;
+            } finally {
+                subscription.request(1);
             }
-            if (epoch > current && timingUnit.level() <= config.lastLevel()) {
-                toPreblock.accept(round);
-                log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
-            }
-            current = epoch;
         }
 
         @Override
         public void onSubscribe(Subscription subscription) {
             current = 0;
+            this.subscription = subscription;
+            subscription.request(1);
         }
 
     }
@@ -140,7 +149,7 @@ public class Orderer {
     private Creator                               creator;
     private epoch                                 current;
     private final DataSource                      ds;
-    private final SubmissionPublisher<Unit>       lastTiming;
+    private final Queue<Unit>                     lastTiming;
     private final ReadWriteLock                   mx = new ReentrantReadWriteLock();
     private final SubmissionPublisher<List<Unit>> orderedUnits;
     private epoch                                 previous;
@@ -151,7 +160,7 @@ public class Orderer {
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
-        this.lastTiming = new SubmissionPublisher<>(config.executor(), config.numberOfEpochs());
+        this.lastTiming = new BlockingArrayQueue<>();
         this.orderedUnits = new SubmissionPublisher<>(config.executor(), conf.epochLength());
         this.toPreblock = toPreblock;
         this.unitBelt = new SubmissionPublisher<>(config.executor(), conf.epochLength() * conf.nProc());
@@ -185,7 +194,7 @@ public class Orderer {
         final Lock lock = mx.readLock();
         lock.lock();
         try {
-            List<Unit> result = new ArrayList<Unit>();
+            List<Unit> result = new ArrayList<>();
             Consumer<DagInfo> deltaResolver = dagInfo -> {
                 if (dagInfo == null) {
                     return;
