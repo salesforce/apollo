@@ -18,18 +18,22 @@ import java.util.List;
  */
 public interface RandomSource {
     interface RandomSourceFactory {
-        // DealingData returns random source data that should be included in the dealing
-        // unit for the given epoch.
+        /**
+         * DealingData returns random source data that should be included in the dealing
+         * unit for the given epoch.
+         */
         byte[] dealingData(int epoch);
 
-        // NewRandomSource produces a randomness source for the provided dag.
+        /** NewRandomSource produces a randomness source for the provided dag. */
         RandomSource newRandomSource(Dag dag);
     }
 
-    // DataToInclude returns data which should be included in a unit based on its
-    // level and parents.
+    /**
+     * DataToInclude returns data which should be included in a unit based on its
+     * level and parents.
+     */
     byte[] dataToInclude(List<Unit> parents, int level);
 
-    // RandomBytes returns random bytes for a given process and level.
+    /** RandomBytes returns random bytes for a given process and level. */
     byte[] randomBytes(short process, int level);
 }

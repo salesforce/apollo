@@ -96,9 +96,11 @@ public interface Dag {
 
         public record getResult(List<List<Unit>> result, int unknown) {}
 
-        // get takes a list of heights (of length nProc) and returns a slice (of length
-        // nProc) of slices of corresponding units. The second returned value is the
-        // number of unknown units (no units for that creator-height pair).
+        /**
+         * get takes a list of heights (of length nProc) and returns a slice (of length
+         * nProc) of slices of corresponding units. The second returned value is the
+         * number of unknown units (no units for that creator-height pair).
+         */
         public getResult get(List<Integer> heights) {
             if (heights.size() != width) {
                 throw new IllegalStateException("Wrong number of heights passed to fiber map");
@@ -339,9 +341,11 @@ public interface Dag {
             return nProc;
         }
 
-        // return all units present in dag that are above (in height sense)
-        // given heights. When called with null argument, returns all units in the dag.
-        // Units returned by this method are in random order.
+        /**
+         * return all units present in dag that are above (in height sense) given
+         * heights. When called with null argument, returns all units in the dag. Units
+         * returned by this method are in random order.
+         */
         @Override
         public List<Unit> unitsAbove(List<Integer> heights) {
             if (heights == null) {
@@ -350,7 +354,9 @@ public interface Dag {
             return heightUnits.above(heights);
         }
 
-        // returns the prime units at the requested level, indexed by their creator ids.
+        /**
+         * returns the prime units at the requested level, indexed by their creator ids.
+         */
         @Override
         public SlottedUnits unitsOnLevel(int level) {
             var res = levelUnits.getFiber(level);
@@ -393,7 +399,7 @@ public interface Dag {
 
     void check(Unit u);
 
-    // return a slce of parents of the specified unit if control hash matches
+    /** return a slce of parents of the specified unit if control hash matches */
     Decoded decodeParents(PreUnit unit);
 
     int epoch();
@@ -410,7 +416,7 @@ public interface Dag {
 
     SlottedUnits maximalUnitsPerProcess();
 
-    // returns the maximal level of a unit in the dag.
+    /** returns the maximal level of a unit in the dag. */
     default int maxLevel() {
         AtomicInteger maxLevel = new AtomicInteger(-1);
         maximalUnitsPerProcess().iterate(units -> {

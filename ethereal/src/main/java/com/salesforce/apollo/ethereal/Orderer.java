@@ -78,12 +78,14 @@ public class Orderer {
         }
     }
 
-    // A consumer of ordered round of units produced by Extenders and
-    // produces Preblocks based on them. Since Extenders in multiple epochs can
-    // supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
-    // Preblocks are produced in ascending order with respect to epochs. For the
-    // last ordered round of the epoch, the timing unit defining it is sent to the
-    // creator (to produce signature shares.)
+    /**
+     * A consumer of ordered round of units produced by Extenders and produces
+     * Preblocks based on them. Since Extenders in multiple epochs can supply
+     * ordered rounds simultaneously, handleTimingRounds needs to ensure that
+     * Preblocks are produced in ascending order with respect to epochs. For the
+     * last ordered round of the epoch, the timing unit defining it is sent to the
+     * creator (to produce signature shares.)
+     */
     private class OrderedRoundConsumer implements Subscriber<List<Unit>> {
         private volatile int current;
         private Subscription subscription;
@@ -167,9 +169,11 @@ public class Orderer {
         this.clock = clock;
     }
 
-    // Sends preunits received from other committee members to their corresponding
-    // epochs. It assumes preunits are ordered by ascending epochID and, within each
-    // epoch, they are topologically sorted.
+    /**
+     * Sends preunits received from other committee members to their corresponding
+     * epochs. It assumes preunits are ordered by ascending epochID and, within each
+     * epoch, they are topologically sorted.
+     */
     public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
         var errors = new HashMap<Digest, Correctness>();
         while (preunits.size() > 0) {
@@ -187,9 +191,11 @@ public class Orderer {
         return errors;
     }
 
-    // Delta returns all units present in the orderer that are newer than units
-    // described by the given DagInfo. This includes all units from the epoch given
-    // by the DagInfo above provided heights as well as ALL units from newer epochs.
+    /**
+     * Returns all units present in the orderer that are newer than units described
+     * by the given DagInfo. This includes all units from the epoch given by the
+     * DagInfo above provided heights as well as ALL units from newer epochs.
+     */
     public List<Unit> delta(DagInfo[] info) {
         final Lock lock = mx.readLock();
         lock.lock();
@@ -220,7 +226,7 @@ public class Orderer {
         }
     }
 
-    // GetInfo returns DagInfo of the dag from the most recent epoch.
+    /** GetInfo returns DagInfo of the dag from the most recent epoch. */
     public DagInfo[] getInfo() {
         final Lock lock = mx.readLock();
         lock.lock();
@@ -238,7 +244,7 @@ public class Orderer {
         }
     }
 
-    // MaxUnits returns maximal units per process from the chosen epoch.
+    /** MaxUnits returns maximal units per process from the chosen epoch. */
     public SlottedUnits maxUnits(int epoch) {
         var ep = getEpoch(epoch);
         if (ep != null) {
@@ -275,10 +281,12 @@ public class Orderer {
         log.info("Orderer stopped");
     }
 
-    // UnitsByHash allows to access units present in the orderer using their hashes.
-    // The length of the returned slice is equal to the number of argument hashes.
-    // For non-present units the returned slice contains nil on the corresponding
-    // position.
+    /**
+     * UnitsByHash allows to access units present in the orderer using their hashes.
+     * The length of the returned slice is equal to the number of argument hashes.
+     * For non-present units the returned slice contains nil on the corresponding
+     * position.
+     */
     public List<Unit> unitsByHash(List<Digest> ids) {
         List<Unit> result;
         final Lock lock = mx.readLock();
@@ -298,10 +306,12 @@ public class Orderer {
         return result;
     }
 
-    // UnitsByID allows to access units present in the orderer using their ids. The
-    // returned slice contains only existing units (no nil entries for non-present
-    // units) and can contain multiple units with the same id (forks). Because of
-    // that the length of the result can be different than the number of arguments.
+    /**
+     * UnitsByID allows to access units present in the orderer using their ids. The
+     * returned slice contains only existing units (no nil entries for non-present
+     * units) and can contain multiple units with the same id (forks). Because of
+     * that the length of the result can be different than the number of arguments.
+     */
     public List<Unit> unitsByID(List<Long> ids) {
         var result = new ArrayList<Unit>();
         final Lock lock = mx.readLock();
@@ -340,9 +350,11 @@ public class Orderer {
         return new epochWithNewer(null, false);
     }
 
-    // insert puts the provided unit directly into the corresponding epoch. If such
-    // epoch does not exist, creates it. All correctness checks (epoch proof, adder,
-    // dag checks) are skipped. This method is meant for our own units only.
+    /**
+     * insert puts the provided unit directly into the corresponding epoch. If such
+     * epoch does not exist, creates it. All correctness checks (epoch proof, adder,
+     * dag checks) are skipped. This method is meant for our own units only.
+     */
     private void insert(Unit unit) {
         if (unit.creator() != config.pid()) {
             log.warn("Invalid unit creator: {}", unit.creator());
@@ -363,8 +375,10 @@ public class Orderer {
         }
     }
 
-    // newEpoch creates and returns a new epoch object with the given EpochID. If
-    // such epoch already exists, returns it.
+    /**
+     * newEpoch creates and returns a new epoch object with the given EpochID. If
+     * such epoch already exists, returns it.
+     */
     private epoch newEpoch(int epoch) {
         final Lock lock = mx.writeLock();
         lock.lock();
@@ -389,9 +403,11 @@ public class Orderer {
         }
     }
 
-    // retrieveEpoch returns an epoch for the given preunit. If the preunit comes
-    // from a future epoch, it is checked for new epoch proof. If failed, requests
-    // gossip with source of the preunit.
+    /**
+     * retrieveEpoch returns an epoch for the given preunit. If the preunit comes
+     * from a future epoch, it is checked for new epoch proof. If failed, requests
+     * gossip with source of the preunit.
+     */
     private epoch retrieveEpoch(PreUnit pu, short source) {
         var epochId = pu.epoch();
         var e = getEpoch(epochId);
@@ -406,8 +422,10 @@ public class Orderer {
         return epoch;
     }
 
-    // rsData produces random source data for a unit with provided level, parents
-    // and epoch.
+    /**
+     * rsData produces random source data for a unit with provided level, parents
+     * and epoch.
+     */
     private RsData rsData() {
         return (level, parents, epoch) -> {
             byte[] result = null;

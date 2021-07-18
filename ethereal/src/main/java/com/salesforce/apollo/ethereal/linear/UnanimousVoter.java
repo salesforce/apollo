@@ -81,8 +81,10 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
             return superMajority(v.dag, r);
         }
 
-        // Decides if uc is popular (i.e. it can be used as a timing unit).
-        // Returns vote, level on which the decision was made and current dag level.
+        /**
+         * Decides if uc is popular (i.e. it can be used as a timing unit). Returns
+         * vote, level on which the decision was made and current dag level.
+         */
         public Decision decideUnitIsPopular(int dagMaxLevel) {
             if (decision != Vote.UNDECIDED) {
                 return new Decision(decision, decisionLevel);
@@ -115,8 +117,10 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
             return new Decision(Vote.UNDECIDED, -1);
         }
 
-        // returns a maximal level of a prime unit which can be used
-        // for deciding assuming that dag is on level 'dagMaxLevel'.
+        /**
+         * returns a maximal level of a prime unit which can be used for deciding
+         * assuming that dag is on level 'dagMaxLevel'.
+         */
         private int getMaxDecideLevel(int dagMaxLevel) {
             var deterministicLevel = v.uc.level() + v.commonVoteDeterministicPrefix;
             if (dagMaxLevel - 2 < deterministicLevel) {
@@ -128,8 +132,10 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
             return dagMaxLevel - 2;
         }
 
-        // Checks if votes for popular or unpopular make a quorum.
-        // Returns the vote making a quorum or undecided if there is no quorum.
+        /**
+         * Checks if votes for popular or unpopular make a quorum. Returns the vote
+         * making a quorum or undecided if there is no quorum.
+         */
         private Vote superMajority(Dag dag, votingResult votes) {
             if (dag.isQuorum(votes.popular)) {
                 return Vote.POPULAR;

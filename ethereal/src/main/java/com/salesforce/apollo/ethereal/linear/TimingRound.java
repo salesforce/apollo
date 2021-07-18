@@ -19,18 +19,20 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm digestAlgorithm) {
-    // returns all units ordered in this timing round.
+    /** returns all units ordered in this timing round. **/
     public List<Unit> orderedUnits() {
         var layers = getAntichainLayers(currentTU, lastTUs);
         var sortedUnits = mergeLayers(layers);
         return sortedUnits;
     }
 
-    // NOTE we can prove that comparing with last k timing units, where k is the
-    // first round for which the deterministic common vote is zero, is enough to
-    // verify if a unit was already ordered. Since the common vote for round k is 0,
-    // every unit on level tu.Level()+k must be above a timing unit tu, otherwise
-    // some unit would decide 0 for it.
+    /**
+     * NOTE we can prove that comparing with last k timing units, where k is the
+     * first round for which the deterministic common vote is zero, is enough to
+     * verify if a unit was already ordered. Since the common vote for round k is 0,
+     * every unit on level tu.Level()+k must be above a timing unit tu, otherwise
+     * some unit would decide 0 for it.
+     */
     private boolean checkIfAlreadyOrdered(Unit u, List<Unit> prevTUs) {
         var prevTU = prevTUs.get(prevTUs.size() - 1);
         if (prevTU == null || u.level() > prevTU.level()) {
@@ -44,11 +46,12 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm di
         return false;
     }
 
-    // getAntichainLayers for a given timing unit tu, returns all the units in its
-    // timing round divided into layers.
-    // 0-th layer is formed by minimal units in this timing round.
-    // 1-st layer is formed by minimal units when the 0th layer is removed.
-    // etc.
+    /**
+     * getAntichainLayers for a given timing unit tu, returns all the units in its
+     * timing round divided into layers. 0-th layer is formed by minimal units in
+     * this timing round. 1-st layer is formed by minimal units when the 0th layer
+     * is removed. etc.
+     */
     private List<List<Unit>> getAntichainLayers(Unit tu, List<Unit> prevTUs) {
         var unitToLayer = new HashMap<Digest, Integer>();
         var seenUnits = new HashMap<Digest, Boolean>();

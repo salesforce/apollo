@@ -45,13 +45,13 @@ public interface Adder {
             this.digestAlgorithm = digestAlgorithm;
         }
 
-        // Checks basic correctness of a slice of preunits and then adds
-        // correct ones to the buffer zone.
-        // Returned slice can have the following members:
-        // - DataError - if creator or signature are wrong
-        // - DuplicateUnit, DuplicatePreunit - if such a unit is already in dag/waiting
-        // - UnknownParents - in that case the preunit is normally added and processed,
-        // error is returned only for log purpose.
+        /**
+         * Checks basic correctness of a slice of preunits and then adds correct ones to
+         * the buffer zone. Returned slice can have the following members: - DataError -
+         * if creator or signature are wrong - DuplicateUnit, DuplicatePreunit - if such
+         * a unit is already in dag/waiting - UnknownParents - in that case the preunit
+         * is normally added and processed, error is returned only for log purpose.
+         */
         @Override
         public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
             var errors = new HashMap<Digest, Correctness>();
@@ -156,9 +156,10 @@ public interface Adder {
             return Correctness.CORRECT;
         }
 
-        // checkIfMissing sets the children() attribute of a newly created
-        // waitingPreunit,
-        // depending on if it was missing
+        /**
+         * checkIfMissing sets the children() attribute of a newly created
+         * waitingPreunit, depending on if it was missing
+         */
         private void checkIfMissing(waitingPreUnit wp) {
             var mp = missing.get(wp.id());
             if (mp != null) {
@@ -174,11 +175,12 @@ public interface Adder {
             }
         }
 
-        // checkParents finds out which parents of a newly created waitingPreUnit are in
-        // the dag, which are waiting, and which are missing. Sets values of
-        // waitingParents() and missingParents() accordingly. Additionally, returns
-        // maximal
-        // heights of dag.
+        /**
+         * checkParents finds out which parents of a newly created waitingPreUnit are in
+         * the dag, which are waiting, and which are missing. Sets values of
+         * waitingParents() and missingParents() accordingly. Additionally, returns
+         * maximal heights of dag.
+         */
         private List<Integer> checkParents(waitingPreUnit wp) {
             var epoch = wp.pu().epoch();
             var maxHeights = dag.maxView().heights();
@@ -207,14 +209,16 @@ public interface Adder {
             }
         }
 
-        // registerMissing registers the fact that the given waitingPreUnit needs an
-        // unknown unit with the given id.
+        /**
+         * registerMissing registers the fact that the given waitingPreUnit needs an
+         * unknown unit with the given id.
+         */
         private void registerMissing(long id, waitingPreUnit wp) {
             missing.putIfAbsent(id, new missingPreUnit(new ArrayList<>(), clock.instant()));
             missing.get(id).neededBy().add(wp);
         }
 
-        // remove waitingPreunit from the buffer zone and notify its children.
+        /** remove waitingPreunit from the buffer zone and notify its children. */
         private void remove(waitingPreUnit wp) {
             mtx.lock();
             try {
@@ -234,8 +238,10 @@ public interface Adder {
             }
         }
 
-        // removeFailed removes from the buffer zone a ready preunit which we failed to
-        // add, together with all its descendants.
+        /**
+         * removeFailed removes from the buffer zone a ready preunit which we failed to
+         * add, together with all its descendants.
+         */
         private void removeFailed(waitingPreUnit wp) {
             waiting.remove(wp.pu().hash());
             waitingById.remove(wp.id());
@@ -252,7 +258,7 @@ public interface Adder {
         @Override
         public void close() {
             // TODO Auto-generated method stub
-            
+
         }
 
     }
@@ -266,13 +272,13 @@ public interface Adder {
 
     record missingPreUnit(List<waitingPreUnit> neededBy, java.time.Instant requested) {}
 
-    // Checks basic correctness of a slice of preunits and then adds
-    // correct ones to the buffer zone.
-    // Returned slice can have the following members:
-    // - DataError - if creator or signature are wrong
-    // - DuplicateUnit, DuplicatePreunit - if such a unit is already in dag/waiting
-    // - UnknownParents - in that case the preunit is normally added and processed,
-    // error is returned only for log purpose.
+    /**
+     * Checks basic correctness of a slice of preunits and then adds correct ones to
+     * the buffer zone. Returned slice can have the following members: - DataError -
+     * if creator or signature are wrong - DuplicateUnit, DuplicatePreunit - if such
+     * a unit is already in dag/waiting - UnknownParents - in that case the preunit
+     * is normally added and processed, error is returned only for log purpose.
+     */
     Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
 
     void close();

@@ -21,8 +21,10 @@ import com.salesforce.apollo.crypto.JohnHancock;
  */
 public interface Data {
 
-    // Block is a preblock that has been processed and signed by committee members.
-    // It is the final building block of the blockchain produced by the protocol.
+    /**
+     * Block is a preblock that has been processed and signed by committee members.
+     * It is the final building block of the blockchain produced by the protocol.
+     */
     record Block(List<Any> data, byte[] randomBytes, long id, List<Any> additionalData, JohnHancock signature) {
 
         public Digest hash(DigestAlgorithm algo) {
@@ -44,10 +46,11 @@ public interface Data {
         }
     }
 
-    // return a preblock from a slice of units containing a timing round. It assumes
-    // that the timing unit is the last unit in the slice, and that
-    // random source data of the timing unit starts with random bytes from the
-    // previous level.
+    /**
+     * return a preblock from a slice of units containing a timing round. It assumes
+     * that the timing unit is the last unit in the slice, and that random source
+     * data of the timing unit starts with random bytes from the previous level.
+     */
     static PreBlock toPreBlock(List<Unit> round) {
         var data = new ArrayList<Any>();
         for (Unit u : round) {

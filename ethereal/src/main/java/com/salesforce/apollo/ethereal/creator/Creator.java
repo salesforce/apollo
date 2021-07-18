@@ -100,12 +100,14 @@ public class Creator {
 
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
-    // MakeConsistent ensures that the set of parents follows "parent consistency
-    // rule". Modifies the provided unit slice in place. Parent consistency rule
-    // means that unit's i-th parent cannot be lower (in a level sense) than i-th
-    // parent of any other of that units parents. In other words, units seen from U
-    // "directly" (as parents) cannot be below the ones seen "indirectly" (as
-    // parents of parents).
+    /**
+     * MakeConsistent ensures that the set of parents follows "parent consistency
+     * rule". Modifies the provided unit slice in place. Parent consistency rule
+     * means that unit's i-th parent cannot be lower (in a level sense) than i-th
+     * parent of any other of that units parents. In other words, units seen from U
+     * "directly" (as parents) cannot be below the ones seen "indirectly" (as
+     * parents of parents).
+     */
     private static void makeConsistent(List<Unit> parents) {
         for (int i = 0; i < parents.size(); i++) {
             for (int j = 0; j < parents.size(); j++) {
@@ -178,11 +180,13 @@ public class Creator {
         update(u);
     }
 
-    // produces a piece of data to be included in a unit on a given level.
-    // For regular units the provided DataSource is used. For finishing units it's
-    // either nil or, if available, an encoded threshold signature share of hash and
-    // id of the last timing unit (obtained from preblockMaker on lastTiming
-    // channel)
+    /**
+     * produces a piece of data to be included in a unit on a given level. For
+     * regular units the provided DataSource is used. For finishing units it's
+     * either nil or, if available, an encoded threshold signature share of hash and
+     * id of the last timing unit (obtained from preblockMaker on lastTiming
+     * channel)
+     **/
     private Any getData(int level, Queue<Unit> lastTiming) {
         if (level <= conf.lastLevel()) {
             if (ds != null) {
@@ -211,8 +215,10 @@ public class Creator {
         return null;
     }
 
-    // getParentsForLevel returns a set of candidates such that their level is at
-    // most level-1.
+    /**
+     * getParentsForLevel returns a set of candidates such that their level is at
+     * most level-1.
+     */
     private List<Unit> getParentsForLevel(int level) {
         var result = new ArrayList<Unit>();
         for (Unit u : candidates) {
@@ -225,8 +231,10 @@ public class Creator {
         return result;
     }
 
-    // newEpoch switches the creator to a chosen epoch, resets candidates and shares
-    // and creates a dealing with the provided data.
+    /**
+     * switches the creator to a chosen epoch, resets candidates and shares and
+     * creates a dealing with the provided data.
+     **/
     private void newEpoch(int epoch, Any data) {
         this.epoch = epoch;
         resetEpoch();
@@ -238,9 +246,10 @@ public class Creator {
         return false;
     }
 
-    // resetEpoch resets the candidates and all related variables to the initial
-    // state (a slice with NProc nils). This is useful when switching to a new
-    // epoch.
+    /**
+     * resets the candidates and all related variables to the initial state (a slice
+     * with NProc nils). This is useful when switching to a new epoch.
+     */
     private void resetEpoch() {
         candidates.clear();
         for (int ix = 0; ix < candidates.size(); ix++) {
@@ -251,8 +260,10 @@ public class Creator {
         level = 0;
     }
 
-    // update takes a unitand updates the receiver's state with information
-    // contained in the unit.
+    /**
+     * takes a unit and updates the receiver's state with information contained in
+     * the unit.
+     */
     private void update(Unit unit) {
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
@@ -283,9 +294,11 @@ public class Creator {
 
     }
 
-    // updateCandidates puts the provided unit in parent candidates provided that
-    // the level is higher than the level of the previous candidate for that
-    // creator.
+    /**
+     * updateCandidates puts the provided unit in parent candidates provided that
+     * the level is higher than the level of the previous candidate for that
+     * creator.
+     */
     private void updateCandidates(Unit u) {
         if (u.epoch() != epoch) {
             return;

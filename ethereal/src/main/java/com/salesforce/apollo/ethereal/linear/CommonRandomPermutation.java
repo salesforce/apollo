@@ -29,20 +29,28 @@ import com.salesforce.apollo.ethereal.Unit;
 public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short crpFixedPrefix,
                                       DigestAlgorithm digestAlgorithm) {
 
-    // Iterates over all the prime units on a given level in random order.
-    // It calls the given work function on each of the units until the function
-    // returns false or the contents run out.
-    //
-    // The underlying random permutation of units is generated in two steps
-    // (1) the prefix is based only on the previous timing unit and hashes of units
-    // (2) the suffix is computed using the random source
-    // The second part of the permutation is being calculated only when needed,
-    // i.e. the given work function returns true on all the units in the prefix.
-    //
-    // The function itself returns
-    // - false when generating the suffix of the permutation failed (because the dag
-    // hasn't reached a level high enough to reveal the randomBytes needed)
-    // - true otherwise
+    /**
+     * Iterates over all the prime units on a given level in random order. It calls
+     * the given work function on each of the units until the function returns false
+     * or the contents run out.
+     * <p>
+     * The underlying random permutation of units is generated in two steps
+     * <p>
+     * (1) the prefix is based only on the previous timing unit and hashes of units
+     * <p>
+     * (2) the suffix is computed using the random source
+     * <p>
+     * The second part of the permutation is being calculated only when needed, i.e.
+     * the given work function returns true on all the units in the prefix.
+     * <p>
+     * 
+     * The function itself returns
+     * <p>
+     * - false when generating the suffix of the permutation failed (because the dag
+     * hasn't reached a level high enough to reveal the randomBytes needed)
+     * <p>
+     * - true otherwise
+     */
     public boolean iterate(int level, Unit previousTU, Function<Unit, Boolean> work) {
         var split = splitProcesses(dag.nProc(), crpFixedPrefix, level, previousTU);
 

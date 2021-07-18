@@ -142,8 +142,10 @@ public interface Unit extends PreUnit {
         return level;
     }
 
-    // Computes all maximal units produced by a pid present in parents and their
-    // floors
+    /**
+     * Computes all maximal units produced by a pid present in parents and their
+     * floors
+     */
     static List<Unit> maximalByPid(List<Unit> parents, short pid) {
         if (parents.get(pid) == null) {
             return Collections.emptyList();
@@ -184,7 +186,7 @@ public interface Unit extends PreUnit {
         return maximal;
     }
 
-    // Is the receiver above the specified unit?
+    /** Is the receiver above the specified unit? */
     default boolean above(Unit v) {
         if (v == null) {
             return false;
@@ -203,7 +205,7 @@ public interface Unit extends PreUnit {
 
     boolean aboveWithinProc(Unit unit);
 
-    // checks whether the receiver is below any of the specified units
+    /** checks whether the receiver is below any of the specified units */
     default boolean belowAny(List<Unit> units) {
         for (Unit v : units) {
             if (v != null && v.above(this)) {
@@ -213,9 +215,11 @@ public interface Unit extends PreUnit {
         return false;
     }
 
-    // this implementation works as long as there is no race for writing/reading to
-    // dag.maxUnits, i.e. as long as units created by one process are added
-    // atomically
+    /**
+     * this implementation works as long as there is no race for writing/reading to
+     * dag.maxUnits, i.e. as long as units created by one process are added
+     * atomically
+     */
     default int computeForkingHeight(Dag dag) {
         if (dealing()) {
             if (dag.maximalUnitsPerProcess().get(creator()).size() > 0) {
@@ -258,7 +262,7 @@ public interface Unit extends PreUnit {
 
     List<Unit> parents();
 
-    // Return the parent that was created by the same process as the receiver
+    /** Return the parent that was created by the same process as the receiver */
     default Unit predecessor() {
         return parents().get(creator());
     }

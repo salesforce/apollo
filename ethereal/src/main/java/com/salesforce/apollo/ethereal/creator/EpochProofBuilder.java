@@ -126,8 +126,10 @@ public interface EpochProofBuilder {
 
     static final Logger log = LoggerFactory.getLogger(EpochProofBuilder.class);
 
-    // decodeShare reads signature share and the signed message from Data contained
-    // in some unit.
+    /**
+     * decodeShare reads signature share and the signed message from Data contained
+     * in some unit.
+     */
     static DecodedShare decodeShare(Any data) {
         try {
             EpochProof proof = data.unpack(EpochProof.class);
@@ -138,8 +140,10 @@ public interface EpochProofBuilder {
         }
     }
 
-    // EpochProofBuilder checks if the given preunit is a proof that a new epoch
-    // started.
+    /**
+     * EpochProofBuilder checks if the given preunit is a proof that a new epoch
+     * started.
+     */
     static boolean epochProof(PreUnit pu, WeakThresholdKey wtk) {
         if (!pu.dealing() || wtk == null) {
             return false;
@@ -166,8 +170,10 @@ public interface EpochProofBuilder {
         return Proof.newBuilder().setEncodedId(lastTimingUnit.id()).setHash(lastTimingUnit.hash().toDigeste()).build();
     }
 
-    // encodeShare converts signature share and the signed message into Data that
-    // can be put into unit.
+    /**
+     * converts signature share and the signed message into Data that can be put
+     * into unit.
+     */
     private static Any encodeShare(Share share, Proof proof) {
         return Any.pack(EpochProof.newBuilder().setMsg(proof).setSignature(share.toSignature().toSig()).build());
     }

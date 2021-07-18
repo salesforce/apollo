@@ -74,13 +74,17 @@ public interface SlottedUnits {
         return new slottedUnits(contents, locks);
     }
 
-    // Return all units in this container created by the process identified by the
-    // pid
+    /**
+     * Return all units in this container created by the process identified by the
+     * pid
+     */
     List<Unit> get(short pid);
 
     void iterate(Function<List<Unit>, Boolean> work);
 
-    // Replace all units created by the process specified by the pid with the
-    // specified units
+    /**
+     * Replace all units created by the process specified by the pid with the
+     * specified units
+     */
     void set(short pid, List<Unit> units);
 }
