@@ -37,7 +37,8 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
- * Orderer orders ordered orders into ordered order.
+ * Orderer orders ordered orders into ordered order. The Jesus Nut of the
+ * Ethereal pipeline
  * 
  * @author hal.hildebrand
  *
@@ -98,11 +99,11 @@ public class Orderer {
             var timingUnit = round.get(round.size() - 1);
             var epoch = timingUnit.epoch();
 
-            if (timingUnit.level() == conf.lastLevel()) {
+            if (timingUnit.level() == config.lastLevel()) {
                 lastTiming.submit(timingUnit);
                 finishEpoch(epoch);
             }
-            if (epoch > current && timingUnit.level() <= conf.lastLevel()) {
+            if (epoch > current && timingUnit.level() <= config.lastLevel()) {
                 toPreblock.accept(round);
                 log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
             }
@@ -135,7 +136,7 @@ public class Orderer {
     }
 
     private final Clock                           clock;
-    private Config                                conf;
+    private final Config                          config;
     private Creator                               creator;
     private epoch                                 current;
     private final DataSource                      ds;
@@ -148,15 +149,15 @@ public class Orderer {
     private final Consumer<List<Unit>>            toPreblock;
     private final SubmissionPublisher<Unit>       unitBelt;
 
-    public Orderer(SubmissionPublisher<Unit> unitBelt, DataSource ds, SubmissionPublisher<List<Unit>> orderedUnits,
-                   Consumer<List<Unit>> toPreblock, SubmissionPublisher<Unit> lastTiming, Clock clock,
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock,
                    SubmissionPublisher<Unit> synchronizer) {
+        this.config = conf;
         this.ds = ds;
-        this.lastTiming = lastTiming;
-        this.orderedUnits = orderedUnits;
+        this.lastTiming = new SubmissionPublisher<>(config.executor(), config.numberOfEpochs());
+        this.orderedUnits = new SubmissionPublisher<>(config.executor(), conf.epochLength());
         this.synchronizer = synchronizer;
         this.toPreblock = toPreblock;
-        this.unitBelt = unitBelt;
+        this.unitBelt = new SubmissionPublisher<>(config.executor(), conf.epochLength() * conf.nProc());
         this.clock = clock;
     }
 
@@ -243,10 +244,10 @@ public class Orderer {
 
     public void start(RandomSourceFactory rsf) {
         this.rsf = rsf;
-        creator = new Creator(conf, ds, u -> {
+        creator = new Creator(config, ds, u -> {
             insert(u);
             synchronizer.submit(u);
-        }, rsData(), epoch -> new epochProofImpl(conf, epoch, new sharesDB(conf, new HashMap<>())));
+        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new HashMap<>())));
 
         newEpoch(0);
 
@@ -338,7 +339,7 @@ public class Orderer {
     // epoch does not exist, creates it. All correctness checks (epoch proof, adder,
     // dag checks) are skipped. This method is meant for our own units only.
     private void insert(Unit unit) {
-        if (unit.creator() != conf.pid()) {
+        if (unit.creator() != config.pid()) {
             log.warn("Invalid unit creator: {}", unit.creator());
             return;
         }
@@ -368,7 +369,7 @@ public class Orderer {
                     previous.close();
                 }
                 previous = current;
-                current = newEpoch(epoch, conf, rsf, unitBelt, orderedUnits, clock);
+                current = newEpoch(epoch, config, rsf, unitBelt, orderedUnits, clock);
                 return current;
             }
             if (epoch == current.id()) {
@@ -391,7 +392,7 @@ public class Orderer {
         var e = getEpoch(epochId);
         var epoch = e.epoch;
         if (e.newer) {
-            if (creator.epochProof(pu, conf.WTKey())) {
+            if (creator.epochProof(pu, config.WTKey())) {
                 epoch = newEpoch(epochId);
             } else {
 //                ord.syncer.RequestGossip(source)

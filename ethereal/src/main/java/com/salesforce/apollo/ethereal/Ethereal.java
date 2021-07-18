@@ -46,6 +46,5 @@ public class Ethereal {
                       }, () -> new TreeMap<>()));
         publicKeys = new PublicKey[pids.size()];
         p2pKeys = new PublicKey[pids.size()];
-
     }
 }

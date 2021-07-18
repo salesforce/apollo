@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -19,7 +20,7 @@ import com.salesforce.apollo.crypto.Signer;
 public record Config(short nProc, int epochLength, short pid, int zeroVotRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey) {
+                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -40,6 +41,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         private short                       crpFixedPrefix;
         private DigestAlgorithm             digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int                         epochLength     = 1;
+        private Executor                    executor        = r -> r.run();
         private int                         firstDecidedRound;
         private int                         lastLevel;
         private short                       nProc;
@@ -93,7 +95,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         public Config build() {
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor);
         }
 
         public List<BiConsumer<Unit, Dag>> getChecks() {
@@ -114,6 +116,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
 
         public int getEpochLength() {
             return epochLength;
+        }
+
+        public Executor getExecutor() {
+            return executor;
         }
 
         public int getFirstDecidedRound() {
@@ -190,6 +196,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
 
         public Builder setEpochLength(int epochLength) {
             this.epochLength = epochLength;
+            return this;
+        }
+
+        public Builder setExecutor(Executor executor) {
+            this.executor = executor;
             return this;
         }
 
