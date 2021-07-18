@@ -145,26 +145,22 @@ public class Orderer {
     private final SubmissionPublisher<List<Unit>> orderedUnits;
     private epoch                                 previous;
     private RandomSourceFactory                   rsf;
-    private final SubmissionPublisher<Unit>       synchronizer;
     private final Consumer<List<Unit>>            toPreblock;
     private final SubmissionPublisher<Unit>       unitBelt;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock,
-                   SubmissionPublisher<Unit> synchronizer) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new SubmissionPublisher<>(config.executor(), config.numberOfEpochs());
         this.orderedUnits = new SubmissionPublisher<>(config.executor(), conf.epochLength());
-        this.synchronizer = synchronizer;
         this.toPreblock = toPreblock;
         this.unitBelt = new SubmissionPublisher<>(config.executor(), conf.epochLength() * conf.nProc());
         this.clock = clock;
     }
 
-    // AddPreunits sends preunits received from other committee members to their
-    // corresponding epochs.
-    // It assumes preunits are ordered by ascending epochID and, within each epoch,
-    // they are topologically sorted.
+    // Sends preunits received from other committee members to their corresponding
+    // epochs. It assumes preunits are ordered by ascending epochID and, within each
+    // epoch, they are topologically sorted.
     public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
         var errors = new HashMap<Digest, Correctness>();
         while (preunits.size() > 0) {
@@ -242,7 +238,7 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf) {
+    public void start(RandomSourceFactory rsf, SubmissionPublisher<PreUnit> synchronizer) {
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             insert(u);
