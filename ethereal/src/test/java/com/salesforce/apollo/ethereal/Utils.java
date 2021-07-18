@@ -61,5 +61,9 @@ public interface Utils {
             }
             return errors.isEmpty() ? null : errors;
         }
+
+        @Override
+        public void close() {
+        }
     }
 }

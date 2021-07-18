@@ -8,6 +8,7 @@ package com.salesforce.apollo.ethereal;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -18,6 +19,8 @@ import javax.crypto.SecretKey;
 import com.salesfoce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.ThresholdKey;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.DecodedShare;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.Share;
 
 /**
  * @author hal.hildebrand
@@ -118,9 +121,9 @@ public record WeakThresholdKey(ThresholdKey tk, Map<Short, Boolean> shareProvide
         // (6) Encrypted sks in the form
         // a) length of the cipher text
         // b) cipher text of the key
-        byte[] encode()  {
-            
-            var data =new byte[2 + 4];
+        byte[] encode() {
+
+            var data = new byte[2 + 4];
 //            binary.LittleEndian.PutUint16(data[:2], tk.threshold);
 
 //            var globalVKMarshalled = globalVK.marshal();
@@ -213,7 +216,26 @@ public record WeakThresholdKey(ThresholdKey tk, Map<Short, Boolean> shareProvide
 //        return new WeakThresholdKey(tk, shareProviders);
 //    }
 
-    public boolean verifySignature(JohnHancock sig, Proof msg) { 
+    public boolean verifySignature(JohnHancock sig, Proof msg) {
+        return false;
+    }
+
+    public Share createShare(Proof proof) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    public int threshold() {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    public JohnHancock combineShares(Collection<Share> shareSlice) {
+        return null;
+    }
+
+    public boolean verifyShare(DecodedShare share) {
+        // TODO Auto-generated method stub
         return false;
     }
 

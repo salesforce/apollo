@@ -249,6 +249,12 @@ public interface Adder {
 
         }
 
+        @Override
+        public void close() {
+            // TODO Auto-generated method stub
+            
+        }
+
     }
 
     enum Correctness {
@@ -268,5 +274,7 @@ public interface Adder {
     // - UnknownParents - in that case the preunit is normally added and processed,
     // error is returned only for log purpose.
     Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
+
+    void close();
 
 }

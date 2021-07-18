@@ -15,7 +15,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.google.protobuf.Any;
-import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
@@ -36,6 +35,11 @@ public class Creator {
     @FunctionalInterface
     public interface RandomSourceData {
         byte[] apply(int level, List<Unit> parents, int epoch);
+    }
+
+    @FunctionalInterface
+    public interface RsData {
+        byte[] rsData(int level, List<Unit> parents, int epoch);
     }
 
     private record built(List<Unit> parents, int level) {}
@@ -60,16 +64,11 @@ public class Creator {
         }
     }
 
-    @FunctionalInterface
-    public interface RsData {
-        byte[] rsData(int level, List<Unit> parents, int epoch);
-    }
-
     private List<Unit>                                 candidates;
     private final Config                               conf;
     private final DataSource                           ds;
     private int                                        epoch;
-    private EpochProof                                 epochProof;
+    private EpochProofBuilder                          epochProof;
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
     private Map<Short, Boolean>                        frozen;
     private int                                        level;
@@ -77,7 +76,8 @@ public class Creator {
     private short                                      onMaxLvl;
     private int                                        quorum;
     private final RsData                               rsData;
-    private final Consumer<Unit>                       send;
+
+    private final Consumer<Unit> send;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -87,6 +87,16 @@ public class Creator {
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
 
+    }
+
+    public void creatUnits(SubmissionPublisher<Unit> unitBelt, SubmissionPublisher<Unit> lastTiming) {
+        // TODO Auto-generated method stub
+
+    }
+
+    public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
+        // TODO Auto-generated method stub
+        return false;
     }
 
     public void process(Unit candidate, Unit timingUnit) {
@@ -110,8 +120,8 @@ public class Creator {
     }
 
     private void createUnit(List<Unit> parents, int level, Any data) {
-        var u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.apply(level, parents, epoch),
-                                    conf.signer(), conf.digestAlgorithm());
+        Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
+                                     conf.signer(), conf.digestAlgorithm());
         send.accept(u);
         update(u);
     }
@@ -205,7 +215,7 @@ public class Creator {
         // If this is a finishing unit try to extract threshold signature share from it.
         // If there are enough shares to produce the signature (and therefore a proof
         // that the current epoch is finished) switch to a new epoch.
-        var ep = epochProof.tryBuilding(unit);
+        Any ep = epochProof.tryBuilding(unit);
         if (ep != null) {
             newEpoch(epoch + 1, ep);
             return;
@@ -237,16 +247,6 @@ public class Creator {
                 level++;
             }
         }
-    }
-
-    public void creatUnits(SubmissionPublisher<Unit> unitBelt, SubmissionPublisher<Unit> lastTiming) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
-        // TODO Auto-generated method stub
-        return false;
     }
 
 }

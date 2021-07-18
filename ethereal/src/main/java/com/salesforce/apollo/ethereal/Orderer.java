@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
@@ -22,6 +23,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
+import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.slf4j.Logger;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -31,7 +33,8 @@ import com.salesforce.apollo.ethereal.Dag.DagInfo;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.creator.Creator;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
-import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
@@ -41,34 +44,34 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
  *
  */
 public class Orderer {
-    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs) {
+    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs, Queue<Boolean> more) {
 
         public void close() {
-            // TODO Auto-generated method stub
-
+            adder.close();
+            extender.close();
         }
 
         public boolean wantsMoreUnits() {
-            // TODO Auto-generated method stub
-            return false;
+            return more.peek() ? more.poll() : false;
         }
 
         public Collection<? extends Unit> allUnits() {
-            // TODO Auto-generated method stub
-            return null;
+            return dag.unitsAbove(null);
         }
 
         public Collection<? extends Unit> unitsAbove(List<Integer> heights) {
-            // TODO Auto-generated method stub
-            return null;
+            return dag.unitsAbove(heights);
+        }
+
+        public void noMoreUnits() {
+            more.clear();
         }
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
 
         public void noMoreUnits() {
-            // TODO Auto-generated method stub
-
+            epoch.noMoreUnits();
         }
     }
 
@@ -116,10 +119,11 @@ public class Orderer {
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
     public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SubmissionPublisher<Unit> unitBelt,
-                                 Clock clock) {
+                                 SubmissionPublisher<List<Unit>> output, Clock clock) {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
-        ExtenderService ext = new ExtenderService(dg, rs, config);
+        ExtenderService ext = new ExtenderService(dg, rs, config, output);
+        dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
             ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
@@ -127,7 +131,8 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs);
+        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs,
+                         new BlockingArrayQueue<Boolean>());
     }
 
     private final Clock                           clock;
@@ -177,24 +182,6 @@ public class Orderer {
         return errors;
     }
 
-    // GetInfo returns DagInfo of the dag from the most recent epoch.
-    public DagInfo[] getInfo() {
-        final Lock lock = mx.readLock();
-        lock.lock();
-        try {
-            var result = new DagInfo[2];
-            if (previous != null && !previous.wantsMoreUnits()) {
-                result[0] = previous.dag.maxView();
-            }
-            if (current != null && !current.wantsMoreUnits()) {
-                result[1] = current.dag().maxView();
-            }
-            return result;
-        } finally {
-            lock.unlock();
-        }
-    }
-
     // Delta returns all units present in the orderer that are newer than units
     // described by the given DagInfo. This includes all units from the epoch given
     // by the DagInfo above provided heights as well as ALL units from newer epochs.
@@ -228,6 +215,24 @@ public class Orderer {
         }
     }
 
+    // GetInfo returns DagInfo of the dag from the most recent epoch.
+    public DagInfo[] getInfo() {
+        final Lock lock = mx.readLock();
+        lock.lock();
+        try {
+            var result = new DagInfo[2];
+            if (previous != null && !previous.wantsMoreUnits()) {
+                result[0] = previous.dag.maxView();
+            }
+            if (current != null && !current.wantsMoreUnits()) {
+                result[1] = current.dag().maxView();
+            }
+            return result;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     // MaxUnits returns maximal units per process from the chosen epoch.
     public SlottedUnits maxUnits(int epoch) {
         var ep = getEpoch(epoch);
@@ -242,7 +247,7 @@ public class Orderer {
         creator = new Creator(conf, ds, u -> {
             insert(u);
             synchronizer.submit(u);
-        }, rsData(), EpochProofBuilder.newProofBuilder(conf));
+        }, rsData(), epoch -> new epochProofImpl(conf, epoch, new sharesDB(conf, new HashMap<>())));
 
         newEpoch(0);
 
@@ -364,7 +369,7 @@ public class Orderer {
                     previous.close();
                 }
                 previous = current;
-                current = newEpoch(epoch, conf, rsf, unitBelt, clock);
+                current = newEpoch(epoch, conf, rsf, unitBelt, orderedUnits, clock);
                 return current;
             }
             if (epoch == current.id()) {
