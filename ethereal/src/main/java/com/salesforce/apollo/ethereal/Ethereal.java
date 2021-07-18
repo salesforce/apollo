@@ -23,16 +23,16 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Ethereal {
-
     private final Context<Member> context;
     // members assigned a process id, 0 -> Context cardinality. Determined by id
     // (hash) sort order
-    private final SortedMap<Digest, Short> pids;
-    private final PublicKey[] publicKeys;
-    private final PublicKey[] p2pKeys;
+    private final SortedMap<Digest, Short>  pids;
+    private final PublicKey[]               publicKeys;
+    private final PublicKey[]               p2pKeys;
     private final Map<String, List<String>> setupAddresses = new HashMap<>();
-    private final Map<String, List<String>> addresses = new HashMap<>();
+    private final Map<String, List<String>> addresses      = new HashMap<>();
 
     public Ethereal(Config configuration, Context<Member> context) {
         this.context = context;
@@ -46,6 +46,6 @@ public class Ethereal {
                       }, () -> new TreeMap<>()));
         publicKeys = new PublicKey[pids.size()];
         p2pKeys = new PublicKey[pids.size()];
-        
+
     }
 }

@@ -26,6 +26,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.Share;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public record WeakThresholdKey(ThresholdKey tk, Map<Short, Boolean> shareProviders) {
 
     static BigInteger poly(List<BigInteger> coeffs, BigInteger x) {

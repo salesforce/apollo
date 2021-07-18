@@ -14,16 +14,15 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
-import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.slf4j.Logger;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -44,15 +43,16 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
  *
  */
 public class Orderer {
-    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs, Queue<Boolean> more) {
+    public record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs, AtomicBoolean more) {
 
         public void close() {
             adder.close();
             extender.close();
+            more.set(false);
         }
 
         public boolean wantsMoreUnits() {
-            return more.peek() ? more.poll() : false;
+            return more.get();
         }
 
         public Collection<? extends Unit> allUnits() {
@@ -64,7 +64,7 @@ public class Orderer {
         }
 
         public void noMoreUnits() {
-            more.clear();
+            more.set(false);
         }
     }
 
@@ -131,8 +131,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs,
-                         new BlockingArrayQueue<Boolean>());
+        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs, new AtomicBoolean(true));
     }
 
     private final Clock                           clock;
