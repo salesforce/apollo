@@ -167,7 +167,9 @@ public interface PreUnit {
 
         buffers.add(idBuff);
         buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
-        buffers.add(ByteBuffer.wrap(rsData));
+        if (rsData != null) {
+            buffers.add(ByteBuffer.wrap(rsData));
+        }
 
         for (int h : crown.heights()) {
             ByteBuffer heightBuff = ByteBuffer.allocate(4);
@@ -181,9 +183,9 @@ public interface PreUnit {
     }
 
     static DecodedId decode(long id) {
-        var height = (int) (id & (1 << 16 - 1));
+        var height = (int) (id & ((1 << 16) - 1));
         id >>= 16;
-        var creator = (short) (id & (1 << 16 - 1));
+        var creator = (short) (id & ((1 << 16) - 1));
         return new DecodedId(height, creator, (int) (id >> 16));
     }
 

@@ -16,16 +16,6 @@ import com.salesforce.apollo.ethereal.Utils.TestAdder;
  *
  */
 public interface DagFactory {
-    public class TestDagFactory implements DagFactory {
-
-        @Override
-        public DagAdder createDag(short nProc) {
-            var cnf = Config.Builder.empty().setnProc(nProc).build();
-            var dag = Dag.newDag(cnf, 0);
-            return new DagAdder(dag, new TestAdder(dag));
-        }
-    }
-
     public class DefaultChecksFactory implements DagFactory {
 
         @Override
@@ -38,6 +28,26 @@ public interface DagFactory {
             dag.addCheck(Checks.forkerMuting());
 
             return new DagAdder(dag, new AdderImpl(dag, Clock.systemUTC(), cnf.digestAlgorithm()));
+        }
+    }
+
+    public class TestDagFactory implements DagFactory {
+
+        private final int initialEpoch;
+
+        public TestDagFactory() {
+            this(0);
+        }
+
+        public TestDagFactory(int initialEpoch) {
+            this.initialEpoch = initialEpoch;
+        }
+
+        @Override
+        public DagAdder createDag(short nProc) {
+            var cnf = Config.Builder.empty().setnProc(nProc).build();
+            var dag = Dag.newDag(cnf, initialEpoch);
+            return new DagAdder(dag, new TestAdder(dag));
         }
     }
 

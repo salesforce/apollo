@@ -35,6 +35,17 @@ public class DagTest {
     public void testIt() {
         System.out.println("65000549695646603732796438742359905742570406053903786389881062969044166799969".length());
     }
+    
+    @Test
+    public void testEnDecodingId() {
+        
+        var id = PreUnit.id(100, (short) 1, 2);
+        
+        var decoded = PreUnit.decode(id);
+        assertEquals(1, decoded.creator());
+        assertEquals(100, decoded.height());
+        assertEquals(2, decoded.epoch());
+    }
 
     // @Test // TODO, resolution of forking (with alerts or RBAC)
     public void aboveWorkingFoTwoForksFromOneUnit() throws Exception {

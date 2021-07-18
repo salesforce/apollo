@@ -7,10 +7,10 @@
 package com.salesforce.apollo.ethereal.creator;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
@@ -18,6 +18,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +74,7 @@ public class Creator {
 
         @Override
         public void onNext(Unit u) {
+            log.info("Processing next unit: {} ", u);
             mx.lock();
             try {
                 // Step 1: update candidates with all units waiting on the unit belt
@@ -122,20 +125,21 @@ public class Creator {
         }
     }
 
-    private List<Unit>                                 candidates;
+    private final List<Unit>                           candidates;
     private final Config                               conf;
     private final DataSource                           ds;
     private int                                        epoch;
     private EpochProofBuilder                          epochProof;
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
-    private Map<Short, Boolean>                        frozen;
+    private final Set<Short>                           frozen = new HashSet<>();
     private int                                        level;
     private int                                        maxLvl;
-    private final Lock                                 mx = new ReentrantLock();
+    private final Lock                                 mx     = new ReentrantLock();
     private short                                      onMaxLvl;
     private int                                        quorum;
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
+    private boolean                                    epochDone;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -144,6 +148,8 @@ public class Creator {
         this.rsData = rsData;
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
+        this.candidates = IntStream.range(0, conf.nProc()).mapToObj(e -> null).map(e -> (Unit) e)
+                                   .collect(Collectors.toList());
 
     }
 
@@ -176,6 +182,7 @@ public class Creator {
     private void createUnit(List<Unit> parents, int level, Any data) {
         Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
                                      conf.signer(), conf.digestAlgorithm());
+        log.info("Created unit: {} ", u);
         send.accept(u);
         update(u);
     }
@@ -200,6 +207,7 @@ public class Creator {
         }
 
         if (timingUnit.epoch() == epoch) {
+            epochDone = true;
             if (epoch == conf.numberOfEpochs() - 1) {
                 // the epoch we just finished is the last epoch we were supposed to produce
                 return Any.getDefaultInstance();
@@ -236,14 +244,21 @@ public class Creator {
      * creates a dealing with the provided data.
      **/
     private void newEpoch(int epoch, Any data) {
+        log.info("Changing epoch to: {} : {}", epoch, data);
         this.epoch = epoch;
         resetEpoch();
         epochProof = epochProofBuilder.apply(epoch);
-        createUnit(Collections.emptyList(), 0, data);
+        createUnit(IntStream.range(0, conf.nProc()).mapToObj(e -> (Unit) null).toList(), 0, data);
     }
 
+    /**
+     * ready checks if the creator is ready to produce a new unit. Usually that
+     * means: "do we have enough new candidates to produce a unit with level higher
+     * than the previous one?" Besides that, we stop producing units for the current
+     * epoch after creating a unit with signature share.
+     */
     private boolean ready() {
-        return false;
+        return !epochDone && level > candidates.get(conf.pid()).level();
     }
 
     /**
@@ -251,8 +266,9 @@ public class Creator {
      * with NProc nils). This is useful when switching to a new epoch.
      */
     private void resetEpoch() {
+        log.info("Resetting epoch");
         candidates.clear();
-        for (int ix = 0; ix < candidates.size(); ix++) {
+        for (int ix = 0; ix < conf.nProc(); ix++) {
             candidates.add(null);
         }
         maxLvl = -1;
@@ -267,7 +283,9 @@ public class Creator {
     private void update(Unit unit) {
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
-        if (frozen.get(unit.creator()) || unit.epoch() < epoch) {
+        if (frozen.contains(unit.creator()) || unit.epoch() < epoch) {
+            log.info("Unit rejected frozen: {} epoch: {} current: {}", frozen.contains(unit.creator()), unit.epoch(),
+                     epoch);
             return;
         }
 
@@ -276,6 +294,7 @@ public class Creator {
         // the first unit from a new epoch is always a dealing unit.
         if (unit.epoch() > epoch) {
             if (!epochProof.verify(unit)) {
+                log.info("Unit did not verify, rejected");
                 return;
             }
             newEpoch(unit.epoch(), unit.data());
@@ -306,6 +325,7 @@ public class Creator {
         var prev = candidates.get(u.creator());
         if (prev == null || prev.level() < u.level()) {
             candidates.set(u.creator(), u);
+            log.info("Candidate  updated to: {} ", u);
             if (u.level() == maxLvl) {
                 onMaxLvl++;
             }
