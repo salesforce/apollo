@@ -62,7 +62,7 @@ public class Orderer {
             return dag.unitsAbove(null);
         }
 
-        public Collection<? extends Unit> unitsAbove(List<Integer> heights) {
+        public Collection<? extends Unit> unitsAbove(int[] heights) {
             return dag.unitsAbove(heights);
         }
 

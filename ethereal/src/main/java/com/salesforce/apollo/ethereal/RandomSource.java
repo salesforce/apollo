@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.List;
-
 /**
  * RandomSource represents a source of randomness needed to run the protocol. It
  * specifies what kind of data should be included in units, and can use this
@@ -32,7 +30,7 @@ public interface RandomSource {
      * DataToInclude returns data which should be included in a unit based on its
      * level and parents.
      */
-    byte[] dataToInclude(List<Unit> parents, int level);
+    byte[] dataToInclude(Unit[] parents, int level);
 
     /** RandomBytes returns random bytes for a given process and level. */
     byte[] randomBytes(short process, int level);

@@ -55,7 +55,7 @@ public interface Utils {
                     failed.set(i, true);
                     continue;
                 }
-                List<Unit> parents = decodedParents.parents();
+                Unit[] parents = decodedParents.parents();
                 var freeUnit = dag.build(pu, parents);
                 dag.insert(freeUnit);
             }

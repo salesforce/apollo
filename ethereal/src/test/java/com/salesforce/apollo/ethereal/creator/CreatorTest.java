@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.KeyPair;
+import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ForkJoinPool;
@@ -19,7 +20,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -113,7 +113,7 @@ public class CreatorTest {
         Utils.waitForCondition(4_000, 500, () -> finished.get());
         assertTrue(finished.get());
 
-        var parents = IntStream.range(0, nProc).mapToObj(e -> (Unit) null).toList();
+        Unit[] parents = new Unit[nProc];
         for (short pid = 1; pid < cnf.nProc(); pid++) {
             var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
             var unitData = Any.getDefaultInstance();
@@ -136,6 +136,62 @@ public class CreatorTest {
         assertEquals(1, createdUnit.level());
         assertEquals(0, createdUnit.creator());
         assertEquals(1, createdUnit.height());
+
+        unitBelt.close();
+        assertEquals(0, unitBelt.estimateMaximumLag());
+        assertEquals(0, unitRec.size());
+    }
+
+    @Test
+    public void shouldUnitsForEachConsecutiveLevel() throws Exception {
+        short nProc = 4;
+        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+        var unitRec = new ArrayBlockingQueue<Unit>(100);
+        Consumer<Unit> send = u -> unitRec.add(u);
+        var creator = newCreator(cnf, send);
+        assertNotNull(creator);
+
+        AtomicBoolean finished = new AtomicBoolean();
+
+        var unitBelt = new SubmissionPublisher<Unit>();
+        var lastTiming = new ArrayBlockingQueue<Unit>(100);
+
+        ForkJoinPool.commonPool().execute(() -> {
+            creator.creatUnits(unitBelt, lastTiming);
+            finished.set(true);
+        });
+
+        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        assertTrue(finished.get());
+
+        Unit[] parents = new Unit[nProc];
+        var maxLevels = 2;
+
+        for (int level = 0; level <= maxLevels; level++) {
+            var newParents = new ArrayList<Unit>();
+            for (short pid = 1; pid < cnf.nProc(); pid++) {
+                var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
+                var unitData = Any.getDefaultInstance();
+                var rsData = new byte[0];
+                JohnHancock sig = null;
+                long id = PreUnit.id(0, pid, 0);
+                var pu = PreUnit.newPreUnit(id, crown, unitData, rsData, sig, DigestAlgorithm.DEFAULT);
+                var unit = pu.from(parents);
+                newParents.add(unit);
+                unitBelt.submit(unit);
+            }
+            parents = newParents.toArray(new Unit[parents.length]);
+        }
+        for (int level = 0; level < 4; level++) {
+            var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+
+            assertNotNull(createdUnit);
+            assertEquals(level, createdUnit.level());
+            assertEquals(0, createdUnit.creator());
+            assertEquals(level, createdUnit.height());
+        }
 
         unitBelt.close();
         assertEquals(0, unitBelt.estimateMaximumLag());

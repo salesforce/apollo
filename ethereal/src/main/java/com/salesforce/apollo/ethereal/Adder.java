@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -94,18 +95,19 @@ public interface Adder {
                 var parents = decoded.parents();
                 if (decoded.inError()) {
                     if (decoded instanceof AmbiguousParents ap) {
-                        parents = new ArrayList<>();
+                        parents = new Unit[parents.length];
+                        int i = 0;
                         for (var possibleParents : ap.units()) {
                             if (possibleParents.isEmpty()) {
                                 break;
                             }
                             if (possibleParents.size() == 1) {
-                                parents.add(possibleParents.get(0));
+                                parents[i++] = possibleParents.get(0);
                             }
                         }
                     }
                 }
-                if (!Digest.combine(digestAlgorithm, parents.stream().map(e -> e.hash()).toList())
+                if (!Digest.combine(digestAlgorithm, (Digest[]) Stream.of(parents).map(e -> e.hash()).toArray())
                            .equals(wp.pu().view().controlHash())) {
                     wp.failed().set(true);
                     handleInvalidControlHash(wp.source(), wp.pu(), parents);
@@ -181,12 +183,12 @@ public interface Adder {
          * waitingParents() and missingParents() accordingly. Additionally, returns
          * maximal heights of dag.
          */
-        private List<Integer> checkParents(waitingPreUnit wp) {
+        private int[] checkParents(waitingPreUnit wp) {
             var epoch = wp.pu().epoch();
             var maxHeights = dag.maxView().heights();
             short creator = 0;
             for (int height : wp.pu().view().heights()) {
-                if (height > maxHeights.get(creator++)) {
+                if (height > maxHeights[creator++]) {
                     long parentID = id(height, creator, epoch);
                     var par = waitingById.get(parentID);
                     if (par != null) {
@@ -201,7 +203,7 @@ public interface Adder {
             return maxHeights;
         }
 
-        private void handleInvalidControlHash(long sourcePID, PreUnit witness, List<Unit> parentCandidates) {
+        private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
             var ids = new ArrayList<Long>();
             short pid = 0;
             for (var height : witness.view().heights()) {

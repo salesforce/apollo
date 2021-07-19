@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
@@ -14,12 +14,11 @@ import java.util.Set;
 import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,13 +49,14 @@ public class Creator {
 
     @FunctionalInterface
     public interface RsData {
-        byte[] rsData(int level, List<Unit> parents, int epoch);
+        byte[] rsData(int level, Unit[] parents, int epoch);
     }
 
     private class BeltSubscriber implements Subscriber<Unit> {
 
-        private final Queue<Unit> lastTiming;
-        private Subscription      subscription;
+        private final Queue<Unit>   lastTiming;
+        private Subscription        subscription;
+        private final AtomicInteger pending = new AtomicInteger();
 
         public BeltSubscriber(Queue<Unit> lastTiming) {
             this.lastTiming = lastTiming;
@@ -79,27 +79,34 @@ public class Creator {
             try {
                 // Step 1: update candidates with all units waiting on the unit belt
                 update(u);
-                while (ready()) {
-                    // Step 2: get parents and level using current strategy
-                    var built = buildParents();
-                    // Step 3: create unit
-                    createUnit(built.parents, built.level, getData(built.level, lastTiming));
+                if (pending.incrementAndGet() >= quorum) {
+                    pending.set(0);
+                    create();
+                    subscription.request(conf.nProc() - conf.byzantine());
                 }
             } finally {
                 mx.unlock();
-                subscription.request(1);
             }
         }
 
         @Override
         public void onSubscribe(Subscription subscription) {
             this.subscription = subscription;
-            subscription.request(1);
+            subscription.request(quorum);
+        }
+
+        private void create() {
+            while (ready()) {
+                // Step 2: get parents and level using current strategy
+                var built = buildParents();
+                // Step 3: create unit
+                createUnit(built.parents, built.level, getData(built.level, lastTiming));
+            }
         }
 
     }
 
-    private record built(List<Unit> parents, int level) {}
+    private record built(Unit[] parents, int level) {}
 
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
@@ -111,21 +118,21 @@ public class Creator {
      * "directly" (as parents) cannot be below the ones seen "indirectly" (as
      * parents of parents).
      */
-    private static void makeConsistent(List<Unit> parents) {
-        for (int i = 0; i < parents.size(); i++) {
-            for (int j = 0; j < parents.size(); j++) {
-                if (parents.get(j) == null) {
+    private static void makeConsistent(Unit[] parents) {
+        for (int i = 0; i < parents.length; i++) {
+            for (int j = 0; j < parents.length; j++) {
+                if (parents[j] == null) {
                     continue;
                 }
-                Unit u = parents.get(j).parents().get(i);
-                if (parents.get(i) == null || (u != null && u.level() > parents.get(i).level())) {
-                    parents.set(i, u);
+                Unit u = parents[j].parents()[i];
+                if (parents[i] == null || (u != null && u.level() > parents[i].level())) {
+                    parents[i] = u;
                 }
             }
         }
     }
 
-    private final List<Unit>                           candidates;
+    private final Unit[]                               candidates;
     private final Config                               conf;
     private final DataSource                           ds;
     private int                                        epoch;
@@ -136,7 +143,7 @@ public class Creator {
     private int                                        maxLvl;
     private final Lock                                 mx     = new ReentrantLock();
     private short                                      onMaxLvl;
-    private int                                        quorum;
+    private final int                                  quorum;
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
     private boolean                                    epochDone;
@@ -148,9 +155,8 @@ public class Creator {
         this.rsData = rsData;
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
-        this.candidates = IntStream.range(0, conf.nProc()).mapToObj(e -> null).map(e -> (Unit) e)
-                                   .collect(Collectors.toList());
-
+        this.candidates = new Unit[config.nProc()];
+        quorum = 2 * config.byzantine() + 1;
     }
 
     /**
@@ -174,12 +180,13 @@ public class Creator {
         if (conf.canSkipLevel()) {
             return new built(getParents(), level);
         } else {
-            level = candidates.get(conf.pid()).level() + 1;
-            return new built(getParentsForLevel(level), level);
+            var l = candidates[conf.pid()].level() + 1;
+            return new built(getParentsForLevel(l), l);
         }
     }
 
-    private void createUnit(List<Unit> parents, int level, Any data) {
+    private void createUnit(Unit[] parents, int level, Any data) {
+        assert parents.length == conf.nProc();
         Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
                                      conf.signer(), conf.digestAlgorithm());
         log.info("Created unit: {} ", u);
@@ -205,35 +212,40 @@ public class Creator {
         if (timingUnit == null) {
             return Any.getDefaultInstance();
         }
-
-        if (timingUnit.epoch() == epoch) {
-            epochDone = true;
-            if (epoch == conf.numberOfEpochs() - 1) {
-                // the epoch we just finished is the last epoch we were supposed to produce
-                return Any.getDefaultInstance();
+        // in a rare case there can be timing units from previous epochs left on
+        // lastTiming channel. the purpose of this loop is to drain and ignore them.
+        while (timingUnit != null) {
+            if (timingUnit.epoch() == epoch) {
+                epochDone = true;
+                if (epoch == conf.numberOfEpochs() - 1) {
+                    // the epoch we just finished is the last epoch we were supposed to produce
+                    return Any.getDefaultInstance();
+                }
+                return epochProof.buildShare(timingUnit);
             }
-            return epochProof.buildShare(timingUnit);
+            log.warn("Creator received timing unit from newer epoch: {} that it has seen", timingUnit.epoch());
+            timingUnit = lastTiming.poll();
         }
-        log.warn("Creator received timing unit from newer epoch: {} that it has seen", timingUnit.epoch());
-
         return Any.getDefaultInstance();
     }
 
-    private List<Unit> getParents() {
-        return null;
+    private Unit[] getParents() {
+        Unit[] result = Arrays.copyOf(candidates, candidates.length);
+        makeConsistent(result);
+        return result;
     }
 
     /**
      * getParentsForLevel returns a set of candidates such that their level is at
      * most level-1.
      */
-    private List<Unit> getParentsForLevel(int level) {
-        var result = new ArrayList<Unit>();
+    private Unit[] getParentsForLevel(int level) {
+        var result = new Unit[conf.nProc()];
         for (Unit u : candidates) {
             for (; u != null && u.level() >= level;) {
                 u = u.predecessor();
             }
-            result.add(u);
+            result[u.creator()] = u;
         }
         makeConsistent(result);
         return result;
@@ -246,9 +258,10 @@ public class Creator {
     private void newEpoch(int epoch, Any data) {
         log.info("Changing epoch to: {} : {}", epoch, data);
         this.epoch = epoch;
+        epochDone = false;
         resetEpoch();
         epochProof = epochProofBuilder.apply(epoch);
-        createUnit(IntStream.range(0, conf.nProc()).mapToObj(e -> (Unit) null).toList(), 0, data);
+        createUnit(new Unit[conf.nProc()], 0, data);
     }
 
     /**
@@ -258,7 +271,7 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private boolean ready() {
-        return !epochDone && level > candidates.get(conf.pid()).level();
+        return !epochDone && level > candidates[conf.pid()].level();
     }
 
     /**
@@ -267,10 +280,7 @@ public class Creator {
      */
     private void resetEpoch() {
         log.info("Resetting epoch");
-        candidates.clear();
-        for (int ix = 0; ix < conf.nProc(); ix++) {
-            candidates.add(null);
-        }
+        Arrays.setAll(candidates, u -> null);
         maxLvl = -1;
         onMaxLvl = 0;
         level = 0;
@@ -322,9 +332,9 @@ public class Creator {
         if (u.epoch() != epoch) {
             return;
         }
-        var prev = candidates.get(u.creator());
+        var prev = candidates[u.creator()];
         if (prev == null || prev.level() < u.level()) {
-            candidates.set(u.creator(), u);
+            candidates[u.creator()] = u;
             log.info("Candidate  updated to: {} ", u);
             if (u.level() == maxLvl) {
                 onMaxLvl++;

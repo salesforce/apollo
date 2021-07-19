@@ -35,12 +35,12 @@ public class DagTest {
     public void testIt() {
         System.out.println("65000549695646603732796438742359905742570406053903786389881062969044166799969".length());
     }
-    
+
     @Test
     public void testEnDecodingId() {
-        
+
         var id = PreUnit.id(100, (short) 1, 2);
-        
+
         var decoded = PreUnit.decode(id);
         assertEquals(1, decoded.creator());
         assertEquals(100, decoded.height());
@@ -93,7 +93,7 @@ public class DagTest {
         for (short pid = 0; pid < d.dag().nProc(); pid++) {
             for (short pid2 = 0; pid2 < d.dag().nProc(); pid2++) {
                 var myFloor = units.get(pid).get(0).get(0).floor(pid2);
-                assertEquals(0, myFloor.size());
+                assertEquals(0, myFloor.length);
             }
         }
     }
@@ -121,10 +121,10 @@ public class DagTest {
 
         var floor0 = units.get((short) 0).get(1).get(0).floor((short) 0);
         var floor1 = units.get((short) 0).get(1).get(0).floor((short) 1);
-        assertEquals(1, floor0.size());
-        assertEquals(units.get((short) 0).get(0).get(0), floor0.get(0));
-        assertEquals(1, floor1.size());
-        assertEquals(units.get((short) 1).get(0).get(0), floor1.get(0));
+        assertEquals(1, floor0.length);
+        assertEquals(units.get((short) 0).get(0).get(0), floor0[0]);
+        assertEquals(1, floor1.length);
+        assertEquals(units.get((short) 1).get(0).get(0), floor1[0]);
     }
 
     @Test

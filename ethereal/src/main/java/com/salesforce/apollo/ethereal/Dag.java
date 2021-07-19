@@ -11,10 +11,7 @@ import static com.salesforce.apollo.ethereal.PreUnit.decode;
 import static com.salesforce.apollo.ethereal.SlottedUnits.newSlottedUnits;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,7 +33,7 @@ import com.salesforce.apollo.ethereal.Adder.Correctness;
 @SuppressWarnings("unused")
 public interface Dag {
 
-    record DagInfo(int epoch, List<Integer> heights) {}
+    record DagInfo(int epoch, int[] heights) {}
 
     public interface Decoded {
         default Correctness classification() {
@@ -47,19 +44,19 @@ public interface Dag {
             return true;
         }
 
-        default List<Unit> parents() {
-            return Collections.emptyList();
+        default Unit[] parents() {
+            return new Unit[0];
         }
     }
 
-    public record DecodedR(List<Unit> parents) implements Decoded {
+    public record DecodedR(Unit[] parents) implements Decoded {
         @Override
         public boolean inError() {
             return false;
         }
     }
 
-    record fiberMap(Map<Integer, SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
+    record fiberMap(List<SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
 
         public SlottedUnits getFiber(int value) {
             final Lock lock = mx.readLock();
@@ -86,7 +83,7 @@ public interface Dag {
             lock.lock();
             try {
                 for (int i = len.get(); i < len.get() + nValues; i++) {
-                    content.put(i, newSlottedUnits(width));
+                    content.add(newSlottedUnits(width));
                 }
                 len.addAndGet(nValues);
             } finally {
@@ -101,8 +98,8 @@ public interface Dag {
          * nProc) of slices of corresponding units. The second returned value is the
          * number of unknown units (no units for that creator-height pair).
          */
-        public getResult get(List<Integer> heights) {
-            if (heights.size() != width) {
+        public getResult get(int[] heights) {
+            if (heights.length != width) {
                 throw new IllegalStateException("Wrong number of heights passed to fiber map");
             }
             List<List<Unit>> result = IntStream.range(0, width).mapToObj(e -> new ArrayList<Unit>())
@@ -111,8 +108,8 @@ public interface Dag {
             final Lock lock = mx.readLock();
             lock.lock();
             try {
-                for (short pid = 0; pid < heights.size(); pid++) {
-                    var h = heights.get(pid);
+                for (short pid = 0; pid < heights.length; pid++) {
+                    var h = heights[pid];
                     if (h == -1) {
                         continue;
                     }
@@ -131,14 +128,14 @@ public interface Dag {
             }
         }
 
-        public List<Unit> above(List<Integer> heights) {
-            if (heights.size() != width) {
+        public List<Unit> above(int[] heights) {
+            if (heights.length != width) {
                 throw new IllegalStateException("Incorrect number of heights");
             }
-            var min = heights.get(0);
-            for (int h : heights.subList(1, heights.size())) {
-                if (h < min) {
-                    min = h;
+            var min = heights[0];
+            for (int i = 1; i < heights.length; i++) {
+                if (heights[i] < min) {
+                    min = heights[i];
                 }
             }
             var result = new ArrayList<Unit>();
@@ -148,7 +145,7 @@ public interface Dag {
                 for (int height = min + 1; height < length(); height++) {
                     var su = content.get(height);
                     for (short i = 0; i < width; i++) {
-                        if (height > heights.get(i)) {
+                        if (height > heights[i]) {
                             result.addAll(su.get(i));
                         }
                     }
@@ -205,7 +202,8 @@ public interface Dag {
         }
 
         @Override
-        public Unit build(PreUnit base, List<Unit> parents) {
+        public Unit build(PreUnit base, Unit[] parents) {
+            assert parents.length == nProc;
             return base.from(parents);
         }
 
@@ -227,18 +225,18 @@ public interface Dag {
             if (possibleParents.unknown > 0) {
                 return new UnknownParents(possibleParents.unknown);
             }
-            List<Unit> parents = IntStream.range(0, nProc).mapToObj(e -> (Unit) null).collect(Collectors.toList());
+            Unit[] parents = new Unit[nProc];
 
             int i = -1;
             for (List<Unit> units : possibleParents.result) {
                 i++;
-                if (heights.get(i) == -1) {
+                if (heights[i] == -1) {
                     continue;
                 }
                 if (units.size() > 1) {
                     return new AmbiguousParents(possibleParents.result);
                 }
-                parents.set(i, units.get(0));
+                parents[i] = units.get(0);
             }
             return new DecodedR(parents);
         }
@@ -347,7 +345,7 @@ public interface Dag {
          * returned by this method are in random order.
          */
         @Override
-        public List<Unit> unitsAbove(List<Integer> heights) {
+        public List<Unit> unitsAbove(int[] heights) {
             if (heights == null) {
                 return units.values().stream().toList();
             }
@@ -381,10 +379,10 @@ public interface Dag {
     }
 
     private static fiberMap newFiberMap(short width, int initialLength) {
-        var newMap = new fiberMap(new HashMap<>(), width, new AtomicInteger(initialLength),
+        var newMap = new fiberMap(new ArrayList<SlottedUnits>(), width, new AtomicInteger(initialLength),
                                   new ReentrantReadWriteLock());
         for (int i = 0; i < initialLength; i++) {
-            newMap.content.put(i, newSlottedUnits(width));
+            newMap.content.add(newSlottedUnits(width));
         }
         return newMap;
     }
@@ -395,7 +393,7 @@ public interface Dag {
 
     void beforeInsert(Consumer<Unit> h);
 
-    Unit build(PreUnit base, List<Unit> parents);
+    Unit build(PreUnit base, Unit[] parents);
 
     void check(Unit u);
 
@@ -443,12 +441,12 @@ public interface Dag {
             heights.add(h);
             return true;
         });
-        return new DagInfo(epoch(), heights);
+        return new DagInfo(epoch(), heights.stream().mapToInt(i -> i).toArray());
     }
 
     short nProc();
 
-    List<Unit> unitsAbove(List<Integer> heights);
+    List<Unit> unitsAbove(int[] heights);
 
     SlottedUnits unitsOnLevel(int level);
 }

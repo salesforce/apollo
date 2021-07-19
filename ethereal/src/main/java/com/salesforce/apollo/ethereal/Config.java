@@ -20,8 +20,8 @@ import com.salesforce.apollo.crypto.Signer;
 public record Config(short nProc, int epochLength, short pid, int zeroVotRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor) {
-    
+                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine) {
+
     public static Config empty() {
         return Builder.empty().build();
     }
@@ -39,6 +39,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
             return new Builder().requiredByLinear();
         }
 
+        private int                         byzantine       = -1;
         private boolean                     canSkipLevel    = false;
         private List<BiConsumer<Unit, Dag>> checks;
         private int                         commonVoteDeterministicPrefix;
@@ -51,6 +52,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         private short                       nProc;
         private int                         numberOfEpochs  = 1;
         private int                         orderStartLevel = 6;
+        private double                      pByz            = 0.33;
         private short                       pid;
         private Signer                      signer;
         private WeakThresholdKey            wtk;
@@ -97,9 +99,16 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
         }
 
         public Config build() {
+            if (byzantine <= -1) {
+                byzantine = (int) (((double) nProc) * pByz);
+            }
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine);
+        }
+
+        public int getByzantine() {
+            return byzantine;
         }
 
         public List<BiConsumer<Unit, Dag>> getChecks() {
@@ -146,6 +155,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
             return orderStartLevel;
         }
 
+        public double getpByz() {
+            return pByz;
+        }
+
         public short getPid() {
             return pid;
         }
@@ -170,6 +183,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
             firstDecidedRound = 3;
             commonVoteDeterministicPrefix = 10;
             zeroVotRoundForCommonVote = 3;
+            return this;
+        }
+
+        public Builder setByzantine(int byzantine) {
+            this.byzantine = byzantine;
             return this;
         }
 
@@ -230,6 +248,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
 
         public Builder setOrderStartLevel(int orderStartLevel) {
             this.orderStartLevel = orderStartLevel;
+            return this;
+        }
+
+        public Builder setpByz(double pByz) {
+            this.pByz = pByz;
             return this;
         }
 

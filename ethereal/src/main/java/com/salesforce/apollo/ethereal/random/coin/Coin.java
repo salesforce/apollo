@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal.random.coin;
 
-import java.util.List;
-
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
@@ -18,16 +16,16 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  *
  */
 public class Coin implements RandomSource {
-    
+
     public static RandomSourceFactory newFactory(short pid, WeakThresholdKey wtk) {
         return new RandomSourceFactory() {
-            
+
             @Override
             public RandomSource newRandomSource(Dag dag) {
                 // TODO Auto-generated method stub
                 return null;
             }
-            
+
             @Override
             public byte[] dealingData(int epoch) {
                 // TODO Auto-generated method stub
@@ -37,7 +35,7 @@ public class Coin implements RandomSource {
     }
 
     @Override
-    public byte[] dataToInclude(List<Unit> parents, int level) {
+    public byte[] dataToInclude(Unit[] parents, int level) {
         // TODO Auto-generated method stub
         return null;
     }

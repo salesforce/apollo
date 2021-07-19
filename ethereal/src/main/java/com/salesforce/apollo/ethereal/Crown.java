@@ -8,9 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.crypto.Digest.combine;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -25,31 +22,31 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  * @author hal.hildebrand
  *
  */
-public record Crown(List<Integer> heights, Digest controlHash) {
+public record Crown(int[] heights, Digest controlHash) {
 
-    public static Crown crownFromParents(List<Unit> parents, DigestAlgorithm algo) {
-        var nProc = parents.size();
-        var heights = new ArrayList<Integer>(nProc);
-        var hashes = new ArrayList<Digest>(nProc);
+    public static Crown crownFromParents(Unit[] parents, DigestAlgorithm algo) {
+        var nProc = parents.length;
+        var heights = new int[nProc];
+        var hashes = new Digest[nProc];
+        int i = 0;
         for (Unit u : parents) {
             if (u == null) {
-                heights.add(-1);
-                hashes.add(algo.getOrigin());
+                heights[i] = -1;
+                hashes[i] = algo.getOrigin();
             } else {
-                heights.add(u.height());
-                hashes.add(u.hash());
+                heights[i] = u.height();
+                hashes[i] = u.hash();
             }
+            i++;
         }
         return new Crown(heights, combine(algo, hashes));
     }
 
-    public static Crown newCrown(List<Integer> heights, Digest hash) {
+    public static Crown newCrown(int[] heights, Digest hash) {
         return new Crown(heights, hash);
     }
 
     public static Crown emptyCrown(short nProc, DigestAlgorithm digestAlgorithm) {
-        return new Crown(IntStream.range(0, nProc).mapToObj(e -> -1).collect(Collectors.toList()),
-                         combine(digestAlgorithm,
-                                 IntStream.range(0, nProc).mapToObj(e -> (Digest) null).collect(Collectors.toList())));
+        return new Crown(IntStream.range(0, nProc).map(e -> -1).toArray(), combine(digestAlgorithm, new Digest[nProc]));
     }
 }

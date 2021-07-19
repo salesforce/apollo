@@ -16,7 +16,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,7 +46,7 @@ public class CRPTest {
         }
 
         @Override
-        public byte[] dataToInclude(List<Unit> parents, int level) {
+        public byte[] dataToInclude(Unit[] parents, int level) {
             return super.dataToInclude(parents, level);
         }
 
@@ -64,7 +63,7 @@ public class CRPTest {
         boolean called = false;
 
         @Override
-        public byte[] dataToInclude(List<Unit> parents, int level) {
+        public byte[] dataToInclude(Unit[] parents, int level) {
             called = true;
             return null;
         }

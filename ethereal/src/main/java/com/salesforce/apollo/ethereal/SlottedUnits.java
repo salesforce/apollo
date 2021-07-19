@@ -64,7 +64,7 @@ public interface SlottedUnits {
 
     }
 
-    static SlottedUnits newSlottedUnits(short n) {
+    static SlottedUnits newSlottedUnits(int n) {
         List<List<Unit>> contents = new ArrayList<>();
         List<ReadWriteLock> locks = new ArrayList<>();
         for (int i = 0; i < n; i++) {

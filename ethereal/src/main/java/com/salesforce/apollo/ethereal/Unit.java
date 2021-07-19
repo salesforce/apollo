@@ -9,7 +9,6 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import com.google.protobuf.Any;
@@ -101,7 +100,7 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public List<Unit> floor(short slice) {
+        public Unit[] floor(short slice) {
             return unit.floor(slice);
         }
 
@@ -111,7 +110,7 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public List<Unit> parents() {
+        public Unit[] parents() {
             return unit.parents();
         }
 
@@ -120,8 +119,8 @@ public interface Unit extends PreUnit {
         }
     }
 
-    static int levelFromParents(List<Unit> parents) {
-        var nProc = (short) parents.size();
+    static int levelFromParents(Unit[] parents) {
+        var nProc = (short) parents.length;
         var level = 0;
         var onLevel = (short) 0;
         for (Unit p : parents) {
@@ -146,12 +145,12 @@ public interface Unit extends PreUnit {
      * Computes all maximal units produced by a pid present in parents and their
      * floors
      */
-    static List<Unit> maximalByPid(List<Unit> parents, short pid) {
-        if (parents.get(pid) == null) {
-            return Collections.emptyList();
+    static Unit[] maximalByPid(Unit[] parents, short pid) {
+        if (parents[pid] == null) {
+            return new Unit[0];
         }
         var maximal = new ArrayList<Unit>();
-        maximal.add(parents.get(pid));
+        maximal.add(parents[pid]);
         for (Unit parent : parents) {
             if (parent == null) {
                 continue;
@@ -183,7 +182,7 @@ public interface Unit extends PreUnit {
             }
         }
 
-        return maximal;
+        return maximal.toArray(new Unit[maximal.size()]);
     }
 
     /** Is the receiver above the specified unit? */
@@ -253,17 +252,18 @@ public interface Unit extends PreUnit {
     }
 
     default Unit embed(Dag dag) {
+        assert this.parents().length == dag.nProc();
         return new unitInDag(this, computeForkingHeight(dag));
     }
 
-    List<Unit> floor(short slice);
+    Unit[] floor(short slice);
 
     int level();
 
-    List<Unit> parents();
+    Unit[] parents();
 
     /** Return the parent that was created by the same process as the receiver */
     default Unit predecessor() {
-        return parents().get(creator());
+        return parents()[creator()];
     }
 }
