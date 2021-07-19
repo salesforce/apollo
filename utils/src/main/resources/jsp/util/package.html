@@ -1,0 +1,21 @@
+<body>
+This provides classes and interfaces to customise the semantics of <TT>Object</TT>
+channels.
+<P>
+By default, channels are zero-buffered and fully synchronised: both a reader
+and a writer have to be ready for a communication to proceed.  Whoever
+gets to the communication point first has to wait for the other party.
+<P>
+This package provides a variety of classes conforming
+to the {@link jcsp.util.ChannelDataStore} interface.
+These classes can be used as <I>plug-ins</I> to the <TT>static</TT>
+{@link jcsp.lang.Channel} manufacturing methods to customise their semantics.
+Classes are provided for blocking FIFO buffers,
+overwriting buffers (losing either the newest or oldest data) and
+infinite (within the realms of your virtual memory) buffers.
+<P>
+Users may write and use their own implementations of
+the {@link jcsp.util.ChannelDataStore} interface, but
+great care must be taken to specify its semantics.
+It should not normally be necessary to do this.
+</body>

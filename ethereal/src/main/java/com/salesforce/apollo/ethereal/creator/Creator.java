@@ -82,8 +82,10 @@ public class Creator {
                 if (pending.incrementAndGet() >= quorum) {
                     pending.set(0);
                     create();
-                    subscription.request(conf.nProc() - conf.byzantine());
+                    subscription.request(conf.nProc());
                 }
+            } catch (Throwable e) {
+                log.error("Error in processing unit: {}", u, e);
             } finally {
                 mx.unlock();
             }
@@ -92,11 +94,12 @@ public class Creator {
         @Override
         public void onSubscribe(Subscription subscription) {
             this.subscription = subscription;
-            subscription.request(quorum);
+            subscription.request(conf.nProc());
         }
 
         private void create() {
             while (ready()) {
+                log.info("** Ready, creating units");
                 // Step 2: get parents and level using current strategy
                 var built = buildParents();
                 // Step 3: create unit

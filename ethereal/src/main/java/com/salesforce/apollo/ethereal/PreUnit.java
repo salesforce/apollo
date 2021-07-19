@@ -209,16 +209,6 @@ public interface PreUnit {
 
     }
 
-    static PreUnit newPreUnit(long id, Crown crown, Any data, byte[] rsData, JohnHancock signature,
-                              DigestAlgorithm algo) {
-        var t = decode(id);
-        if (t.height != crown.heights()[t.creator] + 1) {
-            throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
-        }
-        return new preUnit(t.creator, t.epoch, t.height, signature, computeHash(algo, id, crown, data, rsData), crown,
-                           data, rsData);
-    }
-
     short creator();
 
     Any data();
