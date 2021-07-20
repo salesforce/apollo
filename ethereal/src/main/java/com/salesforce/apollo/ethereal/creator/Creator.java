@@ -26,7 +26,6 @@ import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.WeakThresholdKey;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -79,6 +78,7 @@ public class Creator {
     private final Config                               conf;
     private final DataSource                           ds;
     private int                                        epoch;
+    private boolean                                    epochDone;
     private EpochProofBuilder                          epochProof;
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
     private final Set<Short>                           frozen = new HashSet<>();
@@ -89,7 +89,6 @@ public class Creator {
     private final int                                  quorum;
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
-    private boolean                                    epochDone;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -111,32 +110,7 @@ public class Creator {
      */
     public void creatUnits(SimpleChannel<Unit> unitBelt, Queue<Unit> lastTiming) {
         newEpoch(epoch, Any.getDefaultInstance());
-        unitBelt.consume(units -> {
-            log.info("Processing next units: {} ", units.size());
-            mx.lock();
-            try {
-                for (Unit u : units) {
-                    // Step 1: update candidates with all units waiting on the unit belt
-                    update(u);
-                }
-                while (ready()) {
-                    log.info("Ready, creating units");
-                    // Step 2: get parents and level using current strategy
-                    var built = buildParents();
-                    // Step 3: create unit
-                    createUnit(built.parents, built.level, getData(built.level, lastTiming));
-                }
-            } catch (Throwable e) {
-                log.error("Error in processing units", e);
-            } finally {
-                mx.unlock();
-            }
-        });
-    }
-
-    public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
-        // TODO Auto-generated method stub
-        return false;
+        unitBelt.consume(units -> consume(units, lastTiming));
     }
 
     private built buildParents() {
@@ -145,6 +119,28 @@ public class Creator {
         } else {
             var l = candidates[conf.pid()].level() + 1;
             return new built(getParentsForLevel(l), l);
+        }
+    }
+
+    private void consume(List<Unit> units, Queue<Unit> lastTiming) {
+        log.info("Processing next units: {} ", units.size());
+        mx.lock();
+        try {
+            for (Unit u : units) {
+                // Step 1: update candidates with all units waiting on the unit belt
+                update(u);
+            }
+            while (ready()) {
+                log.info("Ready, creating units");
+                // Step 2: get parents and level using current strategy
+                var built = buildParents();
+                // Step 3: create unit
+                createUnit(built.parents, built.level, getData(built.level, lastTiming));
+            }
+        } catch (Throwable e) {
+            log.error("Error in processing units", e);
+        } finally {
+            mx.unlock();
         }
     }
 

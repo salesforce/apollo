@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.Exchanger;
-import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -69,8 +68,8 @@ public class Ethereal {
     // Instead, a fixed seeded WeakThresholdKey is used for the main consensus.
     // NoBeacon should be used for testing purposes only! Returns start and stop
     // functions.
-    public controller noBeacon(Config conf, DataSource ds, SubmissionPublisher<PreBlock> preblockSink,
-                               SubmissionPublisher<PreUnit> syn) {
+    public controller noBeacon(Config conf, DataSource ds, SimpleChannel<PreBlock> preblockSink,
+                               SimpleChannel<PreUnit> syn) {
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         var consensus = consensus(conf, wtkChan, ds, preblockSink, syn);
         return new controller(() -> {
@@ -89,8 +88,8 @@ public class Ethereal {
     // pass the result of the setup phase. Returns two functions that can be used
     // to, respectively, start and stop the whole system. The provided preblock
     // sink gets closed after producing the last preblock.
-    public controller process(Config setupConfig, Config config, DataSource ds,
-                              SubmissionPublisher<PreBlock> preblockSink, SubmissionPublisher<PreUnit> syn) {
+    public controller process(Config setupConfig, Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
+                              SimpleChannel<PreUnit> syn) {
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         controller setup = setup(setupConfig, wtkChan);
         controller consensus = consensus(config, wtkChan, ds, preblockSink, syn);
@@ -107,7 +106,7 @@ public class Ethereal {
     }
 
     private controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 SubmissionPublisher<PreBlock> preblockSink, SubmissionPublisher<PreUnit> syn) {
+                                 SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> syn) {
         Consumer<List<Unit>> makePreblock = units -> {
             preblockSink.submit(Data.toPreBlock(units));
             var timingUnit = units.get(units.size() - 1);
@@ -176,7 +175,7 @@ public class Ethereal {
             }
         };
 
-        SubmissionPublisher<PreUnit> syn = new SubmissionPublisher<>();
+        SimpleChannel<PreUnit> syn = new SimpleChannel<>(1000);
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
         return new controller(() -> ord.start(rsf, syn), () -> ord.stop());
     }

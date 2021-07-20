@@ -34,7 +34,7 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  *
  */
 @SuppressWarnings("unused")
-public interface EpochProofBuilder {
+public interface EpochProofBuilder { 
 
     /**
      * @author hal.hildebrand

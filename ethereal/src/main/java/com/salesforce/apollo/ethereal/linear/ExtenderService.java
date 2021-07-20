@@ -7,11 +7,11 @@
 package com.salesforce.apollo.ethereal.linear;
 
 import java.util.List;
-import java.util.concurrent.SubmissionPublisher;
 
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
+import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -19,7 +19,7 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class ExtenderService {
-    public ExtenderService(Dag dag, RandomSource rs, Config config, SubmissionPublisher<List<Unit>> orderedUnits) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, SimpleChannel<List<Unit>> orderedUnits) {
         // TODO Auto-generated method stub
     }
 

@@ -15,10 +15,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.Flow.Subscriber;
-import java.util.concurrent.Flow.Subscription;
-import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -34,6 +32,7 @@ import com.salesforce.apollo.ethereal.Dag.DagInfo;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.creator.Creator;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
+import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
@@ -78,60 +77,10 @@ public class Orderer {
         }
     }
 
-    /**
-     * A consumer of ordered round of units produced by Extenders and produces
-     * Preblocks based on them. Since Extenders in multiple epochs can supply
-     * ordered rounds simultaneously, handleTimingRounds needs to ensure that
-     * Preblocks are produced in ascending order with respect to epochs. For the
-     * last ordered round of the epoch, the timing unit defining it is sent to the
-     * creator (to produce signature shares.)
-     */
-    private class OrderedRoundConsumer implements Subscriber<List<Unit>> {
-        private volatile int current;
-        private Subscription subscription;
-
-        @Override
-        public void onComplete() {
-        }
-
-        @Override
-        public void onError(Throwable e) {
-            log.error("Error from producer", e);
-        }
-
-        @Override
-        public void onNext(List<Unit> round) {
-            try {
-                var timingUnit = round.get(round.size() - 1);
-                var epoch = timingUnit.epoch();
-
-                if (timingUnit.level() == config.lastLevel()) {
-                    lastTiming.add(timingUnit);
-                    finishEpoch(epoch);
-                }
-                if (epoch > current && timingUnit.level() <= config.lastLevel()) {
-                    toPreblock.accept(round);
-                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
-                }
-                current = epoch;
-            } finally {
-                subscription.request(1);
-            }
-        }
-
-        @Override
-        public void onSubscribe(Subscription subscription) {
-            current = 0;
-            this.subscription = subscription;
-            subscription.request(1);
-        }
-
-    }
-
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
     public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SimpleChannel<Unit> unitBelt,
-                                 SubmissionPublisher<List<Unit>> orderedUnits, Clock clock) {
+                                 SimpleChannel<List<Unit>> orderedUnits, Clock clock) {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
@@ -146,24 +95,24 @@ public class Orderer {
         return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs, new AtomicBoolean(true));
     }
 
-    private final Clock                           clock;
-    private final Config                          config;
-    private Creator                               creator;
-    private epoch                                 current;
-    private final DataSource                      ds;
-    private final Queue<Unit>                     lastTiming;
-    private final ReadWriteLock                   mx = new ReentrantReadWriteLock();
-    private final SubmissionPublisher<List<Unit>> orderedUnits;
-    private epoch                                 previous;
-    private RandomSourceFactory                   rsf;
-    private final Consumer<List<Unit>>            toPreblock;
-    private final SimpleChannel<Unit>             unitBelt;
+    private final Clock                     clock;
+    private final Config                    config;
+    private Creator                         creator;
+    private epoch                           current;
+    private final DataSource                ds;
+    private final Queue<Unit>               lastTiming;
+    private final ReadWriteLock             mx = new ReentrantReadWriteLock();
+    private final SimpleChannel<List<Unit>> orderedUnits;
+    private epoch                           previous;
+    private RandomSourceFactory             rsf;
+    private final Consumer<List<Unit>>      toPreblock;
+    private final SimpleChannel<Unit>       unitBelt;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new BlockingArrayQueue<>();
-        this.orderedUnits = new SubmissionPublisher<>(config.executor(), conf.epochLength());
+        this.orderedUnits = new SimpleChannel<>(conf.epochLength());
         this.toPreblock = toPreblock;
         this.unitBelt = new SimpleChannel<>(conf.epochLength() * conf.nProc());
         this.clock = clock;
@@ -253,7 +202,7 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf, SubmissionPublisher<PreUnit> synchronizer) {
+    public void start(RandomSourceFactory rsf, SimpleChannel<PreUnit> synchronizer) {
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             insert(u);
@@ -266,7 +215,36 @@ public class Orderer {
         creator.creatUnits(unitBelt, lastTiming);
 
         // Start preblock builder
-        orderedUnits.subscribe(new OrderedRoundConsumer());
+        orderedUnits.consume(ordered -> handleTimingRounds());
+
+    }
+
+    /**
+     * handleTimingRounds waits for ordered round of units produced by Extenders and
+     * produces Preblocks based on them. Since Extenders in multiple epochs can
+     * supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
+     * Preblocks are produced in ascending order with respect to epochs. For the
+     * last ordered round of the epoch, the timing unit defining it is sent to the
+     * creator (to produce signature shares.)
+     */
+    private Consumer<List<List<Unit>>> handleTimingRounds() {
+        AtomicInteger current = new AtomicInteger(0);
+        return ordered -> {
+            for (var round : ordered) {
+                var timingUnit = round.get(round.size() - 1);
+                var epoch = timingUnit.epoch();
+
+                if (timingUnit.level() == config.lastLevel()) {
+                    lastTiming.add(timingUnit);
+                    finishEpoch(epoch);
+                }
+                if (epoch > current.get() && timingUnit.level() <= config.lastLevel()) {
+                    toPreblock.accept(round);
+                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+                }
+                current.set(epoch);
+            }
+        };
     }
 
     public void stop() {
@@ -413,7 +391,7 @@ public class Orderer {
         var e = getEpoch(epochId);
         var epoch = e.epoch;
         if (e.newer) {
-            if (creator.epochProof(pu, config.WTKey())) {
+            if (EpochProofBuilder.epochProof(pu, config.WTKey())) {
                 epoch = newEpoch(epochId);
             } else {
 //                ord.syncer.RequestGossip(source)
