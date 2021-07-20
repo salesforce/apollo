@@ -221,7 +221,7 @@ public class Orderer {
     }
 
     /**
-     * handleTimingRounds waits for ordered round of units produced by Extenders and
+     * Waits for ordered round of units produced by Extenders and
      * produces Preblocks based on them. Since Extenders in multiple epochs can
      * supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
      * Preblocks are produced in ascending order with respect to epochs. For the

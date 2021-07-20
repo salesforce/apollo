@@ -75,38 +75,19 @@ public class SimpleChannel<T> implements Closeable {
     }
 
     public void consumeEach(Consumer<T> consumer) {
-        if (closed.get()) {
-            throw new IllegalStateException("Channel already closed");
-        }
-        if (handler != null) {
-            throw new IllegalStateException("Handler already established");
-        }
-        handler = new Thread(() -> {
-            while (!closed.get()) {
-                try {
-                    var polled = queue.poll(1, TimeUnit.SECONDS);
-                    if (polled != null) {
-                        try {
-                            consumer.accept(polled);
-                        } catch (Throwable e) {
-                            log.error("Error in consumer", e);
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    return; // Normal exit
-                }
-
+        consume(elements -> {
+            for (T element : elements) {
+                consumer.accept(element);
             }
-        }, "Consumer");
-        handler.start();
-    }
-
-    public int size() {
-        return queue.size();
+        });
     }
 
     public boolean offer(T element) {
         return queue.offer(element);
+    }
+
+    public int size() {
+        return queue.size();
     }
 
     public void submit(T element) {
