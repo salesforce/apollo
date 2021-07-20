@@ -20,21 +20,24 @@
 
 package jcsp.lang;
 
-    /**
- * Defines an interface for a connection shared by multiple clients and multiple servers.
+/**
+ * Defines an interface for a connection shared by multiple clients and multiple
+ * servers.
  *
  * @author Quickstone Technologies Limited
  */
-public interface Any2AnyConnection extends ConnectionWithSharedAltingClient,
-            ConnectionWithSharedAltingServer
-{
+public interface Any2AnyConnection extends ConnectionWithSharedAltingClient, ConnectionWithSharedAltingServer {
     /**
-     * Returns a reference to the client end of the connection for use by the client processes.
+     * Returns a reference to the client end of the connection for use by the client
+     * processes.
      */
+    @Override
     public SharedAltingConnectionClient client();
 
     /**
-     * Returns a reference to the server end of the connection for use by the server processes.
+     * Returns a reference to the server end of the connection for use by the server
+     * processes.
      */
+    @Override
     public SharedConnectionServer server();
 }

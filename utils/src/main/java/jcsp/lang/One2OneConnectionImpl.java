@@ -23,65 +23,57 @@ package jcsp.lang;
 import jcsp.util.Buffer;
 
 /**
- * This class is an implementation of <code>One2OneConnection</code>.
- * Each end is safe to be used by one thread at a time.
+ * This class is an implementation of <code>One2OneConnection</code>. Each end
+ * is safe to be used by one thread at a time.
  *
  * @author Quickstone Technologies Limited
  */
-class One2OneConnectionImpl extends AbstractConnectionImpl implements One2OneConnection
-{
+class One2OneConnectionImpl extends AbstractConnectionImpl implements One2OneConnection {
     private AltingConnectionClient client;
     private AltingConnectionServer server;
 
     /**
-     * Initializes all the attributes to necessary values.
-     * Channels are created using the static factory in the
-     * <code>ChannelServer</code> inteface.
+     * Initializes all the attributes to necessary values. Channels are created
+     * using the static factory in the <code>ChannelServer</code> inteface.
      *
      * Constructor for One2OneConnectionImpl.
      */
-    public One2OneConnectionImpl()
-    {
+    public One2OneConnectionImpl() {
         super();
         One2OneChannel chanToServer = ConnectionServer.FACTORY.createOne2One(new Buffer(1));
         One2OneChannel chanFromServer = ConnectionServer.FACTORY.createOne2One(new Buffer(1));
 
-        //create the client and server objects
-        client = new AltingConnectionClientImpl(chanFromServer.in(),
-                                                chanToServer.out(),
-                                                chanToServer.out(),
+        // create the client and server objects
+        client = new AltingConnectionClientImpl(chanFromServer.in(), chanToServer.out(), chanToServer.out(),
                                                 chanFromServer.out());
-        server = new AltingConnectionServerImpl(chanToServer.in(),
-                                                chanToServer.in());
+        server = new AltingConnectionServerImpl(chanToServer.in(), chanToServer.in());
     }
 
     /**
-     * Returns the <code>AltingConnectionClient</code> that can
-     * be used by a single process at any instance.
+     * Returns the <code>AltingConnectionClient</code> that can be used by a single
+     * process at any instance.
      *
-     * This method will always return the same
-     * <code>AltingConnectionClient</code> object.
-     * <code>One2OneConnection</code> is only intendended to have two ends.
+     * This method will always return the same <code>AltingConnectionClient</code>
+     * object. <code>One2OneConnection</code> is only intendended to have two ends.
      *
      * @return the <code>AltingConnectionClient</code> object.
      */
-    public AltingConnectionClient client()
-    {
+    @Override
+    public AltingConnectionClient client() {
         return client;
     }
 
     /**
-     * Returns the <code>AltingConnectionServer</code> that can
-     * be used by a single process at any instance.
+     * Returns the <code>AltingConnectionServer</code> that can be used by a single
+     * process at any instance.
      *
-     * This method will always return the same
-     * <code>AltingConnectionServer</code> object.
-     * <code>One2OneConnection</code> is only intendended to have two ends.
+     * This method will always return the same <code>AltingConnectionServer</code>
+     * object. <code>One2OneConnection</code> is only intendended to have two ends.
      *
      * @return the <code>AltingConnectionServer</code> object.
      */
-    public AltingConnectionServer server()
-    {
+    @Override
+    public AltingConnectionServer server() {
         return server;
     }
 }

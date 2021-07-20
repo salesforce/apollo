@@ -20,17 +20,18 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * This class wraps an ALTable channel so that only the reading part is
- * available to the caller.  Writes are impossible unless you subclass
- * this (and use getChannel()) or keep a reference to the original
- * channel.  <p>
+ * available to the caller. Writes are impossible unless you subclass this (and
+ * use getChannel()) or keep a reference to the original channel.
+ * <p>
  *
-// * @deprecated There is no longer any need to use this class, after the 1.1 class reorganisation.
+ * // * @deprecated There is no longer any need to use this class, after the 1.1
+ * class reorganisation.
  *
  * Note that usually you do not need the absolute guarantee that this class
  * provides - you can usually just cast the channel to an AltingChannelInput,
- * which prevents you from <I>accidentally</I> writing to the channel.  This
+ * which prevents you from <I>accidentally</I> writing to the channel. This
  * class mainly exists for use by some of the jcsp.net classes, where the
  * absolute guarantee that you cannot write to it is important.
  *
@@ -38,34 +39,28 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public class AltingChannelInputWrapper<T> extends AltingChannelInput<T>
-{
+public class AltingChannelInputWrapper<T> extends AltingChannelInput<T> {
     /**
-     * Creates a new AltingChannelInputWrapper which wraps the specified
-     * channel.
+     * Creates a new AltingChannelInputWrapper which wraps the specified channel.
      */
-    public AltingChannelInputWrapper(AltingChannelInput<T> channel)
-    {
+    public AltingChannelInputWrapper(AltingChannelInput<T> channel) {
         this.channel = channel;
     }
 
     /**
-     * This constructor does not wrap a channel.
-     * The underlying channel can be set by calling
-     * <code>setChannel(AltingChannelInput)</code>.
+     * This constructor does not wrap a channel. The underlying channel can be set
+     * by calling <code>setChannel(AltingChannelInput)</code>.
      *
      */
-    protected AltingChannelInputWrapper()
-    {
+    protected AltingChannelInputWrapper() {
         this.channel = null;
     }
 
     /**
      * The real channel which this object wraps.
      *
-     * This used to be a final field but this caused problems
-     * when sub-classes wanted to be serializable. Added a
-     * protected mutator.
+     * This used to be a final field but this caused problems when sub-classes
+     * wanted to be serializable. Added a protected mutator.
      */
     private AltingChannelInput<T> channel;
 
@@ -74,8 +69,7 @@ public class AltingChannelInputWrapper<T> extends AltingChannelInput<T>
      *
      * @return The real channel.
      */
-    protected AltingChannelInput<T> getChannel()
-    {
+    protected AltingChannelInput<T> getChannel() {
         return channel;
     }
 
@@ -84,8 +78,7 @@ public class AltingChannelInputWrapper<T> extends AltingChannelInput<T>
      *
      * @param chan the real channel to be used.
      */
-    protected void setChannel(AltingChannelInput<T> chan)
-    {
+    protected void setChannel(AltingChannelInput<T> chan) {
         this.channel = chan;
     }
 
@@ -94,58 +87,56 @@ public class AltingChannelInputWrapper<T> extends AltingChannelInput<T>
      *
      * @return the object read from the channel
      */
-    public T read()
-    {
+    @Override
+    public T read() {
         return channel.read();
     }
-    
+
     /**
      * Begins an extended rendezvous
      * 
      * @see ChannelInput.startRead
      * @return The object read from the channel
      */
-    public T startRead()
-    {
-    	return channel.startRead();
+    @Override
+    public T startRead() {
+        return channel.startRead();
     }
-    
+
     /**
      * Ends an extended rendezvous
      * 
      * @see ChannelInput.endRead
      */
-    public void endRead()
-    {
-    	channel.endRead();
+    @Override
+    public void endRead() {
+        channel.endRead();
     }
-    
-    
 
     /**
      * Returns whether there is data pending on this channel.
      * <P>
-     * <I>Note: if there is, it won't go away until you read it.  But if there
-     * isn't, there may be some by the time you check the result of this method.</I>
+     * <I>Note: if there is, it won't go away until you read it. But if there isn't,
+     * there may be some by the time you check the result of this method.</I>
      *
      * @return state of the channel.
      */
-    public boolean pending()
-    {
+    @Override
+    public boolean pending() {
         return channel.pending();
     }
 
     /**
-     * Returns true if the event is ready.  Otherwise, this enables the guard
-     * for selection and returns false.
+     * Returns true if the event is ready. Otherwise, this enables the guard for
+     * selection and returns false.
      * <P>
      * <I>Note: this method should only be called by the Alternative class</I>
      *
      * @param alt the Alternative class that is controlling the selection
      * @return true if and only if the event is ready
      */
-    boolean enable(Alternative alt)
-    {
+    @Override
+    boolean enable(Alternative alt) {
         return channel.enable(alt);
     }
 
@@ -156,15 +147,14 @@ public class AltingChannelInputWrapper<T> extends AltingChannelInput<T>
      *
      * @return true if and only if the event was ready
      */
-    boolean disable()
-    {
+    @Override
+    boolean disable() {
         return channel.disable();
     }
 
-	public void poison(int strength) 
-	{
-		channel.poison(strength);	
-	}
-    
-    
+    @Override
+    public void poison(int strength) {
+        channel.poison(strength);
+    }
+
 }

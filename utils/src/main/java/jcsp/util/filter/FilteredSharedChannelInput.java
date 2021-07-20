@@ -22,14 +22,14 @@ package jcsp.util.filter;
 
 import jcsp.lang.SharedChannelInput;
 
-    /**
- * Interface for a channel input end that supports filtering and can be shared by multiple processes.
+/**
+ * Interface for a channel input end that supports filtering and can be shared
+ * by multiple processes.
  *
  * @see SharedChannelInput
  * @see ReadFiltered
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredSharedChannelInput<T> extends SharedChannelInput<T>, FilteredChannelInput<T>
-{
+public interface FilteredSharedChannelInput<T> extends SharedChannelInput<T>, FilteredChannelInput<T> {
 }

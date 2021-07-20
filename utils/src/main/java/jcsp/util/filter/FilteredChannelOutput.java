@@ -22,11 +22,10 @@ package jcsp.util.filter;
 
 import jcsp.lang.ChannelOutput;
 
-    /**
+/**
  * Interface for a channel output end that supports write filtering operations.
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredChannelOutput<T> extends ChannelOutput<T>, WriteFiltered
-{
+public interface FilteredChannelOutput<T> extends ChannelOutput<T>, WriteFiltered {
 }

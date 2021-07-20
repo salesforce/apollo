@@ -20,28 +20,26 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * <p>
- * Defines an interface for a server end of a connection that
- * can be shared by multiple concurrent processes.
+ * Defines an interface for a server end of a connection that can be shared by
+ * multiple concurrent processes.
  * </p>
  * <p>
- * <code>SharedConnectionServer</code> objects cannot have
- * their requests ALTed over.
+ * <code>SharedConnectionServer</code> objects cannot have their requests ALTed
+ * over.
  * </p>
  *
  * @author Quickstone Technologies Limited
  */
-public interface SharedConnectionServer<T> extends ConnectionServer<T>
-{
-	/**
-	 * <p>
-	 * Creates a duplicate copy of the connection end.
-	 * </p>
-	 *
-	 * @return the duplicate <code>SharedConnectionServer</code>
-	 * 			object.
-	 *
-	 */
-	public SharedConnectionServer<T> duplicate();
+public interface SharedConnectionServer<T> extends ConnectionServer<T> {
+    /**
+     * <p>
+     * Creates a duplicate copy of the connection end.
+     * </p>
+     *
+     * @return the duplicate <code>SharedConnectionServer</code> object.
+     *
+     */
+    public SharedConnectionServer<T> duplicate();
 }

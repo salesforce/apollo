@@ -20,10 +20,10 @@
 
 package jcsp.lang;
 
-    /**
- * This implements an any-to-any object channel,
- * safe for use by many writers and many readers. Refer to the {@link Any2AnyChannel} interface
- * for more details.
+/**
+ * This implements an any-to-any object channel, safe for use by many writers
+ * and many readers. Refer to the {@link Any2AnyChannel} interface for more
+ * details.
  *
  * @see jcsp.lang.One2OneChannelImpl
  * @see jcsp.lang.Any2OneChannelImpl
@@ -32,9 +32,8 @@ package jcsp.lang;
  * @author P.D. Austin and P.H. Welch
  */
 
-class Any2AnyChannelImpl<T> extends Any2AnyImpl<T>
-{
-	Any2AnyChannelImpl() {
-		super(new One2OneChannelImpl<T>());
-	}
+class Any2AnyChannelImpl<T> extends Any2AnyImpl<T> {
+    Any2AnyChannelImpl() {
+        super(new One2OneChannelImpl<T>());
+    }
 }

@@ -21,15 +21,15 @@
 package jcsp.lang;
 
 /**
- * <TT>TaggedProtocol</TT> is the base class for messages carrying
- * an <I><B>occam2</B></I>-like tagged (<TT>CASE</TT>) protocol over JCSP channels.
+ * <TT>TaggedProtocol</TT> is the base class for messages carrying an
+ * <I><B>occam2</B></I>-like tagged (<TT>CASE</TT>) protocol over JCSP channels.
  * <P>
  * <H2>Example</H2>
- * <H3>Protocol Definition</H3>
- * <TT>SampleProtocol</TT> illustrates one approach to the passing of different
- * information structures across the same JCSP channel.  It corresponds to the tagged
- * (<TT>CASE</TT>) <TT>PROTOCOL</TT> of <B>occam2.1</B>.  The example was invented
- * by Rick Beton (of Roke Manor Research Ltd.):
+ * <H3>Protocol Definition</H3> <TT>SampleProtocol</TT> illustrates one approach
+ * to the passing of different information structures across the same JCSP
+ * channel. It corresponds to the tagged (<TT>CASE</TT>) <TT>PROTOCOL</TT> of
+ * <B>occam2.1</B>. The example was invented by Rick Beton (of Roke Manor
+ * Research Ltd.):
  *
  * <PRE>
  * PROTOCOL String IS BYTE::[]BYTE:  -- slight licence here!
@@ -49,8 +49,8 @@ package jcsp.lang;
  * :
  * </PRE>
  *
- * <A NAME="SampleProtocol">
- * This corresponds to the (JCSP) <B>Java</B> declaration:
+ * <A NAME="SampleProtocol"> This corresponds to the (JCSP) <B>Java</B>
+ * declaration:
  *
  * <PRE>
  * public class SampleProtocol {
@@ -101,17 +101,19 @@ package jcsp.lang;
  * <I></I>
  * }
  * </PRE>
- * The emphasis in the above definition is <I>security</I>.  The protocol variants
- * hold only immutable data (whose transmission, therefore, can never lead to race
- * hazards).  Secondly, it is impossible for the user of the protocol to set up
- * an incorrect tag or misinterpret a correct one without raising an exception.
+ * 
+ * The emphasis in the above definition is <I>security</I>. The protocol
+ * variants hold only immutable data (whose transmission, therefore, can never
+ * lead to race hazards). Secondly, it is impossible for the user of the
+ * protocol to set up an incorrect tag or misinterpret a correct one without
+ * raising an exception.
  *
- * <H3>Protocol Use</H3>
- * This example has a simple pair of CSProcesses communicating over a channel
- * using the <TT>SampleProtocol</TT>.
+ * <H3>Protocol Use</H3> This example has a simple pair of CSProcesses
+ * communicating over a channel using the <TT>SampleProtocol</TT>.
  * <P>
- * First, here is the <B>occam2.1</B> version.  The network is defined
- * (and started) by:
+ * First, here is the <B>occam2.1</B> version. The network is defined (and
+ * started) by:
+ * 
  * <PRE>
  * CHAN OF SampleProtocol c:
  * <I></I>
@@ -119,7 +121,9 @@ package jcsp.lang;
  *   Producer (c)
  *   Consumer (c, screen)
  * </PRE>
+ * 
  * where:
+ * 
  * <PRE>
  * PROC Producer (CHAN OF SampleProtocol out)
  * <I></I>
@@ -137,7 +141,9 @@ package jcsp.lang;
  * <I></I>
  * :
  * </PRE>
+ * 
  * and where:
+ * 
  * <PRE>
  * PROC Consumer (CHAN OF SampleProtocol in, CHAN OF BYTE screen)
  * <I></I>
@@ -176,8 +182,9 @@ package jcsp.lang;
  * :
  * </PRE>
  * <P>
- * Here is the (JCSP) <B>Java</B> version.  The network is defined
- * (and started) by:
+ * Here is the (JCSP) <B>Java</B> version. The network is defined (and started)
+ * by:
+ * 
  * <PRE>
  * final One2OneChannel c = Channel.one2one ();
  * <I></I>
@@ -188,8 +195,9 @@ package jcsp.lang;
  *    }
  * ).run ();
  * </PRE>
- * <A NAME="Producer">
- * where:
+ * 
+ * <A NAME="Producer"> where:
+ * 
  * <PRE>
  * import jcsp.lang.*;
  * <I></I>
@@ -215,8 +223,9 @@ package jcsp.lang;
  * <I></I>
  * }
  * </PRE>
- * <A NAME="Consumer">
- * and where:
+ * 
+ * <A NAME="Consumer"> and where:
+ * 
  * <PRE>
  * import jcsp.lang.*;
  * <I></I>
@@ -268,25 +277,23 @@ package jcsp.lang;
  * @author P.H. Welch
  */
 
-public class TaggedProtocol
-{
+public class TaggedProtocol {
     /**
      * This public tag is used by the receiving process to determine which variant
-     * of a tagged protocol has been received.
-     * See the above <A HREF="#Consumer">Consumer</A> example (and the definition of
-     * its input channel's <A HREF="#SampleProtocol">SampleProtocol</A>).
+     * of a tagged protocol has been received. See the above
+     * <A HREF="#Consumer">Consumer</A> example (and the definition of its input
+     * channel's <A HREF="#SampleProtocol">SampleProtocol</A>).
      */
     public final int tag;
 
     /**
-     * This super-constructor is invoked by the extending sub-class constructor.
-     * It should be passed a tag that is unique for the tagged protocol for which
-     * that sub-class is one variant.
-     * See the above <A HREF="#SampleProtocol">SampleProtocol</A> (and its use
-     * in <A HREF="#Producer">Producer</A> and <A HREF="#Consumer">Consumer</A>).
+     * This super-constructor is invoked by the extending sub-class constructor. It
+     * should be passed a tag that is unique for the tagged protocol for which that
+     * sub-class is one variant. See the above
+     * <A HREF="#SampleProtocol">SampleProtocol</A> (and its use in
+     * <A HREF="#Producer">Producer</A> and <A HREF="#Consumer">Consumer</A>).
      */
-    public TaggedProtocol(final int tag)
-    {
+    public TaggedProtocol(final int tag) {
         this.tag = tag;
     }
 }

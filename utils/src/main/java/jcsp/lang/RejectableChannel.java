@@ -20,18 +20,20 @@
 
 package jcsp.lang;
 
-    /**
- * Defines an interface for a channel that allows readers to either accept (<code>read</code>) or
- * <code>reject</code> data offered by the writer.
+/**
+ * Defines an interface for a channel that allows readers to either accept
+ * (<code>read</code>) or <code>reject</code> data offered by the writer.
  *
  * @author Quickstone Technologies Limited
  * 
- * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}.  It remains only because it is used by some of the networking features.
+ * @deprecated This channel is superceded by the poison mechanisms, please see
+ *             {@link PoisonException}. It remains only because it is used by
+ *             some of the networking features.
  */
 
-public interface RejectableChannel<T> 
-{
-	public RejectableChannelInput<T> in();
-	
-	public RejectableChannelOutput<T> out();
+@Deprecated
+public interface RejectableChannel<T> {
+    public RejectableChannelInput<T> in();
+
+    public RejectableChannelOutput<T> out();
 }

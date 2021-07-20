@@ -20,12 +20,11 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * This interface is just
  *
  * @author Quickstone Technologies Limited
  */
-interface ConnectionWithSharedAltingClient
-{
+interface ConnectionWithSharedAltingClient {
     public SharedAltingConnectionClient client();
 }

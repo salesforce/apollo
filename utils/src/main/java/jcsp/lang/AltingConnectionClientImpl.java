@@ -20,19 +20,18 @@
 
 package jcsp.lang;
 
-    /**
- * This class does not need to be used by standard JCSP users. It is exposed so that the connection
- * mechanism can be extended for custom connections.
+/**
+ * This class does not need to be used by standard JCSP users. It is exposed so
+ * that the connection mechanism can be extended for custom connections.
  *
  * @author Quickstone Technologies Limited
  */
-public class AltingConnectionClientImpl extends AltingConnectionClient
-{
+public class AltingConnectionClientImpl extends AltingConnectionClient {
     private int currentClientState;
 
-    private static final int CLIENT_STATE_CLOSED = 1;
+    private static final int CLIENT_STATE_CLOSED   = 1;
     private static final int CLIENT_STATE_MADE_REQ = 2;
-    private static final int CLIENT_STATE_OPEN = 3;
+    private static final int CLIENT_STATE_OPEN     = 3;
 
     private AltingChannelInput fromServer;
 
@@ -40,18 +39,16 @@ public class AltingConnectionClientImpl extends AltingConnectionClient
     private ChannelOutput reqToServer;
     private ChannelOutput backToClient;
 
-    private ConnectionClientMessage msg = new ConnectionClientMessage();
+    private ConnectionClientMessage     msg     = new ConnectionClientMessage();
     private ConnectionClientOpenMessage msgOpen = new ConnectionClientOpenMessage();
 
     /**
-     * Constructs a new instance. This constructor must be called by a subclass which is responsible
-     * for creating the channels used by the connection and must pass them into this constructor.
+     * Constructs a new instance. This constructor must be called by a subclass
+     * which is responsible for creating the channels used by the connection and
+     * must pass them into this constructor.
      */
-    protected AltingConnectionClientImpl(AltingChannelInput fromServer,
-                                         ChannelOutput openToServer,
-                                         ChannelOutput reqToServer,
-                                         ChannelOutput backToClient)
-    {
+    protected AltingConnectionClientImpl(AltingChannelInput fromServer, ChannelOutput openToServer,
+                                         ChannelOutput reqToServer, ChannelOutput backToClient) {
         super(fromServer);
         this.fromServer = fromServer;
         this.openToServer = openToServer;
@@ -61,26 +58,22 @@ public class AltingConnectionClientImpl extends AltingConnectionClient
     }
 
     /**
-     * Sends some data over the connection to server once the
-     * connection has been opened.
+     * Sends some data over the connection to server once the connection has been
+     * opened.
      *
-     * @param data	the <code>Object</code> to send to the server.
+     * @param data the <code>Object</code> to send to the server.
      */
-    public void request(Object data) throws IllegalStateException
-    {
+    @Override
+    public void request(Object data) throws IllegalStateException {
         if (currentClientState == CLIENT_STATE_MADE_REQ)
-            throw new IllegalStateException
-                    ("Cannot call request(Object) twice without calling reply().");
-        //this will claim the use of the client
-        if (currentClientState == CLIENT_STATE_CLOSED)
-        {
+            throw new IllegalStateException("Cannot call request(Object) twice without calling reply().");
+        // this will claim the use of the client
+        if (currentClientState == CLIENT_STATE_CLOSED) {
             claim();
             msgOpen.data = data;
             msgOpen.replyChannel = backToClient;
             openToServer.write(msgOpen);
-        }
-        else
-        {
+        } else {
             msg.data = data;
             reqToServer.write(msg);
         }
@@ -88,24 +81,22 @@ public class AltingConnectionClientImpl extends AltingConnectionClient
     }
 
     /**
-     * Receives some data back from the server after
-     * <code>request(Object)</code> has been called.
+     * Receives some data back from the server after <code>request(Object)</code>
+     * has been called.
      *
      * @return the <code>Object</code> sent from the server.
      */
-    public Object reply() throws IllegalStateException
-    {
+    @Override
+    public Object reply() throws IllegalStateException {
         if (currentClientState != CLIENT_STATE_MADE_REQ)
-            throw new IllegalStateException
-                    ("Cannot call reply() on a ConnectionClient that is not waiting for a reply.");
-        ConnectionServerMessage serverReply = (ConnectionServerMessage)fromServer.read();
+            throw new IllegalStateException("Cannot call reply() on a ConnectionClient that is not waiting for a reply.");
+        ConnectionServerMessage serverReply = (ConnectionServerMessage) fromServer.read();
 
-        //check whether the server closed the connection
+        // check whether the server closed the connection
         currentClientState = serverReply.open ? CLIENT_STATE_OPEN : CLIENT_STATE_CLOSED;
         if (serverReply.open)
             currentClientState = CLIENT_STATE_OPEN;
-        else
-        {
+        else {
             currentClientState = CLIENT_STATE_CLOSED;
             release();
         }
@@ -113,38 +104,34 @@ public class AltingConnectionClientImpl extends AltingConnectionClient
     }
 
     /**
-     * Returns whether the server has kept its end of the Connection open.
-     * This should only be called after a call to <code>reply()</code> and
-     * before any other Connection method is called.
+     * Returns whether the server has kept its end of the Connection open. This
+     * should only be called after a call to <code>reply()</code> and before any
+     * other Connection method is called.
      *
-     * @return <code>true</code> iff the server has kept the connection
-     *          open.
+     * @return <code>true</code> iff the server has kept the connection open.
      */
-    public boolean isOpen() throws IllegalStateException
-    {
+    @Override
+    public boolean isOpen() throws IllegalStateException {
         if (currentClientState == CLIENT_STATE_MADE_REQ)
-            throw new IllegalStateException
-                    ("Can only call isOpen() just after a reply has been received from the server.");
+            throw new IllegalStateException("Can only call isOpen() just after a reply has been received from the server.");
         return currentClientState == CLIENT_STATE_OPEN;
     }
 
     /**
-     * This claims a lock on the client.
-     * This implementation does nothing as instances of this
-     * class are only meant to be used with One2?Connection objects.
+     * This claims a lock on the client. This implementation does nothing as
+     * instances of this class are only meant to be used with One2?Connection
+     * objects.
      *
      */
-    protected void claim()
-    {
+    protected void claim() {
     }
 
     /**
-     * This releases a lock on the client.
-     * This implementation does nothing as instances of this
-     * class are only meant to be used with One2?Connection objects.
+     * This releases a lock on the client. This implementation does nothing as
+     * instances of this class are only meant to be used with One2?Connection
+     * objects.
      *
      */
-    protected void release()
-    {
+    protected void release() {
     }
 }

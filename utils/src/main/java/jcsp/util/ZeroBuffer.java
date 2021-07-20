@@ -25,12 +25,12 @@ import java.io.Serializable;
 //{{{  javadoc
 /**
  * This is used to create a zero-buffered object channel that never loses data.
- * <H2>Description</H2>
- * <TT>ZeroBuffer</TT> is an implementation of <TT>ChannelDataStore</TT> that yields
- * the standard <I><B>CSP</B></I> semantics for a channel -- that is zero buffered with
- * direct synchronisation between reader and writer.  Unless specified otherwise,
- * this is the default behaviour for channels.
- * See the <tt>static</tt> construction methods of {@link jcsp.lang.Channel}
+ * <H2>Description</H2> <TT>ZeroBuffer</TT> is an implementation of
+ * <TT>ChannelDataStore</TT> that yields the standard <I><B>CSP</B></I>
+ * semantics for a channel -- that is zero buffered with direct synchronisation
+ * between reader and writer. Unless specified otherwise, this is the default
+ * behaviour for channels. See the <tt>static</tt> construction methods of
+ * {@link jcsp.lang.Channel}
  * ({@link jcsp.lang.Channel#one2one(jcsp.util.ChannelDataStore)} etc.).
  * <P>
  * The <TT>getState</TT> method will return <TT>FULL</TT> if there is an output
@@ -50,11 +50,10 @@ import java.io.Serializable;
  */
 //}}}
 
-public class ZeroBuffer<T> implements ChannelDataStore<T>, Serializable
-{
+public class ZeroBuffer<T> implements ChannelDataStore<T>, Serializable {
     private static final long serialVersionUID = 1L;
     /** The current state */
-    private int state = EMPTY;
+    private int               state            = EMPTY;
 
     /** The Object */
     private T value;
@@ -62,47 +61,52 @@ public class ZeroBuffer<T> implements ChannelDataStore<T>, Serializable
     /**
      * Returns the <TT>Object</TT> from the <TT>ZeroBuffer</TT>.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the <TT>Object</TT> from the <TT>ZeroBuffer</TT>
      */
-    public T get()
-    {
+    @Override
+    public T get() {
         state = EMPTY;
         T o = value;
         value = null;
         return o;
     }
-    
+
     /**
-     * Begins an extended rendezvous - simply returns the next object in the buffer.  
+     * Begins an extended rendezvous - simply returns the next object in the buffer.
      * This function does not remove the object.
      * 
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      * 
-     * @return The object in the buffer. 
+     * @return The object in the buffer.
      */
+    @Override
     public T startGet() {
-      return value;     
+        return value;
     }
-    
+
     /**
      * Ends the extended rendezvous by clearing the buffer.
      */
+    @Override
     public void endGet() {
-      value = null;
-      state = EMPTY;      
+        value = null;
+        state = EMPTY;
     }
 
     /**
      * Puts a new <TT>Object</TT> into the <TT>ZeroBuffer</TT>.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>FULL</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>FULL</TT>.
      *
      * @param value the Object to put into the ZeroBuffer
      */
-    public void put(T value)
-    {
+    @Override
+    public void put(T value) {
         state = FULL;
         this.value = value;
     }
@@ -110,31 +114,31 @@ public class ZeroBuffer<T> implements ChannelDataStore<T>, Serializable
     /**
      * Returns the current state of the <TT>ZeroBuffer</TT>.
      *
-     * @return the current state of the <TT>ZeroBuffer</TT> (<TT>EMPTY</TT>
-     * or <TT>FULL</TT>)
+     * @return the current state of the <TT>ZeroBuffer</TT> (<TT>EMPTY</TT> or
+     *         <TT>FULL</TT>)
      */
-    public int getState()
-    {
+    @Override
+    public int getState() {
         return state;
     }
 
     /**
-     * Returns a new (and <TT>EMPTY</TT>) <TT>ZeroBuffer</TT> with the same
-     * creation parameters as this one.
+     * Returns a new (and <TT>EMPTY</TT>) <TT>ZeroBuffer</TT> with the same creation
+     * parameters as this one.
      * <P>
      * <I>Note: Only the size and structure of the </I><TT>ZeroBuffer</TT><I> is
      * cloned, not any stored data.</I>
      *
      * @return the cloned instance of this <TT>ZeroBuffer</TT>.
      */
-    public ZeroBuffer<T> clone()
-    {
+    @Override
+    public ZeroBuffer<T> clone() {
         return new ZeroBuffer<T>();
     }
-    
-    public void removeAll()
-    {
-    	state = EMPTY;
-    	value = null;
+
+    @Override
+    public void removeAll() {
+        state = EMPTY;
+        value = null;
     }
 }

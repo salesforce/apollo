@@ -20,25 +20,27 @@
 
 package jcsp.lang;
 
-    class SharedChannelOutputImpl<T> implements SharedChannelOutput<T> {
-	
-	private ChannelInternals<T> channel;
-	private int immunity;
-	
-	SharedChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
+class SharedChannelOutputImpl<T> implements SharedChannelOutput<T> {
 
-	public void write(T object) {
-		channel.write(object);
+    private ChannelInternals<T> channel;
+    private int                 immunity;
 
-	}
+    SharedChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.writerPoison(strength);
-		}
-	}
+    @Override
+    public void write(T object) {
+        channel.write(object);
+
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.writerPoison(strength);
+        }
+    }
 
 }

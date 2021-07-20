@@ -20,15 +20,16 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * Defines an interface for a factory that can create arrays of channels.
  *
  * @author Quickstone Technologies Limited
  * 
- * @deprecated These channel factories are deprecated in favour of the new one2one() methods in the Channel class.
+ * @deprecated These channel factories are deprecated in favour of the new
+ *             one2one() methods in the Channel class.
  */
-public interface ChannelArrayFactory
-{
+@Deprecated
+public interface ChannelArrayFactory {
     /**
      * Creates a populated array of <code>n</code> <code>One2One</code> channels.
      *

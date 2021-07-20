@@ -20,16 +20,16 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * <p>
- * Implements a client end of a Connection which can have multiple
- * client processes.
+ * Implements a client end of a Connection which can have multiple client
+ * processes.
  * </p>
  * <p>
- * This object cannot itself be shared between concurrent processes
- * but duplicate objects can be generated that can be used by
- * multiple concurrent processes. This can be achieved using
- * the <code>{@link #duplicate()}</code> method.
+ * This object cannot itself be shared between concurrent processes but
+ * duplicate objects can be generated that can be used by multiple concurrent
+ * processes. This can be achieved using the <code>{@link #duplicate()}</code>
+ * method.
  * </p>
  * <p>
  * The reply from the server can be ALTed over.
@@ -37,58 +37,49 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public class SharedAltingConnectionClient 
-        extends AltingConnectionClientImpl
-        implements SharedConnectionClient 
-{
-    private ChannelInput synchIn;
-    private ChannelOutput synchOut;
+public class SharedAltingConnectionClient extends AltingConnectionClientImpl implements SharedConnectionClient {
+    private ChannelInput                     synchIn;
+    private ChannelOutput                    synchOut;
     private ConnectionWithSharedAltingClient parent;
 
-    protected SharedAltingConnectionClient(AltingChannelInput fromServer,
-                                           ChannelInput synchIn,
-                                           ChannelOutput openToServer,
-                                           ChannelOutput reqToServer,
-                                           SharedChannelOutput synchOut,
-                                           ChannelOutput backToClient,
-                                           ConnectionWithSharedAltingClient
-                                           parent)
-    {
+    protected SharedAltingConnectionClient(AltingChannelInput fromServer, ChannelInput synchIn,
+                                           ChannelOutput openToServer, ChannelOutput reqToServer,
+                                           SharedChannelOutput synchOut, ChannelOutput backToClient,
+                                           ConnectionWithSharedAltingClient parent) {
         super(fromServer, openToServer, reqToServer, backToClient);
         this.synchIn = synchIn;
         this.synchOut = synchOut;
         this.parent = parent;
     }
 
-    protected final void claim()
-    {
+    @Override
+    protected final void claim() {
         synchOut.write(null);
     }
 
-    protected final void release()
-    {
+    @Override
+    protected final void release() {
         synchIn.read();
     }
 
     /**
      * <p>
-     * Returns a <code>SharedConnectionClient</code> object that is
-     * a duplicate of the object on which this method is called.
+     * Returns a <code>SharedConnectionClient</code> object that is a duplicate of
+     * the object on which this method is called.
      * </p>
      * <p>
      * This allows a process using a <code>SharedAltingConnectionClient</code>
-     * object to pass references to the connection client to multiple
-     * processes.
+     * object to pass references to the connection client to multiple processes.
      * </p>
      * <p>
-     * The object returned can be cast into a
-     * <code>SharedConnectionClient</code>  object.
+     * The object returned can be cast into a <code>SharedConnectionClient</code>
+     * object.
      * </p>
      *
-     * @return  a duplicate <code>SharedAltingConnectionClient</code> object.
+     * @return a duplicate <code>SharedAltingConnectionClient</code> object.
      */
-    public SharedConnectionClient duplicate()
-    {
-        return ((ConnectionWithSharedAltingClient) parent).client();
+    @Override
+    public SharedConnectionClient duplicate() {
+        return parent.client();
     }
 }

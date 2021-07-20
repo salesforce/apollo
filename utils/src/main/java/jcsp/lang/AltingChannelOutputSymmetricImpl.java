@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -21,46 +20,48 @@
 
 package jcsp.lang;
 
-  class AltingChannelOutputSymmetricImpl<T> extends AltingChannelOutput<T>
-  implements MultiwaySynchronisation {
+class AltingChannelOutputSymmetricImpl<T> extends AltingChannelOutput<T> implements MultiwaySynchronisation {
 
-  private final AltingBarrier ab;
+    private final AltingBarrier ab;
 
-  private final ChannelOutput<T> out;
+    private final ChannelOutput<T> out;
 
-  private boolean syncDone = false;
-  
-  public AltingChannelOutputSymmetricImpl (
-          AltingBarrier ab, ChannelOutput<T> out) {
-    this.ab = ab;
-    this.out = out;
-  }
+    private boolean syncDone = false;
 
-  boolean enable (Alternative alt) {
-    syncDone = ab.enable (alt);
-    return syncDone;
-  }
+    public AltingChannelOutputSymmetricImpl(AltingBarrier ab, ChannelOutput<T> out) {
+        this.ab = ab;
+        this.out = out;
+    }
 
-  boolean disable () {
-    syncDone = ab.disable ();
-    return syncDone;
-  }
+    @Override
+    boolean enable(Alternative alt) {
+        syncDone = ab.enable(alt);
+        return syncDone;
+    }
 
-  public void write (T o) {
-    if (!syncDone) ab.sync ();
-    syncDone = false;
-    out.write (o);
-  }
+    @Override
+    boolean disable() {
+        syncDone = ab.disable();
+        return syncDone;
+    }
 
-  public boolean pending () {
-    syncDone = ab.poll (10);
-    return syncDone;
-  }
+    @Override
+    public void write(T o) {
+        if (!syncDone)
+            ab.sync();
+        syncDone = false;
+        out.write(o);
+    }
 
-  public void poison(int strength) {
-	out.poison(strength);
-  }
-  
-  
+    @Override
+    public boolean pending() {
+        syncDone = ab.poll(10);
+        return syncDone;
+    }
+
+    @Override
+    public void poison(int strength) {
+        out.poison(strength);
+    }
 
 }

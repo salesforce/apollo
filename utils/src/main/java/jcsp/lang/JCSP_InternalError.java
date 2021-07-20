@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -23,10 +22,11 @@ package jcsp.lang;
 
 //{{{  javadoc
 /**
- * This is thrown by an inconsistency detected in the internal structures of JCSP.
+ * This is thrown by an inconsistency detected in the internal structures of
+ * JCSP.
  *
- * <H2>Description</H2>
- * Please report the circumstances to jcsp-team@kent.ac.uk - thanks!
+ * <H2>Description</H2> Please report the circumstances to jcsp-team@kent.ac.uk
+ * - thanks!
  *
  * @author P.H. Welch
  */
@@ -35,10 +35,8 @@ package jcsp.lang;
 public class JCSP_InternalError extends Error {
     private static final long serialVersionUID = 1L;
 
-  public JCSP_InternalError (String s) {
-    super (
-      s +  "\n*** Please report the circumstances to jcsp-team@kent.ac.uk - thanks!"
-    );
-  }
+    public JCSP_InternalError(String s) {
+        super(s + "\n*** Please report the circumstances to jcsp-team@kent.ac.uk - thanks!");
+    }
 
 }

@@ -20,7 +20,7 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * This is the same as {@link ChannelOutputInt} except that it is guaranteed
  * safe to pass on to more than one internal process for parallel writing.
  * <p>
@@ -29,6 +29,5 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public interface SharedChannelOutputInt extends ChannelOutputInt
-{
+public interface SharedChannelOutputInt extends ChannelOutputInt {
 }

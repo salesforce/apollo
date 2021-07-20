@@ -25,17 +25,17 @@ import java.io.Serializable;
 /**
  * This is used to create a buffered object channel that always accepts and
  * never loses any input.
- * <H2>Description</H2>
- * <TT>InfiniteBuffer</TT> is an implementation of <TT>ChannelDataStore</TT> that yields
- * a <I>FIFO</I> buffered semantics for a channel.  When empty, the channel blocks readers.
- * However, its capacity is <I>infinite</I> (expanding to whatever is needed so far as
- * the underlying memory system will permit).  So, it <I>never</I> gets full and blocks
- * a writer.
- * See the <tt>static</tt> construction methods of {@link jcsp.lang.Channel}
+ * <H2>Description</H2> <TT>InfiniteBuffer</TT> is an implementation of
+ * <TT>ChannelDataStore</TT> that yields a <I>FIFO</I> buffered semantics for a
+ * channel. When empty, the channel blocks readers. However, its capacity is
+ * <I>infinite</I> (expanding to whatever is needed so far as the underlying
+ * memory system will permit). So, it <I>never</I> gets full and blocks a
+ * writer. See the <tt>static</tt> construction methods of
+ * {@link jcsp.lang.Channel}
  * ({@link jcsp.lang.Channel#one2one(jcsp.util.ChannelDataStore)} etc.).
  * <P>
- * The <TT>getState</TT> method returns <TT>EMPTY</TT> or <TT>NONEMPTYFULL</TT>, but
- * never <TT>FULL</TT>.
+ * The <TT>getState</TT> method returns <TT>EMPTY</TT> or <TT>NONEMPTYFULL</TT>,
+ * but never <TT>FULL</TT>.
  * <P>
  * An initial size for the buffer can be specified during construction.
  *
@@ -49,8 +49,7 @@ import java.io.Serializable;
  * @author P.D. Austin
  */
 
-public class InfiniteBuffer<T> implements ChannelDataStore<T>, Serializable
-{ 
+public class InfiniteBuffer<T> implements ChannelDataStore<T>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /** The default size of the buffer */
@@ -74,81 +73,82 @@ public class InfiniteBuffer<T> implements ChannelDataStore<T>, Serializable
     /**
      * Construct a new <TT>InfiniteBuffer</TT> with the default size (of 8).
      */
-    public InfiniteBuffer()
-    {
+    public InfiniteBuffer() {
         this(DEFAULT_SIZE);
     }
 
     /**
      * Construct a new <TT>InfiniteBuffer</TT> with the specified initial size.
      *
-     * @param initialSize the number of Objects
-     * the <TT>InfiniteBuffer</TT> can initially store.
-     * @throws BufferSizeError if <TT>size</TT> is zero or negative.  Note: no action
-     * should be taken to <TT>try</TT>/<TT>catch</TT> this exception
-     * - application code generating it is in error and needs correcting.
+     * @param initialSize the number of Objects the <TT>InfiniteBuffer</TT> can
+     *                    initially store.
+     * @throws BufferSizeError if <TT>size</TT> is zero or negative. Note: no action
+     *                         should be taken to <TT>try</TT>/<TT>catch</TT> this
+     *                         exception - application code generating it is in
+     *                         error and needs correcting.
      */
     @SuppressWarnings("unchecked")
-    public InfiniteBuffer(int initialSize)
-    {
+    public InfiniteBuffer(int initialSize) {
         if (initialSize <= 0)
-            throw new BufferSizeError
-                    ("\n*** Attempt to create a buffered channel with an initially negative or zero capacity");
+            throw new BufferSizeError("\n*** Attempt to create a buffered channel with an initially negative or zero capacity");
         this.initialSize = initialSize;
         buffer = (T[]) new Object[initialSize];
     }
 
     /**
-     * Returns the oldest <TT>Object</TT> from the <TT>InfiniteBuffer</TT> and removes it.
+     * Returns the oldest <TT>Object</TT> from the <TT>InfiniteBuffer</TT> and
+     * removes it.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the oldest <TT>Object</TT> from the <TT>InfiniteBuffer</TT>
      */
-    public T get()
-    {
+    @Override
+    public T get() {
         T value = buffer[firstIndex];
         buffer[firstIndex] = null;
         firstIndex = (firstIndex + 1) % buffer.length;
         counter--;
         return value;
     }
-    
+
     /**
      * Returns the oldest object from the buffer but does not remove it.
      * 
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the oldest <TT>Object</TT> from the <TT>Buffer</TT>
      */
-    public T startGet()
-    {
-      return buffer[firstIndex];
+    @Override
+    public T startGet() {
+        return buffer[firstIndex];
     }
-    
+
     /**
-     * Removes the oldest object from the buffer.     
+     * Removes the oldest object from the buffer.
      */
-    public void endGet()
-    {
-      buffer[firstIndex] = null;
-      firstIndex = (firstIndex + 1) % buffer.length;
-      counter--;
+    @Override
+    public void endGet() {
+        buffer[firstIndex] = null;
+        firstIndex = (firstIndex + 1) % buffer.length;
+        counter--;
     }
 
     /**
      * Puts a new <TT>Object</TT> into the <TT>InfiniteBuffer</TT>.
      * <P>
-     * <I>Implementation note:</I> if <TT>InfiniteBuffer</TT> is full, a new internal
-     * buffer with double the capacity is constructed and the old data copied across.
+     * <I>Implementation note:</I> if <TT>InfiniteBuffer</TT> is full, a new
+     * internal buffer with double the capacity is constructed and the old data
+     * copied across.
      *
      * @param value the Object to put into the InfiniteBuffer
      */
+    @Override
     @SuppressWarnings("unchecked")
-    public void put(T value)
-    {
-        if (counter == buffer.length)
-        {
+    public void put(T value) {
+        if (counter == buffer.length) {
             T[] temp = buffer;
             buffer = (T[]) new Object[buffer.length * 2];
             System.arraycopy(temp, firstIndex, buffer, 0, temp.length - firstIndex);
@@ -165,10 +165,10 @@ public class InfiniteBuffer<T> implements ChannelDataStore<T>, Serializable
      * Returns the current state of the <TT>InfiniteBuffer</TT>.
      *
      * @return the current state of the <TT>InfiniteBuffer</TT> (<TT>EMPTY</TT> or
-     * <TT>NONEMPTYFULL</TT>)
+     *         <TT>NONEMPTYFULL</TT>)
      */
-    public int getState()
-    {
+    @Override
+    public int getState() {
         if (counter == 0)
             return EMPTY;
         else
@@ -179,25 +179,25 @@ public class InfiniteBuffer<T> implements ChannelDataStore<T>, Serializable
      * Returns a new (and <TT>EMPTY</TT>) <TT>InfiniteBuffer</TT> with the same
      * creation parameters as this one.
      * <P>
-     * <I>Note: Only the initial size and structure of the </I><TT>InfiniteBuffer</TT><I>
-     * is cloned, not any stored data.</I>
+     * <I>Note: Only the initial size and structure of the
+     * </I><TT>InfiniteBuffer</TT><I> is cloned, not any stored data.</I>
      *
      * @return the cloned instance of this <TT>InfiniteBuffer</TT>.
      */
-    public InfiniteBuffer<T> clone()
-    {
+    @Override
+    public InfiniteBuffer<T> clone() {
         return new InfiniteBuffer<T>(initialSize);
     }
-    
-    public void removeAll()
-    {
+
+    @Override
+    public void removeAll() {
         counter = 0;
         firstIndex = 0;
         lastIndex = 0;
-        
-        for (int i = 0;i < buffer.length;i++) {
-        	//Null the objects so they can be garbage collected:
-        	buffer[i] = null;
+
+        for (int i = 0; i < buffer.length; i++) {
+            // Null the objects so they can be garbage collected:
+            buffer[i] = null;
         }
     }
 }

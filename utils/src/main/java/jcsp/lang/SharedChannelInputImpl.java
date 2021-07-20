@@ -20,33 +20,37 @@
 
 package jcsp.lang;
 
-    class SharedChannelInputImpl<T> implements SharedChannelInput<T> {
+class SharedChannelInputImpl<T> implements SharedChannelInput<T> {
 
-	private ChannelInternals<T> channel;
-	private int immunity;
-	
-	SharedChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
-	
-	public void endRead() {
-		channel.endRead();
+    private ChannelInternals<T> channel;
+    private int                 immunity;
 
-	}
+    SharedChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public T read() {
-		return channel.read();
-	}
+    @Override
+    public void endRead() {
+        channel.endRead();
 
-	public T startRead() {
-		return channel.startRead();
-	}
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.readerPoison(strength);
-		}
-	}
+    @Override
+    public T read() {
+        return channel.read();
+    }
+
+    @Override
+    public T startRead() {
+        return channel.startRead();
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.readerPoison(strength);
+        }
+    }
 
 }

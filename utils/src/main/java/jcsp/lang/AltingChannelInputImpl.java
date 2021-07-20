@@ -20,45 +20,51 @@
 
 package jcsp.lang;
 
-    class AltingChannelInputImpl<T> extends AltingChannelInput<T> {
+class AltingChannelInputImpl<T> extends AltingChannelInput<T> {
 
-	private ChannelInternals<T> channel;
-	private int immunity;
-	
-	AltingChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
-	
-	
-	public boolean pending() {
-		return channel.readerPending();
-	}
-	
-	boolean disable() {
-		return channel.readerDisable();
-	}
+    private ChannelInternals<T> channel;
+    private int                 immunity;
 
-	boolean enable(Alternative alt) {
-		return channel.readerEnable(alt);
-	}
+    AltingChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public void endRead() {
-		channel.endRead();
-	}
+    @Override
+    public boolean pending() {
+        return channel.readerPending();
+    }
 
-	public T read() {
-		return channel.read();
-	}
+    @Override
+    boolean disable() {
+        return channel.readerDisable();
+    }
 
-	public T startRead() {
-		return channel.startRead();
-	}
+    @Override
+    boolean enable(Alternative alt) {
+        return channel.readerEnable(alt);
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.readerPoison(strength);
-		}
-	}
+    @Override
+    public void endRead() {
+        channel.endRead();
+    }
+
+    @Override
+    public T read() {
+        return channel.read();
+    }
+
+    @Override
+    public T startRead() {
+        return channel.startRead();
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.readerPoison(strength);
+        }
+    }
 
 }

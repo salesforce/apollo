@@ -22,16 +22,14 @@ package jcsp.util.filter;
 
 import jcsp.lang.SharedChannelOutput;
 
-    /**
- * Interface for an output channel end that supports filtering operations and can be shared by multiple
- * concurrent processes.
+/**
+ * Interface for an output channel end that supports filtering operations and
+ * can be shared by multiple concurrent processes.
  *
  * @see SharedChannelOutput
  * @see WriteFiltered
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredSharedChannelOutput<T>
-        extends SharedChannelOutput<T>, FilteredChannelOutput<T>
-{
+public interface FilteredSharedChannelOutput<T> extends SharedChannelOutput<T>, FilteredChannelOutput<T> {
 }

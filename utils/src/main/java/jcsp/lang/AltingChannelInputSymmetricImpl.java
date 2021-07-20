@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -21,56 +20,61 @@
 
 package jcsp.lang;
 
-  class AltingChannelInputSymmetricImpl<T> extends AltingChannelInput<T>
-  implements MultiwaySynchronisation {
+class AltingChannelInputSymmetricImpl<T> extends AltingChannelInput<T> implements MultiwaySynchronisation {
 
-  private final AltingBarrier ab;
+    private final AltingBarrier ab;
 
-  private final ChannelInput<T> in;
+    private final ChannelInput<T> in;
 
-  private boolean syncDone = false;
-  
-  public AltingChannelInputSymmetricImpl (
-          AltingBarrier ab, ChannelInput<T> in) {
-    this.ab = ab;
-    this.in = in;
-  }
+    private boolean syncDone = false;
 
-  boolean enable (Alternative alt) {
-    syncDone = ab.enable (alt);
-    return syncDone;
-  }
+    public AltingChannelInputSymmetricImpl(AltingBarrier ab, ChannelInput<T> in) {
+        this.ab = ab;
+        this.in = in;
+    }
 
-  boolean disable () {
-    syncDone = ab.disable ();
-    return syncDone;
-  }
+    @Override
+    boolean enable(Alternative alt) {
+        syncDone = ab.enable(alt);
+        return syncDone;
+    }
 
-  public T read () {
-    if (!syncDone) ab.sync ();
-    syncDone = false;
-    return in.read ();
-  }
+    @Override
+    boolean disable() {
+        syncDone = ab.disable();
+        return syncDone;
+    }
 
-  public boolean pending () {
-    syncDone = ab.poll (10);
-    return syncDone;
-  }
+    @Override
+    public T read() {
+        if (!syncDone)
+            ab.sync();
+        syncDone = false;
+        return in.read();
+    }
 
-  public void poison(int strength) {
-	in.poison(strength);
-  }
+    @Override
+    public boolean pending() {
+        syncDone = ab.poll(10);
+        return syncDone;
+    }
 
-  public void endRead() {
-	in.endRead();
-  }
+    @Override
+    public void poison(int strength) {
+        in.poison(strength);
+    }
 
-  public T startRead() {
-	if (!syncDone) ab.sync();
-	syncDone = false;
-	return in.read();
-  }
-  
-  
+    @Override
+    public void endRead() {
+        in.endRead();
+    }
+
+    @Override
+    public T startRead() {
+        if (!syncDone)
+            ab.sync();
+        syncDone = false;
+        return in.read();
+    }
 
 }

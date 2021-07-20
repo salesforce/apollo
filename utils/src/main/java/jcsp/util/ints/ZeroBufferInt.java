@@ -24,13 +24,14 @@ import java.io.Serializable;
 
 /**
  * This is used to create a zero-buffered integer channel that never loses data.
- * <H2>Description</H2>
- * <TT>ZeroBufferInt</TT> is an implementation of <TT>ChannelDataStoreInt</TT> that yields
- * the standard <I><B>CSP</B></I> semantics for a channel -- that is zero buffered with
- * direct synchronisation between reader and writer.  Unless specified otherwise,
- * this is the default behaviour for channels.
- * See the <tt>static</tt> construction methods of {@link jcsp.lang.Channel}
- * ({@link jcsp.lang.Channel#one2oneInt(jcsp.util.ints.ChannelDataStoreInt)} etc.).
+ * <H2>Description</H2> <TT>ZeroBufferInt</TT> is an implementation of
+ * <TT>ChannelDataStoreInt</TT> that yields the standard <I><B>CSP</B></I>
+ * semantics for a channel -- that is zero buffered with direct synchronisation
+ * between reader and writer. Unless specified otherwise, this is the default
+ * behaviour for channels. See the <tt>static</tt> construction methods of
+ * {@link jcsp.lang.Channel}
+ * ({@link jcsp.lang.Channel#one2oneInt(jcsp.util.ints.ChannelDataStoreInt)}
+ * etc.).
  * <P>
  * The <TT>getState</TT> method will return <TT>FULL</TT> if there is an output
  * waiting on the channel and <TT>EMPTY</TT> if there is not.
@@ -46,8 +47,7 @@ import java.io.Serializable;
  */
 //}}}
 
-public class ZeroBufferInt implements ChannelDataStoreInt, Serializable
-{
+public class ZeroBufferInt implements ChannelDataStoreInt, Serializable {
     /** The current state */
     private int state = EMPTY;
 
@@ -57,45 +57,50 @@ public class ZeroBufferInt implements ChannelDataStoreInt, Serializable
     /**
      * Returns the <TT>int</TT> from the <TT>ZeroBufferInt</TT>.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the <TT>int</TT> from the <TT>ZeroBufferInt</TT>
      */
-    public int get()
-    {
+    @Override
+    public int get() {
         state = EMPTY;
         int o = value;
         return o;
     }
-    
+
     /**
-     * Begins an extended rendezvous - simply returns the next integer in the buffer.  
-     * This function does not remove the integer.
+     * Begins an extended rendezvous - simply returns the next integer in the
+     * buffer. This function does not remove the integer.
      * 
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      * 
-     * @return The integer in the buffer. 
+     * @return The integer in the buffer.
      */
+    @Override
     public int startGet() {
-      return value;     
+        return value;
     }
-    
+
     /**
      * Ends the extended rendezvous by clearing the buffer.
      */
-    public void endGet() {      
-      state = EMPTY;      
+    @Override
+    public void endGet() {
+        state = EMPTY;
     }
 
     /**
      * Puts a new <TT>int</TT> into the <TT>ZeroBufferInt</TT>.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>FULL</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>FULL</TT>.
      *
      * @param value the int to put into the ZeroBufferInt
      */
-    public void put(int value)
-    {
+    @Override
+    public void put(int value) {
         state = FULL;
         this.value = value;
     }
@@ -103,11 +108,11 @@ public class ZeroBufferInt implements ChannelDataStoreInt, Serializable
     /**
      * Returns the current state of the <TT>ZeroBufferInt</TT>.
      *
-     * @return the current state of the <TT>ZeroBufferInt</TT> (<TT>EMPTY</TT>
-     * or <TT>FULL</TT>)
+     * @return the current state of the <TT>ZeroBufferInt</TT> (<TT>EMPTY</TT> or
+     *         <TT>FULL</TT>)
      */
-    public int getState()
-    {
+    @Override
+    public int getState() {
         return state;
     }
 
@@ -120,13 +125,13 @@ public class ZeroBufferInt implements ChannelDataStoreInt, Serializable
      *
      * @return the cloned instance of this <TT>ZeroBufferInt</TT>.
      */
-    public Object clone()
-    {
+    @Override
+    public Object clone() {
         return new ZeroBufferInt();
     }
-    
-    public void removeAll()
-    {
-    	state = EMPTY;
-    }    
+
+    @Override
+    public void removeAll() {
+        state = EMPTY;
+    }
 }

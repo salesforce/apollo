@@ -20,35 +20,40 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.ChannelInput;
+import jcsp.lang.ChannelOutput;
+import jcsp.lang.SharedChannelInput;
+import jcsp.lang.SharedChannelOutput;
 
-    /**
- * <p>Factory for creating filtered channel ends around existing channel ends.</p>
+/**
+ * <p>
+ * Factory for creating filtered channel ends around existing channel ends.
+ * </p>
  *
- * <p>An instance of this class can be created and used, or alternatively the static factory
- * <code>FilteredChannelEnd</code> may be more convenient.</p>
+ * <p>
+ * An instance of this class can be created and used, or alternatively the
+ * static factory <code>FilteredChannelEnd</code> may be more convenient.
+ * </p>
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredChannelEndFactory
-{
+public class FilteredChannelEndFactory {
     /**
      * Constructs a new <code>FilteredChannelEndFactory</code>.
      */
-    public FilteredChannelEndFactory()
-    {
+    public FilteredChannelEndFactory() {
         super();
     }
 
     /**
-     * Creates a new filtered channel input end around an existing channel end. The created channel end
-     * can be used as a guard in an <code>Alternative</code>.
+     * Creates a new filtered channel input end around an existing channel end. The
+     * created channel end can be used as a guard in an <code>Alternative</code>.
      *
      * @param in the existing channel end.
      * @return the created channel end.
      */
-    public FilteredAltingChannelInput createFiltered(AltingChannelInput in)
-    {
+    public FilteredAltingChannelInput createFiltered(AltingChannelInput in) {
         return new FilteredAltingChannelInput(in);
     }
 
@@ -58,20 +63,18 @@ public class FilteredChannelEndFactory
      * @param in the existing channel end.
      * @return the created channel end.
      */
-    public FilteredChannelInput createFiltered(ChannelInput in)
-    {
+    public FilteredChannelInput createFiltered(ChannelInput in) {
         return new FilteredChannelInputWrapper(in);
     }
 
     /**
-     * Creates a new filtered channel input end around an existing channel end. The created channel end
-     * can be shared by multiple processes.
+     * Creates a new filtered channel input end around an existing channel end. The
+     * created channel end can be shared by multiple processes.
      *
      * @param in the existing channel end.
      * @return the created channel end.
      */
-    public FilteredSharedChannelInput createFiltered(SharedChannelInput in)
-    {
+    public FilteredSharedChannelInput createFiltered(SharedChannelInput in) {
         return new FilteredSharedChannelInputWrapper(in);
     }
 
@@ -81,20 +84,18 @@ public class FilteredChannelEndFactory
      * @param out the existing channel end.
      * @return the created channel end.
      */
-    public FilteredChannelOutput createFiltered(ChannelOutput out)
-    {
+    public FilteredChannelOutput createFiltered(ChannelOutput out) {
         return new FilteredChannelOutputWrapper(out);
     }
 
     /**
-     * Creates a new filtered channel output end around an existing channel end. The created channel end
-     * can be shared by multiple processes.
+     * Creates a new filtered channel output end around an existing channel end. The
+     * created channel end can be shared by multiple processes.
      *
      * @param out the existing channel end.
      * @return the created channel end.
      */
-    public FilteredSharedChannelOutput createFiltered(SharedChannelOutput out)
-    {
+    public FilteredSharedChannelOutput createFiltered(SharedChannelOutput out) {
         return new FilteredSharedChannelOutputWrapper(out);
     }
 }

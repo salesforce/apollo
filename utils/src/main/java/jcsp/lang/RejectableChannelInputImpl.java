@@ -21,14 +21,14 @@
 package jcsp.lang;
 
 @SuppressWarnings("deprecation")
-    class RejectableChannelInputImpl<T> extends ChannelInputImpl<T> implements RejectableChannelInput<T> {
-	
-	public RejectableChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
-		super(_channel, _immunity); 
-	}
+class RejectableChannelInputImpl<T> extends ChannelInputImpl<T> implements RejectableChannelInput<T> {
 
-	public void reject()
-    {
-    	super.poison(Integer.MAX_VALUE);
+    public RejectableChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
+        super(_channel, _immunity);
+    }
+
+    @Override
+    public void reject() {
+        super.poison(Integer.MAX_VALUE);
     }
 }

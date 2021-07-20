@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -21,18 +20,20 @@
 
 package jcsp.lang;
 
-  class BasicOne2OneChannelSymmetric implements One2OneChannelSymmetric {
+class BasicOne2OneChannelSymmetric implements One2OneChannelSymmetric {
 
-  private final AltingBarrier[] ab = AltingBarrier.create (2);
+    private final AltingBarrier[] ab = AltingBarrier.create(2);
 
-  private final One2OneChannel c = Channel.one2one();
+    private final One2OneChannel c = Channel.one2one();
 
-  public AltingChannelInput in () {
-    return new AltingChannelInputSymmetricImpl(ab[0], c.in());
-  }
+    @Override
+    public AltingChannelInput in() {
+        return new AltingChannelInputSymmetricImpl(ab[0], c.in());
+    }
 
-  public AltingChannelOutput out (){
-    return new AltingChannelOutputSymmetricImpl (ab[1], c.out());
-  }
+    @Override
+    public AltingChannelOutput out() {
+        return new AltingChannelOutputSymmetricImpl(ab[1], c.out());
+    }
 
 }

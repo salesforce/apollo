@@ -20,17 +20,17 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.Any2OneChannel;
+import jcsp.lang.SharedChannelOutput;
 
-    /**
- * This wraps up an Any2OneChannel object so that its
- * input and output ends are separate objects. Both ends of the channel
- * have filtering enabled.
+/**
+ * This wraps up an Any2OneChannel object so that its input and output ends are
+ * separate objects. Both ends of the channel have filtering enabled.
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredAny2OneChannelImpl<In, Out> implements FilteredAny2OneChannel<In, Out>
-{
+class FilteredAny2OneChannelImpl<In, Out> implements FilteredAny2OneChannel<In, Out> {
     /**
      * The input end of the channel.
      */
@@ -44,29 +44,28 @@ class FilteredAny2OneChannelImpl<In, Out> implements FilteredAny2OneChannel<In, 
     /**
      * Constructs a new filtered channel over the top of an existing channel.
      */
-    public FilteredAny2OneChannelImpl(Any2OneChannel<In, Out> chan)
-    {
+    public FilteredAny2OneChannelImpl(Any2OneChannel<In, Out> chan) {
         in = new FilteredAltingChannelInput<In>(chan.in());
         out = new FilteredSharedChannelOutputWrapper<Out>(chan.out());
     }
 
-    public AltingChannelInput<In> in()
-    {
+    @Override
+    public AltingChannelInput<In> in() {
         return in;
     }
 
-    public SharedChannelOutput<Out> out()
-    {
+    @Override
+    public SharedChannelOutput<Out> out() {
         return out;
     }
 
-    public ReadFiltered inFilter()
-    {
+    @Override
+    public ReadFiltered inFilter() {
         return in;
     }
 
-    public WriteFiltered outFilter()
-    {
+    @Override
+    public WriteFiltered outFilter() {
         return out;
     }
 }

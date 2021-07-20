@@ -22,9 +22,8 @@ package jcsp.lang;
 
 import jcsp.util.ChannelDataStore;
 
-class PoisonableBufferedAny2OneChannel<T> extends Any2OneImpl<T>
-{
-	PoisonableBufferedAny2OneChannel(ChannelDataStore<T> _data, int _immunity) {
-		super(new PoisonableBufferedOne2OneChannel<T>(_data,_immunity));
-	}
+class PoisonableBufferedAny2OneChannel<T> extends Any2OneImpl<T> {
+    PoisonableBufferedAny2OneChannel(ChannelDataStore<T> _data, int _immunity) {
+        super(new PoisonableBufferedOne2OneChannel<T>(_data, _immunity));
+    }
 }

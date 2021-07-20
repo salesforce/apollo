@@ -22,13 +22,13 @@ package jcsp.util.filter;
 
 import jcsp.lang.One2AnyChannel;
 
-    /**
- * Interface for an <code>Any2Any</code> channel that supports both read and write filters.
+/**
+ * Interface for an <code>Any2Any</code> channel that supports both read and
+ * write filters.
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredOne2AnyChannel<In, Out> extends One2AnyChannel<In, Out>
-{
+public interface FilteredOne2AnyChannel<In, Out> extends One2AnyChannel<In, Out> {
     /**
      * Returns the control interface to manipulate the read filters.
      */

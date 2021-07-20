@@ -24,9 +24,8 @@ package jcsp.lang;
 /**
  * This is thrown for an illegal operation on an Barrier.
  *
- * <H2>Description</H2>
- * Currently, there is only one cause: more processes have resigned than were
- * enrolled.
+ * <H2>Description</H2> Currently, there is only one cause: more processes have
+ * resigned than were enrolled.
  *
  * @author P.H. Welch
  */
@@ -35,8 +34,8 @@ package jcsp.lang;
 public class BarrierError extends Error {
     private static final long serialVersionUID = 1L;
 
-  public BarrierError (String s) {
-    super (s);
-  }
+    public BarrierError(String s) {
+        super(s);
+    }
 
 }

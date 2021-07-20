@@ -20,26 +20,25 @@
 
 package jcsp.util.filter;
 
-import jcsp.util.*;
+import jcsp.util.ChannelDataStore;
 
-    /**
+/**
  * Static factory for creating filtered channels.
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredChannel
-{
+public class FilteredChannel {
     /**
      * Default factory for creating the channels.
      */
     private static FilteredChannelFactory factory = new FilteredChannelFactory();
 
     /**
-     * Private constructor to prevent any instances of this static factory from being created.
+     * Private constructor to prevent any instances of this static factory from
+     * being created.
      */
-    private FilteredChannel()
-    {
-        //private constructor to stop construction
+    private FilteredChannel() {
+        // private constructor to stop construction
     }
 
     /**
@@ -47,9 +46,8 @@ public class FilteredChannel
      *
      * @return the created channel.
      */
-    public static FilteredOne2OneChannel createOne2One()
-    {
-        return (FilteredOne2OneChannel)factory.createOne2One();
+    public static FilteredOne2OneChannel createOne2One() {
+        return (FilteredOne2OneChannel) factory.createOne2One();
     }
 
     /**
@@ -57,9 +55,8 @@ public class FilteredChannel
      *
      * @return the created channel.
      */
-    public static FilteredAny2OneChannel createAny2One()
-    {
-        return (FilteredAny2OneChannel)factory.createAny2One();
+    public static FilteredAny2OneChannel createAny2One() {
+        return (FilteredAny2OneChannel) factory.createAny2One();
     }
 
     /**
@@ -67,9 +64,8 @@ public class FilteredChannel
      *
      * @return the created channel.
      */
-    public static FilteredOne2AnyChannel createOne2Any()
-    {
-        return (FilteredOne2AnyChannel)factory.createOne2Any();
+    public static FilteredOne2AnyChannel createOne2Any() {
+        return (FilteredOne2AnyChannel) factory.createOne2Any();
     }
 
     /**
@@ -77,65 +73,56 @@ public class FilteredChannel
      *
      * @return the created channel.
      */
-    public static FilteredAny2AnyChannel createAny2Any()
-    {
-        return (FilteredAny2AnyChannel)factory.createAny2Any();
+    public static FilteredAny2AnyChannel createAny2Any() {
+        return (FilteredAny2AnyChannel) factory.createAny2Any();
     }
 
     /**
-     * Constructs and returns an array of <code>One2OneChannel</code>
-     * objects.
+     * Constructs and returns an array of <code>One2OneChannel</code> objects.
      *
-     * @param	n	the size of the array of channels.
+     * @param n the size of the array of channels.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createOne2One(int)
      */
-    public static FilteredOne2OneChannel[] createOne2One(int n)
-    {
-        return (FilteredOne2OneChannel[])factory.createOne2One(n);
+    public static FilteredOne2OneChannel[] createOne2One(int n) {
+        return (FilteredOne2OneChannel[]) factory.createOne2One(n);
     }
 
     /**
-     * Constructs and returns an array of <code>Any2OneChannel</code>
-     * objects.
+     * Constructs and returns an array of <code>Any2OneChannel</code> objects.
      *
-     * @param	n	the size of the array of channels.
+     * @param n the size of the array of channels.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createAny2One(int)
      */
-    public static FilteredAny2OneChannel[] createAny2One(int n)
-    {
-        return (FilteredAny2OneChannel[])factory.createAny2One(n);
+    public static FilteredAny2OneChannel[] createAny2One(int n) {
+        return (FilteredAny2OneChannel[]) factory.createAny2One(n);
     }
 
     /**
-     * Constructs and returns an array of <code>One2AnyChannel</code>
-     * objects.
+     * Constructs and returns an array of <code>One2AnyChannel</code> objects.
      *
-     * @param	n	the size of the array of channels.
+     * @param n the size of the array of channels.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createOne2Any(int)
      */
-    public static FilteredOne2AnyChannel[] createOne2Any(int n)
-    {
-        return (FilteredOne2AnyChannel[])factory.createOne2Any(n);
+    public static FilteredOne2AnyChannel[] createOne2Any(int n) {
+        return (FilteredOne2AnyChannel[]) factory.createOne2Any(n);
     }
 
     /**
-     * Constructs and returns an array of <code>Any2AnyChannel</code>
-     * objects.
+     * Constructs and returns an array of <code>Any2AnyChannel</code> objects.
      *
-     * @param	n	the size of the array of channels.
+     * @param n the size of the array of channels.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createAny2Any(int)
      */
-    public static FilteredAny2AnyChannel[] createAny2Any(int n)
-    {
-        return (FilteredAny2AnyChannel[])factory.createAny2Any(n);
+    public static FilteredAny2AnyChannel[] createAny2Any(int n) {
+        return (FilteredAny2AnyChannel[]) factory.createAny2Any(n);
     }
 
     /**
@@ -144,9 +131,8 @@ public class FilteredChannel
      * @param buffer the buffer implementation to use.
      * @return the created channel.
      */
-    public static FilteredOne2OneChannel createOne2One(ChannelDataStore buffer)
-    {
-        return (FilteredOne2OneChannel)factory.createOne2One(buffer);
+    public static FilteredOne2OneChannel createOne2One(ChannelDataStore buffer) {
+        return (FilteredOne2OneChannel) factory.createOne2One(buffer);
     }
 
     /**
@@ -155,9 +141,8 @@ public class FilteredChannel
      * @param buffer the buffer implementation to use.
      * @return the created channel.
      */
-    public static FilteredAny2OneChannel createAny2One(ChannelDataStore buffer)
-    {
-        return (FilteredAny2OneChannel)factory.createAny2One(buffer);
+    public static FilteredAny2OneChannel createAny2One(ChannelDataStore buffer) {
+        return (FilteredAny2OneChannel) factory.createAny2One(buffer);
     }
 
     /**
@@ -166,9 +151,8 @@ public class FilteredChannel
      * @param buffer the buffer implementation to use.
      * @return the created channel.
      */
-    public static FilteredOne2AnyChannel createOne2Any(ChannelDataStore buffer)
-    {
-        return (FilteredOne2AnyChannel)factory.createOne2Any(buffer);
+    public static FilteredOne2AnyChannel createOne2Any(ChannelDataStore buffer) {
+        return (FilteredOne2AnyChannel) factory.createOne2Any(buffer);
     }
 
     /**
@@ -177,68 +161,63 @@ public class FilteredChannel
      * @param buffer the buffer implementation to use.
      * @return the created channel.
      */
-    public static FilteredAny2AnyChannel createAny2Any(ChannelDataStore buffer)
-    {
-        return (FilteredAny2AnyChannel)factory.createAny2Any(buffer);
+    public static FilteredAny2AnyChannel createAny2Any(ChannelDataStore buffer) {
+        return (FilteredAny2AnyChannel) factory.createAny2Any(buffer);
     }
 
     /**
-     * Constructs and returns an array of <code>One2OneChannel</code>
-     * objects using a given buffer.
+     * Constructs and returns an array of <code>One2OneChannel</code> objects using
+     * a given buffer.
      *
-     * @param	n	the size of the array of channels.
+     * @param n      the size of the array of channels.
      * @param buffer the buffer implementation to use.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createOne2One(int)
      */
-    public static FilteredOne2OneChannel[] createOne2One(ChannelDataStore buffer, int n)
-    {
-        return (FilteredOne2OneChannel[])factory.createOne2One(buffer, n);
+    public static FilteredOne2OneChannel[] createOne2One(ChannelDataStore buffer, int n) {
+        return (FilteredOne2OneChannel[]) factory.createOne2One(buffer, n);
     }
 
     /**
-     * Constructs and returns an array of <code>Any2OneChannel</code>
-     * objects with a given buffer.
+     * Constructs and returns an array of <code>Any2OneChannel</code> objects with a
+     * given buffer.
      *
-     * @param	n	the size of the array of channels.
+     * @param n      the size of the array of channels.
      * @param buffer the buffer implementation to use.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createAny2One(int)
      */
-    public static FilteredAny2OneChannel[] createAny2One(ChannelDataStore buffer, int n)
-    {
-        return (FilteredAny2OneChannel[])factory.createAny2One(buffer, n);
+    public static FilteredAny2OneChannel[] createAny2One(ChannelDataStore buffer, int n) {
+        return (FilteredAny2OneChannel[]) factory.createAny2One(buffer, n);
     }
 
     /**
-     * Constructs and returns an array of <code>One2AnyChannel</code>
-     * objects with a given buffer.
+     * Constructs and returns an array of <code>One2AnyChannel</code> objects with a
+     * given buffer.
      *
-     * @param	n	the size of the array of channels.
+     * @param n      the size of the array of channels.
      * @param buffer the buffer implementation to use.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createOne2Any(int)
      */
-    public static FilteredOne2AnyChannel[] createOne2Any(ChannelDataStore buffer, int n)
-    {
-        return (FilteredOne2AnyChannel[])factory.createOne2Any(buffer, n);
+    public static FilteredOne2AnyChannel[] createOne2Any(ChannelDataStore buffer, int n) {
+        return (FilteredOne2AnyChannel[]) factory.createOne2Any(buffer, n);
     }
 
     /**
-     * Constructs and returns an array of <code>Any2AnyChannel</code>
-     * objects with a given buffer.
+     * Constructs and returns an array of <code>Any2AnyChannel</code> objects with a
+     * given buffer.
      *
-     * @param	n	the size of the array of channels.
+     * @param n      the size of the array of channels.
      * @param buffer the buffer implementation to use.
      * @return the array of channels.
      *
      * @see jcsp.lang.ChannelArrayFactory#createAny2Any(int)
      */
-    public static FilteredAny2AnyChannel[] createAny2Any(ChannelDataStore buffer, int n)
-    {
+    public static FilteredAny2AnyChannel[] createAny2Any(ChannelDataStore buffer, int n) {
         return (FilteredAny2AnyChannel[]) factory.createAny2Any(buffer, n);
     }
 }

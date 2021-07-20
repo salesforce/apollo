@@ -20,25 +20,27 @@
 
 package jcsp.lang;
 
-    class ChannelOutputIntImpl implements ChannelOutputInt {
-	
-	private ChannelInternalsInt channel;
-	private int immunity;
-	
-	ChannelOutputIntImpl(ChannelInternalsInt _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
+class ChannelOutputIntImpl implements ChannelOutputInt {
 
-	public void write(int object) {
-		channel.write(object);
+    private ChannelInternalsInt channel;
+    private int                 immunity;
 
-	}
+    ChannelOutputIntImpl(ChannelInternalsInt _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.writerPoison(strength);
-		}
-	}
+    @Override
+    public void write(int object) {
+        channel.write(object);
+
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.writerPoison(strength);
+        }
+    }
 
 }

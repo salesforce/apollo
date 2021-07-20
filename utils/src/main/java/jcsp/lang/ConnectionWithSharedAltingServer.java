@@ -20,10 +20,9 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * @author Quickstone Technologies Limited
  */
-interface ConnectionWithSharedAltingServer<T>
-{
+interface ConnectionWithSharedAltingServer<T> {
     public SharedConnectionServer<T> server();
 }

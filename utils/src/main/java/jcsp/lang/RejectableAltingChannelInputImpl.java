@@ -20,51 +20,56 @@
 
 package jcsp.lang;
 
-    @SuppressWarnings("deprecation")
-    class RejectableAltingChannelInputImpl<T> extends RejectableAltingChannelInput<T> {
-	
-	private ChannelInternals<T> channel;
-	private int immunity;
-	
-	RejectableAltingChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
-	
-	
-	public boolean pending() {
-		return channel.readerPending();
-	}
-	
-	boolean disable() {
-		return channel.readerDisable();
-	}
+@SuppressWarnings("deprecation")
+class RejectableAltingChannelInputImpl<T> extends RejectableAltingChannelInput<T> {
 
-	boolean enable(Alternative alt) {
-		return channel.readerEnable(alt);
-	}
+    private ChannelInternals<T> channel;
+    private int                 immunity;
 
-	public void endRead() {
-		channel.endRead();
-	}
+    RejectableAltingChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public T read() {
-		return channel.read();
-	}
+    @Override
+    public boolean pending() {
+        return channel.readerPending();
+    }
 
-	public T startRead() {
-		return channel.startRead();
-	}
+    @Override
+    boolean disable() {
+        return channel.readerDisable();
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.readerPoison(strength);
-		}
-	}
+    @Override
+    boolean enable(Alternative alt) {
+        return channel.readerEnable(alt);
+    }
 
+    @Override
+    public void endRead() {
+        channel.endRead();
+    }
 
-	public void reject()
-    {
-    	channel.readerPoison(Integer.MAX_VALUE);
+    @Override
+    public T read() {
+        return channel.read();
+    }
+
+    @Override
+    public T startRead() {
+        return channel.startRead();
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.readerPoison(strength);
+        }
+    }
+
+    @Override
+    public void reject() {
+        channel.readerPoison(Integer.MAX_VALUE);
     }
 }

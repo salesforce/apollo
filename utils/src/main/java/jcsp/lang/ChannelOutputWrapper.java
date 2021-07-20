@@ -20,17 +20,19 @@
 
 package jcsp.lang;
 
-    /**
- * Defines a wrapper to go around a channel output end. This wrapper allows a channel end to be given
- * away without any risk of the user of that end casting it to a channel input because they cannot
- * gain access to the actual channel end.
+/**
+ * Defines a wrapper to go around a channel output end. This wrapper allows a
+ * channel end to be given away without any risk of the user of that end casting
+ * it to a channel input because they cannot gain access to the actual channel
+ * end.
  *
- * @deprecated There is no longer any need to use this class, after the 1.1 class reorganisation.
+ * @deprecated There is no longer any need to use this class, after the 1.1
+ *             class reorganisation.
  *
  * @author Quickstone Technologies Limited
  */
-public class ChannelOutputWrapper<T> implements ChannelOutput<T>
-{
+@Deprecated
+public class ChannelOutputWrapper<T> implements ChannelOutput<T> {
     /**
      * The actual channel end.
      */
@@ -41,8 +43,7 @@ public class ChannelOutputWrapper<T> implements ChannelOutput<T>
      *
      * @param out the existing channel end.
      */
-    public ChannelOutputWrapper(ChannelOutput<T> out)
-    {
+    public ChannelOutputWrapper(ChannelOutput<T> out) {
         this.out = out;
     }
 
@@ -52,14 +53,14 @@ public class ChannelOutputWrapper<T> implements ChannelOutput<T>
      * @param o the value to write.
      * @see ChannelOutput
      */
-    public void write(T o)
-    {
+    @Override
+    public void write(T o) {
         out.write(o);
     }
-    
-    public void poison(int strength) 
-	{
-		out.poison(strength);	
-	}
+
+    @Override
+    public void poison(int strength) {
+        out.poison(strength);
+    }
 
 }

@@ -20,44 +20,39 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * <p>
  * Defines an interface for a factory than can create connections.
  * </p>
  *
  * @author Quickstone Technologies Limited
  */
-public interface ConnectionFactory
-{
+public interface ConnectionFactory {
     /**
-     * Constructs and returns an implementation of
-     * <code>One2OneConnection</code>.
+     * Constructs and returns an implementation of <code>One2OneConnection</code>.
      *
-     * @return	the constructed <code>One2OneConnection</code> object.
+     * @return the constructed <code>One2OneConnection</code> object.
      */
     public One2OneConnection createOne2One();
 
     /**
-     * Constructs and returns an implementation of
-     * <code>Any2OneConnection</code>.
+     * Constructs and returns an implementation of <code>Any2OneConnection</code>.
      *
-     * @return	the constructed <code>Any2OneConnection</code> object.
+     * @return the constructed <code>Any2OneConnection</code> object.
      */
     public Any2OneConnection createAny2One();
 
     /**
-     * Constructs and returns an implementation of
-     * <code>One2AnyConnection</code>.
+     * Constructs and returns an implementation of <code>One2AnyConnection</code>.
      *
-     * @return	the constructed <code>One2AnyConnection</code> object.
+     * @return the constructed <code>One2AnyConnection</code> object.
      */
     public One2AnyConnection createOne2Any();
 
     /**
-     * Constructs and returns an implementation of
-     * <code>Any2AnyConnection</code>.
+     * Constructs and returns an implementation of <code>Any2AnyConnection</code>.
      *
-     * @return	the constructed <code>Any2AnyConnection</code> object.
+     * @return the constructed <code>Any2AnyConnection</code> object.
      */
     public Any2AnyConnection createAny2Any();
 }

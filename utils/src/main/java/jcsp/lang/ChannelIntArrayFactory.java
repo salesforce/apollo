@@ -20,15 +20,17 @@
 
 package jcsp.lang;
 
-    /**
- * Defines an interface for a factory that can create arrays of channels carrying integers.
+/**
+ * Defines an interface for a factory that can create arrays of channels
+ * carrying integers.
  *
  * @author Quickstone Technologies Limited
  * 
- * @deprecated These channel factories are deprecated in favour of the new one2one() methods in the Channel class.
+ * @deprecated These channel factories are deprecated in favour of the new
+ *             one2one() methods in the Channel class.
  */
-public interface ChannelIntArrayFactory
-{
+@Deprecated
+public interface ChannelIntArrayFactory {
     /**
      * Creates a populated array of <code>n</code> <code>One2One</code> channels.
      *

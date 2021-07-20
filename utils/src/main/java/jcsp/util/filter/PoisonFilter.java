@@ -20,15 +20,14 @@
 
 package jcsp.util.filter;
 
-    /**
- * This filter will throw a <code>PoisonException</code>
- * when <code>filter(Object)</code> is called. This can be
- * used to prevent a channel from being written to or read from.
+/**
+ * This filter will throw a <code>PoisonException</code> when
+ * <code>filter(Object)</code> is called. This can be used to prevent a channel
+ * from being written to or read from.
  *
  * @author Quickstone Technologies Limited
  */
-public class PoisonFilter implements Filter
-{
+public class PoisonFilter implements Filter {
     /**
      * The message to be placed in the <code>PoisonException</code> raised.
      */
@@ -42,21 +41,19 @@ public class PoisonFilter implements Filter
     /**
      * Constructs a new filter with the default message.
      */
-    public PoisonFilter()
-    {
+    public PoisonFilter() {
         this(defaultMessage);
     }
 
     /**
      * Constructs a new filter with a specific message.
      */
-    public PoisonFilter(String message)
-    {
+    public PoisonFilter(String message) {
         this.message = message;
     }
 
-    public Object filter(Object obj)
-    {
+    @Override
+    public Object filter(Object obj) {
         throw new PoisonFilterException(this.message);
     }
 }

@@ -20,10 +20,10 @@
 
 package jcsp.lang;
 
-    /**
- * An interface to connection.  This is used by servers which wish to
- * {@link Alternative ALT} over a connection.  Note that you cannot have
- * more than one server serving an AltingConnectionServer.
+/**
+ * An interface to connection. This is used by servers which wish to
+ * {@link Alternative ALT} over a connection. Note that you cannot have more
+ * than one server serving an AltingConnectionServer.
  *
  * @see ConnectionServer
  * @see ConnectionClient
@@ -31,8 +31,7 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public abstract class AltingConnectionServer extends Guard implements ConnectionServer
-{
+public abstract class AltingConnectionServer extends Guard implements ConnectionServer {
     /**
      * The channel used to ALT over.
      */
@@ -41,61 +40,56 @@ public abstract class AltingConnectionServer extends Guard implements Connection
     /**
      * Constructor.
      *
-     * Note that this is only intended for use by JCSP, and should
-     * not be called by user processes.  Users should use one of the
-     * subclasses.
+     * Note that this is only intended for use by JCSP, and should not be called by
+     * user processes. Users should use one of the subclasses.
      *
      * @param altingChannel The channel used to implement the Guard
      */
-    protected AltingConnectionServer(AltingChannelInput altingChannel)
-    {
+    protected AltingConnectionServer(AltingChannelInput altingChannel) {
         this.altingChannel = altingChannel;
     }
 
     /**
      * Returns the channel used to implement the Guard.
      *
-     * Note that this method is only intended for use by
-     * JCSP, and should not be called by user processes.
+     * Note that this method is only intended for use by JCSP, and should not be
+     * called by user processes.
      *
-     * Concrete subclasses should override this method to
-     * return null, to ensure that the alting channel is
-     * kept private.
+     * Concrete subclasses should override this method to return null, to ensure
+     * that the alting channel is kept private.
      *
      * @return The channel passed to the constructor.
      */
-    protected AltingChannelInput getAltingChannel()
-    {
+    protected AltingChannelInput getAltingChannel() {
         return altingChannel;
     }
 
     /**
-     * <code>ConnectionServer</code> implementations are likely to be
-     * implemented over channels. Multiple channels from the client
-     * to server may be used; one could be used for the initial
-     * connection while another one could be used for data requests.
+     * <code>ConnectionServer</code> implementations are likely to be implemented
+     * over channels. Multiple channels from the client to server may be used; one
+     * could be used for the initial connection while another one could be used for
+     * data requests.
      *
-     * This method allows sub-classes to specify which channel should
-     * be the next one to be alted over.
+     * This method allows sub-classes to specify which channel should be the next
+     * one to be alted over.
      *
-     * @param	chan	the channel to be ALTed over.
+     * @param chan the channel to be ALTed over.
      */
-    protected void setAltingChannel(AltingChannelInput chan)
-    {
+    protected void setAltingChannel(AltingChannelInput chan) {
         altingChannel = chan;
     }
 
     /**
-     * Returns true if the event is ready.  Otherwise, this enables the guard
-     * for selection and returns false.
+     * Returns true if the event is ready. Otherwise, this enables the guard for
+     * selection and returns false.
      * <P>
      * <I>Note: this method should only be called by the Alternative class</I>
      *
      * @param alt the Alternative class that is controlling the selection
      * @return true if and only if the event is ready
      */
-    boolean enable(Alternative alt)
-    {
+    @Override
+    boolean enable(Alternative alt) {
         return altingChannel.enable(alt);
     }
 
@@ -106,22 +100,21 @@ public abstract class AltingConnectionServer extends Guard implements Connection
      *
      * @return true if and only if the event was ready
      */
-    boolean disable()
-    {
+    @Override
+    boolean disable() {
         return altingChannel.disable();
     }
 
     /**
-     * Returns whether there is an open() pending on this connection. <p>
+     * Returns whether there is an open() pending on this connection.
+     * <p>
      *
-     * <i>Note: if there is, it won't go away until you accept it.  But if
-     * there isn't, there may be one by the time you check the result of
-     * this method.</i>
+     * <i>Note: if there is, it won't go away until you accept it. But if there
+     * isn't, there may be one by the time you check the result of this method.</i>
      *
      * @return true only if open() will complete without blocking.
      */
-    public boolean pending()
-    {
+    public boolean pending() {
         return altingChannel.pending();
     }
 }

@@ -23,18 +23,16 @@ package jcsp.lang;
 /**
  * @author Jo Aldous
  */
-abstract class AbstractConnectionImpl
-{
-    protected static final int CLIENT_STATE_CLOSED = 1;
-    protected static final int CLIENT_STATE_OPEN = 2;
+abstract class AbstractConnectionImpl {
+    protected static final int CLIENT_STATE_CLOSED   = 1;
+    protected static final int CLIENT_STATE_OPEN     = 2;
     protected static final int CLIENT_STATE_MADE_REQ = 3;
-    protected static final int SERVER_STATE_CLOSED = 1;
-    protected static final int SERVER_STATE_OPEN = 2;
+    protected static final int SERVER_STATE_CLOSED   = 1;
+    protected static final int SERVER_STATE_OPEN     = 2;
     protected static final int SERVER_STATE_RECEIVED = 3;
 
     protected static final NonSingleRequestOpenMsg nonSingleRequestMsg = new NonSingleRequestOpenMsg();
 
-    static class NonSingleRequestOpenMsg
-    {
+    static class NonSingleRequestOpenMsg {
     }
 }

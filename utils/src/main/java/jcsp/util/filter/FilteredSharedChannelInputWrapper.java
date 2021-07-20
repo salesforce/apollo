@@ -20,22 +20,20 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.SharedChannelInput;
 
-    /**
- * This is wrapper for a <code>SharedChannelInput</code> that adds
- * read filtering. Instances of this class can be safely used by
- * multiple concurrent processes.
+/**
+ * This is wrapper for a <code>SharedChannelInput</code> that adds read
+ * filtering. Instances of this class can be safely used by multiple concurrent
+ * processes.
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredSharedChannelInputWrapper<T>
-        extends FilteredChannelInputWrapper<T>
-        implements FilteredSharedChannelInput<T>
-{    
+public class FilteredSharedChannelInputWrapper<T> extends FilteredChannelInputWrapper<T>
+                                              implements FilteredSharedChannelInput<T> {
     /**
-     * The object used for synchronization by the methods here to protect the readers from each other
-     * when manipulating the filters and reading data.
+     * The object used for synchronization by the methods here to protect the
+     * readers from each other when manipulating the filters and reading data.
      */
     private Object synchObject;
 
@@ -44,64 +42,56 @@ public class FilteredSharedChannelInputWrapper<T>
      *
      * @param in the existing channel end.
      */
-    public FilteredSharedChannelInputWrapper(SharedChannelInput<T> in)
-    {
-        super(in);        
+    public FilteredSharedChannelInputWrapper(SharedChannelInput<T> in) {
+        super(in);
         synchObject = new Object();
     }
 
-    public T read()
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public T read() {
+        synchronized (synchObject) {
             return super.read();
         }
     }
 
-    public void addReadFilter(Filter filter)
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public void addReadFilter(Filter filter) {
+        synchronized (synchObject) {
             super.addReadFilter(filter);
         }
     }
 
-    public void addReadFilter(Filter filter, int index)
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public void addReadFilter(Filter filter, int index) {
+        synchronized (synchObject) {
             super.addReadFilter(filter, index);
         }
     }
 
-    public void removeReadFilter(Filter filter)
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public void removeReadFilter(Filter filter) {
+        synchronized (synchObject) {
             super.removeReadFilter(filter);
         }
     }
 
-    public void removeReadFilter(int index)
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public void removeReadFilter(int index) {
+        synchronized (synchObject) {
             super.removeReadFilter(index);
         }
     }
 
-    public Filter getReadFilter(int index)
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public Filter getReadFilter(int index) {
+        synchronized (synchObject) {
             return super.getReadFilter(index);
         }
     }
 
-    public int getReadFilterCount()
-    {
-        synchronized (synchObject)
-        {
+    @Override
+    public int getReadFilterCount() {
+        synchronized (synchObject) {
             return super.getReadFilterCount();
         }
     }

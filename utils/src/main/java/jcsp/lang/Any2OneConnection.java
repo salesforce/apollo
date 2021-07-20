@@ -20,25 +20,24 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * <p>
- * Defines an interface for a connection that can be shared
- * by multiple concurrent clients but used by
- * a single server. The server end of the connection can be
- * used as a guard in an <code>Alternative</code>.
+ * Defines an interface for a connection that can be shared by multiple
+ * concurrent clients but used by a single server. The server end of the
+ * connection can be used as a guard in an <code>Alternative</code>.
  * </p>
  *
  * @author Quickstone Technologies Limited
  */
-public interface Any2OneConnection extends ConnectionWithSharedAltingClient
-{
+public interface Any2OneConnection extends ConnectionWithSharedAltingClient {
     /**
-     * Returns a client end of the connection. This may only be
-     * safely used by a single process but further calls will
-     * return new clients which may be used by other processes.
+     * Returns a client end of the connection. This may only be safely used by a
+     * single process but further calls will return new clients which may be used by
+     * other processes.
      *
      * @return a new <code>SharedAltingConnectionClient</code> object.
      */
+    @Override
     public SharedAltingConnectionClient client();
 
     /**

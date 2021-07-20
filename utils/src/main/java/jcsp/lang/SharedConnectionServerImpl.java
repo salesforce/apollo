@@ -20,58 +20,53 @@
 
 package jcsp.lang;
 
-    /**
- * This class does not need to be used by standard JCSP users. It is exposed so that the connection
- * mechanism can be extended for custom connections.
+/**
+ * This class does not need to be used by standard JCSP users. It is exposed so
+ * that the connection mechanism can be extended for custom connections.
  *
  * @author Quickstone Technologies Limited
  */
-public class SharedConnectionServerImpl implements SharedConnectionServer
-{
+public class SharedConnectionServerImpl implements SharedConnectionServer {
     private AltingConnectionServerImpl connectionServerToUse;
 
-    private ChannelInput synchIn;
-    private ChannelOutput synchOut;
+    private ChannelInput                     synchIn;
+    private ChannelOutput                    synchOut;
     private ConnectionWithSharedAltingServer parent;
 
-    protected SharedConnectionServerImpl(AltingChannelInput openIn,
-                                         AltingChannelInput requestIn,
-                                         ChannelInput synchIn,
-                                         SharedChannelOutput synchOut,
-                                         ConnectionWithSharedAltingServer parent)
-    {
+    protected SharedConnectionServerImpl(AltingChannelInput openIn, AltingChannelInput requestIn, ChannelInput synchIn,
+                                         SharedChannelOutput synchOut, ConnectionWithSharedAltingServer parent) {
         connectionServerToUse = new AltingConnectionServerImpl(openIn, requestIn);
         this.synchOut = synchOut;
         this.synchIn = synchIn;
         this.parent = parent;
     }
 
-    public Object request()
-    {
+    @Override
+    public Object request() {
         if (connectionServerToUse.getServerState() == AltingConnectionServerImpl.SERVER_STATE_CLOSED)
             synchOut.write(null);
         return connectionServerToUse.request();
     }
 
-    public void reply(Object data)
-    {
+    @Override
+    public void reply(Object data) {
         reply(data, false);
     }
 
-    public void reply(Object data, boolean close)
-    {
+    @Override
+    public void reply(Object data, boolean close) {
         connectionServerToUse.reply(data, close);
         if (connectionServerToUse.getServerState() == AltingConnectionServerImpl.SERVER_STATE_CLOSED)
             synchIn.read();
     }
 
-    public void replyAndClose(Object data)
-    {
+    @Override
+    public void replyAndClose(Object data) {
         reply(data, true);
     }
 
-    public SharedConnectionServer duplicate()
-    {
+    @Override
+    public SharedConnectionServer duplicate() {
         return parent.server();
     }
 }

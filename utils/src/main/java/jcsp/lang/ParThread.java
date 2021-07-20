@@ -20,13 +20,12 @@
 
 package jcsp.lang;
 
-    /**
- * This is the <TT>Thread</TT> class used by {@link Parallel} to run all but
- * one of its given processes.
+/**
+ * This is the <TT>Thread</TT> class used by {@link Parallel} to run all but one
+ * of its given processes.
  *
- * <H2>Description</H2>
- * A <TT>ParThread</TT> is a <TT>Thread</TT> used by {@link Parallel} to run
- * all but one of its given processes.
+ * <H2>Description</H2> A <TT>ParThread</TT> is a <TT>Thread</TT> used by
+ * {@link Parallel} to run all but one of its given processes.
  * <P>
  * The <TT>CSProcess</TT> to be executed can be changed using the
  * <TT>setProcess</TT> method providing the <TT>ParThread</TT> is not active.
@@ -40,8 +39,7 @@ package jcsp.lang;
  */
 //}}}
 
-class ParThread extends Thread
-{
+class ParThread extends Thread {
     /** the process to be executed */
     private CSProcess process;
 
@@ -59,8 +57,7 @@ class ParThread extends Thread
      * @param process the process to be executed
      * @param barrier the barrier for then end of the PAR
      */
-    public ParThread(CSProcess process, Barrier barrier)
-    {
+    public ParThread(CSProcess process, Barrier barrier) {
         setDaemon(true);
         this.process = process;
         this.barrier = barrier;
@@ -73,8 +70,7 @@ class ParThread extends Thread
      * @param process the process to be executed
      * @param barrier the barrier for then end of the PAR
      */
-    public void reset(CSProcess process, Barrier barrier)
-    {
+    public void reset(CSProcess process, Barrier barrier) {
         this.process = process;
         this.barrier = barrier;
         setName(process.toString());
@@ -84,8 +80,7 @@ class ParThread extends Thread
      * Sets the ParThread to terminate next time it's unparked.
      *
      */
-    public void terminate()
-    {
+    public void terminate() {
         running = false;
         park.sync();
     }
@@ -93,40 +88,29 @@ class ParThread extends Thread
     /**
      * Releases the ParThread to do some more work.
      */
-    public void release()
-    {
+    public void release() {
         park.sync();
     }
 
     /**
-     * The main body of this process.
-     * above.
+     * The main body of this process. above.
      */
-    public void run()
-    {
-        try
-        {
+    @Override
+    public void run() {
+        try {
             Parallel.addToAllParThreads(this);
-            while (running)
-            {
-                try
-                {
+            while (running) {
+                try {
                     process.run();
-                }
-                catch (Throwable e)
-                {
+                } catch (Throwable e) {
                     Parallel.uncaughtException("jcsp.lang.Parallel", e);
                 }
                 barrier.resign();
                 park.sync();
             }
-        }
-        catch (Throwable t)
-        {
+        } catch (Throwable t) {
             Parallel.uncaughtException("jcsp.lang.Parallel", t);
-        }
-        finally
-        {
+        } finally {
             Parallel.removeFromAllParThreads(this);
         }
     }

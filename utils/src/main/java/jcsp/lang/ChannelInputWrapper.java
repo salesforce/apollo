@@ -20,17 +20,19 @@
 
 package jcsp.lang;
 
-    /**
- * Defines a wrapper to go around a channel input end. This wrapper allows a channel end to be given
- * away without any risk of the user of that end casting it to a channel output because they cannot
- * gain access to the actual channel end.
+/**
+ * Defines a wrapper to go around a channel input end. This wrapper allows a
+ * channel end to be given away without any risk of the user of that end casting
+ * it to a channel output because they cannot gain access to the actual channel
+ * end.
  *
- * @deprecated There is no longer any need to use this class, after the 1.1 class reorganisation.
+ * @deprecated There is no longer any need to use this class, after the 1.1
+ *             class reorganisation.
  *
  * @author Quickstone Technologies Limited
  */
-public class ChannelInputWrapper<T> implements ChannelInput<T>
-{
+@Deprecated
+public class ChannelInputWrapper<T> implements ChannelInput<T> {
     /**
      * The actual channel end.
      */
@@ -41,8 +43,7 @@ public class ChannelInputWrapper<T> implements ChannelInput<T>
      *
      * @param in the existing channel end.
      */
-    public ChannelInputWrapper(ChannelInput<T> in)
-    {
+    public ChannelInputWrapper(ChannelInput<T> in) {
         this.in = in;
     }
 
@@ -52,35 +53,35 @@ public class ChannelInputWrapper<T> implements ChannelInput<T>
      * @see ChannelInput
      * @return the value read.
      */
-    public T read()
-    {
+    @Override
+    public T read() {
         return in.read();
     }
-    
+
     /**
      * Begins an extended rendezvous
      * 
      * @see ChannelInput.startRead
      * @return The object read from the channel
      */
-    public T startRead()
-    {
-    	return in.startRead();
+    @Override
+    public T startRead() {
+        return in.startRead();
     }
-    
+
     /**
      * Ends an extended rendezvous
      * 
      * @see ChannelInput.endRead
      */
-    public void endRead()
-    {
-    	in.endRead();
+    @Override
+    public void endRead() {
+        in.endRead();
     }
-    
-    public void poison(int strength) 
-	{
-		in.poison(strength);	
-	}
+
+    @Override
+    public void poison(int strength) {
+        in.poison(strength);
+    }
 
 }

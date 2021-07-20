@@ -20,18 +20,16 @@
 
 package jcsp.lang;
 
-    /**
- * This extends {@link Guard} and {@link ChannelAccept}
- * to enable a process to choose between many CALL channel (and other) events.
- * <H2>Description</H2>
- * <TT>AltingChannelAccept</TT> extends {@link Guard} and {@link ChannelAccept}
- * to enable a process
- * to choose between many CALL channel (and other) events.  The methods inherited from
- * <TT>Guard</TT> are of no concern to users of this package.
+/**
+ * This extends {@link Guard} and {@link ChannelAccept} to enable a process to
+ * choose between many CALL channel (and other) events.
+ * <H2>Description</H2> <TT>AltingChannelAccept</TT> extends {@link Guard} and
+ * {@link ChannelAccept} to enable a process to choose between many CALL channel
+ * (and other) events. The methods inherited from <TT>Guard</TT> are of no
+ * concern to users of this package.
  *
- * <H2>Example</H2>
- * See the explanations and examples documented in {@link One2OneCallChannel} and
- * {@link Any2OneCallChannel}.
+ * <H2>Example</H2> See the explanations and examples documented in
+ * {@link One2OneCallChannel} and {@link Any2OneCallChannel}.
  *
  * @see Alternative
  * @see One2OneCallChannel
@@ -40,7 +38,6 @@ package jcsp.lang;
  * @author P.H. Welch
  */
 
-public abstract class AltingChannelAccept extends Guard implements ChannelAccept
-{
-  // nothing to add ...
+public abstract class AltingChannelAccept extends Guard implements ChannelAccept {
+    // nothing to add ...
 }

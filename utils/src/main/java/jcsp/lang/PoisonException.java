@@ -20,9 +20,9 @@
 
 package jcsp.lang;
 
-    /**
- * This exception is thrown when a process tries to use a channel that
- * has been poisoned.
+/**
+ * This exception is thrown when a process tries to use a channel that has been
+ * poisoned.
  *
  * @see Poisonable
  */
@@ -30,30 +30,29 @@ package jcsp.lang;
 public class PoisonException extends ChannelDataRejectedException {
 
     private static final long serialVersionUID = 1L;
-  private int strength;
+    private int               strength;
 
-  /**
-   * JCSP users should not have to construct these.
-   *
-   * @param strength the strength of this exception
-   *   (which will normally be the strength of the poison in the channel).
-   */
-  protected PoisonException (int strength) {
-    //super("PoisonException, strength: " + strength);
-    this.strength = strength;
-  }
+    /**
+     * JCSP users should not have to construct these.
+     *
+     * @param strength the strength of this exception (which will normally be the
+     *                 strength of the poison in the channel).
+     */
+    protected PoisonException(int strength) {
+        // super("PoisonException, strength: " + strength);
+        this.strength = strength;
+    }
 
-  /**
-   * Once this exception has been caught, the catching process should
-   * poison all its channels with the strength held by the exception
-   * (which will normally be the strength of the poison in the channel
-   * that caused the exception to be thrown).
-   * See the example handler at the end of
-   * <a href="Alternative.html#FairMuxTime">this section</a>
-   * of the documentation of {@link Alternative}.
-   */
-  public int getStrength() {
-    return strength;
-   }
+    /**
+     * Once this exception has been caught, the catching process should poison all
+     * its channels with the strength held by the exception (which will normally be
+     * the strength of the poison in the channel that caused the exception to be
+     * thrown). See the example handler at the end of
+     * <a href="Alternative.html#FairMuxTime">this section</a> of the documentation
+     * of {@link Alternative}.
+     */
+    public int getStrength() {
+        return strength;
+    }
 
 }

@@ -20,89 +20,94 @@
 
 package jcsp.lang;
 
-    class Any2AnyIntImpl implements Any2AnyChannelInt, ChannelInternalsInt {
+class Any2AnyIntImpl implements Any2AnyChannelInt, ChannelInternalsInt {
 
-	private ChannelInternalsInt channel;
-	/** The mutex on which readers must synchronize */
-    private final Mutex readMutex = new Mutex();
-    private final Object writeMonitor = new Object();
-    
+    private ChannelInternalsInt channel;
+    /** The mutex on which readers must synchronize */
+    private final Mutex         readMutex    = new Mutex();
+    private final Object        writeMonitor = new Object();
+
     Any2AnyIntImpl(ChannelInternalsInt _channel) {
-		channel = _channel;
-	}
-	
-	public SharedChannelInputInt in() {
-		return new SharedChannelInputIntImpl(this,0);
-	}
+        channel = _channel;
+    }
 
-	public SharedChannelOutputInt out() { 
-		return new SharedChannelOutputIntImpl(this,0);
-	}
+    @Override
+    public SharedChannelInputInt in() {
+        return new SharedChannelInputIntImpl(this, 0);
+    }
 
-	public void endRead() {
-		channel.endRead();
-		readMutex.release();
+    @Override
+    public SharedChannelOutputInt out() {
+        return new SharedChannelOutputIntImpl(this, 0);
+    }
 
-	}
+    @Override
+    public void endRead() {
+        channel.endRead();
+        readMutex.release();
 
-	public int read() {
-		readMutex.claim();
+    }
+
+    @Override
+    public int read() {
+        readMutex.claim();
 //		A poison exception might be thrown, hence the try/finally:		
-		try
-		{
-			return channel.read();
-		}
-		finally
-		{
-			readMutex.release();		
-		}		
-	}
+        try {
+            return channel.read();
+        } finally {
+            readMutex.release();
+        }
+    }
 
-	//begin never used:
-	public boolean readerDisable() {
-		return false;
-	}
+    // begin never used:
+    @Override
+    public boolean readerDisable() {
+        return false;
+    }
 
-	public boolean readerEnable(Alternative alt) {
-		return false;
-	}
+    @Override
+    public boolean readerEnable(Alternative alt) {
+        return false;
+    }
 
-	public boolean readerPending() {
-		return false;
-	}
-	//end never used
+    @Override
+    public boolean readerPending() {
+        return false;
+    }
+    // end never used
 
-	public void readerPoison(int strength) {
-		readMutex.claim();
-		channel.readerPoison(strength);
-		readMutex.release();
-	}
+    @Override
+    public void readerPoison(int strength) {
+        readMutex.claim();
+        channel.readerPoison(strength);
+        readMutex.release();
+    }
 
-	public int startRead() {
-		readMutex.claim();		
-		try
-		{
-			return channel.startRead();
-		}
-		catch (RuntimeException e)
-		{
-			channel.endRead();
-			readMutex.release();
-			throw e;
-		}
-		
-	}
+    @Override
+    public int startRead() {
+        readMutex.claim();
+        try {
+            return channel.startRead();
+        } catch (RuntimeException e) {
+            channel.endRead();
+            readMutex.release();
+            throw e;
+        }
 
-	public void write(int n) {
-		synchronized (writeMonitor) {
-			channel.write(n);
-		}		
-	}
+    }
 
-	public void writerPoison(int strength) {
-		synchronized (writeMonitor) {		
-			channel.writerPoison(strength);
-		}
-	}
+    @Override
+    public void write(int n) {
+        synchronized (writeMonitor) {
+            channel.write(n);
+        }
+    }
+
+    @Override
+    public void writerPoison(int strength) {
+        synchronized (writeMonitor) {
+            channel.writerPoison(strength);
+        }
+    }
 
 }

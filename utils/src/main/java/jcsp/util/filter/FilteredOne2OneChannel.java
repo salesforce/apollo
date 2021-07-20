@@ -20,10 +20,11 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.One2OneChannel;
 
-    /**
- * Interface for a <code>One2One</code> channel that supports filtering operations at each end.
+/**
+ * Interface for a <code>One2One</code> channel that supports filtering
+ * operations at each end.
  *
  * @see One2OneChannel
  * @see ReadFiltered
@@ -31,15 +32,16 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredOne2OneChannel<In, Out> extends One2OneChannel<In, Out>
-{
+public interface FilteredOne2OneChannel<In, Out> extends One2OneChannel<In, Out> {
     /**
-     * Returns the control interface for configuring the read filters on the channel.
+     * Returns the control interface for configuring the read filters on the
+     * channel.
      */
     public ReadFiltered inFilter();
 
     /**
-     * Returns the control interface for configuring the write filters on the channel.
+     * Returns the control interface for configuring the write filters on the
+     * channel.
      */
     public WriteFiltered outFilter();
 }

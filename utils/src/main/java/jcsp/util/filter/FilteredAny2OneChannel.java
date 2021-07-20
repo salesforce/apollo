@@ -22,8 +22,9 @@ package jcsp.util.filter;
 
 import jcsp.lang.Any2OneChannel;
 
-    /**
- * Interface for an Any2One channel that supports filtering operations at each end.
+/**
+ * Interface for an Any2One channel that supports filtering operations at each
+ * end.
  *
  * @see Any2OneChannel
  * @see ReadFiltered
@@ -31,8 +32,7 @@ import jcsp.lang.Any2OneChannel;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredAny2OneChannel<In, Out> extends Any2OneChannel<In, Out>
-{
+public interface FilteredAny2OneChannel<In, Out> extends Any2OneChannel<In, Out> {
     /**
      * Returns an interface for configuring read filters on the channel.
      */

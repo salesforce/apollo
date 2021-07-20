@@ -20,66 +20,77 @@
 
 package jcsp.lang;
 
-    class Any2OneIntImpl implements ChannelInternalsInt, Any2OneChannelInt {
+class Any2OneIntImpl implements ChannelInternalsInt, Any2OneChannelInt {
 
-	private ChannelInternalsInt channel;
-	private final Object writeMonitor = new Object();
-	
-	Any2OneIntImpl(ChannelInternalsInt _channel) {
-		channel = _channel;
-	}
+    private ChannelInternalsInt channel;
+    private final Object        writeMonitor = new Object();
 
-	//Begin never used:
-	public void endRead() {
-		channel.endRead();
-	}
+    Any2OneIntImpl(ChannelInternalsInt _channel) {
+        channel = _channel;
+    }
 
-	public int read() {
-		return channel.read();
-	}
+    // Begin never used:
+    @Override
+    public void endRead() {
+        channel.endRead();
+    }
 
-	public boolean readerDisable() {
-		return channel.readerDisable();
-	}
+    @Override
+    public int read() {
+        return channel.read();
+    }
 
-	public boolean readerEnable(Alternative alt) {
-		return channel.readerEnable(alt);
-	}
+    @Override
+    public boolean readerDisable() {
+        return channel.readerDisable();
+    }
 
-	public boolean readerPending() {
-		return channel.readerPending();
-	}
+    @Override
+    public boolean readerEnable(Alternative alt) {
+        return channel.readerEnable(alt);
+    }
 
-	public void readerPoison(int strength) {
-		channel.readerPoison(strength);
+    @Override
+    public boolean readerPending() {
+        return channel.readerPending();
+    }
 
-	}
+    @Override
+    public void readerPoison(int strength) {
+        channel.readerPoison(strength);
 
-	public int startRead() {
-		return channel.startRead();
-	}
-	//End never used
+    }
 
-	public void write(int n) {
-		synchronized (writeMonitor) {
-			channel.write(n);
-		}
+    @Override
+    public int startRead() {
+        return channel.startRead();
+    }
+    // End never used
 
-	}
+    @Override
+    public void write(int n) {
+        synchronized (writeMonitor) {
+            channel.write(n);
+        }
 
-	public void writerPoison(int strength) {
-		synchronized (writeMonitor) {
-			channel.writerPoison(strength);
-		}
+    }
 
-	}
+    @Override
+    public void writerPoison(int strength) {
+        synchronized (writeMonitor) {
+            channel.writerPoison(strength);
+        }
 
-	public AltingChannelInputInt in() {
-		return new AltingChannelInputIntImpl(channel,0);
-	}
+    }
 
-	public SharedChannelOutputInt out() {
-		return new SharedChannelOutputIntImpl(this,0);
-	}
+    @Override
+    public AltingChannelInputInt in() {
+        return new AltingChannelInputIntImpl(channel, 0);
+    }
+
+    @Override
+    public SharedChannelOutputInt out() {
+        return new SharedChannelOutputIntImpl(this, 0);
+    }
 
 }

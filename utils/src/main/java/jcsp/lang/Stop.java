@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -23,22 +22,20 @@ package jcsp.lang;
 
 //{{{  javadoc
 
-  /**
- * This is a process that starts, engages in no events, performs no
- * computation but refuses to terminate.
- * <H2>Description</H2>
- * <TT>Stop</TT> is a process that starts, engages in no events, performs no
- * computation but refuses to terminate.
+/**
+ * This is a process that starts, engages in no events, performs no computation
+ * but refuses to terminate.
+ * <H2>Description</H2> <TT>Stop</TT> is a process that starts, engages in no
+ * events, performs no computation but refuses to terminate.
  * <p>
  * It can also be used as a {@link Guard} in an {@link Alternative} that is
- * never ready.
- * Of course, this is equivalent to it (and its defended process) not being
- * there at all!
+ * never ready. Of course, this is equivalent to it (and its defended process)
+ * not being there at all!
  * <P>
- * <I>Note: this process is included for completeness &ndash; it is one of the fundamental
- * primitives of <B>CSP</B>, where it represents a broken process and is a unit of
- * external choice.
- * In JCSP, it is a unit of {@link Alternative}.</I>
+ * <I>Note: this process is included for completeness &ndash; it is one of the
+ * fundamental primitives of <B>CSP</B>, where it represents a broken process
+ * and is a unit of external choice. In JCSP, it is a unit of
+ * {@link Alternative}.</I>
  *
  * @see Skip
  *
@@ -49,46 +46,47 @@ package jcsp.lang;
 
 public class Stop extends Guard implements CSProcess {
 
-  /**
-   * Enables this guard.
-   *
-   * @param alt the Alternative doing the enabling.
-   */
-  boolean enable (Alternative alt) {
-    Thread.yield ();
-    return false;
-  }
-
-  /**
-   * Disables this guard.
-   */
-  boolean disable () {
-    return false;
-  }
-
-  /**
-   * This process starts, engages in no events, performs no computation
-   * and refuses to terminate.
-   * <p>
-   */
-  public void run () {
-    Object lock = new Object ();
-    synchronized (lock) {
-      try {
-        lock.wait ();
-	while (true) {
-	  if (Spurious.logging) {
-	    SpuriousLog.record (SpuriousLog.StopRun);
-	  }
-	  lock.wait ();
-        }	  
-
-      }
-      catch (InterruptedException e) {
-        throw new ProcessInterruptedException ("*** Thrown from Stop.run ()\n"
-                                             + e.toString ());
-      }
+    /**
+     * Enables this guard.
+     *
+     * @param alt the Alternative doing the enabling.
+     */
+    @Override
+    boolean enable(Alternative alt) {
+        Thread.yield();
+        return false;
     }
-  }
+
+    /**
+     * Disables this guard.
+     */
+    @Override
+    boolean disable() {
+        return false;
+    }
+
+    /**
+     * This process starts, engages in no events, performs no computation and
+     * refuses to terminate.
+     * <p>
+     */
+    @Override
+    public void run() {
+        Object lock = new Object();
+        synchronized (lock) {
+            try {
+                lock.wait();
+                while (true) {
+                    if (Spurious.logging) {
+                        SpuriousLog.record(SpuriousLog.StopRun);
+                    }
+                    lock.wait();
+                }
+
+            } catch (InterruptedException e) {
+                throw new ProcessInterruptedException("*** Thrown from Stop.run ()\n" + e.toString());
+            }
+        }
+    }
 
 }

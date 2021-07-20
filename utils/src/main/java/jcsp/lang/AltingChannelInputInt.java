@@ -20,20 +20,20 @@
 
 package jcsp.lang;
 
-    /**
- * This extends {@link Guard} and {@link ChannelInputInt}
- * to enable a process
- * to choose between many integer input (and other) events.
+/**
+ * This extends {@link Guard} and {@link ChannelInputInt} to enable a process to
+ * choose between many integer input (and other) events.
  * <p>
  * A <i>reading-end</i>, obtained from a <i>one-one</i> or <i>any-one</i>
- * channel by invoking its <tt>in()</tt> method, will extend this abstract class.
- * <H2>Description</H2>
- * <TT>AltingChannelInputInt</TT> extends {@link Guard} and {@link ChannelInputInt}
- * to enable a process
- * to choose between many integer input (and other) events.  The methods inherited from
- * <TT>Guard</TT> are of no concern to users of this package.
+ * channel by invoking its <tt>in()</tt> method, will extend this abstract
+ * class.
+ * <H2>Description</H2> <TT>AltingChannelInputInt</TT> extends {@link Guard} and
+ * {@link ChannelInputInt} to enable a process to choose between many integer
+ * input (and other) events. The methods inherited from <TT>Guard</TT> are of no
+ * concern to users of this package.
  * </P>
  * <H2>Example</H2>
+ * 
  * <PRE>
  * import jcsp.lang.*;
  * <I></I>
@@ -73,13 +73,12 @@ package jcsp.lang;
  * @author P.D. Austin and P.H. Welch
  */
 
-public abstract class AltingChannelInputInt extends Guard implements ChannelInputInt
-{
+public abstract class AltingChannelInputInt extends Guard implements ChannelInputInt {
     /**
      * Returns whether there is data pending on this channel.
      * <P>
-     * <I>Note: if there is, it won't go away until you read it.  But if there
-     * isn't, there may be some by the time you check the result of this method.</I>
+     * <I>Note: if there is, it won't go away until you read it. But if there isn't,
+     * there may be some by the time you check the result of this method.</I>
      *
      * @return state of the channel.
      */

@@ -20,29 +20,28 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * <p>
- * Defines an interface for a client end of a connection that
- * can be shared by multiple clients.
+ * Defines an interface for a client end of a connection that can be shared by
+ * multiple clients.
  * </p>
  * <p>
- * This object cannot itself be shared between concurrent processes
- * but duplicate objects can be generated that can be used by
- * multiple concurrent processes. This can be achieved using
- * the <code>{@link #duplicate()}</code> method.
+ * This object cannot itself be shared between concurrent processes but
+ * duplicate objects can be generated that can be used by multiple concurrent
+ * processes. This can be achieved using the <code>{@link #duplicate()}</code>
+ * method.
  * </p>
  * <p>
- * See <code>{@link ConnectionClient}</code> for a fuller explanation
- * of how to use connection client objects.
+ * See <code>{@link ConnectionClient}</code> for a fuller explanation of how to
+ * use connection client objects.
  * </p>
  *
  * @author Quickstone Technologies Limited
  */
-public interface SharedConnectionClient<T> extends ConnectionClient<T, T>
-{
+public interface SharedConnectionClient<T> extends ConnectionClient<T, T> {
     /**
-     * Returns a duplicates <code>SharedConnectionClient</code> object
-     * which may be used by another process to this instance.
+     * Returns a duplicates <code>SharedConnectionClient</code> object which may be
+     * used by another process to this instance.
      *
      * @return a duplicate <code>SharedConnectionClient</code> object.
      */

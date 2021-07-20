@@ -20,25 +20,23 @@
 
 package jcsp.lang;
 
-import jcsp.util.*;
+import jcsp.util.Buffer;
 
 /**
- * This class is an implementation of <code>Any2OneConnection</code>.
- * Each end is safe to be used by one thread at a time.
+ * This class is an implementation of <code>Any2OneConnection</code>. Each end
+ * is safe to be used by one thread at a time.
  *
  * @author Quickstone Technologies Limited
  */
-class Any2OneConnectionImpl implements Any2OneConnection
-{
+class Any2OneConnectionImpl implements Any2OneConnection {
     private AltingConnectionServer server;
-    private One2OneChannel chanToServer;
-    private One2OneChannel chanFromServer;
-    private Any2OneChannel chanSynch;
+    private One2OneChannel         chanToServer;
+    private One2OneChannel         chanFromServer;
+    private Any2OneChannel         chanSynch;
 
     /**
-     * Initializes all the attributes to necessary values.
-     * Channels are created using the static factory in the
-     * <code>ChannelServer</code> inteface.
+     * Initializes all the attributes to necessary values. Channels are created
+     * using the static factory in the <code>ChannelServer</code> inteface.
      *
      * Constructor for One2OneConnectionImpl.
      */
@@ -47,35 +45,30 @@ class Any2OneConnectionImpl implements Any2OneConnection
         chanToServer = ConnectionServer.FACTORY.createOne2One(new Buffer(1));
         chanFromServer = ConnectionServer.FACTORY.createOne2One(new Buffer(1));
         chanSynch = ConnectionServer.FACTORY.createAny2One(new Buffer(1));
-        //create the server object - client object created when accessed
+        // create the server object - client object created when accessed
         server = new AltingConnectionServerImpl(chanToServer.in(), chanToServer.in());
     }
 
     /**
-     * Returns the <code>AltingConnectionClient</code> that can
-     * be used by a single process at any instance.
+     * Returns the <code>AltingConnectionClient</code> that can be used by a single
+     * process at any instance.
      *
      * @return the <code>AltingConnectionClient</code> object.
      */
-    public SharedAltingConnectionClient client()
-    {
-        return new SharedAltingConnectionClient(chanFromServer.in(),
-                                                chanSynch.in(),
-                                                chanToServer.out(),
-                                                chanToServer.out(),
-                                                chanSynch.out(),
-                                                chanFromServer.out(),
-                                                this);
+    @Override
+    public SharedAltingConnectionClient client() {
+        return new SharedAltingConnectionClient(chanFromServer.in(), chanSynch.in(), chanToServer.out(),
+                                                chanToServer.out(), chanSynch.out(), chanFromServer.out(), this);
     }
 
     /**
-     * Returns the <code>AltingConnectionServer</code> that can
-     * be used by a single process at any instance.
+     * Returns the <code>AltingConnectionServer</code> that can be used by a single
+     * process at any instance.
      *
      * @return the <code>AltingConnectionServer</code> object.
      */
-    public AltingConnectionServer server()
-    {
+    @Override
+    public AltingConnectionServer server() {
         return server;
     }
 }

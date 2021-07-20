@@ -20,81 +20,80 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.AltingChannelInputWrapper;
 
-    /**
- * Implements an <code>AltingChannelInput</code> channel end that also supports read filters.
+/**
+ * Implements an <code>AltingChannelInput</code> channel end that also supports
+ * read filters.
  *
  * @see AltingChannelInput
  * @see ReadFiltered
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredAltingChannelInput<T>
-        extends AltingChannelInputWrapper<T>
-        implements FilteredChannelInput<T>
-{
+public class FilteredAltingChannelInput<T> extends AltingChannelInputWrapper<T> implements FilteredChannelInput<T> {
     /**
      * Holds the filters installed for the read end of this channel.
      */
     private FilterHolder filters = null;
 
     /**
-     * Constructs a new channel end that supports filtering by wrapping up an existing channel end.
+     * Constructs a new channel end that supports filtering by wrapping up an
+     * existing channel end.
      *
      * @param altingChannelInput the existing channel end.
      */
-    FilteredAltingChannelInput(AltingChannelInput<T> altingChannelInput)
-    {
+    FilteredAltingChannelInput(AltingChannelInput<T> altingChannelInput) {
         super(altingChannelInput);
     }
 
+    @Override
     @SuppressWarnings("unchecked")
-    public T read()
-    {
+    public T read() {
         T toFilter = super.read();
         for (int i = 0; filters != null && i < filters.getFilterCount(); i++)
             toFilter = (T) filters.getFilter(i).filter(toFilter);
         return toFilter;
     }
 
-    public void addReadFilter(Filter filter)
-    {
+    @Override
+    public void addReadFilter(Filter filter) {
         if (filters == null)
             filters = new FilterHolder();
         filters.addFilter(filter);
     }
 
-    public void addReadFilter(Filter filter, int index)
-    {
+    @Override
+    public void addReadFilter(Filter filter, int index) {
         if (filters == null)
             filters = new FilterHolder();
         filters.addFilter(filter, index);
     }
 
-    public void removeReadFilter(Filter filter)
-    {
+    @Override
+    public void removeReadFilter(Filter filter) {
         if (filters == null)
             filters = new FilterHolder();
         filters.removeFilter(filter);
     }
 
-    public void removeReadFilter(int index)
-    {
+    @Override
+    public void removeReadFilter(int index) {
         if (filters == null)
             filters = new FilterHolder();
         filters.removeFilter(index);
     }
 
-    public Filter getReadFilter(int index)
-    {
+    @Override
+    public Filter getReadFilter(int index) {
         if (filters == null)
             filters = new FilterHolder();
         return filters.getFilter(index);
     }
 
-    public int getReadFilterCount()
-    {
+    @Override
+    public int getReadFilterCount() {
         if (filters == null)
             return 0;
         return filters.getFilterCount();

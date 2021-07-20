@@ -22,9 +22,10 @@ package jcsp.util.filter;
 
 /**
  * Interface for channel plug-ins that define filtering operations -
- * transformations on the data as it is read or written. A channel (or channel end) that supports
- * filtering will implement the <code>ReadFiltered</code> or <code>WriteFiltered</code> interface which
- * allows instances of <code>Filter</code> to be installed or removed from the channel.
+ * transformations on the data as it is read or written. A channel (or channel
+ * end) that supports filtering will implement the <code>ReadFiltered</code> or
+ * <code>WriteFiltered</code> interface which allows instances of
+ * <code>Filter</code> to be installed or removed from the channel.
  *
  * @see jcsp.util.filter.FilteredChannel
  * @see jcsp.util.filter.FilteredChannelEnd
@@ -33,11 +34,10 @@ package jcsp.util.filter;
  *
  * @author Quickstone Technologies Limited
  */
-public interface Filter
-{
+public interface Filter {
     /**
-     * Applies the filter operation. The object given can be modified and returned or another object
-     * substituted in its place.
+     * Applies the filter operation. The object given can be modified and returned
+     * or another object substituted in its place.
      *
      * @param obj the original object in the channel communication.
      * @return the modified/substituted object after filtration.

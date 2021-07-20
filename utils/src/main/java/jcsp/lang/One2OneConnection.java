@@ -20,13 +20,13 @@
 
 package jcsp.lang;
 
-    /**
- * Defines an interface for a connection that can be used by a single server and single client.
+/**
+ * Defines an interface for a connection that can be used by a single server and
+ * single client.
  *
  * @author Quickstone Technologies Limited
  */
-public interface One2OneConnection
-{
+public interface One2OneConnection {
     /**
      * Returns the client end of the connection.
      */

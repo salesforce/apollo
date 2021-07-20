@@ -20,14 +20,15 @@
 
 package jcsp.lang;
 
-    /**
- * This is the super-class for all {@link Alternative} events selectable by a process.
- * <H2>Description</H2>
- * <TT>Guard</TT> defines an abstract interface to be implemented by events competing
- * for selection by a process executing an {@link Alternative}.  Its methods have
- * only <I>package</I> visibility within <TT>jcsp.lang</TT> and are of no concern to
- * <I>users</I> of this package.  Currently, JCSP supports channel inputs, accepts,
- * timeouts and skips as guards.
+/**
+ * This is the super-class for all {@link Alternative} events selectable by a
+ * process.
+ * <H2>Description</H2> <TT>Guard</TT> defines an abstract interface to be
+ * implemented by events competing for selection by a process executing an
+ * {@link Alternative}. Its methods have only <I>package</I> visibility within
+ * <TT>jcsp.lang</TT> and are of no concern to <I>users</I> of this package.
+ * Currently, JCSP supports channel inputs, accepts, timeouts and skips as
+ * guards.
  * <P>
  * <I>Note: for those familiar with the <I><B>occam</B></I> multiprocessing
  * language, classes implementing </I><TT>Guard</TT><I> correspond to process
@@ -42,11 +43,10 @@ package jcsp.lang;
  * @author P.H. Welch
  */
 
-public abstract class Guard
-{
+public abstract class Guard {
     /**
-     * Returns true if the event is ready.  Otherwise, this enables the guard
-     * for selection and returns false.
+     * Returns true if the event is ready. Otherwise, this enables the guard for
+     * selection and returns false.
      * <P>
      * <I>Note: this method should only be called by the Alternative class</I>
      *
@@ -63,15 +63,15 @@ public abstract class Guard
      * @return true if and only if the event was ready
      */
     abstract boolean disable();
-    
+
     /**
-     * Schedules the process performing the given Alternative to run again.
-     * This is intended for use by advanced users of the library who want to
-     * create their own Guards that are not in the jcsp.lang package.
+     * Schedules the process performing the given Alternative to run again. This is
+     * intended for use by advanced users of the library who want to create their
+     * own Guards that are not in the jcsp.lang package.
      * 
      * @param alt The Alternative to schedule
      */
-    protected void schedule (Alternative alt) {
-    	alt.schedule();
+    protected void schedule(Alternative alt) {
+        alt.schedule();
     }
 }

@@ -20,15 +20,17 @@
 
 package jcsp.util.filter;
 
-import jcsp.lang.*;
+import jcsp.lang.AltingChannelInput;
+import jcsp.lang.ChannelOutput;
+import jcsp.lang.One2OneChannel;
 
-    /**
- * Implements a <code>One2One</code> channel that supports filtering at each end.
+/**
+ * Implements a <code>One2One</code> channel that supports filtering at each
+ * end.
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredOne2OneChannelImpl<In, Out> implements FilteredOne2OneChannel<In, Out>
-{
+class FilteredOne2OneChannelImpl<In, Out> implements FilteredOne2OneChannel<In, Out> {
     /**
      * The filtered input end of the channel.
      */
@@ -44,29 +46,28 @@ class FilteredOne2OneChannelImpl<In, Out> implements FilteredOne2OneChannel<In, 
      *
      * @param chan the existing channel.
      */
-    public FilteredOne2OneChannelImpl(One2OneChannel<In, Out> chan)
-    {
+    public FilteredOne2OneChannelImpl(One2OneChannel<In, Out> chan) {
         in = new FilteredAltingChannelInput<In>(chan.in());
         out = new FilteredChannelOutputWrapper<Out>(chan.out());
     }
 
-    public AltingChannelInput<In> in()
-    {
+    @Override
+    public AltingChannelInput<In> in() {
         return in;
     }
 
-    public ChannelOutput<Out> out()
-    {
+    @Override
+    public ChannelOutput<Out> out() {
         return out;
     }
 
-    public ReadFiltered inFilter()
-    {
+    @Override
+    public ReadFiltered inFilter() {
         return in;
     }
 
-    public WriteFiltered outFilter()
-    {
+    @Override
+    public WriteFiltered outFilter() {
         return out;
     }
 }

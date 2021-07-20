@@ -20,19 +20,21 @@
 
 package jcsp.lang;
 
-    /**
- * Defines an interface for an input channel end that gives the reader the ability to reject instead
- * of accepting pending data.
+/**
+ * Defines an interface for an input channel end that gives the reader the
+ * ability to reject instead of accepting pending data.
  *
  * @author Quickstone Technologies Limited
  * 
- * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}.  It remains only because it is used by some of the networking features.
+ * @deprecated This channel is superceded by the poison mechanisms, please see
+ *             {@link PoisonException}. It remains only because it is used by
+ *             some of the networking features.
  */
-public interface RejectableChannelInput<T> extends ChannelInput<T>
-{
+@Deprecated
+public interface RejectableChannelInput<T> extends ChannelInput<T> {
     /**
-     * Reject any data pending instead of reading it. The currently blocked writer will receive a
-     * <Code>ChannelDataRejectedException</code>.
+     * Reject any data pending instead of reading it. The currently blocked writer
+     * will receive a <Code>ChannelDataRejectedException</code>.
      */
     public void reject();
 }

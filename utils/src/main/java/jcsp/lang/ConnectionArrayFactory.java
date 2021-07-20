@@ -20,22 +20,19 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * Defines an interface for a factory that can create arrays of connections.
  *
  * @author Quickstone Technologies Limited
  */
-public interface ConnectionArrayFactory
-{
+public interface ConnectionArrayFactory {
     /**
      * Constructs and returns an array of instances of an implementation of
      * <code>One2OneConnection</code>.
      *
-     * @param n	the number of <code>One2OneConnection</code> objects
-     * 			    to construct.
+     * @param n the number of <code>One2OneConnection</code> objects to construct.
      *
-     * @return	the constructed array of <code>One2OneConnection</code>
-     *          objects.
+     * @return the constructed array of <code>One2OneConnection</code> objects.
      */
     public One2OneConnection[] createOne2One(int n);
 
@@ -43,11 +40,9 @@ public interface ConnectionArrayFactory
      * Constructs and returns an array of instances of an implementation of
      * <code>Any2OneConnection</code>.
      *
-     * @param n	the number of <code>Any2OneConnection</code> objects
-     * 			    to construct.
+     * @param n the number of <code>Any2OneConnection</code> objects to construct.
      *
-     * @return	the constructed array of <code>Any2OneConnection</code>
-     *          objects.
+     * @return the constructed array of <code>Any2OneConnection</code> objects.
      */
     public Any2OneConnection[] createAny2One(int n);
 
@@ -55,11 +50,9 @@ public interface ConnectionArrayFactory
      * Constructs and returns an array of instances of an implementation of
      * <code>One2AnyConnection</code>.
      *
-     * @param n	the number of <code>One2AnyConnection</code> objects
-     * 			    to construct.
+     * @param n the number of <code>One2AnyConnection</code> objects to construct.
      *
-     * @return	the constructed array of <code>One2AnyConnection</code>
-     * 			objects.
+     * @return the constructed array of <code>One2AnyConnection</code> objects.
      */
     public One2AnyConnection[] createOne2Any(int n);
 
@@ -67,11 +60,9 @@ public interface ConnectionArrayFactory
      * Constructs and returns an array of instances of an implementation of
      * <code>Any2AnyConnection</code>.
      *
-     * @param n	the number of <code>Any2AnyConnection</code> objects
-     * 			    to construct.
+     * @param n the number of <code>Any2AnyConnection</code> objects to construct.
      *
-     * @return	the constructed array of <code>Any2AnyConnection</code>
-     * 			objects.
+     * @return the constructed array of <code>Any2AnyConnection</code> objects.
      */
     public Any2AnyConnection[] createAny2Any(int n);
 }

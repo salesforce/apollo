@@ -20,33 +20,37 @@
 
 package jcsp.lang;
 
-    class ChannelInputIntImpl implements ChannelInputInt {
+class ChannelInputIntImpl implements ChannelInputInt {
 
-	private ChannelInternalsInt channel;
-	private int immunity;
-	
-	ChannelInputIntImpl(ChannelInternalsInt _channel, int _immunity) {
-		channel = _channel;
-		immunity = _immunity;
-	}
-	
-	public void endRead() {
-		channel.endRead();
+    private ChannelInternalsInt channel;
+    private int                 immunity;
 
-	}
+    ChannelInputIntImpl(ChannelInternalsInt _channel, int _immunity) {
+        channel = _channel;
+        immunity = _immunity;
+    }
 
-	public int read() {
-		return channel.read();
-	}
+    @Override
+    public void endRead() {
+        channel.endRead();
 
-	public int startRead() {
-		return channel.startRead();
-	}
+    }
 
-	public void poison(int strength) {
-		if (strength > immunity) {
-			channel.readerPoison(strength);
-		}
-	}
+    @Override
+    public int read() {
+        return channel.read();
+    }
+
+    @Override
+    public int startRead() {
+        return channel.startRead();
+    }
+
+    @Override
+    public void poison(int strength) {
+        if (strength > immunity) {
+            channel.readerPoison(strength);
+        }
+    }
 
 }

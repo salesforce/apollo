@@ -1,5 +1,4 @@
 
-
 //////////////////////////////////////////////////////////////////////
 //                                                                  //
 //  JCSP ("CSP for Java") Libraries                                 //
@@ -23,23 +22,22 @@ package jcsp.lang;
 
 //{{{  javadoc
 /**
- * This is thrown if a process is interrupted whilst blocked during synchronisation
- * - processes should never be interrupted.
+ * This is thrown if a process is interrupted whilst blocked during
+ * synchronisation - processes should never be interrupted.
  *
- * <H2>Description</H2>
- * This is caused by accessing the Java thread executing a JCSP process and invoking its
- * <TT>java.lang.Thread.interrupt</TT>() method.
- * If this is done to a process blocked on a JCSP synchronisation primitive (such as
- * a channel communication or timeout), the process will wake up prematurely
- * -- invalidating the semantics of that primitive.
- * The wake up is intercepted and this {@link Error} is thrown.
+ * <H2>Description</H2> This is caused by accessing the Java thread executing a
+ * JCSP process and invoking its <TT>java.lang.Thread.interrupt</TT>() method.
+ * If this is done to a process blocked on a JCSP synchronisation primitive
+ * (such as a channel communication or timeout), the process will wake up
+ * prematurely -- invalidating the semantics of that primitive. The wake up is
+ * intercepted and this {@link Error} is thrown.
  * <P>
  * Some browsers, when shutting down an <I>applet</I>, may do this to processes
  * spawned by an {@link jcsp.awt.ActiveApplet} that have not died naturally.
  *
- * Alternatively, this may be raised by processes stopped prematurely as a result of
- * a call to <TT>Parallel.destroy</TT>, or by calling <TT>stop</TT> on the
- * <TT>ProcessManager</TT> responsible for the process (or network).
+ * Alternatively, this may be raised by processes stopped prematurely as a
+ * result of a call to <TT>Parallel.destroy</TT>, or by calling <TT>stop</TT> on
+ * the <TT>ProcessManager</TT> responsible for the process (or network).
  *
  * @author P.H. Welch
  */
@@ -48,11 +46,9 @@ package jcsp.lang;
 public class ProcessInterruptedException extends Error {
     private static final long serialVersionUID = 1L;
 
-  public ProcessInterruptedException (String s) {
-    super ("\n*** Interrupting a running process is not compatible with JCSP\n" +
-           "*** Please don't do this!\n" + s);
+    public ProcessInterruptedException(String s) {
+        super("\n*** Interrupting a running process is not compatible with JCSP\n" + "*** Please don't do this!\n" + s);
 // System.out.println ("Someone is creating a ProcessInterruptedException!\n" + s);
-  }
+    }
 
 }
-

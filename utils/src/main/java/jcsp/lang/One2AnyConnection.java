@@ -20,14 +20,13 @@
 
 package jcsp.lang;
 
-    /**
- * An interface for a connection which can be used by only one client but which can be used by multiple
- * concurrent servers.
+/**
+ * An interface for a connection which can be used by only one client but which
+ * can be used by multiple concurrent servers.
  *
  * @author Quickstone Technologies Limited
  */
-public interface One2AnyConnection extends ConnectionWithSharedAltingServer
-{
+public interface One2AnyConnection extends ConnectionWithSharedAltingServer {
     /**
      * Returns the client part of the connection.
      */
@@ -36,5 +35,6 @@ public interface One2AnyConnection extends ConnectionWithSharedAltingServer
     /**
      * Returns the server part of the connection.
      */
+    @Override
     public SharedConnectionServer server();
 }

@@ -24,10 +24,10 @@ import java.io.Serializable;
 
 /**
  * This is used to create a buffered object channel that never loses data.
- * <H2>Description</H2>
- * <TT>Buffer</TT> is an implementation of <TT>ChannelDataStore</TT> that yields
- * a blocking <I>FIFO</I> buffered semantics for a channel.
- * See the <tt>static</tt> construction methods of {@link jcsp.lang.Channel}
+ * <H2>Description</H2> <TT>Buffer</TT> is an implementation of
+ * <TT>ChannelDataStore</TT> that yields a blocking <I>FIFO</I> buffered
+ * semantics for a channel. See the <tt>static</tt> construction methods of
+ * {@link jcsp.lang.Channel}
  * ({@link jcsp.lang.Channel#one2one(jcsp.util.ChannelDataStore)} etc.).
  * <P>
  * The <TT>getState</TT> method returns <TT>EMPTY</TT>, <TT>NONEMPTYFULL</TT> or
@@ -43,8 +43,7 @@ import java.io.Serializable;
  * @author P.D. Austin
  */
 
-public class Buffer<T> implements ChannelDataStore<T>, Serializable
-{ 
+public class Buffer<T> implements ChannelDataStore<T>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /** The storage for the buffered Objects */
@@ -63,13 +62,13 @@ public class Buffer<T> implements ChannelDataStore<T>, Serializable
      * Construct a new <TT>Buffer</TT> with the specified size.
      *
      * @param size the number of Objects the Buffer can store.
-     * @throws BufferSizeError if <TT>size</TT> is negative.  Note: no action
-     * should be taken to <TT>try</TT>/<TT>catch</TT> this exception
-     * - application code generating it is in error and needs correcting.
+     * @throws BufferSizeError if <TT>size</TT> is negative. Note: no action should
+     *                         be taken to <TT>try</TT>/<TT>catch</TT> this
+     *                         exception - application code generating it is in
+     *                         error and needs correcting.
      */
     @SuppressWarnings("unchecked")
-    public Buffer(int size)
-    {
+    public Buffer(int size) {
         if (size < 0)
             throw new BufferSizeError("\n*** Attempt to create a buffered channel with negative capacity");
         buffer = (T[]) new Object[size + 1]; // the extra one is a subtlety needed by
@@ -79,50 +78,53 @@ public class Buffer<T> implements ChannelDataStore<T>, Serializable
     /**
      * Returns the oldest <TT>Object</TT> from the <TT>Buffer</TT> and removes it.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the oldest <TT>Object</TT> from the <TT>Buffer</TT>
      */
-    public T get()
-    {
+    @Override
+    public T get() {
         T value = buffer[firstIndex];
         buffer[firstIndex] = null;
         firstIndex = (firstIndex + 1) % buffer.length;
         counter--;
         return value;
     }
-    
+
     /**
      * Returns the oldest object from the buffer but does not remove it.
      * 
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>EMPTY</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>EMPTY</TT>.
      *
      * @return the oldest <TT>Object</TT> from the <TT>Buffer</TT>
      */
-    public T startGet()
-    {
-      return buffer[firstIndex];
+    @Override
+    public T startGet() {
+        return buffer[firstIndex];
     }
-    
+
     /**
-     * Removes the oldest object from the buffer.     
+     * Removes the oldest object from the buffer.
      */
-    public void endGet()
-    {
-      buffer[firstIndex] = null;
-      firstIndex = (firstIndex + 1) % buffer.length;
-      counter--;
+    @Override
+    public void endGet() {
+        buffer[firstIndex] = null;
+        firstIndex = (firstIndex + 1) % buffer.length;
+        counter--;
     }
 
     /**
      * Puts a new <TT>Object</TT> into the <TT>Buffer</TT>.
      * <P>
-     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return <TT>FULL</TT>.
+     * <I>Pre-condition</I>: <TT>getState</TT> must not currently return
+     * <TT>FULL</TT>.
      *
      * @param value the Object to put into the Buffer
      */
-    public void put(T value)
-    {
+    @Override
+    public void put(T value) {
         buffer[lastIndex] = value;
         lastIndex = (lastIndex + 1) % buffer.length;
         counter++;
@@ -132,10 +134,10 @@ public class Buffer<T> implements ChannelDataStore<T>, Serializable
      * Returns the current state of the <TT>Buffer</TT>.
      *
      * @return the current state of the <TT>Buffer</TT> (<TT>EMPTY</TT>,
-     * <TT>NONEMPTYFULL</TT> or <TT>FULL</TT>)
+     *         <TT>NONEMPTYFULL</TT> or <TT>FULL</TT>)
      */
-    public int getState()
-    {
+    @Override
+    public int getState() {
         if (counter == 0)
             return EMPTY;
         else if (counter == buffer.length)
@@ -145,28 +147,28 @@ public class Buffer<T> implements ChannelDataStore<T>, Serializable
     }
 
     /**
-     * Returns a new (and <TT>EMPTY</TT>) <TT>Buffer</TT> with the same
-     * creation parameters as this one.
+     * Returns a new (and <TT>EMPTY</TT>) <TT>Buffer</TT> with the same creation
+     * parameters as this one.
      * <P>
-     * <I>Note: Only the size and structure of the </I><TT>Buffer</TT><I> is
-     * cloned, not any stored data.</I>
+     * <I>Note: Only the size and structure of the </I><TT>Buffer</TT><I> is cloned,
+     * not any stored data.</I>
      *
      * @return the cloned instance of this <TT>Buffer</TT>
      */
-    public Buffer<T> clone()
-    {
+    @Override
+    public Buffer<T> clone() {
         return new Buffer<T>(buffer.length - 1);
     }
-    
-    public void removeAll()
-    {
+
+    @Override
+    public void removeAll() {
         counter = 0;
         firstIndex = 0;
         lastIndex = 0;
-        
-        for (int i = 0;i < buffer.length;i++) {
-        	//Null the objects so they can be garbage collected:
-        	buffer[i] = null;
+
+        for (int i = 0; i < buffer.length; i++) {
+            // Null the objects so they can be garbage collected:
+            buffer[i] = null;
         }
     }
 }

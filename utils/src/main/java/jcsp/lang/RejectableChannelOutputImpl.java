@@ -21,11 +21,10 @@
 package jcsp.lang;
 
 @SuppressWarnings("deprecation")
-    class RejectableChannelOutputImpl<T> extends ChannelOutputImpl<T> implements
-            RejectableChannelOutput<T> {
+class RejectableChannelOutputImpl<T> extends ChannelOutputImpl<T> implements RejectableChannelOutput<T> {
 
-	public RejectableChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
-		super(_channel, _immunity);		
-	}
+    public RejectableChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
+        super(_channel, _immunity);
+    }
 
 }

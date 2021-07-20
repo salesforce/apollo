@@ -20,19 +20,19 @@
 
 package jcsp.lang;
 
-    /**
+/**
  * This implements {@link ChannelOutputInt} with <I>black hole</I> semantics.
- * <H2>Description</H2>
- * <TT>BlackHoleChannelInt</TT> is an implementation of {@link ChannelOutputInt} that yields
- * <I>black hole</I> semantics for a channel.  Writers may always write but there can be
- * no readers.  Any number of writers may share the same <I>black hole</I>.
+ * <H2>Description</H2> <TT>BlackHoleChannelInt</TT> is an implementation of
+ * {@link ChannelOutputInt} that yields <I>black hole</I> semantics for a
+ * channel. Writers may always write but there can be no readers. Any number of
+ * writers may share the same <I>black hole</I>.
  * <P>
- * <I>Note:</I> <TT>BlackHoleChannelInt</TT>s are used for masking off unwanted outputs
- * from processes.  They are useful when we want to reuse an existing process component
- * intact, but don't need some of its output channels (i.e. we don't want to redesign
- * and reimplement the component to remove the redundant channels).  Normal channels cannot
- * be plugged in and left dangling as this may deadlock (parts of) the component being
- * reused.
+ * <I>Note:</I> <TT>BlackHoleChannelInt</TT>s are used for masking off unwanted
+ * outputs from processes. They are useful when we want to reuse an existing
+ * process component intact, but don't need some of its output channels (i.e. we
+ * don't want to redesign and reimplement the component to remove the redundant
+ * channels). Normal channels cannot be plugged in and left dangling as this may
+ * deadlock (parts of) the component being reused.
  * <P>
  *
  * @see ChannelOutputInt
@@ -44,20 +44,19 @@ package jcsp.lang;
  * @author P.H. Welch
  */
 
-public class BlackHoleChannelInt implements ChannelOutputInt
-{ 
-  /**
-   * Write an integer to the channel and loose it.
-   *
-   * @param n the integer to write to the channel.
-   */
+public class BlackHoleChannelInt implements ChannelOutputInt {
+    /**
+     * Write an integer to the channel and loose it.
+     *
+     * @param n the integer to write to the channel.
+     */
 
-  public void write(int n)
-  {    
-  }  
-  
-  public void poison(int strength) 
-  {    
-  }
+    @Override
+    public void write(int n) {
+    }
+
+    @Override
+    public void poison(int strength) {
+    }
 
 }

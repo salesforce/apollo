@@ -20,86 +20,91 @@
 
 package jcsp.lang;
 
-    class One2AnyImpl<T> implements One2AnyChannel<T, T>, ChannelInternals<T> {
+class One2AnyImpl<T> implements One2AnyChannel<T, T>, ChannelInternals<T> {
 
-	private ChannelInternals<T> channel;
-	/** The mutex on which readers must synchronize */
-    private final Mutex readMutex = new Mutex();
-    
+    private ChannelInternals<T> channel;
+    /** The mutex on which readers must synchronize */
+    private final Mutex         readMutex = new Mutex();
+
     One2AnyImpl(ChannelInternals<T> _channel) {
-		channel = _channel;
-	}
-	
-	public SharedChannelInput<T> in() {
-		return new SharedChannelInputImpl<T>(this,0);
-	}
+        channel = _channel;
+    }
 
-	public ChannelOutput<T> out() { 
-		return new ChannelOutputImpl<T>(channel,0);
-	}
+    @Override
+    public SharedChannelInput<T> in() {
+        return new SharedChannelInputImpl<T>(this, 0);
+    }
 
-	public void endRead() {
-		channel.endRead();
-		readMutex.release();
+    @Override
+    public ChannelOutput<T> out() {
+        return new ChannelOutputImpl<T>(channel, 0);
+    }
 
-	}
+    @Override
+    public void endRead() {
+        channel.endRead();
+        readMutex.release();
 
-	public T read() {
-		readMutex.claim();
-		//A poison exception might be thrown, hence the try/finally:		
-		try
-		{
-			return channel.read();
-		}
-		finally
-		{
-			readMutex.release();		
-		}		
-	}
+    }
 
-	//begin never used:
-	public boolean readerDisable() {
-		return false;
-	}
+    @Override
+    public T read() {
+        readMutex.claim();
+        // A poison exception might be thrown, hence the try/finally:
+        try {
+            return channel.read();
+        } finally {
+            readMutex.release();
+        }
+    }
 
-	public boolean readerEnable(Alternative alt) {
-		return false;
-	}
+    // begin never used:
+    @Override
+    public boolean readerDisable() {
+        return false;
+    }
 
-	public boolean readerPending() {
-		return false;
-	}
-	//end never used
+    @Override
+    public boolean readerEnable(Alternative alt) {
+        return false;
+    }
 
-	public void readerPoison(int strength) {
-		readMutex.claim();
-		channel.readerPoison(strength);
-		readMutex.release();
-	}
+    @Override
+    public boolean readerPending() {
+        return false;
+    }
+    // end never used
 
-	public T startRead() {
-		readMutex.claim();		
-		try
-		{
-			return channel.startRead();
-		}
-		catch (RuntimeException e)
-		{
-			channel.endRead();
-			readMutex.release();
-			throw e;
-		}
-		
-	}
+    @Override
+    public void readerPoison(int strength) {
+        readMutex.claim();
+        channel.readerPoison(strength);
+        readMutex.release();
+    }
 
-	//begin never used
-	public void write(T obj) {
-		channel.write(obj);
-	}
+    @Override
+    public T startRead() {
+        readMutex.claim();
+        try {
+            return channel.startRead();
+        } catch (RuntimeException e) {
+            channel.endRead();
+            readMutex.release();
+            throw e;
+        }
 
-	public void writerPoison(int strength) { 
-		channel.writerPoison(strength);
-	}
-	//end never used
+    }
+
+    // begin never used
+    @Override
+    public void write(T obj) {
+        channel.write(obj);
+    }
+
+    @Override
+    public void writerPoison(int strength) {
+        channel.writerPoison(strength);
+    }
+    // end never used
 
 }

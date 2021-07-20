@@ -21,12 +21,12 @@
 package jcsp.lang;
 
 /**
- * Thrown by a <code>read</code> or a <code>write</code> method of a channel when a reject has been
- * called and the synchronization and data transfer will not complete.
+ * Thrown by a <code>read</code> or a <code>write</code> method of a channel
+ * when a reject has been called and the synchronization and data transfer will
+ * not complete.
  *
  * @author Quickstone Technologies Limited
  */
-public class ChannelDataRejectedException extends RuntimeException
-{	
+public class ChannelDataRejectedException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 }

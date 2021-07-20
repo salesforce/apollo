@@ -22,11 +22,10 @@ package jcsp.util.filter;
 
 import jcsp.lang.ChannelInput;
 
-    /**
+/**
  * Interface for a channel input end that supports filtering operations.
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredChannelInput<T> extends ChannelInput<T>, ReadFiltered
-{
+public interface FilteredChannelInput<T> extends ChannelInput<T>, ReadFiltered {
 }

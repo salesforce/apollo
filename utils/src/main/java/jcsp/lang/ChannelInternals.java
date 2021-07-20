@@ -20,25 +20,29 @@
 
 package jcsp.lang;
 
-    interface ChannelInternals<T> {
+interface ChannelInternals<T> {
 
-	public T read();
-	public void write(T obj);
-	
-	public T startRead();
-	public void endRead();
-	
-	public boolean readerEnable(Alternative alt);
-	public boolean readerDisable();
-	public boolean readerPending();
-	
-	/*//For Symmetric channel, later:
-	public boolean writerEnable(Alternative alt);
-	public boolean writerDisable();
-	public boolean writerPending();
-	*/
-	
-	public void readerPoison(int strength);
-	public void writerPoison(int strength);
+    public T read();
+
+    public void write(T obj);
+
+    public T startRead();
+
+    public void endRead();
+
+    public boolean readerEnable(Alternative alt);
+
+    public boolean readerDisable();
+
+    public boolean readerPending();
+
+    /*
+     * //For Symmetric channel, later: public boolean writerEnable(Alternative alt);
+     * public boolean writerDisable(); public boolean writerPending();
+     */
+
+    public void readerPoison(int strength);
+
+    public void writerPoison(int strength);
 
 }

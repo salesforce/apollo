@@ -20,10 +20,10 @@
 
 package jcsp.lang;
 
-    /**
- * This implements an any-to-one integer channel,
- * safe for use by many writers and one reader.Refer to the {@link Any2OneChannelInt} interface for
- * a fuller description.
+/**
+ * This implements an any-to-one integer channel, safe for use by many writers
+ * and one reader.Refer to the {@link Any2OneChannelInt} interface for a fuller
+ * description.
  *
  * @see jcsp.lang.One2OneChannelIntImpl
  * @see jcsp.lang.One2AnyChannelIntImpl
@@ -33,9 +33,8 @@ package jcsp.lang;
  * @author P.D. Austin and P.H. Welch
  */
 
-class Any2OneChannelIntImpl extends Any2OneIntImpl
-{
-	Any2OneChannelIntImpl() {
-		super(new One2OneChannelIntImpl());
-	}
+class Any2OneChannelIntImpl extends Any2OneIntImpl {
+    Any2OneChannelIntImpl() {
+        super(new One2OneChannelIntImpl());
+    }
 }

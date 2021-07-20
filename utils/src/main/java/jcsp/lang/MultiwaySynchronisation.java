@@ -20,4 +20,5 @@
 
 package jcsp.lang;
 
-interface MultiwaySynchronisation {}
+interface MultiwaySynchronisation {
+}
