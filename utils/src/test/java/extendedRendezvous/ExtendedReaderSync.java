@@ -38,13 +38,13 @@ public class ExtendedReaderSync implements CSProcess {
 
   private AltingBarrier[][] events;
   
-  private ChannelInput input;
+  private ChannelInput<?> input;
   
   private int iterations;
   
   private Object[] valuesRead;
   
-  public ExtendedReaderSync(AltingBarrier[][] barriers, ChannelInput in, int iterations) {
+  public ExtendedReaderSync(AltingBarrier[][] barriers, ChannelInput<?> in, int iterations) {
     if (barriers.length != iterations) {
       throw new InvalidParameterException("Barriers must be the same length as iterations");
     }
@@ -55,7 +55,7 @@ public class ExtendedReaderSync implements CSProcess {
     valuesRead = new Object[iterations];
   }
   
-  public ExtendedReaderSync(AltingBarrier barrier, ChannelInput in, int iterations) {
+  public ExtendedReaderSync(AltingBarrier barrier, ChannelInput<?> in, int iterations) {
     this.events = new AltingBarrier[iterations][];
     Arrays.fill(this.events,new AltingBarrier[] {barrier});
     

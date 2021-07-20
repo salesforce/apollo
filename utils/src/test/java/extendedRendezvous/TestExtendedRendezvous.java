@@ -50,6 +50,7 @@ import jcsp.util.Buffer;
 import jcsp.util.OverFlowingBuffer;
 import jcsp.util.ints.BufferInt;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class TestExtendedRendezvous {
 
     /**
@@ -73,7 +74,7 @@ public class TestExtendedRendezvous {
         }
     }
 
-    public void helper_testChannelOneWriter(ChannelInput in, ChannelOutput out) {
+    public void helper_testChannelOneWriter(ChannelInput<? super Object> in, ChannelOutput<? super Object> out) {
 
         /*
          * This test checks that the reads and writes occur in the right order during an
@@ -125,25 +126,25 @@ public class TestExtendedRendezvous {
 
     @Test
     public void testNormalOne2OneChannel() {
-        One2OneChannel chan = Channel.one2one();
+        One2OneChannel  chan = Channel.one2one();
         helper_testChannelOneWriter(chan.in(), chan.out());
     }
 
     @Test
     public void testNormalAny2OneChannel() {
-        Any2OneChannel chan = Channel.any2one();
+        Any2OneChannel  chan = Channel.any2one();
         helper_testChannelOneWriter(chan.in(), chan.out());
     }
 
     @Test
     public void testNormalOne2AnyChannel() {
-        One2AnyChannel chan = Channel.one2any();
+        One2AnyChannel  chan = Channel.one2any();
         helper_testChannelOneWriter(chan.in(), chan.out());
     }
 
     @Test
     public void testNormalAny2AnyChannel() {
-        Any2AnyChannel chan = Channel.any2any();
+        Any2AnyChannel  chan = Channel.any2any();
         helper_testChannelOneWriter(chan.in(), chan.out());
     }
 
@@ -216,7 +217,7 @@ public class TestExtendedRendezvous {
         helper_testIntChannelOneWriter(chan.in(), chan.out());
     }
 
-    public void helper_testFIFOChannelOneWriter(ChannelInput in, ChannelOutput out) {
+    public void helper_testFIFOChannelOneWriter(ChannelInput  in, ChannelOutput  out) {
 
         /*
          * Since the reads and writes are fairly independent, this test instead checks
@@ -244,37 +245,37 @@ public class TestExtendedRendezvous {
 
     @Test
     public void testFIFO_One2OneChannel() {
-        One2OneChannel chan4 = Channel.one2one(new Buffer(4));
+        One2OneChannel<?, ?> chan4 = Channel.one2one(new Buffer<Object>(4));
         helper_testFIFOChannelOneWriter(chan4.in(), chan4.out());
 
-        One2OneChannel chan1 = Channel.one2one(new Buffer(1));
+        One2OneChannel<?, ?> chan1 = Channel.one2one(new Buffer<Object>(1));
         helper_testFIFOChannelOneWriter(chan1.in(), chan1.out());
     }
 
     @Test
     public void testFIFO_Any2OneChannel() {
-        Any2OneChannel chan4 = Channel.any2one(new Buffer(4));
+        Any2OneChannel<?, ?> chan4 = Channel.any2one(new Buffer<Object>(4));
         helper_testFIFOChannelOneWriter(chan4.in(), chan4.out());
 
-        Any2OneChannel chan1 = Channel.any2one(new Buffer(1));
+        Any2OneChannel<?, ?> chan1 = Channel.any2one(new Buffer<Object>(1));
         helper_testFIFOChannelOneWriter(chan1.in(), chan1.out());
     }
 
     @Test
     public void testFIFO_One2AnyChannel() {
-        One2AnyChannel chan4 = Channel.one2any(new Buffer(4));
+        One2AnyChannel<?, ?> chan4 = Channel.one2any(new Buffer<Object>(4));
         helper_testFIFOChannelOneWriter(chan4.in(), chan4.out());
 
-        One2AnyChannel chan1 = Channel.one2any(new Buffer(1));
+        One2AnyChannel<?, ?> chan1 = Channel.one2any(new Buffer<Object>(1));
         helper_testFIFOChannelOneWriter(chan1.in(), chan1.out());
     }
 
     @Test
     public void testFIFO_Any2AnyChannel() {
-        Any2AnyChannel chan4 = Channel.any2any(new Buffer(4));
+        Any2AnyChannel<?, ?> chan4 = Channel.any2any(new Buffer<Object>(4));
         helper_testFIFOChannelOneWriter(chan4.in(), chan4.out());
 
-        Any2AnyChannel chan1 = Channel.any2any(new Buffer(1));
+        Any2AnyChannel<?, ?> chan1 = Channel.any2any(new Buffer<Object>(1));
         helper_testFIFOChannelOneWriter(chan1.in(), chan1.out());
     }
 
@@ -348,7 +349,7 @@ public class TestExtendedRendezvous {
          * sync during the 1st item. Repeat until 100 items have been sent (80 received)
          */
 
-        One2OneChannel chan = Channel.one2one(new OverFlowingBuffer(4));
+        One2OneChannel<?, ?> chan = Channel.one2one(new OverFlowingBuffer<Object>(4));
 
         AltingBarrier[] syncEvent = AltingBarrier.create(2);
 
