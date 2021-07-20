@@ -81,7 +81,7 @@ package jcsp.lang;
  */
 //}}}
 
-public abstract class AltingChannelOutput extends Guard implements ChannelOutput {
+public abstract class AltingChannelOutput<T> extends Guard implements ChannelOutput<T> {
 
   // nothing alse to add
 

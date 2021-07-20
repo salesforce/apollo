@@ -48,7 +48,9 @@ package jcsp.util;
  */
 
 public class BufferSizeError extends Error
-{
+{ 
+    private static final long serialVersionUID = 1L;
+
     public BufferSizeError (String s)
     {
         super (s);

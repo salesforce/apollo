@@ -23,8 +23,8 @@ package jcsp.lang;
     /**
  * @author Quickstone Technologies Limited
  */
-class ConnectionClientOpenMessage extends ConnectionClientMessage
+class ConnectionClientOpenMessage<T> extends ConnectionClientMessage<T>
 {
     private static final long serialVersionUID = 1L;
-    ChannelOutput replyChannel;
+    ChannelOutput<ConnectionServerMessage<T>> replyChannel;
 }

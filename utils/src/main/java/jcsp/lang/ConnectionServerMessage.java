@@ -25,9 +25,9 @@ import java.io.Serializable;
 /**
  * @author Quickstone Technologies Limited
  */
-class ConnectionServerMessage implements Serializable
+class ConnectionServerMessage<T> implements Serializable
 {
     private static final long serialVersionUID = 1L;
 	boolean open;
-	Object data;
+	T data;
 }

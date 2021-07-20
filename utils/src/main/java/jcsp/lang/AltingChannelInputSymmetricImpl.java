@@ -21,17 +21,17 @@
 
 package jcsp.lang;
 
-  class AltingChannelInputSymmetricImpl extends AltingChannelInput
+  class AltingChannelInputSymmetricImpl<T> extends AltingChannelInput<T>
   implements MultiwaySynchronisation {
 
   private final AltingBarrier ab;
 
-  private final ChannelInput in;
+  private final ChannelInput<T> in;
 
   private boolean syncDone = false;
   
   public AltingChannelInputSymmetricImpl (
-          AltingBarrier ab, ChannelInput in) {
+          AltingBarrier ab, ChannelInput<T> in) {
     this.ab = ab;
     this.in = in;
   }
@@ -46,7 +46,7 @@ package jcsp.lang;
     return syncDone;
   }
 
-  public Object read () {
+  public T read () {
     if (!syncDone) ab.sync ();
     syncDone = false;
     return in.read ();
@@ -65,7 +65,7 @@ package jcsp.lang;
 	in.endRead();
   }
 
-  public Object startRead() {
+  public T startRead() {
 	if (!syncDone) ab.sync();
 	syncDone = false;
 	return in.read();

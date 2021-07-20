@@ -20,17 +20,17 @@
 
 package jcsp.lang;
 
-    class SharedChannelOutputImpl implements SharedChannelOutput {
+    class SharedChannelOutputImpl<T> implements SharedChannelOutput<T> {
 	
-	private ChannelInternals channel;
+	private ChannelInternals<T> channel;
 	private int immunity;
 	
-	SharedChannelOutputImpl(ChannelInternals _channel, int _immunity) {
+	SharedChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
 		channel = _channel;
 		immunity = _immunity;
 	}
 
-	public void write(Object object) {
+	public void write(T object) {
 		channel.write(object);
 
 	}

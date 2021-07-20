@@ -20,12 +20,13 @@
 
 package jcsp.lang;
 
-    class RejectableAltingChannelInputImpl extends RejectableAltingChannelInput {
+    @SuppressWarnings("deprecation")
+    class RejectableAltingChannelInputImpl<T> extends RejectableAltingChannelInput<T> {
 	
-	private ChannelInternals channel;
+	private ChannelInternals<T> channel;
 	private int immunity;
 	
-	RejectableAltingChannelInputImpl(ChannelInternals _channel, int _immunity) {
+	RejectableAltingChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
 		channel = _channel;
 		immunity = _immunity;
 	}
@@ -47,11 +48,11 @@ package jcsp.lang;
 		channel.endRead();
 	}
 
-	public Object read() {
+	public T read() {
 		return channel.read();
 	}
 
-	public Object startRead() {
+	public T startRead() {
 		return channel.startRead();
 	}
 

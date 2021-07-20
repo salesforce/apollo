@@ -27,6 +27,6 @@ import jcsp.lang.ChannelInput;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredChannelInput extends ChannelInput, ReadFiltered
+public interface FilteredChannelInput<T> extends ChannelInput<T>, ReadFiltered
 {
 }

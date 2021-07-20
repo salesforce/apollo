@@ -31,7 +31,7 @@ import jcsp.lang.SharedChannelOutput;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredSharedChannelOutput
-        extends SharedChannelOutput, FilteredChannelOutput
+public interface FilteredSharedChannelOutput<T>
+        extends SharedChannelOutput<T>, FilteredChannelOutput<T>
 {
 }

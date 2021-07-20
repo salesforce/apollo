@@ -44,14 +44,14 @@ package jcsp.lang;
  * @author P.H. Welch
  */
 
-public class BlackHoleChannel implements ChannelOutput
+public class BlackHoleChannel<T> implements ChannelOutput<T>
 {    
     /**
      * Write an Object to the channel and lose it.
      *
      * @param object the object to write to the channel.
      */
-    public void write(Object object)
+    public void write(T object)
     {      
     }   
     

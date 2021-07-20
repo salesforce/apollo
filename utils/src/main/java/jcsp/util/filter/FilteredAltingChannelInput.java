@@ -30,9 +30,9 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredAltingChannelInput
-        extends AltingChannelInputWrapper
-        implements FilteredChannelInput
+public class FilteredAltingChannelInput<T>
+        extends AltingChannelInputWrapper<T>
+        implements FilteredChannelInput<T>
 {
     /**
      * Holds the filters installed for the read end of this channel.
@@ -44,16 +44,17 @@ public class FilteredAltingChannelInput
      *
      * @param altingChannelInput the existing channel end.
      */
-    FilteredAltingChannelInput(AltingChannelInput altingChannelInput)
+    FilteredAltingChannelInput(AltingChannelInput<T> altingChannelInput)
     {
         super(altingChannelInput);
     }
 
-    public Object read()
+    @SuppressWarnings("unchecked")
+    public T read()
     {
-        Object toFilter = super.read();
+        T toFilter = super.read();
         for (int i = 0; filters != null && i < filters.getFilterCount(); i++)
-            toFilter = filters.getFilter(i).filter(toFilter);
+            toFilter = (T) filters.getFilter(i).filter(toFilter);
         return toFilter;
     }
 

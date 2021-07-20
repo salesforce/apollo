@@ -59,16 +59,16 @@ package jcsp.lang;
  * @author N.C.C. Brown
  */
 
-public interface One2OneChannelSymmetric {
+public interface One2OneChannelSymmetric<T> {
 
   /**
    * Returns the input channel end.
    */
-  public AltingChannelInput in();
+  public AltingChannelInput<T> in();
 
   /**
    * Returns the output channel end.
    */
-  public AltingChannelOutput out();
+  public AltingChannelOutput<T> out();
 
 }

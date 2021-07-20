@@ -43,10 +43,12 @@ import java.io.Serializable;
  * @author P.D. Austin
  */
 
-public class Buffer implements ChannelDataStore, Serializable
-{
+public class Buffer<T> implements ChannelDataStore<T>, Serializable
+{ 
+    private static final long serialVersionUID = 1L;
+
     /** The storage for the buffered Objects */
-    private final Object[] buffer;
+    private final T[] buffer;
 
     /** The number of Objects stored in the Buffer */
     private int counter = 0;
@@ -65,11 +67,12 @@ public class Buffer implements ChannelDataStore, Serializable
      * should be taken to <TT>try</TT>/<TT>catch</TT> this exception
      * - application code generating it is in error and needs correcting.
      */
+    @SuppressWarnings("unchecked")
     public Buffer(int size)
     {
         if (size < 0)
             throw new BufferSizeError("\n*** Attempt to create a buffered channel with negative capacity");
-        buffer = new Object[size + 1]; // the extra one is a subtlety needed by
+        buffer = (T[]) new Object[size + 1]; // the extra one is a subtlety needed by
         // the current channel algorithms.
     }
 
@@ -80,9 +83,9 @@ public class Buffer implements ChannelDataStore, Serializable
      *
      * @return the oldest <TT>Object</TT> from the <TT>Buffer</TT>
      */
-    public Object get()
+    public T get()
     {
-        Object value = buffer[firstIndex];
+        T value = buffer[firstIndex];
         buffer[firstIndex] = null;
         firstIndex = (firstIndex + 1) % buffer.length;
         counter--;
@@ -96,7 +99,7 @@ public class Buffer implements ChannelDataStore, Serializable
      *
      * @return the oldest <TT>Object</TT> from the <TT>Buffer</TT>
      */
-    public Object startGet()
+    public T startGet()
     {
       return buffer[firstIndex];
     }
@@ -118,7 +121,7 @@ public class Buffer implements ChannelDataStore, Serializable
      *
      * @param value the Object to put into the Buffer
      */
-    public void put(Object value)
+    public void put(T value)
     {
         buffer[lastIndex] = value;
         lastIndex = (lastIndex + 1) % buffer.length;
@@ -150,9 +153,9 @@ public class Buffer implements ChannelDataStore, Serializable
      *
      * @return the cloned instance of this <TT>Buffer</TT>
      */
-    public Object clone()
+    public Buffer<T> clone()
     {
-        return new Buffer(buffer.length - 1);
+        return new Buffer<T>(buffer.length - 1);
     }
     
     public void removeAll()

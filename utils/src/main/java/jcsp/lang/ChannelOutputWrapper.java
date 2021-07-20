@@ -29,19 +29,19 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public class ChannelOutputWrapper implements ChannelOutput
+public class ChannelOutputWrapper<T> implements ChannelOutput<T>
 {
     /**
      * The actual channel end.
      */
-    private ChannelOutput out;
+    private ChannelOutput<T> out;
 
     /**
      * Creates a new wrapper for the given channel end.
      *
      * @param out the existing channel end.
      */
-    public ChannelOutputWrapper(ChannelOutput out)
+    public ChannelOutputWrapper(ChannelOutput<T> out)
     {
         this.out = out;
     }
@@ -52,7 +52,7 @@ public class ChannelOutputWrapper implements ChannelOutput
      * @param o the value to write.
      * @see ChannelOutput
      */
-    public void write(Object o)
+    public void write(T o)
     {
         out.write(o);
     }

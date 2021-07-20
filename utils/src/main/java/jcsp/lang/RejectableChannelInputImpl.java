@@ -20,9 +20,10 @@
 
 package jcsp.lang;
 
-    class RejectableChannelInputImpl extends ChannelInputImpl implements RejectableChannelInput {
+@SuppressWarnings("deprecation")
+    class RejectableChannelInputImpl<T> extends ChannelInputImpl<T> implements RejectableChannelInput<T> {
 	
-	public RejectableChannelInputImpl(ChannelInternals _channel, int _immunity) {
+	public RejectableChannelInputImpl(ChannelInternals<T> _channel, int _immunity) {
 		super(_channel, _immunity); 
 	}
 

@@ -29,6 +29,6 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public interface SharedChannelOutput extends ChannelOutput
+public interface SharedChannelOutput<T> extends ChannelOutput<T>
 {
 }

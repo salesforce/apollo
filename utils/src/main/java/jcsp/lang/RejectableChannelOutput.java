@@ -28,7 +28,7 @@ package jcsp.lang;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}.  It remains only because it is used by some of the networking features.
  */
-public interface RejectableChannelOutput extends ChannelOutput
+public interface RejectableChannelOutput<T> extends ChannelOutput<T>
 {
     /**
      * Writes data over the channel.
@@ -36,5 +36,5 @@ public interface RejectableChannelOutput extends ChannelOutput
      * @param o an object to write over the channel.
      * @throws ChannelDataRejectedException if the reader rejects the data instead of reading it from the channel.
      */
-    public void write(Object o) throws ChannelDataRejectedException;
+    public void write(T o) throws ChannelDataRejectedException;
 }

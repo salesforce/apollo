@@ -20,17 +20,17 @@
 
 package jcsp.lang;
 
-    class ChannelOutputImpl implements ChannelOutput {
+    class ChannelOutputImpl<T> implements ChannelOutput<T> {
 	
-	private ChannelInternals channel;
+	private ChannelInternals<T> channel;
 	private int immunity;
 	
-	ChannelOutputImpl(ChannelInternals _channel, int _immunity) {
+	ChannelOutputImpl(ChannelInternals<T> _channel, int _immunity) {
 		channel = _channel;
 		immunity = _immunity;
 	}
 
-	public void write(Object object) {
+	public void write(T object) {
 		channel.write(object);
 
 	}

@@ -29,19 +29,19 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public class ChannelInputWrapper implements ChannelInput
+public class ChannelInputWrapper<T> implements ChannelInput<T>
 {
     /**
      * The actual channel end.
      */
-    private ChannelInput in;
+    private ChannelInput<T> in;
 
     /**
      * Constructs a new wrapper around the given channel end.
      *
      * @param in the existing channel end.
      */
-    public ChannelInputWrapper(ChannelInput in)
+    public ChannelInputWrapper(ChannelInput<T> in)
     {
         this.in = in;
     }
@@ -52,7 +52,7 @@ public class ChannelInputWrapper implements ChannelInput
      * @see ChannelInput
      * @return the value read.
      */
-    public Object read()
+    public T read()
     {
         return in.read();
     }
@@ -63,7 +63,7 @@ public class ChannelInputWrapper implements ChannelInput
      * @see ChannelInput.startRead
      * @return The object read from the channel
      */
-    public Object startRead()
+    public T startRead()
     {
     	return in.startRead();
     }

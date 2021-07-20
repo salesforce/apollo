@@ -30,6 +30,6 @@ import jcsp.lang.SharedChannelInput;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredSharedChannelInput extends SharedChannelInput, FilteredChannelInput
+public interface FilteredSharedChannelInput<T> extends SharedChannelInput<T>, FilteredChannelInput<T>
 {
 }

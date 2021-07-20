@@ -27,6 +27,6 @@ import jcsp.lang.ChannelOutput;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredChannelOutput extends ChannelOutput, WriteFiltered
+public interface FilteredChannelOutput<T> extends ChannelOutput<T>, WriteFiltered
 {
 }

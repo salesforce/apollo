@@ -29,9 +29,9 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredSharedChannelInputWrapper
-        extends FilteredChannelInputWrapper
-        implements FilteredSharedChannelInput
+public class FilteredSharedChannelInputWrapper<T>
+        extends FilteredChannelInputWrapper<T>
+        implements FilteredSharedChannelInput<T>
 {    
     /**
      * The object used for synchronization by the methods here to protect the readers from each other
@@ -44,13 +44,13 @@ public class FilteredSharedChannelInputWrapper
      *
      * @param in the existing channel end.
      */
-    public FilteredSharedChannelInputWrapper(SharedChannelInput in)
+    public FilteredSharedChannelInputWrapper(SharedChannelInput<T> in)
     {
         super(in);        
         synchObject = new Object();
     }
 
-    public Object read()
+    public T read()
     {
         synchronized (synchObject)
         {

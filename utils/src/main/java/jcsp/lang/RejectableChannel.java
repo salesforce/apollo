@@ -28,9 +28,10 @@ package jcsp.lang;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}.  It remains only because it is used by some of the networking features.
  */
-public interface RejectableChannel 
+
+public interface RejectableChannel<T> 
 {
-	public RejectableChannelInput in();
+	public RejectableChannelInput<T> in();
 	
-	public RejectableChannelOutput out();
+	public RejectableChannelOutput<T> out();
 }

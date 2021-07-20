@@ -20,12 +20,12 @@
 
 package jcsp.lang;
 
-    interface ChannelInternals {
+    interface ChannelInternals<T> {
 
-	public Object read();
-	public void write(Object obj);
+	public T read();
+	public void write(T obj);
 	
-	public Object startRead();
+	public T startRead();
 	public void endRead();
 	
 	public boolean readerEnable(Alternative alt);

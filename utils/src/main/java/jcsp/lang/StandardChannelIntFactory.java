@@ -38,6 +38,7 @@ import jcsp.util.ints.ChannelDataStoreInt;
  *
  * @author Quickstone Technologies Limited
  */
+@SuppressWarnings("deprecation")
 public class StandardChannelIntFactory
         implements
         ChannelIntFactory,

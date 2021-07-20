@@ -89,6 +89,6 @@ public class SharedAltingConnectionClient
      */
     public SharedConnectionClient duplicate()
     {
-        return parent.client();
+        return ((ConnectionWithSharedAltingClient) parent).client();
     }
 }

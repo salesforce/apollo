@@ -27,9 +27,10 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredChannelOutputWrapper
-        extends ChannelOutputWrapper
-        implements FilteredChannelOutput
+@SuppressWarnings("deprecation")
+class FilteredChannelOutputWrapper<T>
+        extends ChannelOutputWrapper<T>
+        implements FilteredChannelOutput<T>
 {
     /**
      * Set of write filters installed.
@@ -41,15 +42,16 @@ class FilteredChannelOutputWrapper
      *
      * @param out the existing output channel.
      */
-    public FilteredChannelOutputWrapper(ChannelOutput out)
+    public FilteredChannelOutputWrapper(ChannelOutput<T> out)
     {
         super(out);
     }
 
-    public void write(Object data)
+    @SuppressWarnings("unchecked")
+    public void write(T data)
     {
         for (int i = 0; filters != null && i < filters.getFilterCount(); i++)
-            data = filters.getFilter(i).filter(data);
+            data = (T) filters.getFilter(i).filter(data);
         super.write(data);
     }
 

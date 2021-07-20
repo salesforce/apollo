@@ -28,7 +28,7 @@ package jcsp.lang;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}
  */
-public abstract class RejectableAltingChannelInput extends AltingChannelInput implements RejectableChannelInput
+public abstract class RejectableAltingChannelInput<T> extends AltingChannelInput<T> implements RejectableChannelInput<T>
 {
     /**
      * Reject any data pending instead of reading it. The currently blocked writer will receive a

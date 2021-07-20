@@ -23,7 +23,7 @@ package jcsp.lang;
     /**
  * @author Quickstone Technologies Limited
  */
-interface ConnectionWithSharedAltingServer
+interface ConnectionWithSharedAltingServer<T>
 {
-    public SharedConnectionServer server();
+    public SharedConnectionServer<T> server();
 }

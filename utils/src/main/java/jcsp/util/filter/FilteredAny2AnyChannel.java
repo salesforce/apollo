@@ -31,7 +31,7 @@ import jcsp.lang.Any2AnyChannel;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredAny2AnyChannel extends Any2AnyChannel
+public interface FilteredAny2AnyChannel<T> extends Any2AnyChannel<T>
 {
     /**
      * Returns an interface for configuring read filters on the channel.

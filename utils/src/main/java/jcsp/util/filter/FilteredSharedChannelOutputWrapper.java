@@ -29,9 +29,9 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-public class FilteredSharedChannelOutputWrapper
-        extends FilteredChannelOutputWrapper
-        implements FilteredSharedChannelOutput
+public class FilteredSharedChannelOutputWrapper<T>
+        extends FilteredChannelOutputWrapper<T>
+        implements FilteredSharedChannelOutput<T>
 {    
 
     /**
@@ -45,13 +45,13 @@ public class FilteredSharedChannelOutputWrapper
      *
      * @param out the existing channel end.
      */
-    public FilteredSharedChannelOutputWrapper(SharedChannelOutput out)
+    public FilteredSharedChannelOutputWrapper(SharedChannelOutput<T> out)
     {
         super(out);
         synchObject = new Object();
     }
 
-    public void write(Object data)
+    public void write(T data)
     {
         synchronized (synchObject)
         {

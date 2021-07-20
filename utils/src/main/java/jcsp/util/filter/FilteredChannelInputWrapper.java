@@ -27,9 +27,10 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredChannelInputWrapper
-        extends ChannelInputWrapper
-        implements FilteredChannelInput
+@SuppressWarnings("deprecation")
+class FilteredChannelInputWrapper<T>
+        extends ChannelInputWrapper<T>
+        implements FilteredChannelInput<T>
 {
     /**
      * Set of read filters installed.
@@ -41,16 +42,17 @@ class FilteredChannelInputWrapper
      *
      * @param in channel end to create the wrapper around.
      */
-    FilteredChannelInputWrapper(ChannelInput in)
+    FilteredChannelInputWrapper(ChannelInput<T> in)
     {
         super(in);
     }
 
-    public Object read()
+    @SuppressWarnings("unchecked")
+    public T read()
     {
-        Object toFilter = super.read();
+        T toFilter = super.read();
         for (int i = 0; filters != null && i < filters.getFilterCount(); i++)
-            toFilter = filters.getFilter(i).filter(toFilter);
+            toFilter = (T) filters.getFilter(i).filter(toFilter);
         return toFilter;
     }
 

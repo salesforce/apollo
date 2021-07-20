@@ -28,7 +28,7 @@ package jcsp.lang;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}.  It remains only because it is used by some of the networking features.
  */
-public interface RejectableChannelInput extends ChannelInput
+public interface RejectableChannelInput<T> extends ChannelInput<T>
 {
     /**
      * Reject any data pending instead of reading it. The currently blocked writer will receive a
