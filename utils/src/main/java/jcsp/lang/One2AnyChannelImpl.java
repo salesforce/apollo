@@ -68,9 +68,9 @@ package jcsp.lang;
  * @author P.D. Austin and P.H. Welch
  */
 
-class One2AnyChannelImpl extends One2AnyImpl
+class One2AnyChannelImpl<T> extends One2AnyImpl<T>
 {
 	One2AnyChannelImpl() {
-		super(new One2OneChannelImpl());
+		super(new One2OneChannelImpl<T>());
 	}
 }

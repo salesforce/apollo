@@ -29,33 +29,33 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredAny2AnyChannelImpl<T> implements FilteredAny2AnyChannel<T>
+class FilteredAny2AnyChannelImpl<In, Out> implements FilteredAny2AnyChannel<In, Out>
 {
     /**
      * The input end of the channel.
      */
-    private FilteredSharedChannelInput<T> in;
+    private FilteredSharedChannelInput<In> in;
 
     /**
      * The output end of the channel.
      */
-    private FilteredSharedChannelOutput<T> out;
+    private FilteredSharedChannelOutput<Out> out;
 
     /**
      * Constructs a new filtered channel object based on an existing channel.
      */
-    FilteredAny2AnyChannelImpl(Any2AnyChannel<T> chan)
+    FilteredAny2AnyChannelImpl(Any2AnyChannel<In, Out> chan)
     {
-        in = new FilteredSharedChannelInputWrapper<T>(chan.in());
-        out = new FilteredSharedChannelOutputWrapper<T>(chan.out());
+        in = new FilteredSharedChannelInputWrapper<In>(chan.in());
+        out = new FilteredSharedChannelOutputWrapper<Out>(chan.out());
     }
 
-    public SharedChannelInput<T> in()
+    public SharedChannelInput<In> in()
     {
         return in;
     }
 
-    public SharedChannelOutput<T> out()
+    public SharedChannelOutput<Out> out()
     {
         return out;
     }

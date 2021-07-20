@@ -35,24 +35,24 @@ package jcsp.lang;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}. It remains only because it is used by some of the networking features.
  */
-public class RejectableOne2AnyChannel        
-        implements RejectableChannel
+public class RejectableOne2AnyChannel  <T>      
+        implements RejectableChannel<T>
 {
-	One2AnyChannelImpl innerChannel;
+	One2AnyChannelImpl<T> innerChannel;
     
     /**
      * Constructs a new channel.
      */
     public RejectableOne2AnyChannel()
     {
-    	innerChannel = (One2AnyChannelImpl) Channel.one2any();
+    	innerChannel = (One2AnyChannelImpl<T>) Channel.one2any();
     }
 
-	public RejectableChannelInput in() {
-		return new RejectableChannelInputImpl(innerChannel,0);
+	public RejectableChannelInput<T> in() {
+		return new RejectableChannelInputImpl<T>(innerChannel,0);
 	}
 
-	public RejectableChannelOutput out() {
-		return new RejectableChannelOutputImpl(innerChannel,0);
+	public RejectableChannelOutput<T> out() {
+		return new RejectableChannelOutputImpl<T>(innerChannel,0);
 	}
 }

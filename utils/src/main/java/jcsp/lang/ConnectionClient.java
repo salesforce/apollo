@@ -54,7 +54,7 @@ package jcsp.lang;
  *
  * @author Quickstone Technologies Limited
  */
-public interface ConnectionClient<T>
+public interface ConnectionClient<In, Out>
 {
     /**
      * <p>This method is used to send data to a <code>ConnectionServer</code> in
@@ -78,7 +78,7 @@ public interface ConnectionClient<T>
      * @throws  IllegalStateException	if the method is called when it is
      *                                  not meant to be.
      */
-    public void request(T data) throws IllegalStateException;
+    public void request(In data) throws IllegalStateException;
 
     /**
      * <p>Receives some data back from the server after
@@ -93,7 +93,7 @@ public interface ConnectionClient<T>
      * @throws  IllegalStateException	if the method is called when it is
      *                                  not meant to be.
      */
-    public T reply() throws IllegalStateException;
+    public Out reply() throws IllegalStateException;
 
     /**
      * <p>Returns whether the server has kept its end of the Connection open.

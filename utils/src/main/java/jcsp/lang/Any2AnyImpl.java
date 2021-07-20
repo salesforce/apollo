@@ -20,7 +20,7 @@
 
 package jcsp.lang;
 
-    class Any2AnyImpl<T> implements Any2AnyChannel<T>, ChannelInternals<T> {
+    class Any2AnyImpl<T> implements Any2AnyChannel<T, T>, ChannelInternals<T> {
 
         private ChannelInternals<T> channel;
         /** The mutex on which readers must synchronize */

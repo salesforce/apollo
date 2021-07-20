@@ -37,26 +37,26 @@ import jcsp.util.ChannelDataStore;
  * 
  * @deprecated This channel is superceded by the poison mechanisms, please see {@link PoisonException}
  */
-public class RejectableBufferedOne2AnyChannel implements RejectableChannel
+public class RejectableBufferedOne2AnyChannel<T> implements RejectableChannel<T>
 {
-	BufferedOne2AnyChannel innerChannel;
+	BufferedOne2AnyChannel<T> innerChannel;
 	
     /**
      * Constructs a new <code>RejectableBufferedOne2AnyChannel</code>
      *
      * @param data the buffer implementation to use.
      */
-    public RejectableBufferedOne2AnyChannel(ChannelDataStore data)
+    public RejectableBufferedOne2AnyChannel(ChannelDataStore<T> data)
     {
-        innerChannel = (BufferedOne2AnyChannel) Channel.one2any(data);
+        innerChannel = (BufferedOne2AnyChannel<T>) Channel.one2any(data);
     }
     
 	public RejectableChannelInput in() {
-		return new RejectableChannelInputImpl(innerChannel,0);
+		return new RejectableChannelInputImpl<T>(innerChannel,0);
 	}
 
 	public RejectableChannelOutput out() {
-		return new RejectableChannelOutputImpl(innerChannel,0);
+		return new RejectableChannelOutputImpl<T>(innerChannel,0);
 	}
 
 }

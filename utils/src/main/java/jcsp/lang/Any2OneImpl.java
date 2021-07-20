@@ -20,12 +20,12 @@
 
 package jcsp.lang;
 
-    class Any2OneImpl implements ChannelInternals, Any2OneChannel {
+    class Any2OneImpl<T> implements ChannelInternals<T>, Any2OneChannel<T, T> {
 
-	private ChannelInternals channel;
+	private ChannelInternals<T> channel;
 	private final Object writeMonitor = new Object();
 	
-	Any2OneImpl(ChannelInternals _channel) {
+	Any2OneImpl(ChannelInternals<T> _channel) {
 		channel = _channel;
 	}
 
@@ -34,7 +34,7 @@ package jcsp.lang;
 		channel.endRead();
 	}
 
-	public Object read() {
+	public T read() {
 		return channel.read();
 	}
 
@@ -55,12 +55,12 @@ package jcsp.lang;
 
 	}
 
-	public Object startRead() {
+	public T startRead() {
 		return channel.startRead();
 	}
 	//End never used
 
-	public void write(Object obj) {
+	public void write(T obj) {
 		synchronized (writeMonitor) {
 			channel.write(obj);
 		}
@@ -74,12 +74,12 @@ package jcsp.lang;
 
 	}
 
-	public AltingChannelInput in() {
-		return new AltingChannelInputImpl(channel,0);
+	public AltingChannelInput<T> in() {
+		return new AltingChannelInputImpl<T>(channel,0);
 	}
 
-	public SharedChannelOutput out() {
-		return new SharedChannelOutputImpl(this,0);
+	public SharedChannelOutput<T> out() {
+		return new SharedChannelOutputImpl<T>(this,0);
 	}
 
 }

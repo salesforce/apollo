@@ -31,7 +31,7 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-public interface FilteredOne2OneChannel extends One2OneChannel
+public interface FilteredOne2OneChannel<In, Out> extends One2OneChannel<In, Out>
 {
     /**
      * Returns the control interface for configuring the read filters on the channel.

@@ -20,9 +20,9 @@
 
 package jcsp.lang;
 
-    class PoisonableOne2AnyChannelImpl extends One2AnyImpl
+    class PoisonableOne2AnyChannelImpl<T> extends One2AnyImpl<T>
 {
 	PoisonableOne2AnyChannelImpl(int _immunity) {
-		super(new PoisonableOne2OneChannelImpl(_immunity));
+		super(new PoisonableOne2OneChannelImpl<T>(_immunity));
 	}
 }

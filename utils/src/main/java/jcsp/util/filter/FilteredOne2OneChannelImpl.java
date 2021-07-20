@@ -27,35 +27,35 @@ import jcsp.lang.*;
  *
  * @author Quickstone Technologies Limited
  */
-class FilteredOne2OneChannelImpl implements FilteredOne2OneChannel
+class FilteredOne2OneChannelImpl<In, Out> implements FilteredOne2OneChannel<In, Out>
 {
     /**
      * The filtered input end of the channel.
      */
-    private FilteredAltingChannelInput in;
+    private FilteredAltingChannelInput<In> in;
 
     /**
      * The filtered output end of the channel.
      */
-    private FilteredChannelOutput out;
+    private FilteredChannelOutput<Out> out;
 
     /**
      * Constructs a new filtered channel based on an existing channel.
      *
      * @param chan the existing channel.
      */
-    public FilteredOne2OneChannelImpl(One2OneChannel chan)
+    public FilteredOne2OneChannelImpl(One2OneChannel<In, Out> chan)
     {
-        in = new FilteredAltingChannelInput(chan.in());
-        out = new FilteredChannelOutputWrapper(chan.out());
+        in = new FilteredAltingChannelInput<In>(chan.in());
+        out = new FilteredChannelOutputWrapper<Out>(chan.out());
     }
 
-    public AltingChannelInput in()
+    public AltingChannelInput<In> in()
     {
         return in;
     }
 
-    public ChannelOutput out()
+    public ChannelOutput<Out> out()
     {
         return out;
     }

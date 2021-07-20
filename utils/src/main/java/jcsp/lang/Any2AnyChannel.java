@@ -93,15 +93,15 @@ package jcsp.lang;
  *
  * @author P.D. Austin and P.H. Welch
  */
-public interface Any2AnyChannel<T>
+public interface Any2AnyChannel<In, Out>
 {
     /**
      * Returns the input end of the channel.
      */
-    public SharedChannelInput<T> in();
+    public SharedChannelInput<In> in();
 
     /**
      * Returns the output end of the channel.
      */
-    public SharedChannelOutput<T> out();
+    public SharedChannelOutput<Out> out();
 }

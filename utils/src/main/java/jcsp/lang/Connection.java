@@ -146,7 +146,7 @@ public class Connection
     {
         SharedConnectionClient r[] = new SharedConnectionClient[c.length];
         for (int i = 0; i < c.length; i++)
-            r[i] = c[i].client();
+            r[i] = (SharedConnectionClient) c[i].client();
         return r;
     }
 
@@ -161,7 +161,7 @@ public class Connection
     {
         SharedConnectionClient r[] = new SharedConnectionClient[c.length];
         for (int i = 0; i < c.length; i++)
-            r[i] = c[i].client();
+            r[i] = (SharedConnectionClient) c[i].client();
         return r;
     }
 
