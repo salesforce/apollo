@@ -120,7 +120,7 @@ public class Creator {
                     update(u);
                 }
                 while (ready()) {
-                    log.info("** Ready, creating units");
+                    log.info("Ready, creating units");
                     // Step 2: get parents and level using current strategy
                     var built = buildParents();
                     // Step 3: create unit

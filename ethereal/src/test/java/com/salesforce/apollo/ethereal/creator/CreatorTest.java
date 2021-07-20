@@ -80,12 +80,16 @@ public class CreatorTest {
     private final static Random entropy = new Random(0x1638);
 
     static Creator newCreator(Config cnf, Consumer<Unit> send) {
+        return newCreator(cnf, send, true);
+    }
+
+    static Creator newCreator(Config cnf, Consumer<Unit> send, boolean proofResult) {
         var dataSource = new RandomDataSource(10);
         RsData rsData = (i, p, e) -> {
             return null;
         };
         Function<Integer, EpochProofBuilder> epochProofBuilder = epoch -> {
-            return new testEpochProofBuilder(u -> true);
+            return new testEpochProofBuilder(u -> proofResult);
         };
         return new Creator(cnf, dataSource, send, rsData, epochProofBuilder);
     }
@@ -97,6 +101,62 @@ public class CreatorTest {
         }
         return new preUnit(t.creator(), t.epoch(), t.height(), null, PreUnit.computeHash(algo, id, crown, data, rsData),
                            crown, data, rsData);
+    }
+
+    @Test
+    public void invalidFromFutureShouldNotProduceItButKeepProducing() throws Exception {
+        short nProc = 4;
+        var epoch = 7;
+        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1).build();
+
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
+        Consumer<Unit> send = u -> unitRec.add(u);
+        var creator = newCreator(cnf, send);
+        assertNotNull(creator);
+
+        AtomicBoolean finished = new AtomicBoolean();
+
+        var unitBelt = new SimpleChannel<Unit>(100);
+        var lastTiming = new ArrayBlockingQueue<Unit>(2);
+
+        ForkJoinPool.commonPool().execute(() -> {
+            creator.creatUnits(unitBelt, lastTiming);
+            finished.set(true);
+        });
+
+        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        assertTrue(finished.get());
+
+        Unit[] parents = new Unit[nProc];
+        var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
+        var unitData = Any.getDefaultInstance();
+        var rsData = new byte[0];
+        short pid = 1;
+        long id = PreUnit.id(0, pid, epoch);
+        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+        var unit = pu.from(parents);
+        assertEquals(epoch, unit.epoch());
+        unitBelt.submit(unit);
+
+        var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+        assertNotNull(createdUnit);
+        assertEquals(0, createdUnit.level());
+        assertEquals(0, createdUnit.creator());
+        assertEquals(0, createdUnit.height());
+        assertEquals(0, createdUnit.epoch());
+
+        createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+        assertNotNull(createdUnit);
+        assertEquals(0, createdUnit.level());
+        assertEquals(0, createdUnit.creator());
+        assertEquals(0, createdUnit.height());
+        assertEquals(epoch, createdUnit.epoch());
+
+        assertEquals(0, unitBelt.size());
+        unitBelt.close();
+        assertEquals(0, unitRec.size());
     }
 
     @Test
@@ -149,7 +209,6 @@ public class CreatorTest {
             assertEquals(level, createdUnit.height());
         }
 
-        assertEquals(0, unitBelt.size());
         unitBelt.close();
         assertEquals(0, unitRec.size());
 
@@ -265,5 +324,118 @@ public class CreatorTest {
         assertEquals(0, unitBelt.size());
         unitBelt.close();
         assertEquals(0, unitRec.size());
+    }
+
+    @Test
+    public void valdFromFutureShouldProduceUnitOfThatEpoch() throws Exception {
+        short nProc = 4;
+        var epoch = 7;
+        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(epoch).build();
+
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
+        Consumer<Unit> send = u -> unitRec.add(u);
+        var creator = newCreator(cnf, send, false);
+        assertNotNull(creator);
+
+        AtomicBoolean finished = new AtomicBoolean();
+
+        var unitBelt = new SimpleChannel<Unit>(100);
+        var lastTiming = new ArrayBlockingQueue<Unit>(2);
+
+        ForkJoinPool.commonPool().execute(() -> {
+            creator.creatUnits(unitBelt, lastTiming);
+            finished.set(true);
+        });
+
+        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        assertTrue(finished.get());
+
+        Unit[] parents = new Unit[nProc];
+        var crown = Crown.newCrownFromParents(parents, DigestAlgorithm.DEFAULT);
+        var unitData = Any.getDefaultInstance();
+        var rsData = new byte[0];
+        short pid = 1;
+        long id = PreUnit.id(0, pid, epoch);
+        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+        var unit = pu.from(parents);
+        assertEquals(epoch, unit.epoch());
+        unitBelt.submit(unit);
+
+        var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+        assertNotNull(createdUnit);
+        assertEquals(0, createdUnit.level());
+        assertEquals(0, createdUnit.creator());
+        assertEquals(0, createdUnit.height());
+        assertEquals(0, createdUnit.epoch());
+
+        for (pid = 2; pid < cnf.nProc(); pid++) {
+            crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
+            unitData = Any.getDefaultInstance();
+            rsData = new byte[0];
+            id = PreUnit.id(0, pid, 0);
+            pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+            unit = pu.from(parents);
+            unitBelt.submit(unit);
+        }
+
+        createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+        assertNotNull(createdUnit);
+        assertEquals(1, createdUnit.level());
+        assertEquals(0, createdUnit.creator());
+        assertEquals(1, createdUnit.height());
+        assertEquals(0, createdUnit.epoch());
+
+        assertEquals(0, unitBelt.size());
+        unitBelt.close();
+        assertEquals(0, unitRec.size());
+    }
+
+    @Test
+    public void withoutEnoughUnitsOnALevelShouldNotCreateNewUnits() throws Exception {
+        short nProc = 4;
+        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
+        Consumer<Unit> send = u -> unitRec.add(u);
+        var creator = newCreator(cnf, send);
+        assertNotNull(creator);
+
+        var unitBelt = new SimpleChannel<Unit>(100);
+
+        AtomicBoolean finished = new AtomicBoolean();
+        var lastTiming = new ArrayBlockingQueue<Unit>(100);
+        ForkJoinPool.commonPool().execute(() -> {
+            creator.creatUnits(unitBelt, lastTiming);
+            finished.set(true);
+        });
+
+        Utils.waitForCondition(4_000, 500, () -> finished.get());
+
+        Unit[] parents = new Unit[nProc];
+
+        for (short pid = 3; pid < cnf.nProc(); pid++) {
+            var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
+            var unitData = Any.getDefaultInstance();
+            var rsData = new byte[0];
+            var id = PreUnit.id(0, pid, 0);
+            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+            var unit = pu.from(parents);
+            unitBelt.submit(unit);
+        }
+
+        assertTrue(finished.get());
+        var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+
+        assertNotNull(createdUnit);
+        assertEquals(0, createdUnit.level());
+        assertEquals(0, createdUnit.creator());
+        assertEquals(0, createdUnit.height()); 
+        
+        unitBelt.close();
+        assertEquals(0, unitRec.size());
+
     }
 }
