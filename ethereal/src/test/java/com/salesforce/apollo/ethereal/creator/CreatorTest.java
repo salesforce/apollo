@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -34,6 +33,7 @@ import com.salesforce.apollo.ethereal.Crown;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
 import com.salesforce.apollo.utils.Utils;
@@ -105,12 +105,12 @@ public class CreatorTest {
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
                                 .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
-        var unitRec = new ArrayBlockingQueue<Unit>(2);
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        var unitBelt = new SubmissionPublisher<Unit>();
+        var unitBelt = new SimpleChannel<Unit>(100);
 
         AtomicBoolean finished = new AtomicBoolean();
         var lastTiming = new ArrayBlockingQueue<Unit>(100);
@@ -149,7 +149,7 @@ public class CreatorTest {
             assertEquals(level, createdUnit.height());
         }
 
-        assertEquals(0, unitBelt.estimateMaximumLag());
+        assertEquals(0, unitBelt.size());
         unitBelt.close();
         assertEquals(0, unitRec.size());
 
@@ -161,14 +161,14 @@ public class CreatorTest {
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(true).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
                                 .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
-        var unitRec = new ArrayBlockingQueue<Unit>(2);
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SubmissionPublisher<Unit>();
+        var unitBelt = new SimpleChannel<Unit>(100);
 
         Unit[] parents = new Unit[nProc];
         var maxLevel = 2;
@@ -211,7 +211,7 @@ public class CreatorTest {
         assertEquals(1, createdUnit.height());
 
         unitBelt.close();
-        assertEquals(0, unitBelt.estimateMaximumLag());
+        assertEquals(0, unitBelt.size());
         assertEquals(0, unitRec.size());
     }
 
@@ -221,23 +221,14 @@ public class CreatorTest {
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
                                 .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
-        var unitRec = new ArrayBlockingQueue<Unit>(2);
+        var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SubmissionPublisher<Unit>();
-        var lastTiming = new ArrayBlockingQueue<Unit>(100);
-
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.creatUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
-        assertTrue(finished.get());
+        var unitBelt = new SimpleChannel<Unit>(100);
 
         Unit[] parents = new Unit[nProc];
         for (short pid = 1; pid < cnf.nProc(); pid++) {
@@ -249,6 +240,15 @@ public class CreatorTest {
             var unit = pu.from(parents);
             unitBelt.submit(unit);
         }
+        var lastTiming = new ArrayBlockingQueue<Unit>(2);
+
+        ForkJoinPool.commonPool().execute(() -> {
+            creator.creatUnits(unitBelt, lastTiming);
+            finished.set(true);
+        });
+
+        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        assertTrue(finished.get());
 
         var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
         assertNotNull(createdUnit);
@@ -262,7 +262,7 @@ public class CreatorTest {
         assertEquals(0, createdUnit.creator());
         assertEquals(1, createdUnit.height());
 
-        assertEquals(0, unitBelt.estimateMaximumLag());
+        assertEquals(0, unitBelt.size());
         unitBelt.close();
         assertEquals(0, unitRec.size());
     }

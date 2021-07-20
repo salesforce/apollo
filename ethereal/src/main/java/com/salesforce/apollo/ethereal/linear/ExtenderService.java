@@ -19,7 +19,7 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class ExtenderService {
-    public ExtenderService(Dag dag, RandomSource rs, Config config, SubmissionPublisher<List<Unit>> output) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, SubmissionPublisher<List<Unit>> orderedUnits) {
         // TODO Auto-generated method stub
     }
 

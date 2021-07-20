@@ -11,10 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.Flow.Subscriber;
-import java.util.concurrent.Flow.Subscription;
-import java.util.concurrent.SubmissionPublisher;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -28,6 +24,7 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.WeakThresholdKey;
 
@@ -50,63 +47,6 @@ public class Creator {
     @FunctionalInterface
     public interface RsData {
         byte[] rsData(int level, Unit[] parents, int epoch);
-    }
-
-    private class BeltSubscriber implements Subscriber<Unit> {
-
-        private final Queue<Unit>   lastTiming;
-        private Subscription        subscription;
-        private final AtomicInteger pending = new AtomicInteger();
-
-        public BeltSubscriber(Queue<Unit> lastTiming) {
-            this.lastTiming = lastTiming;
-        }
-
-        @Override
-        public void onComplete() {
-            log.info("Creator complete");
-        }
-
-        @Override
-        public void onError(Throwable e) {
-            log.error("Error in unit belt", e);
-        }
-
-        @Override
-        public void onNext(Unit u) {
-            log.info("Processing next unit: {} ", u);
-            mx.lock();
-            try {
-                // Step 1: update candidates with all units waiting on the unit belt
-                update(u);
-                if (pending.incrementAndGet() >= quorum) {
-                    pending.set(0);
-                    create();
-                    subscription.request(conf.nProc());
-                }
-            } catch (Throwable e) {
-                log.error("Error in processing unit: {}", u, e);
-            } finally {
-                mx.unlock();
-            }
-        }
-
-        @Override
-        public void onSubscribe(Subscription subscription) {
-            this.subscription = subscription;
-            subscription.request(conf.nProc());
-        }
-
-        private void create() {
-            while (ready()) {
-                log.info("** Ready, creating units");
-                // Step 2: get parents and level using current strategy
-                var built = buildParents();
-                // Step 3: create unit
-                createUnit(built.parents, built.level, getData(built.level, lastTiming));
-            }
-        }
-
     }
 
     private record built(Unit[] parents, int level) {}
@@ -169,9 +109,29 @@ public class Creator {
      * on which the last timing unit of each epoch is expected to appear. This
      * method is stopped by closing unitBelt channel.
      */
-    public void creatUnits(SubmissionPublisher<Unit> unitBelt, Queue<Unit> lastTiming) {
+    public void creatUnits(SimpleChannel<Unit> unitBelt, Queue<Unit> lastTiming) {
         newEpoch(epoch, Any.getDefaultInstance());
-        unitBelt.subscribe(new BeltSubscriber(lastTiming));
+        unitBelt.consume(units -> {
+            log.info("Processing next units: {} ", units.size());
+            mx.lock();
+            try {
+                for (Unit u : units) {
+                    // Step 1: update candidates with all units waiting on the unit belt
+                    update(u);
+                }
+                while (ready()) {
+                    log.info("** Ready, creating units");
+                    // Step 2: get parents and level using current strategy
+                    var built = buildParents();
+                    // Step 3: create unit
+                    createUnit(built.parents, built.level, getData(built.level, lastTiming));
+                }
+            } catch (Throwable e) {
+                log.error("Error in processing units", e);
+            } finally {
+                mx.unlock();
+            }
+        });
     }
 
     public boolean epochProof(PreUnit pu, WeakThresholdKey wtKey) {
@@ -244,11 +204,13 @@ public class Creator {
      */
     private Unit[] getParentsForLevel(int level) {
         var result = new Unit[conf.nProc()];
-        for (Unit u : candidates) {
-            for (; u != null && u.level() >= level;) {
-                u = u.predecessor();
+        for (int i = 0; i < candidates.length; i++) {
+            Unit u = candidates[i];
+            for (; u != null && u.level() >= level; u = u.predecessor())
+                ;
+            if (u != null) {
+                result[u.creator()] = u;
             }
-            result[u.creator()] = u;
         }
         makeConsistent(result);
         return result;

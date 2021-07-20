@@ -130,11 +130,11 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
-    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SubmissionPublisher<Unit> unitBelt,
-                                 SubmissionPublisher<List<Unit>> output, Clock clock) {
+    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SimpleChannel<Unit> unitBelt,
+                                 SubmissionPublisher<List<Unit>> orderedUnits, Clock clock) {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
-        ExtenderService ext = new ExtenderService(dg, rs, config, output);
+        ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
         dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
             ext.chooseNextTimingUnits();
@@ -157,7 +157,7 @@ public class Orderer {
     private epoch                                 previous;
     private RandomSourceFactory                   rsf;
     private final Consumer<List<Unit>>            toPreblock;
-    private final SubmissionPublisher<Unit>       unitBelt;
+    private final SimpleChannel<Unit>             unitBelt;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
@@ -165,7 +165,7 @@ public class Orderer {
         this.lastTiming = new BlockingArrayQueue<>();
         this.orderedUnits = new SubmissionPublisher<>(config.executor(), conf.epochLength());
         this.toPreblock = toPreblock;
-        this.unitBelt = new SubmissionPublisher<>(config.executor(), conf.epochLength() * conf.nProc());
+        this.unitBelt = new SimpleChannel<>(conf.epochLength() * conf.nProc());
         this.clock = clock;
     }
 
