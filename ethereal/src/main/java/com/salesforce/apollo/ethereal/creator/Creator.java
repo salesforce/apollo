@@ -24,8 +24,8 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * Creator is a component responsible for producing new units. It processes

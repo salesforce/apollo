@@ -33,9 +33,9 @@ import com.salesforce.apollo.ethereal.Crown;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
-import com.salesforce.apollo.ethereal.SimpleChannel;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
+import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**

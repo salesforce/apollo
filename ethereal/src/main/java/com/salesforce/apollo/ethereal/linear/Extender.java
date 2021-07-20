@@ -32,8 +32,7 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
  *
  */
 public class Extender {
-    public Extender(Dag dag, RandomSource rs, Config conf, DigestAlgorithm digestAlgorithm) {
-        this.digestAlgorithm = digestAlgorithm;
+    public Extender(Dag dag, RandomSource rs, Config conf) {
         this.dag = dag;
         randomSource = rs;
         lastTUs = new ArrayList<>();
@@ -41,6 +40,7 @@ public class Extender {
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
+        digestAlgorithm = conf.digestAlgorithm();
         crpIterator = new CommonRandomPermutation(dag, rs, conf.crpFixedPrefix(), digestAlgorithm);
     }
 

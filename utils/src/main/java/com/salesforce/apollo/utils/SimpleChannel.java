@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal;
+package com.salesforce.apollo.utils;
 
 import java.io.Closeable;
 import java.util.ArrayList;
@@ -35,13 +35,22 @@ public class SimpleChannel<T> implements Closeable {
 
     @Override
     public void close() {
-        closed.set(true);
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         if (handler != null) {
             handler.interrupt();
+            handler = null;
         }
     }
 
     public void consume(Consumer<List<T>> consumer) {
+        if (closed.get()) {
+            throw new IllegalStateException("Channel already closed");
+        }
+        if (handler != null) {
+            throw new IllegalStateException("Handler already established");
+        }
         handler = new Thread(() -> {
             while (!closed.get()) {
                 try {
@@ -65,8 +74,39 @@ public class SimpleChannel<T> implements Closeable {
         handler.start();
     }
 
+    public void consumeEach(Consumer<T> consumer) {
+        if (closed.get()) {
+            throw new IllegalStateException("Channel already closed");
+        }
+        if (handler != null) {
+            throw new IllegalStateException("Handler already established");
+        }
+        handler = new Thread(() -> {
+            while (!closed.get()) {
+                try {
+                    var polled = queue.poll(1, TimeUnit.SECONDS);
+                    if (polled != null) {
+                        try {
+                            consumer.accept(polled);
+                        } catch (Throwable e) {
+                            log.error("Error in consumer", e);
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    return; // Normal exit
+                }
+
+            }
+        }, "Consumer");
+        handler.start();
+    }
+
     public int size() {
         return queue.size();
+    }
+
+    public boolean offer(T element) {
+        return queue.offer(element);
     }
 
     public void submit(T element) {

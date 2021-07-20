@@ -30,6 +30,7 @@ import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * @author hal.hildebrand

@@ -36,6 +36,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the

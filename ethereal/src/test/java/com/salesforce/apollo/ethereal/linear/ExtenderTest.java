@@ -19,7 +19,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DagFactory;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
@@ -43,7 +42,7 @@ public class ExtenderTest {
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).setCrpFixedPrefix(crpFixedPrefix).build();
-        var ordering = new Extender(d.dag(), rs, cnf, DigestAlgorithm.DEFAULT);
+        var ordering = new Extender(d.dag(), rs, cnf);
         assertNull(ordering.nextRound());
     }
 
@@ -55,7 +54,7 @@ public class ExtenderTest {
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).setCrpFixedPrefix(crpFixedPrefix).build();
-        var ordering = new Extender(d.dag(), rs, cnf, DigestAlgorithm.DEFAULT);
+        var ordering = new Extender(d.dag(), rs, cnf);
         assertNull(ordering.nextRound());
     }
 
@@ -67,7 +66,7 @@ public class ExtenderTest {
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).setCrpFixedPrefix(crpFixedPrefix).build();
-        var ordering = new Extender(d.dag(), rs, cnf, DigestAlgorithm.DEFAULT);
+        var ordering = new Extender(d.dag(), rs, cnf);
 
         for (int level = 0; level < 8; level++) {
             assertNotNull(ordering.nextRound(), "failed at level:  " + level);
@@ -83,7 +82,7 @@ public class ExtenderTest {
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).setCrpFixedPrefix(crpFixedPrefix).build();
-        var ordering = new Extender(d.dag(), rs, cnf, DigestAlgorithm.DEFAULT);
+        var ordering = new Extender(d.dag(), rs, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();
         for (int level = 0; level < 8; level++) {
