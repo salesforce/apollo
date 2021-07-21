@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.security.PublicKey;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,6 +19,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
@@ -50,19 +50,19 @@ import com.salesforce.apollo.utils.Utils;
 public class Ethereal {
     public interface Committee {
         class Default implements Committee {
-            private final Map<Short, PublicKey> keys;
+            private final Map<Short, Verifier> verifiers;
 
-            public Default(Map<Short, PublicKey> keys) {
-                this.keys = new HashMap<>(keys);
+            public Default(Map<Short, Verifier> verifiers) {
+                this.verifiers = new HashMap<>(verifiers);
             }
 
             @Override
-            public PublicKey getSigningKey(short pid) {
-                return keys.get(pid);
+            public Verifier getVerifier(short pid) {
+                return verifiers.get(pid);
             }
         }
 
-        PublicKey getSigningKey(short pid);
+        Verifier getVerifier(short pid);
     }
 
     public record Controller(Runnable start, Runnable stop) {};
