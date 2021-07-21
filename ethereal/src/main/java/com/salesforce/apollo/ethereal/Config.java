@@ -14,6 +14,7 @@ import java.util.function.BiConsumer;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.ethereal.Ethereal.Committee;
 import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
 
@@ -62,7 +63,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                         orderStartLevel = 6;
         private double                      pByz            = 0.33;
         private short                       pid;
-        private Signer                      signer;
+        private Signer                      signer          = new MockSigner();
         private WeakThresholdKey            wtk;
         private int                         zeroVotRoundForCommonVote;
 
@@ -111,7 +112,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 byzantine = (int) ((nProc) * pByz);
             }
             Objects.requireNonNull(committee, "Committee cannot be null");
-            Objects.requireNonNull(signer, "SignerImpl cannot be null");
+            Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
 
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,

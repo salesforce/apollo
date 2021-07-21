@@ -21,6 +21,45 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  *
  */
 public interface Signer {
+
+    class MockSigner implements Signer {
+
+        @Override
+        public SignatureAlgorithm algorithm() {
+            return SignatureAlgorithm.DEFAULT;
+        }
+
+        @Override
+        public int keyIndex() {
+            return 0;
+        }
+
+        @Override
+        public JohnHancock sign(byte[]... bytes) {
+            return new JohnHancock(algorithm(), new byte[0]);
+        }
+
+        @Override
+        public JohnHancock sign(ByteBuffer... buffs) {
+            return new JohnHancock(algorithm(), new byte[0]);
+        }
+
+        @Override
+        public JohnHancock sign(ByteString... message) {
+            return new JohnHancock(algorithm(), new byte[0]);
+        }
+
+        @Override
+        public JohnHancock sign(InputStream message) {
+            return new JohnHancock(algorithm(), new byte[0]);
+        }
+
+        @Override
+        public JohnHancock sign(List<ByteBuffer> buffers) {
+            return new JohnHancock(algorithm(), new byte[0]);
+        }
+    }
+
     class SignerImpl implements Signer {
         private final SignatureAlgorithm algorithm;
         private final int                keyIndex;
