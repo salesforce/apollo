@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
@@ -30,10 +31,10 @@ public class IdentifierSpecificationTests {
         this.deterministicRandom.setSeed(new byte[] { 0 });
 
         this.keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        this.signer = new Signer(1, this.keyPair.getPrivate());
+        this.signer = new SignerImpl(1, this.keyPair.getPrivate());
 
         this.keyPair2 = SignatureAlgorithm.ED_25519.generateKeyPair();
-        this.signer2 = new Signer(2, this.keyPair2.getPrivate());
+        this.signer2 = new SignerImpl(2, this.keyPair2.getPrivate());
 
     }
 

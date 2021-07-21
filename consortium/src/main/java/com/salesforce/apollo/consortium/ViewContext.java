@@ -34,7 +34,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
@@ -163,7 +163,7 @@ public class ViewContext implements MembershipListener<Member> {
     }
 
     public Validate generateValidation(Digest hash, Block block) {
-        JohnHancock signature = new Signer(0, consensusKeyPair
+        JohnHancock signature = new SignerImpl(0, consensusKeyPair
                                                               .getPrivate()).sign(digestAlgorithm.digest(block.getHeader().toByteString()).toDigeste().toByteString());
 
         if (log.isTraceEnabled()) {

@@ -27,7 +27,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Crown;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -109,7 +109,7 @@ public class CreatorTest {
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1).build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -164,7 +164,7 @@ public class CreatorTest {
         short nProc = 4;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -219,7 +219,7 @@ public class CreatorTest {
         short nProc = 4;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(true).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -279,7 +279,7 @@ public class CreatorTest {
         short nProc = 4;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -332,7 +332,7 @@ public class CreatorTest {
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(epoch).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch).build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -397,7 +397,7 @@ public class CreatorTest {
         short nProc = 4;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new Signer(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);

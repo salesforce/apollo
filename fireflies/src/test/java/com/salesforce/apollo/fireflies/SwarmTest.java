@@ -34,7 +34,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
@@ -217,7 +217,7 @@ public class SwarmTest {
                        .map(cert -> new Node(
                                new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                        cert.getX509Certificate(), cert.getPrivateKey(),
-                                       new Signer(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey()),
+                                       new SignerImpl(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey()),
                                parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());

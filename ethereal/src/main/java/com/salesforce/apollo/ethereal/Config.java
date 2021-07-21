@@ -6,12 +6,16 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.ethereal.Ethereal.Committee;
+import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
 
 /**
  * Configuration for an Ethereal instantiation.
@@ -22,7 +26,8 @@ import com.salesforce.apollo.crypto.Signer;
 public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine) {
+                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine,
+                     Committee committee) {
 
     public static Config empty() {
         return Builder.empty().build();
@@ -44,6 +49,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                         byzantine       = -1;
         private boolean                     canSkipLevel    = false;
         private List<BiConsumer<Unit, Dag>> checks;
+        private Committee                   committee       = new Default(Collections.emptyMap());
         private int                         commonVoteDeterministicPrefix;
         private short                       crpFixedPrefix;
         private DigestAlgorithm             digestAlgorithm = DigestAlgorithm.DEFAULT;
@@ -104,9 +110,13 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (byzantine <= -1) {
                 byzantine = (int) (((double) nProc) * pByz);
             }
+            Objects.requireNonNull(committee, "Committee cannot be null");
+            Objects.requireNonNull(signer, "SignerImpl cannot be null");
+            Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
+
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee);
         }
 
         public int getByzantine() {
@@ -115,6 +125,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public List<BiConsumer<Unit, Dag>> getChecks() {
             return checks;
+        }
+
+        public Committee getCommittee() {
+            return committee;
         }
 
         public int getCommonVoteDeterministicPrefix() {
@@ -200,6 +214,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setChecks(List<BiConsumer<Unit, Dag>> checks) {
             this.checks = checks;
+            return this;
+        }
+
+        public Builder setCommittee(Committee committee) {
+            this.committee = committee;
             return this;
         }
 

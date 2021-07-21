@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.security.PublicKey;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,20 +28,43 @@ import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
- * The Ethereal instance represents a set linearly decided transactions. These
- * transactions are causally arranged in a linear order. Ethereal has three ways
- * to invoke consensus, each providing different guarantees. The strongest
- * guarantees are provided by the <code>abftRandomBeacon</code>() method, which
- * provides correct and live guarantees. The remaining methods,
- * <code>weakBeacon</code>() and <code>deterministic</code>() provide equal
- * guarantees for correctness, however neither guarantee liveness. The liveness
- * guarantees provided are quite strong, however, despite not being provably air
- * tight.
+ * The Ethereal instance represents a list of linearly decided batches of
+ * transactions, refered to as <code>Unit</code>s. These Units are causally
+ * arranged in a linear order.
+ * 
+ * Ethereal has three ways to invoke consensus upon its members, each providing
+ * different guarantees.
+ * 
+ * The strongest guarantees are provided by the <code>abftRandomBeacon</code>()
+ * method, which provides correct and live guarantees.
+ * 
+ * The remaining 2 methods, <code>weakBeacon</code>() and
+ * <code>deterministic</code>() provide equal guarantees for correctness,
+ * however neither guarantee liveness. The liveness guarantees provided are
+ * quite strong and difficult to actually subvert, however, despite not being
+ * provably air tight.
  * 
  * @author hal.hildebrand
  *
  */
 public class Ethereal {
+    public interface Committee {
+        class Default implements Committee {
+            private final Map<Short, PublicKey> keys;
+
+            public Default(Map<Short, PublicKey> keys) {
+                this.keys = new HashMap<>(keys);
+            }
+
+            @Override
+            public PublicKey getSigningKey(short pid) {
+                return keys.get(pid);
+            }
+        }
+
+        PublicKey getSigningKey(short pid);
+    }
+
     public record Controller(Runnable start, Runnable stop) {};
 
     private static final Logger log     = LoggerFactory.getLogger(Ethereal.class);

@@ -19,6 +19,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -321,7 +322,7 @@ public class RotationSpecification {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
             }
 
-            signer = new Signer(keyIndex, requireNonNull(privateKey));
+            signer = new SignerImpl(keyIndex, requireNonNull(privateKey));
             return this;
         }
 
