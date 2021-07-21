@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ghost;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,6 +46,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -60,7 +60,7 @@ public class PerfTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, testCardinality).parallel().mapToObj(i -> getMember(i))
+        certs = IntStream.range(0, testCardinality).parallel().mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }

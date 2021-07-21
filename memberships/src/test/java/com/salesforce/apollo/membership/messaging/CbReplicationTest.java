@@ -7,7 +7,6 @@
 package com.salesforce.apollo.membership.messaging;
 
 import static com.salesforce.apollo.membership.messaging.causal.CausalBuffer.hashOf;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
@@ -35,6 +34,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer;
 import com.salesforce.apollo.membership.messaging.causal.CausalBuffer.StampedMessage;
 import com.salesforce.apollo.membership.messaging.causal.Parameters;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -56,8 +56,8 @@ public class CbReplicationTest {
 
     @BeforeEach
     public void setup() {
-        memberA = new SigningMemberImpl(getMember(0));
-        memberB = new SigningMemberImpl(getMember(1));
+        memberA = new SigningMemberImpl(Utils.getMember(0));
+        memberB = new SigningMemberImpl(Utils.getMember(1));
         context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1));
         context.activate(memberA);
         context.activate(memberB);

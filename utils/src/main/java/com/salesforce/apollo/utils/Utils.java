@@ -44,10 +44,15 @@ import java.net.SocketException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.channels.ClosedChannelException;
+import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -67,7 +72,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.cert.Certificates;
 
 /**
  * 
@@ -1092,5 +1101,19 @@ public class Utils {
                 throw new IllegalStateException(e);
             }
         };
+    }
+
+    public static CertificateWithPrivateKey getMember(int index) {
+        byte[] hash = new byte[32];
+        hash[0] = (byte) index;
+        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
+        Date notBefore = Date.from(Instant.now());
+        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
+        X509Certificate generated = Certificates.selfSign(false,
+                                                          encode(id, "localhost", allocatePort(), keyPair.getPublic()),
+                                                          secureEntropy(), keyPair, notBefore, notAfter,
+                                                          Collections.emptyList());
+        return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
     }
 }
