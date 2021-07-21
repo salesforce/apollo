@@ -6,11 +6,14 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.util.function.Consumer;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.ethereal.Data.PreBlock;
+import com.salesforce.apollo.ethereal.Ethereal.Controller;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * @author hal.hildebrand
@@ -18,10 +21,23 @@ import com.salesforce.apollo.membership.Member;
  */
 public class EtherealTest {
 
+    private Controller controller;
+
+    @AfterEach
+    public void disposeController() {
+        if (controller != null) {
+            controller.stop();
+        }
+    }
+
     @Test
     public void assembled() {
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 5);
-        
-        Ethereal e = new Ethereal(context);
+        Ethereal e = new Ethereal();
+        Config config = Config.newBuilder().build();
+        DataSource ds = null;
+        SimpleChannel<PreBlock> out = null;
+        SimpleChannel<PreUnit> synchronizer = null;
+        Consumer<Orderer> connector = null;
+        controller = e.deterministic(config, ds, out, synchronizer, connector);
     }
 }

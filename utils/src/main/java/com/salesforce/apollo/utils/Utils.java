@@ -637,6 +637,23 @@ public class Utils {
         }
     }
 
+    public static CertificateWithPrivateKey getMember(Digest id) {
+        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
+        Date notBefore = Date.from(Instant.now());
+        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        X509Certificate generated = Certificates.selfSign(false,
+                                                          encode(id, "localhost", allocatePort(), keyPair.getPublic()),
+                                                          secureEntropy(), keyPair, notBefore, notAfter,
+                                                          Collections.emptyList());
+        return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
+    }
+
+    public static CertificateWithPrivateKey getMember(int index) {
+        byte[] hash = new byte[32];
+        hash[0] = (byte) index;
+        return getMember(new Digest(DigestAlgorithm.DEFAULT, hash));
+    }
+
     /**
      * Answer the extension of the file
      * 
@@ -1101,19 +1118,5 @@ public class Utils {
                 throw new IllegalStateException(e);
             }
         };
-    }
-
-    public static CertificateWithPrivateKey getMember(int index) {
-        byte[] hash = new byte[32];
-        hash[0] = (byte) index;
-        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        Date notBefore = Date.from(Instant.now());
-        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
-        Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
-        X509Certificate generated = Certificates.selfSign(false,
-                                                          encode(id, "localhost", allocatePort(), keyPair.getPublic()),
-                                                          secureEntropy(), keyPair, notBefore, notAfter,
-                                                          Collections.emptyList());
-        return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
     }
 }

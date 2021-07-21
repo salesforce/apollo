@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -22,7 +23,6 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
-import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.slf4j.Logger;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -112,7 +112,7 @@ public class Orderer {
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
-        this.lastTiming = new BlockingArrayQueue<>();
+        this.lastTiming = new LinkedBlockingDeque<>();
         this.orderedUnits = new SimpleChannel<>(conf.epochLength());
         this.toPreblock = toPreblock;
         this.unitBelt = new SimpleChannel<>(conf.epochLength() * conf.nProc());

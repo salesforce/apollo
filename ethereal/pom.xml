@@ -12,7 +12,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>memberships</artifactId>
+			<artifactId>utils</artifactId>
 		</dependency>
 
 		<!-- Test Only Deps below this line -->

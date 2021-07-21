@@ -19,3 +19,8 @@ message Proof {
     int64 encodedId = 1;
     utils.Digeste hash = 2;
 }
+
+
+message ByteMessage {
+    bytes contents = 1;
+}

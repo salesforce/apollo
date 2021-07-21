@@ -14,10 +14,12 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 
 /**
+ * Configuration for an Ethereal instantiation.
+ * 
  * @author hal.hildebrand
  *
  */
-public record Config(short nProc, int epochLength, short pid, int zeroVotRoundForCommonVote, int firstDecidedRound,
+public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine) {
@@ -75,7 +77,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVotRoundFo
             orderStartLevel = config.orderStartLevel;
             pid = config.pid;
             signer = config.signer;
-            zeroVotRoundForCommonVote = config.zeroVotRoundForCommonVote;
+            zeroVotRoundForCommonVote = config.zeroVoteRoundForCommonVote;
         }
 
         public Builder addConsensusConfig() {

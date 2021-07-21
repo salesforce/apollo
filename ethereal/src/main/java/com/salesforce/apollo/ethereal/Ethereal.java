@@ -6,128 +6,70 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.security.PublicKey;
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.concurrent.Exchanger;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
-import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.SimpleChannel;
+import com.salesforce.apollo.utils.Utils;
 
 /**
+ * The Ethereal instance represents a set linearly decided transactions. These
+ * transactions are causally arranged in a linear order. Ethereal has three ways
+ * to invoke consensus, each providing different guarantees. The strongest
+ * guarantees are provided by the <code>abftRandomBeacon</code>() method, which
+ * provides correct and live guarantees. The remaining methods,
+ * <code>weakBeacon</code>() and <code>deterministic</code>() provide equal
+ * guarantees for correctness, however neither guarantee liveness. The liveness
+ * guarantees provided are quite strong, however, despite not being provably air
+ * tight.
+ * 
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class Ethereal {
     public record Controller(Runnable start, Runnable stop) {};
 
-    private static final Logger             log       = LoggerFactory.getLogger(Ethereal.class);
-    private final Map<String, List<String>> addresses = new HashMap<>();
-    private final Context<Member>           context;
-    // members assigned a process id, 0 -> Context cardinality. Determined by id
-    // (hash) sort order
-    private final PublicKey[]              p2pKeys;
-    private final SortedMap<Digest, Short> pids;
-    private final PublicKey[]              publicKeys;
-
-    private final Map<String, List<String>> setupAddresses = new HashMap<>();
-
-    public Ethereal(Context<Member> context) {
-        this.context = context;
-        AtomicInteger i = new AtomicInteger(0);
-        // Organize the members of the context by labeling them with short integer
-        // values. The pids maps members to this id, and the map is sorted and ordered
-        // by member id, with key index == member's pid
-        pids = context.allMembers().sorted()
-                      .collect(Collectors.toMap(m -> m.getId(), m -> (short) i.getAndIncrement(), (a, b) -> {
-                          throw new IllegalStateException();
-                      }, () -> new TreeMap<>()));
-        publicKeys = new PublicKey[pids.size()];
-        p2pKeys = new PublicKey[pids.size()];
-    }
+    private static final Logger log     = LoggerFactory.getLogger(Ethereal.class);
+    private final AtomicBoolean started = new AtomicBoolean();
 
     /**
-     * The main processing entry point for Ethereal. Given two Config objects (one
-     * for the setup phase and one for the main consensus), data source and preblock
-     * sink, initialize two orderers and a channel between them used to pass the
-     * result of the setup phase. Returns two functions that can be used to,
-     * respectively, start and stop the whole system. The provided preblock sink
-     * gets closed after producing the last preblock.
+     * Processing entry point for Ethereal using an asynchronous, BFT random beacon.
+     * This provides strong liveness guarantees for the instance.
      * 
-     * @param conf          - the Config
+     * Given two Config objects (one for the setup phase and one for the main
+     * consensus), data source and preblock sink, initialize two orderers and a
+     * channel between them used to pass the result of the setup phase. The first
+     * phase is the setup phase for the instance, and generates the weak threshold
+     * key for subsequent randomness, to be revealed when appropriate in the
+     * protocol phases.
+     * 
+     * @param setupConfig   - configuration for random beacon setup phase
+     * @param config        - the Config
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
      * @param connector     - the Consumer of the created Orderer for this system
+     * @return the Controller for starting/stopping this instance, or NULL if
+     *         already started.
      */
-    public Controller deterministic(Config setupConfig, Config config, DataSource ds,
-                                    SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
-                                    Consumer<Orderer> connector) {
-        Controller consensus = deterministicConsensus(config, ds, preblockSink, synchronizer, connector);
-        if (consensus == null) {
-            throw new IllegalStateException("Error occurred initializing consensus");
+    public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
+                                       SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
+                                       Consumer<Orderer> connector) {
+        if (!started.compareAndSet(false, true)) {
+            return null;
         }
-        return consensus;
-    }
-
-    /**
-     * A counterpart of process() that does not perform the setup phase. Instead, a
-     * fixed seeded WeakThresholdKey is used for the main consensus. NoBeacon should
-     * be used for testing purposes only! Returns start and stop functions.
-     * 
-     * @param conf          - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
-     */
-    public Controller noBeacon(Config conf, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                               SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
-        Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, connector);
-        return new Controller(() -> {
-            consensus.start.run();
-            try {
-                wtkChan.exchange(WeakThresholdKey.seededWTK(conf.nProc(), conf.pid(), 2137, null));
-            } catch (InterruptedException e) {
-                throw new IllegalStateException(e);
-            }
-        }, consensus.stop);
-    }
-
-    /**
-     * Deterministic consensus processing entry point for Ethereal. Returns two
-     * functions that can be used to, respectively, start and stop the whole system.
-     * The provided preblock sink gets closed after producing the last preblock.
-     * 
-     * @param conf          - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
-     */
-    public Controller process(Config setupConfig, Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                              SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
         Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, connector);
@@ -141,6 +83,60 @@ public class Ethereal {
             setup.stop.run();
             consensus.stop.run();
         });
+    }
+
+    /**
+     * Deterministic consensus processing entry point for Ethereal. Does not
+     * strongly guarantee liveness, but does guarantee correctness.
+     * 
+     * @param config        - the Config
+     * @param ds            - the DataSource to use to build Units
+     * @param prebblockSink - the channel to send assembled PreBlocks as output
+     * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param connector     - the Consumer of the created Orderer for this system
+     * @return the Controller for starting/stopping this instance, or NULL if
+     *         already started.
+     */
+    public Controller deterministic(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
+                                    SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+        if (!started.compareAndSet(false, true)) {
+            return null;
+        }
+        Controller consensus = deterministicConsensus(config, ds, preblockSink, synchronizer, connector);
+        if (consensus == null) {
+            throw new IllegalStateException("Error occurred initializing consensus");
+        }
+        return consensus;
+    }
+
+    /**
+     * A counterpart of consensus() in that this does not perform the setup phase
+     * for the ABFT random beacon, rather relying on a fixed seeded WeakThresholdKey
+     * is used for the main consensus.
+     * 
+     * @param conf          - the Config
+     * @param ds            - the DataSource to use to build Units
+     * @param prebblockSink - the channel to send assembled PreBlocks as output
+     * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param connector     - the Consumer of the created Orderer for this system
+     * @return the Controller for starting/stopping this instance, or NULL if
+     *         already started.
+     */
+    public Controller weakBeacon(Config conf, DataSource ds, SimpleChannel<PreBlock> preblockSink,
+                                 SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+        if (!started.compareAndSet(false, true)) {
+            return null;
+        }
+        Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, connector);
+        return new Controller(() -> {
+            consensus.start.run();
+            try {
+                wtkChan.exchange(WeakThresholdKey.seededWTK(conf.nProc(), conf.pid(), 2137, null));
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }, consensus.stop);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
@@ -157,7 +153,7 @@ public class Ethereal {
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
-        var started = new BlockingArrayQueue<>(1);
+        var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
                 try {
@@ -174,12 +170,14 @@ public class Ethereal {
                     orderer.start(Coin.newFactory(config.pid(), wtkey), synchronizer);
                     connector.accept(orderer);
                 } finally {
-                    started.add(true);
+                    started.set(true);
                 }
             });
         };
         Runnable stop = () -> {
-            started.poll();
+            if (!Utils.waitForCondition(2_000, () -> started.get())) {
+                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
+            }
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -201,7 +199,7 @@ public class Ethereal {
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
-        var started = new BlockingArrayQueue<>(1);
+        AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
                 try {
@@ -210,12 +208,14 @@ public class Ethereal {
                     orderer.start(new DsrFactory(), synchronizer);
                     connector.accept(orderer);
                 } finally {
-                    started.add(true);
+                    started.set(true);
                 }
             });
         };
         Runnable stop = () -> {
-            started.poll();
+            if (!Utils.waitForCondition(2_000, () -> started.get())) {
+                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
+            }
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -234,10 +234,6 @@ public class Ethereal {
 
     private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
         var rsf = new Beacon(conf);
-        if (rsf != null) {
-            return null;
-        }
-
         Consumer<List<Unit>> extractHead = units -> {
             var head = units.get(units.size() - 1);
             if (head.level() == conf.orderStartLevel()) {

@@ -36,7 +36,7 @@ public class Extender {
         this.dag = dag;
         randomSource = rs;
         lastTUs = new ArrayList<>();
-        zeroVoteRoundForCommonVote = conf.zeroVotRoundForCommonVote();
+        zeroVoteRoundForCommonVote = conf.zeroVoteRoundForCommonVote();
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();

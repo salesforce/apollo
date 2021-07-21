@@ -17,6 +17,7 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  *
  */
 public class Beacon implements RandomSourceFactory {
+    @SuppressWarnings("unused")
     private final Config config;
 
     public Beacon(Config config) {
