@@ -220,34 +220,6 @@ public class Orderer {
 
     }
 
-    /**
-     * Waits for ordered round of units produced by Extenders and
-     * produces Preblocks based on them. Since Extenders in multiple epochs can
-     * supply ordered rounds simultaneously, handleTimingRounds needs to ensure that
-     * Preblocks are produced in ascending order with respect to epochs. For the
-     * last ordered round of the epoch, the timing unit defining it is sent to the
-     * creator (to produce signature shares.)
-     */
-    private Consumer<List<List<Unit>>> handleTimingRounds() {
-        AtomicInteger current = new AtomicInteger(0);
-        return ordered -> {
-            for (var round : ordered) {
-                var timingUnit = round.get(round.size() - 1);
-                var epoch = timingUnit.epoch();
-
-                if (timingUnit.level() == config.lastLevel()) {
-                    lastTiming.add(timingUnit);
-                    finishEpoch(epoch);
-                }
-                if (epoch > current.get() && timingUnit.level() <= config.lastLevel()) {
-                    toPreblock.accept(round);
-                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
-                }
-                current.set(epoch);
-            }
-        };
-    }
-
     public void stop() {
         if (previous != null) {
             previous.close();
@@ -327,6 +299,34 @@ public class Orderer {
             return new epochWithNewer(previous, false);
         }
         return new epochWithNewer(null, false);
+    }
+
+    /**
+     * Waits for ordered round of units produced by Extenders and produces Preblocks
+     * based on them. Since Extenders in multiple epochs can supply ordered rounds
+     * simultaneously, handleTimingRounds needs to ensure that Preblocks are
+     * produced in ascending order with respect to epochs. For the last ordered
+     * round of the epoch, the timing unit defining it is sent to the creator (to
+     * produce signature shares.)
+     */
+    private Consumer<List<List<Unit>>> handleTimingRounds() {
+        AtomicInteger current = new AtomicInteger(0);
+        return ordered -> {
+            for (var round : ordered) {
+                var timingUnit = round.get(round.size() - 1);
+                var epoch = timingUnit.epoch();
+
+                if (timingUnit.level() == config.lastLevel()) {
+                    lastTiming.add(timingUnit);
+                    finishEpoch(epoch);
+                }
+                if (epoch > current.get() && timingUnit.level() <= config.lastLevel()) {
+                    toPreblock.accept(round);
+                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+                }
+                current.set(epoch);
+            }
+        };
     }
 
     /**

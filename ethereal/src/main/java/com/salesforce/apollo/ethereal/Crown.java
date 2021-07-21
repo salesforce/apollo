@@ -50,7 +50,7 @@ public record Crown(int[] heights, Digest controlHash) {
         return new Crown(IntStream.range(0, nProc).map(e -> -1).toArray(), combine(digestAlgorithm, new Digest[nProc]));
     }
 
-    public static Crown newCrownFromParents(Unit[] parents, DigestAlgorithm algo) { 
+    public static Crown newCrownFromParents(Unit[] parents, DigestAlgorithm algo) {
         var nProc = parents.length;
         var heights = new int[nProc];
         var hashes = new Digest[nProc];

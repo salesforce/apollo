@@ -43,7 +43,7 @@ public class ExtenderService {
         this.output = output;
         trigger = new SimpleChannel<>(100);
         timingRounds = new SimpleChannel<>(config.epochLength());
-        
+
         trigger.consumeEach(timingUnitDecider());
         timingRounds.consumeEach(roundSorter());
     }

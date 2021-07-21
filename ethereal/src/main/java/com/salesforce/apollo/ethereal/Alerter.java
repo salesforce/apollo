@@ -7,8 +7,11 @@
 package com.salesforce.apollo.ethereal;
 
 /**
- * Alerter is responsible for raising alerts about forks and handling communication about commitments in case of fork.
+ * Alerter is responsible for raising alerts about forks and handling
+ * communication about commitments in case of fork.
+ * 
  * @author hal.hildebrand
  *
  */
-public interface Alerter { }
+public interface Alerter {
+}

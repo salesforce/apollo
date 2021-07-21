@@ -65,10 +65,7 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm di
         seenUnits.put(u.hash(), true);
         var minLayerBelow = -1;
         for (var uParent : u.parents()) {
-            if (uParent == null) {
-                continue;
-            }
-            if (checkIfAlreadyOrdered(uParent, prevTUs)) {
+            if ((uParent == null) || checkIfAlreadyOrdered(uParent, prevTUs)) {
                 continue;
             }
             if (!seenUnits.getOrDefault(uParent.hash(), false)) {

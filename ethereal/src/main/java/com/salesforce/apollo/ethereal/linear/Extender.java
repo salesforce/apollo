@@ -32,6 +32,21 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
  *
  */
 public class Extender {
+    private static Logger log = LoggerFactory.getLogger(Extender.class);
+
+    private int                                     commonVoteDeterministicPrefix;
+    private CommonRandomPermutation                 crpIterator;
+    private Unit                                    currentTU;
+    private final Dag                               dag;
+    private final Map<Digest, SuperMajorityDecider> deciders = new HashMap<>();
+    private final DigestAlgorithm                   digestAlgorithm;
+    private int                                     firstDecidedRound;
+    private boolean                                 lastDecideResult;
+    private List<Unit>                              lastTUs;
+    private int                                     orderStartLevel;
+    private final RandomSource                      randomSource;
+    private int                                     zeroVoteRoundForCommonVote;
+
     public Extender(Dag dag, RandomSource rs, Config conf) {
         this.dag = dag;
         randomSource = rs;
@@ -43,19 +58,6 @@ public class Extender {
         digestAlgorithm = conf.digestAlgorithm();
         crpIterator = new CommonRandomPermutation(dag, rs, conf.crpFixedPrefix(), digestAlgorithm);
     }
-
-    private final Map<Digest, SuperMajorityDecider> deciders = new HashMap<>();
-    private final Dag                               dag;
-    private final RandomSource                      randomSource;
-    private List<Unit>                              lastTUs;
-    private Unit                                    currentTU;
-    private boolean                                 lastDecideResult;
-    private int                                     zeroVoteRoundForCommonVote;
-    private int                                     firstDecidedRound;
-    private int                                     orderStartLevel;
-    private int                                     commonVoteDeterministicPrefix;
-    private CommonRandomPermutation                 crpIterator;
-    private final DigestAlgorithm                   digestAlgorithm;
 
     public TimingRound nextRound() {
         if (lastDecideResult) {
@@ -100,8 +102,6 @@ public class Extender {
         }
         return new TimingRound(currentTU, lastTUs, digestAlgorithm);
     }
-
-    private static Logger log = LoggerFactory.getLogger(Extender.class);
 
     private SuperMajorityDecider getDecider(Unit uc) {
         return deciders.computeIfAbsent(uc.hash(),

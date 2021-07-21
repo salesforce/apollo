@@ -15,7 +15,7 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class DeterministicRandomSource implements RandomSource {
-    
+
     public static class DsrFactory implements RandomSourceFactory {
 
         @Override
@@ -25,10 +25,10 @@ public class DeterministicRandomSource implements RandomSource {
         }
 
         @Override
-        public RandomSource newRandomSource(Dag dag) { 
+        public RandomSource newRandomSource(Dag dag) {
             return new DeterministicRandomSource();
         }
-        
+
     }
 
     @Override

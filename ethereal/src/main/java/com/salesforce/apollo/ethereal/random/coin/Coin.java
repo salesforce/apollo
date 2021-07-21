@@ -21,13 +21,13 @@ public class Coin implements RandomSource {
         return new RandomSourceFactory() {
 
             @Override
-            public RandomSource newRandomSource(Dag dag) {
+            public byte[] dealingData(int epoch) {
                 // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
-            public byte[] dealingData(int epoch) {
+            public RandomSource newRandomSource(Dag dag) {
                 // TODO Auto-generated method stub
                 return null;
             }

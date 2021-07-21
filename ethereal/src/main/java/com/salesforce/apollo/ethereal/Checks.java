@@ -16,26 +16,23 @@ import java.util.function.BiConsumer;
  */
 public interface Checks {
 
-    static final int MaxDtaBytesPerUnit              = (int) 2e6;
-    static final int MaxRandomSourceDataBytesPerUnit = (int) 1e6;
-    static final int MaxUnitsInChunk                 = (int) 1e6;
+    static final List<BiConsumer<Unit, Dag>> ConsensusChecks                 = Arrays.asList(basicCorrectness(),
+                                                                                             parentConsistency(),
+                                                                                             noSelfForkingEvidence(),
+                                                                                             forkerMuting());
+    static final int                         MaxDtaBytesPerUnit              = (int) 2e6;
+    static final int                         MaxRandomSourceDataBytesPerUnit = (int) 1e6;
 
+    static final int                         MaxUnitsInChunk = (int) 1e6;
     static final List<BiConsumer<Unit, Dag>> SetupChecks     = Arrays.asList(basicCorrectness(), parentConsistency(),
                                                                              noLevelSkipping(), noForks());
-    static final List<BiConsumer<Unit, Dag>> ConsensusChecks = Arrays.asList(basicCorrectness(), parentConsistency(),
-                                                                             noSelfForkingEvidence(), forkerMuting());
 
     static BiConsumer<Unit, Dag> basicCorrectness() {
         return (u, dag) -> {
         };
     }
 
-    static BiConsumer<Unit, Dag> parentConsistency() {
-        return (u, dag) -> {
-        };
-    }
-
-    static BiConsumer<Unit, Dag> noLevelSkipping() {
+    static BiConsumer<Unit, Dag> forkerMuting() {
         return (u, dag) -> {
         };
     }
@@ -45,12 +42,17 @@ public interface Checks {
         };
     }
 
+    static BiConsumer<Unit, Dag> noLevelSkipping() {
+        return (u, dag) -> {
+        };
+    }
+
     static BiConsumer<Unit, Dag> noSelfForkingEvidence() {
         return (u, dag) -> {
         };
     }
 
-    static BiConsumer<Unit, Dag> forkerMuting() {
+    static BiConsumer<Unit, Dag> parentConsistency() {
         return (u, dag) -> {
         };
     }

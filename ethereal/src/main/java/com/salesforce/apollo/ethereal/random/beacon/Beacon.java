@@ -24,13 +24,13 @@ public class Beacon implements RandomSourceFactory {
         this.config = config;
     }
 
-    public WeakThresholdKey getWTK(short creator) {
+    @Override
+    public byte[] dealingData(int epoch) {
         // TODO Auto-generated method stub
         return null;
     }
 
-    @Override
-    public byte[] dealingData(int epoch) {
+    public WeakThresholdKey getWTK(short creator) {
         // TODO Auto-generated method stub
         return null;
     }
@@ -40,6 +40,5 @@ public class Beacon implements RandomSourceFactory {
         // TODO Auto-generated method stub
         return null;
     }
- 
 
 }

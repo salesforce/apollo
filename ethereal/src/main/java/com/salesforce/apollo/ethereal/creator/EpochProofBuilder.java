@@ -7,10 +7,11 @@
 package com.salesforce.apollo.ethereal.creator;
 
 import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.decodeShare;
+import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.encodeProof;
+import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.encodeShare;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +35,7 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  *
  */
 @SuppressWarnings("unused")
-public interface EpochProofBuilder { 
+public interface EpochProofBuilder {
 
     /**
      * @author hal.hildebrand
@@ -111,6 +112,7 @@ public interface EpochProofBuilder {
             return false;
         }
 
+        @Override
         public Any buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
             Share share = conf.WTKey().createShare(proof);

@@ -108,7 +108,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Config build() {
             if (byzantine <= -1) {
-                byzantine = (int) (((double) nProc) * pByz);
+                byzantine = (int) ((nProc) * pByz);
             }
             Objects.requireNonNull(committee, "Committee cannot be null");
             Objects.requireNonNull(signer, "SignerImpl cannot be null");

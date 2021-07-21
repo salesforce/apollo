@@ -88,6 +88,12 @@ public interface Adder {
             return errors;
         }
 
+        @Override
+        public void close() {
+            // TODO Auto-generated method stub
+
+        }
+
         public void receive(waitingPreUnit wp) {
             try {
                 // 1. Decode Parents
@@ -148,10 +154,7 @@ public interface Adder {
         }
 
         private Correctness checkCorrectness(PreUnit pu) {
-            if ((pu.creator() >= dag.nProc())) {
-                return Correctness.DATA_ERROR;
-            }
-            if (pu.epoch() != dag.epoch()) {
+            if ((pu.creator() >= dag.nProc()) || (pu.epoch() != dag.epoch())) {
                 return Correctness.DATA_ERROR;
             }
             // TODO verify signature
@@ -253,12 +256,6 @@ public interface Adder {
         }
 
         private void sendIfReady(waitingPreUnit ch) {
-            // TODO Auto-generated method stub
-
-        }
-
-        @Override
-        public void close() {
             // TODO Auto-generated method stub
 
         }
