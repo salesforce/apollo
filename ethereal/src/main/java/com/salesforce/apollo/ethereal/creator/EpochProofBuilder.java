@@ -7,8 +7,6 @@
 package com.salesforce.apollo.ethereal.creator;
 
 import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.decodeShare;
-import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.encodeProof;
-import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.encodeShare;
 
 import java.util.HashMap;
 import java.util.Map;
