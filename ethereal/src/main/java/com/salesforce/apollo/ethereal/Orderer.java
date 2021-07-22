@@ -93,7 +93,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(id, dg, new AdderImpl(dg, clock, config.digestAlgorithm()), ext, rs, new AtomicBoolean(true));
+        return new epoch(id, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
     private final Clock                     clock;
@@ -134,7 +134,7 @@ public class Orderer {
             }
             epoch ep = retrieveEpoch(preunits.get(0), source);
             if (ep != null) {
-                errors.putAll(ep.adder().addPreunits(source, preunits.subList(end, preunits.size())));
+                errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
             }
             preunits = preunits.subList(end, preunits.size());
         }
@@ -340,7 +340,7 @@ public class Orderer {
             return;
         }
         var rslt = getEpoch(unit.epoch());
-        epoch ep = null;
+        epoch ep = rslt.epoch;
         if (rslt.newer) {
             ep = newEpoch(unit.epoch());
         }

@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,9 +19,12 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * @author hal.hildebrand
@@ -31,19 +33,26 @@ import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 public interface Adder {
 
     class AdderImpl implements Adder {
+        private static final Logger log = LoggerFactory.getLogger(Adder.class);
 
-        private final Clock                       clock;
-        private final Dag                         dag;
-        private final DigestAlgorithm             digestAlgorithm;
-        private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
-        private final Lock                        mtx         = new ReentrantLock();
-        private final Map<Digest, waitingPreUnit> waiting     = new ConcurrentHashMap<>();
-        private final Map<Long, waitingPreUnit>   waitingById = new ConcurrentHashMap<>();
+        private final Config                          conf;
+        private final Dag                             dag;
+        private final Map<Long, missingPreUnit>       missing     = new ConcurrentHashMap<>();
+        private final Lock                            mtx         = new ReentrantLock();
+        private final Map<Digest, waitingPreUnit>     waiting     = new ConcurrentHashMap<>();
+        private final Map<Long, waitingPreUnit>       waitingById = new ConcurrentHashMap<>();
+        private final SimpleChannel<waitingPreUnit>[] ready;
 
-        public AdderImpl(Dag dag, Clock clock, DigestAlgorithm digestAlgorithm) {
+        @SuppressWarnings("unchecked")
+        public AdderImpl(Dag dag, Config conf) {
             this.dag = dag;
-            this.clock = clock;
-            this.digestAlgorithm = digestAlgorithm;
+            this.conf = conf;
+            ready = new SimpleChannel[conf.nProc()];
+            for (int i = 0; i < conf.nProc(); i++) {
+                SimpleChannel<waitingPreUnit> channel = new SimpleChannel<>(conf.epochLength());
+                channel.consume(wpus -> wpus.forEach(wpu -> handleReady(wpu)));
+                ready[i] = channel;
+            }
         }
 
         /**
@@ -67,9 +76,11 @@ public interface Adder {
                 if (alreadyInDag.get(i) != null) {
                     Correctness check = checkCorrectness(pu);
                     if (check != Correctness.CORRECT) {
+                        log.info("Failed correctness check: {} : {}", pu, check);
                         errors.put(pu.hash(), check);
                         failed.set(i, true);
                     } else {
+                        log.info("Duplicate unit: {} ", pu);
                         errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
                         failed.set(i, true);
                     }
@@ -90,11 +101,15 @@ public interface Adder {
 
         @Override
         public void close() {
-            // TODO Auto-generated method stub
-
+            for (var channel : ready) {
+                channel.close();
+            }
         }
 
-        public void receive(waitingPreUnit wp) {
+        private void handleReady(waitingPreUnit wp) {
+            if (wp.pu.creator() == conf.pid()) {
+                return;
+            }
             try {
                 // 1. Decode Parents
                 var decoded = dag.decodeParents(wp.pu());
@@ -113,7 +128,9 @@ public interface Adder {
                         }
                     }
                 }
-                if (!Digest.combine(digestAlgorithm, (Digest[]) Stream.of(parents).map(e -> e.hash()).toArray())
+                var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
+                                    .toList();
+                if (!Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]))
                            .equals(wp.pu().view().controlHash())) {
                     wp.failed().set(true);
                     handleInvalidControlHash(wp.source(), wp.pu(), parents);
@@ -136,6 +153,7 @@ public interface Adder {
         // addPreunit as a waitingPreunit to the buffer zone.
         private void addToWaiting(PreUnit pu, short source) {
             if (waiting.containsKey(pu.hash())) {
+                log.info("Already waiting unit: {} ", pu);
                 return;
             }
             var id = pu.id();
@@ -151,6 +169,8 @@ public interface Adder {
             if (wp.missingParents().get() > 0) {
                 return;
             }
+            log.info("Unit now waiting: {} ", pu);
+            sendIfReady(wp);
         }
 
         private Correctness checkCorrectness(PreUnit pu) {
@@ -181,10 +201,9 @@ public interface Adder {
         }
 
         /**
-         * checkParents finds out which parents of a newly created waitingPreUnit are in
-         * the dag, which are waiting, and which are missing. Sets values of
-         * waitingParents() and missingParents() accordingly. Additionally, returns
-         * maximal heights of dag.
+         * finds out which parents of a newly created waitingPreUnit are in the dag,
+         * which are waiting, and which are missing. Sets values of waitingParents() and
+         * missingParents() accordingly. Additionally, returns maximal heights of dag.
          */
         private int[] checkParents(waitingPreUnit wp) {
             var epoch = wp.pu().epoch();
@@ -219,7 +238,7 @@ public interface Adder {
          * unknown unit with the given id.
          */
         private void registerMissing(long id, waitingPreUnit wp) {
-            missing.putIfAbsent(id, new missingPreUnit(new ArrayList<>(), clock.instant()));
+            missing.putIfAbsent(id, new missingPreUnit(new ArrayList<>(), conf.clock().instant()));
             missing.get(id).neededBy().add(wp);
         }
 
@@ -227,7 +246,6 @@ public interface Adder {
         private void remove(waitingPreUnit wp) {
             mtx.lock();
             try {
-
                 if (wp.failed().get()) {
                     removeFailed(wp);
                 } else {
@@ -255,9 +273,16 @@ public interface Adder {
             }
         }
 
-        private void sendIfReady(waitingPreUnit ch) {
-            // TODO Auto-generated method stub
-
+        /**
+         * sendIfReady checks if a waitingPreunit is ready (has no waiting or missing
+         * parents). If yes, the preunit is sent to the channel corresponding to its
+         * dedicated worker.
+         */
+        private void sendIfReady(waitingPreUnit wp) {
+            if (wp.waitingParents().get() == 0 && wp.missingParents().get() == 0) {
+                log.info("Sending unit for processing: {} ", wp);
+                ready[wp.pu().creator()].submit(wp);
+            }
         }
 
     }
@@ -267,7 +292,11 @@ public interface Adder {
     }
 
     record waitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents, AtomicInteger waitingParents,
-                          List<waitingPreUnit> children, AtomicBoolean failed) {}
+                          List<waitingPreUnit> children, AtomicBoolean failed) {
+        public String toString() {
+            return "wpu[" + pu.shortString() + "]";
+        }
+    }
 
     record missingPreUnit(List<waitingPreUnit> neededBy, java.time.Instant requested) {}
 

@@ -120,6 +120,11 @@ public interface PreUnit {
         public String toString() {
             return "freeUnit[" + creator() + ":" + level() + "(" + height() + ")" + ":" + epoch() + "]";
         }
+
+        @Override
+        public String shortString() {
+            return p.shortString();
+        }
     }
 
     public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
@@ -154,7 +159,12 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "preUnit[" + creator() + ":" + height() + ":" + epoch() + "]";
+            return "preUnit[" + shortString() + "]";
+        }
+
+        @Override
+        public String shortString() {
+            return creator() + ":" + height() + ":" + epoch();
         }
     }
 
@@ -244,6 +254,8 @@ public interface PreUnit {
     }
 
     byte[] randomSourceData();
+
+    String shortString();
 
     JohnHancock signature();
 

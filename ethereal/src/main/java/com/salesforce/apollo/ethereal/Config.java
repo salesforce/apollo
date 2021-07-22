@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.time.Clock;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -28,7 +29,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine,
-                     Committee committee) {
+                     Committee committee, Clock clock) {
 
     public static Config empty() {
         return Builder.empty().build();
@@ -50,6 +51,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                         byzantine       = -1;
         private boolean                     canSkipLevel    = false;
         private List<BiConsumer<Unit, Dag>> checks;
+        private Clock                       clock           = Clock.systemUTC();
         private Committee                   committee       = new Default(Collections.emptyMap());
         private int                         commonVoteDeterministicPrefix;
         private short                       crpFixedPrefix;
@@ -117,7 +119,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock);
         }
 
         public int getByzantine() {
@@ -126,6 +128,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public List<BiConsumer<Unit, Dag>> getChecks() {
             return checks;
+        }
+
+        public Clock getClock() {
+            return clock;
         }
 
         public Committee getCommittee() {
@@ -215,6 +221,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setChecks(List<BiConsumer<Unit, Dag>> checks) {
             this.checks = checks;
+            return this;
+        }
+
+        public Builder setClock(Clock clock) {
+            this.clock = clock;
             return this;
         }
 

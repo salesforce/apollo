@@ -116,7 +116,12 @@ public interface Unit extends PreUnit {
 
         @Override
         public String toString() {
-            return "unitInDag[" + creator() + ":" + level() + ":" + epoch() + "]";
+            return "unitInDag[" + shortString() + "]";
+        }
+
+        @Override
+        public String shortString() {
+            return creator() + ":" + level() + ":" + epoch();
         }
     }
 
@@ -228,8 +233,8 @@ public interface Unit extends PreUnit {
                 return Integer.MAX_VALUE;
             }
         }
-        unitInDag predecessor = (unitInDag) predecessor();
-        if (predecessor != null) {
+        var u = predecessor();
+        if (u instanceof unitInDag predecessor) {
             var found = false;
             for (Unit v : dag.maximalUnitsPerProcess().get(creator())) {
                 if (v.equals(predecessor)) {

@@ -31,8 +31,9 @@ import com.salesforce.apollo.utils.SimpleChannel;
  * Creator is a component responsible for producing new units. It processes
  * units produced by other committee members and stores the ones with the
  * highest level as possible parents (candidates). Whenever there are enough
- * parents to produce a unit on a new level, signs and sends (using a function
- * given to the constructor) a new unit.
+ * parents to produce a unit on a new level, the creator creates a new Unit from
+ * the available DataSource, signs and sends (using a function given to the
+ * constructor) this new unit.
  * 
  * @author hal.hildebrand
  *

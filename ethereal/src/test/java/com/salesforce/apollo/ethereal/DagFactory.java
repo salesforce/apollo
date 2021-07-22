@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +31,7 @@ public interface DagFactory {
             dag.addCheck(Checks.noSelfForkingEvidence());
             dag.addCheck(Checks.forkerMuting());
 
-            return new DagAdder(dag, new AdderImpl(dag, Clock.systemUTC(), cnf.digestAlgorithm()));
+            return new DagAdder(dag, new AdderImpl(dag, cnf));
         }
     }
 
