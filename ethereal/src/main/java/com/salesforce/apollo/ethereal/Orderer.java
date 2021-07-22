@@ -85,8 +85,8 @@ public class Orderer {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
+        dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
-            ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
                 unitBelt.submit(u);
@@ -215,7 +215,7 @@ public class Orderer {
         creator.creatUnits(unitBelt, lastTiming);
 
         // Start preblock builder
-        orderedUnits.consume(ordered -> handleTimingRounds());
+        orderedUnits.consume(handleTimingRounds());
 
     }
 
@@ -319,7 +319,7 @@ public class Orderer {
                     lastTiming.add(timingUnit);
                     finishEpoch(epoch);
                 }
-                if (epoch > current.get() && timingUnit.level() <= config.lastLevel()) {
+                if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
                     toPreblock.accept(round);
                     log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
                 }

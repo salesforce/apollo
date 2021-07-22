@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
+import com.salesfoce.apollo.ethereal.proto.EpochProof.Builder;
 import com.salesfoce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
@@ -39,15 +40,11 @@ public interface EpochProofBuilder {
      * @author hal.hildebrand
      *
      */
-    public interface Share {
+    public record Share(short owner, JohnHancock signature) {
         static Share from(EpochProof proof) {
             // TODO Auto-generated method stub
             return null;
         }
-
-        Short owner();
-
-        JohnHancock toSignature();
     }
 
     record sharesDB(Config conf, Map<Proof, Map<Short, Share>> data) {
@@ -61,11 +58,13 @@ public interface EpochProofBuilder {
                 shares = new HashMap<>();
                 data.put(decoded.proof.getMsg(), shares);
             }
-            shares.put(decoded.share.owner(), decoded.share);
-            if (shares.size() >= conf.WTKey().threshold()) {
-                JohnHancock sig = conf.WTKey().combineShares(shares.values());
-                if (sig != null) {
-                    return sig;
+            if (decoded.share != null) {
+                shares.put(decoded.share.owner(), decoded.share);
+                if (shares.size() >= conf.WTKey().threshold()) {
+                    JohnHancock sig = conf.WTKey().combineShares(shares.values());
+                    if (sig != null) {
+                        return sig;
+                    }
                 }
             }
             return null;
@@ -80,7 +79,8 @@ public interface EpochProofBuilder {
         @Override
         public Any tryBuilding(Unit u) {
             // ignore regular units and finishing units with empty data
-            if (u.level() < conf.orderStartLevel() + conf.epochLength() || u.data().getSerializedSize() == 0) {
+            if (u.level() < conf.orderStartLevel() + conf.epochLength()
+            || (u.data() == null || u.data().getSerializedSize() == 0)) {
                 return null;
             }
             var share = decodeShare(u.data());
@@ -88,36 +88,39 @@ public interface EpochProofBuilder {
                 log.warn("Cannot decode share data: {}", u.data());
                 return null;
             }
-            if (!conf.WTKey().verifyShare(share)) {
+            if (conf.useWTK() && !conf.WTKey().verifyShare(share)) {
                 log.warn("Cannot verify share data: {}", u.data());
                 return null;
             }
-            var sig = shares.add(share);
-            if (sig != null) {
-                return encodeSignature(sig, share.proof);
+            if (conf.useWTK()) {
+                var sig = shares.add(share);
+                if (sig != null) {
+                    return encodeSignature(sig, share.proof);
+                }
+                return null;
             }
-            return null;
+            return encodeSignature(null, share.proof);
         }
 
         private Any encodeSignature(JohnHancock sig, EpochProof proof) {
-            // TODO Auto-generated method stub
-            return null;
+            return Any.pack(proof);
         }
 
         @Override
         public boolean verify(Unit unit) {
-            // TODO Auto-generated method stub
-            return false;
+            return conf.useWTK() ? false : true;
         }
 
         @Override
         public Any buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
-            Share share = conf.WTKey().createShare(proof);
-            if (share != null) {
-                return encodeShare(share, proof);
+            if (conf.useWTK()) {
+                Share share = conf.WTKey().createShare(proof);
+                if (share != null) {
+                    return encodeShare(share, proof);
+                }
             }
-            return Any.getDefaultInstance();
+            return encodeShare(null, proof);
         }
 
     }
@@ -135,7 +138,6 @@ public interface EpochProofBuilder {
             EpochProof proof = data.unpack(EpochProof.class);
             return new DecodedShare(Share.from(proof), proof);
         } catch (InvalidProtocolBufferException e) {
-            e.printStackTrace(); // for now
             return null;
         }
     }
@@ -145,7 +147,7 @@ public interface EpochProofBuilder {
      * started.
      */
     static boolean epochProof(PreUnit pu, WeakThresholdKey wtk) {
-        if (!pu.dealing() || wtk == null) {
+        if (!pu.dealing()) {
             return false;
         }
         if (pu.epoch() == 0) {
@@ -155,15 +157,13 @@ public interface EpochProofBuilder {
         try {
             decoded = pu.data().unpack(EpochProof.class);
         } catch (InvalidProtocolBufferException e) {
-            // TODO Log
-            e.printStackTrace();
             return false;
         }
         int epoch = PreUnit.decode(decoded.getMsg().getEncodedId()).epoch();
         if (epoch + 1 != pu.epoch()) {
             return false;
         }
-        return wtk.verifySignature(new JohnHancock(decoded.getSignature()), decoded.getMsg());
+        return wtk == null ? true : wtk.verifySignature(new JohnHancock(decoded.getSignature()), decoded.getMsg());
     }
 
     private static Proof encodeProof(Unit lastTimingUnit) {
@@ -175,7 +175,11 @@ public interface EpochProofBuilder {
      * into unit.
      */
     private static Any encodeShare(Share share, Proof proof) {
-        return Any.pack(EpochProof.newBuilder().setMsg(proof).setSignature(share.toSignature().toSig()).build());
+        Builder builder = EpochProof.newBuilder();
+        if (share != null) {
+            builder.setSignature(share.signature().toSig());
+        }
+        return Any.pack(builder.setMsg(proof).build());
     }
 
     Any buildShare(Unit timingUnit);

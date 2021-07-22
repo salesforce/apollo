@@ -29,7 +29,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine,
-                     Committee committee, Clock clock) {
+                     Committee committee, Clock clock, boolean useWTK) {
 
     public static Config empty() {
         return Builder.empty().build();
@@ -66,8 +66,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private double                      pByz            = 0.33;
         private short                       pid;
         private Signer                      signer          = new MockSigner();
+        private boolean                     useWTK          = false;
         private WeakThresholdKey            wtk;
-        private int                         zeroVotRoundForCommonVote;
+
+        private int zeroVotRoundForCommonVote;
 
         public Builder() {
         }
@@ -113,13 +115,17 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (byzantine <= -1) {
                 byzantine = (int) ((nProc) * pByz);
             }
+            if (wtk == null) {
+                useWTK = false;
+            }
+            lastLevel = epochLength + orderStartLevel;
             Objects.requireNonNull(committee, "Committee cannot be null");
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
 
             return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock, useWTK);
         }
 
         public int getByzantine() {
@@ -200,6 +206,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public boolean isCanSkipLevel() {
             return canSkipLevel;
+        }
+
+        public boolean isUseWTK() {
+            return useWTK;
         }
 
         public Builder requiredByLinear() {
@@ -296,6 +306,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setSigner(Signer signer) {
             this.signer = signer;
+            return this;
+        }
+
+        public Builder setUseWTK(boolean useWTK) {
+            this.useWTK = useWTK;
             return this;
         }
 

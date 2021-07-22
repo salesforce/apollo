@@ -8,6 +8,7 @@ package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,6 +22,8 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
@@ -113,8 +116,8 @@ public class EtherealTest {
         List<DataSource> dataSources = new ArrayList<>();
         List<Orderer> orderers = new ArrayList<>();
         List<Controller> controllers = new ArrayList<>();
-        var builder = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
-                                    .setnProc(nProc).setNumberOfEpochs(2);
+        var builder = Config.Builder.empty().addConsensusConfig().setExecutor(ForkJoinPool.commonPool())
+                                    .setnProc(nProc);
         Consumer<Orderer> connector = o -> orderers.add(o);
         List<SimpleChannel<PreUnit>> inputChannels = new ArrayList<>();
 
@@ -127,9 +130,21 @@ public class EtherealTest {
             controllers.add(controller);
             SimpleChannel<PreUnit> channel = new SimpleChannel<>(100);
             inputChannels.add(channel);
+            for (int d = 0; d < 100; d++) {
+                ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
+                                                     .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
+                                                     .build()));
+            }
         }
 
-        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> e.submit(p))));
+        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> {
+            try {
+                Thread.sleep(2);
+            } catch (InterruptedException e1) {
+                return;
+            }
+            e.submit(p);
+        })));
 
         List<PreBlock> produced = new ArrayList<>();
         out.consumeEach(pb -> {
@@ -148,9 +163,9 @@ public class EtherealTest {
                 var o = deque.remove();
                 channel.consume(pus -> o.addPreunits((short) 0, pus));
             });
-            
-            Utils.waitForCondition(120_000, () -> out.size() == nProc);
-            assertEquals(nProc, out.size());
+
+            Utils.waitForCondition(10_000, 100, () -> produced.size() >= 369);
+            assertTrue(produced.size() >= 369);
         } finally {
             controllers.forEach(e -> e.stop().run());
         }

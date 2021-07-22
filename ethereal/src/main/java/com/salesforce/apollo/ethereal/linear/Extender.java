@@ -74,7 +74,7 @@ public class Extender {
             level = currentTU.level() + 1;
         }
         if (dagMaxLevel < level + firstDecidedRound) {
-            log.info("No round, max dag level: {} is < {}", dagMaxLevel, level + firstDecidedRound);
+            log.info("No round, max dag level: {} is < ({} + {})", dagMaxLevel, level, firstDecidedRound);
             return null;
         }
 
@@ -84,7 +84,7 @@ public class Extender {
             SuperMajorityDecider decider = getDecider(uc);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
-                lastTUs = lastTUs.isEmpty() ? lastTUs : lastTUs.subList(1, lastTUs.size());
+                lastTUs = lastTUs.isEmpty() ? lastTUs : new ArrayList<>(lastTUs.subList(1, lastTUs.size()));
                 lastTUs.add(currentTU);
                 currentTU = uc;
                 lastDecideResult = true;
@@ -107,7 +107,7 @@ public class Extender {
             return null;
         }
         log.info("Timing round: {} last: {}", currentTU, lastTUs);
-        return new TimingRound(currentTU, lastTUs, digestAlgorithm);
+        return new TimingRound(currentTU, new ArrayList<>(lastTUs), digestAlgorithm);
     }
 
     private SuperMajorityDecider getDecider(Unit uc) {

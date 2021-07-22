@@ -266,7 +266,7 @@ public class Creator {
         // the first unit from a new epoch is always a dealing unit.
         if (unit.epoch() > epoch) {
             if (!epochProof.verify(unit)) {
-                log.info("Unit did not verify, rejected");
+                log.info("Unit did not verify epoch, rejected");
                 return;
             }
             newEpoch(unit.epoch(), unit.data());

@@ -177,7 +177,9 @@ public interface PreUnit {
         idBuff.flip();
 
         buffers.add(idBuff);
-        buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
+        if (data != null) {
+            buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
+        }
         if (rsData != null) {
             buffers.add(ByteBuffer.wrap(rsData));
         }

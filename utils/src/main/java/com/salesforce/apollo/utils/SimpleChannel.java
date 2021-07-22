@@ -23,11 +23,11 @@ import org.slf4j.LoggerFactory;
  *
  */
 public class SimpleChannel<T> implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(SimpleChannel.class);
+      static final Logger log = LoggerFactory.getLogger(SimpleChannel.class);
 
-    private AtomicBoolean    closed = new AtomicBoolean();
-    private Thread           handler;
-    private BlockingQueue<T> queue;
+      AtomicBoolean    closed = new AtomicBoolean();
+      Thread           handler;
+      BlockingQueue<T> queue;
 
     public SimpleChannel(int capacity) {
         queue = new LinkedBlockingDeque<>(capacity);
@@ -71,6 +71,7 @@ public class SimpleChannel<T> implements Closeable {
 
             }
         }, "Consumer");
+        handler.setDaemon(true);
         handler.start();
     }
 

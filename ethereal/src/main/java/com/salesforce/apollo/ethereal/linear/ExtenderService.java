@@ -64,7 +64,7 @@ public class ExtenderService {
     private Consumer<TimingRound> roundSorter() {
         return round -> {
             var units = round.orderedUnits();
-            log.info("Output on: {} preBlock: {}", round);
+            log.info("Output of: {} preBlock: {}", round, units);
             output.submit(units);
         };
     }
