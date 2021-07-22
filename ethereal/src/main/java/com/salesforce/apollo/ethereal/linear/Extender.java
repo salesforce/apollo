@@ -61,10 +61,12 @@ public class Extender {
 
     public TimingRound nextRound() {
         if (lastDecideResult) {
+            log.info("No round, lastDecidedResult is true");
             lastDecideResult = false;
         }
         var dagMaxLevel = dag.maxLevel();
         if (dagMaxLevel < orderStartLevel) {
+            log.info("No round, max dag level: {} is < order start level: {}", dagMaxLevel, orderStartLevel);
             return null;
         }
         var level = orderStartLevel;
@@ -72,6 +74,7 @@ public class Extender {
             level = currentTU.level() + 1;
         }
         if (dagMaxLevel < level + firstDecidedRound) {
+            log.info("No round, max dag level: {} is < {}", dagMaxLevel, level + firstDecidedRound);
             return null;
         }
 
@@ -87,9 +90,11 @@ public class Extender {
                 lastDecideResult = true;
                 deciders.clear();
                 decided.set(true);
+                log.info("Round, decided");
                 return false;
             }
             if (decision.decision() == Vote.UNDECIDED) {
+                log.info("No round, undecided");
                 return false;
             }
             return true;
@@ -98,8 +103,10 @@ public class Extender {
             log.info("Missing random bytes");
         }
         if (!decided.get()) {
+            log.info("Nothing decided");
             return null;
         }
+        log.info("Timing round: {} last: {}", currentTU, lastTUs);
         return new TimingRound(currentTU, lastTUs, digestAlgorithm);
     }
 

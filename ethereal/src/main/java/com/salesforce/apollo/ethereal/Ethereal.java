@@ -219,6 +219,7 @@ public class Ethereal {
             preblockSink.submit(Data.toPreBlock(units));
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
+                log.info("Closing at last level: {} and epochs: {}", timingUnit.level(), timingUnit.epoch());
                 // we have just sent the last preblock of the last epoch, it's safe to quit
                 preblockSink.close();
             }

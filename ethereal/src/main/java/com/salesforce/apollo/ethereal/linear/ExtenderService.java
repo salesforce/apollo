@@ -33,13 +33,11 @@ public class ExtenderService {
 
     private final Extender                   ordering;
     private final SimpleChannel<List<Unit>>  output;
-    private final short                      pid;
     private final SimpleChannel<TimingRound> timingRounds;
     private final SimpleChannel<Boolean>     trigger;
 
     public ExtenderService(Dag dag, RandomSource rs, Config config, SimpleChannel<List<Unit>> output) {
         ordering = new Extender(dag, rs, config);
-        pid = config.pid();
         this.output = output;
         trigger = new SimpleChannel<>(100);
         timingRounds = new SimpleChannel<>(config.epochLength());
@@ -49,6 +47,7 @@ public class ExtenderService {
     }
 
     public void chooseNextTimingUnits() {
+        log.info("Signaling to see if we can produce a block");
         trigger.submit(true);
     }
 
@@ -65,13 +64,8 @@ public class ExtenderService {
     private Consumer<TimingRound> roundSorter() {
         return round -> {
             var units = round.orderedUnits();
+            log.info("Output on: {} preBlock: {}", round);
             output.submit(units);
-            for (var u : units) {
-                log.info("Output Unit creator: {} height: {} epoch: {}", u.creator(), u.height(), u.epoch());
-                if (u.creator() == pid) {
-                    log.info("Produced Unit height: {} level: {}", u.height(), u.level());
-                }
-            }
         };
     }
 
@@ -84,6 +78,7 @@ public class ExtenderService {
         return t -> {
             var round = ordering.nextRound();
             while (round != null) {
+                log.info("Producing round: {}", round);
                 timingRounds.submit(round);
                 round = ordering.nextRound();
             }

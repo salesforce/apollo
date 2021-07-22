@@ -18,7 +18,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
@@ -45,27 +44,18 @@ public class EtherealTest {
     }
 
     private static class SimpleDataSource implements DataSource {
-        @SuppressWarnings("unused")
         final Deque<Any> dataStack = new ArrayDeque<>();
 
         @Override
         public Any getData() {
-            return null;
+            return dataStack.pollFirst();
         }
 
-    }
-
-    private Controller controller;
-
-    @AfterEach
-    public void disposeController() {
-        if (controller != null) {
-            controller.stop();
-        }
     }
 
     @Test
     public void assembled() {
+        Controller controller;
         short nProc = 4;
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
@@ -81,30 +71,88 @@ public class EtherealTest {
 
         Ethereal e = new Ethereal();
         controller = e.deterministic(config, ds, out, synchronizer, connector);
-        controller.start().run();
-        Utils.waitForCondition(1_000, () -> ord.get() != null);
-        Orderer orderer = ord.get();
-        assertNotNull(orderer);
+        try {
+            controller.start().run();
+            Utils.waitForCondition(1_000, () -> ord.get() != null);
+            Orderer orderer = ord.get();
+            assertNotNull(orderer);
 
-        for (short pid = 1; pid < config.nProc(); pid++) {
-            var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-            var unitData = Any.getDefaultInstance();
-            var rsData = new byte[0];
-            long id = PreUnit.id(0, pid, 0);
-            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-            orderer.addPreunits(config.pid(), Collections.singletonList(pu));
+            for (short pid = 1; pid < config.nProc(); pid++) {
+                var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
+                var unitData = Any.getDefaultInstance();
+                var rsData = new byte[0];
+                long id = PreUnit.id(0, pid, 0);
+                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+                orderer.addPreunits(config.pid(), Collections.singletonList(pu));
+            }
+            Utils.waitForCondition(2_000, () -> syncd.size() >= 2);
+
+            assertEquals(2, syncd.size());
+
+            PreUnit pu = syncd.get(0);
+            assertEquals(0, pu.creator());
+            assertEquals(0, pu.epoch());
+            assertEquals(0, pu.height());
+
+            pu = syncd.get(1);
+            assertEquals(0, pu.creator());
+            assertEquals(0, pu.epoch());
+            assertEquals(1, pu.height());
+        } finally {
+            controller.stop();
         }
-        Utils.waitForCondition(2_000, () -> syncd.size() >= 2);
-        assertEquals(2, syncd.size());
+    }
 
-        PreUnit pu = syncd.get(0);
-        assertEquals(0, pu.creator());
-        assertEquals(0, pu.epoch());
-        assertEquals(0, pu.height());
+    @Test
+    public void fourWay() {
+        short nProc = 4;
+        SimpleChannel<PreBlock> out = new SimpleChannel<>(100);
+        SimpleChannel<PreUnit> synchronizer = new SimpleChannel<>(100);
 
-        pu = syncd.get(1);
-        assertEquals(0, pu.creator());
-        assertEquals(0, pu.epoch());
-        assertEquals(1, pu.height());
+        List<Ethereal> ethereals = new ArrayList<>();
+        List<DataSource> dataSources = new ArrayList<>();
+        List<Orderer> orderers = new ArrayList<>();
+        List<Controller> controllers = new ArrayList<>();
+        var builder = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
+                                    .setnProc(nProc).setNumberOfEpochs(2);
+        Consumer<Orderer> connector = o -> orderers.add(o);
+        List<SimpleChannel<PreUnit>> inputChannels = new ArrayList<>();
+
+        for (short i = 0; i < nProc; i++) {
+            var e = new Ethereal();
+            var ds = new SimpleDataSource();
+            var controller = e.deterministic(builder.setPid(i).build(), ds, out, synchronizer, connector);
+            ethereals.add(e);
+            dataSources.add(ds);
+            controllers.add(controller);
+            SimpleChannel<PreUnit> channel = new SimpleChannel<>(100);
+            inputChannels.add(channel);
+        }
+
+        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> e.submit(p))));
+
+        List<PreBlock> produced = new ArrayList<>();
+        out.consumeEach(pb -> {
+            System.out.println("Output: " + pb);
+            produced.add(pb);
+        });
+        try {
+            controllers.forEach(e -> e.start().run());
+            Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
+            for (var o : orderers) {
+                assertNotNull(o);
+            }
+
+            Deque<Orderer> deque = new ArrayDeque<>(orderers);
+            inputChannels.forEach(channel -> {
+                var o = deque.remove();
+                channel.consume(pus -> o.addPreunits((short) 0, pus));
+            });
+            
+            Utils.waitForCondition(120_000, () -> out.size() == nProc);
+            assertEquals(nProc, out.size());
+        } finally {
+            controllers.forEach(e -> e.stop().run());
+        }
     }
 }

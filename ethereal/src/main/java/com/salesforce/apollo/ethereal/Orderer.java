@@ -85,7 +85,6 @@ public class Orderer {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
-        dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
             ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
