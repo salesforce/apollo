@@ -12,15 +12,40 @@ package ghost;
 
 service Ghost {
 
+    rpc ghosting(GhostChat) returns (ClockMongering) {}
+
     rpc get (Get) returns (Content) {}
-    rpc put (Entry) returns (google.protobuf.Empty) {}
+    rpc put (Entry) returns (utils.Sig) {}
     rpc purge (Get) returns (google.protobuf.Empty) {}
     
     rpc lookup (Lookup) returns (Binding) {}
-    rpc bind (Bind) returns (google.protobuf.Empty) {}
+    rpc bind (Bind) returns (utils.Sig) {}
     rpc remove (Lookup) returns (google.protobuf.Empty) {}
 
     rpc intervals (Intervals) returns (Entries) {} 
+}
+
+message GhostChat {
+    utils.Digeste context = 1;
+    repeated Sealed events = 2;
+}
+
+message ClockMongering {
+    utils.CausalMessage chatter = 1;
+    utils.Sig signature = 2;
+}
+
+message Event {
+    utils.Digeste source = 1;
+    utils.StampedClock clock = 2;
+    utils.Digeste digest = 3;
+    repeated utils.Digeste parents = 4;
+    string key = 5;
+}
+
+message Sealed {
+    Event event = 1;
+    utils.Sig signature = 2;
 }
 
 message Entry {
@@ -29,10 +54,8 @@ message Entry {
 }
 
 message Content {
-    utils.StampedClock clock = 1;
+    Sealed metadata = 1;
     google.protobuf.Any value = 2;
-    utils.Digeste originator = 3;
-    utils.Sig signature = 4;
 }
 
 message Entries {
@@ -48,6 +71,7 @@ message Get {
 message Lookup {
     utils.Digeste context = 1;
     utils.Digeste key = 2;
+    utils.StampedClock clock = 3;
 }
 
 message Bind {
@@ -58,9 +82,7 @@ message Bind {
 message Binding {
     string key = 1;
     google.protobuf.Any value = 2;
-    utils.StampedClock clock = 3;
-    utils.Digeste originator = 4;
-    utils.Sig signature = 5;
+    Sealed metadata = 3;
 }
 
 message Intervals {

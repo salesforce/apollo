@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,7 +33,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Service;
@@ -64,7 +63,7 @@ public class SuccessorTest {
     public static void beforeClass() {
         certs = IntStream.range(0, CARDINALITY)
                          .parallel()
-                         .mapToObj(i -> getMember(i))
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -89,7 +88,7 @@ public class SuccessorTest {
                                   .map(cert -> new Node(
                                           new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                  new Signer(0, cert.getPrivateKey()),
+                                                  new SignerImpl(0, cert.getPrivateKey()),
                                                   cert.getX509Certificate().getPublicKey()),
                                           parameters))
                                   .collect(Collectors.toList());

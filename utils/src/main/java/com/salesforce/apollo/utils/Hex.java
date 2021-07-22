@@ -29,6 +29,9 @@ public final class Hex {
   }
 
   public static String hex(byte[] bytes) {
+    if (bytes.length == 0) {
+        return "";
+    }
     var hex = new char[2 * bytes.length];
 
     for (int i = 0, bytesLength = bytes.length; i < bytesLength; i++) {

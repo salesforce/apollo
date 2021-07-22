@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ghost;
 
 import static com.google.protobuf.ByteString.copyFromUtf8;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -22,6 +21,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -31,18 +32,21 @@ import org.junit.jupiter.api.BeforeAll;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
+import com.salesforce.apollo.causal.BloomClock;
+import com.salesforce.apollo.causal.IntCausalClock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.ghost.Ghost.GhostParameters;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -56,15 +60,13 @@ public class PerfTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, testCardinality)
-                         .parallel()
-                         .mapToObj(i -> getMember(i))
+        certs = IntStream.range(0, testCardinality).parallel().mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
 
-    private final List<Router> communications = new ArrayList<>();
-    private List<Ghost>        ghosties;
+    private final List<Router>   communications = new ArrayList<>();
+    private List<Ghost<Integer>> ghosties;
 
     @AfterEach
     public void after() {
@@ -76,13 +78,12 @@ public class PerfTest {
 
 //    @Test
     public void puts() throws Exception {
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(cert -> new SigningMemberImpl(
-                                                   Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
-                                                   cert.getX509Certificate().getPublicKey()))
+        List<SigningMember> members = certs.values().stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new SignerImpl(0, cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.2, testCardinality);
@@ -93,11 +94,12 @@ public class PerfTest {
 
         ForkJoinPool executor = new ForkJoinPool();
 
-        List<Ghost> ghosties = members.stream().map(member -> {
+        List<Ghost<Integer>> ghosties = members.stream().map(member -> {
             LocalRouter comms = new LocalRouter(member, ServerConnectionCache.newBuilder().setTarget(1000), executor);
             communications.add(comms);
             comms.start();
-            return new Ghost(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null));
+            return new Ghost<Integer>(member, GhostParameters.newBuilder().build(), comms, context, MVStore.open(null),
+                                      new IntCausalClock(new BloomClock(), new AtomicInteger(), new ReentrantLock()));
         }).collect(Collectors.toList());
         ghosties.forEach(e -> e.start(scheduler, gossipDelay));
 
@@ -109,7 +111,7 @@ public class PerfTest {
         for (int i = 0; i < msgs; i++) {
             int index = i;
             Semaphore extent = new Semaphore(ghosties.size());
-            for (Ghost ghost : ghosties) {
+            for (Ghost<?> ghost : ghosties) {
                 parallel.execute(() -> {
                     try {
                         extent.acquire();

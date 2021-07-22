@@ -44,6 +44,15 @@ As connections are a thing, this package provides a ServerConnectionCache for ma
 which can lead to connection drains.  Also, too, it relies on good behavior (releasing) for garbage collection and such, and so can also be abused.  Luckily all interaction in Apollo is essentially
 event based, and so makes try{} finally {} easy to apply locally.
 
+## Simplified Ring Communication Patterns
+
+To simplify the common operations when using the Context and it's associated Firefly rings, two classes are provided:
+
+- RingCommunications
+- RingIterator
+
+Both are stateful classes and patterns, to be clear and are not to be shared across usages.  The RingCommunications simplifies the common task of executing a "round" of communication with a parter.  This is implemented in cooperation with the Context's Rings, providing a nicely randomized, asychronous mechanism to build more complicated communications upon.  Likewise, the RingIterator is a pattern that simplifies the randomized traversal of of a given membership cut across the Fireflies ring.  This combines iteration much like an Iterator in Java, and provides mechanisms for dealing with continuation of the iteration (like "next()" in an iterator) as well as termination.  Both the iteration pattern  and the RingCommunications pattern continously iterates across the Firefly rings across a given cut, represented by a Digest or Member.
+
 ## Distributed Bloom Filter Based Set Reconcilliation
 
 Currently, the messaging model provides only one replication mechanism using the [Distributed Bloom Filter](https://arxiv.org/abs/1910.07782).  This mechanism leverages the Fireflies gossip communication pattern to transmit small bloom filters representing the state at a particular member.   Currently, a 3 phase gossip is used, consisting of 2 rounds. 

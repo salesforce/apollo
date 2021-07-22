@@ -1,0 +1,115 @@
+<body>
+This provides classes and interfaces corresponding to the fundamental
+primitives of CSP.
+
+<H2>Processes, Networks and Synchronisation</H3>
+In JCSP, a <I>process</I> is an instance of a class implementing the
+{@link jcsp.lang.CSProcess} interface - its behaviour being determined
+by the implementation of its <TT>run()</TT> method.  Processes may be composed
+in {@link jcsp.lang.Sequence} or {@link jcsp.lang.Parallel} (or {@link jcsp.lang.PriParallel}),
+the result of this composition being another process.  Processes may also be spawned
+to run concurrently with the spawning process - see {@link jcsp.lang.ProcessManager}.
+A collection of parallel processes is called a <I>network</I>.
+<P>
+Processes encapsulate both data and algorithms.  Parallel processes interact
+<I>either</I> by synchronised communication along {@link jcsp.lang.Channel}s
+(the cleanest and simplest way) <I>or</I> by synchronised access to shared
+objects.  The latter synchronisation may be achieved through channel signals
+or by a range of other JCSP primitives (such as {@link jcsp.lang.Barrier},
+{@link jcsp.lang.AltingBarrier},
+{@link jcsp.lang.Bucket} or {@link jcsp.lang.Crew}).
+
+<H2>Channels</H3>
+Channels come in two varieties: those that carry <TT>Object</TT> references and
+those that carry <TT>int</TT>s.  For completeness, JCSP should provide channels
+specific to all the Java primitive types.  These could trivially be added but,
+so far, do not seem to be needed in practice.
+Specialised channels, using Java <i>generics</i>, are easy to add and will be done
+soon &ndash; please <A HREF="mailto:jcsp-team@kent.ac.uk">mail us</A> if you have urgent need.
+
+<H3>Channels (from the Point of View of a Process)</H3>
+Processes should drive their channels through <I>channel ends</I>:
+{@link jcsp.lang.ChannelInput} / {@link jcsp.lang.ChannelOutput} (for <TT>Object</TT> channels)
+and {@link jcsp.lang.ChannelInputInt} / {@link jcsp.lang.ChannelOutputInt} (for <TT>int</TT> channels).
+To allow <i>choice</i> of receiving input (see next paragraph), processes must drive
+their channels through {@link jcsp.lang.AltingChannelInput} / {@link jcsp.lang.AltingChannelInputInt}
+(rather than {@link jcsp.lang.ChannelInput} / {@link jcsp.lang.ChannelInputInt}).
+<P>
+Processes may passively wait for a number of events using {@link jcsp.lang.Alternative}.
+These events include <I>channel inputs</I>
+({@link jcsp.lang.AltingChannelInput} / {@link jcsp.lang.AltingChannelInputInt}),
+<I>channel accepts</I>
+({@link jcsp.lang.AltingChannelAccept}),
+<i>alting barriers</i> ({@link jcsp.lang.AltingBarrier}),
+<I>timeouts</I> ({@link jcsp.lang.CSTimer}) and <I>skips</I> ({@link jcsp.lang.Skip}).
+If more than one event is ready, an {@link jcsp.lang.Alternative#select() <I>arbitrary</I>},
+{@link jcsp.lang.Alternative#priSelect() <I>prioritised</I>}
+or {@link jcsp.lang.Alternative#select() <I>fair</I>} choice can be made between them.
+The <I>super-interface</I> for all these ALTable events is {@link jcsp.lang.Guard}.
+
+<H3>Channels (from the Point of View of a Network)</H3>
+Actual channels must be constructed by the {@link jcsp.lang.Parallel} network builder
+with appropriate <i>channel ends</i> passed to the processes needing them (usually via their constructors).
+Four varieties are available for <TT>Object</TT> channels:
+{@link jcsp.lang.One2OneChannel}, {@link jcsp.lang.Any2OneChannel},
+{@link jcsp.lang.One2AnyChannel} and {@link jcsp.lang.Any2AnyChannel}.
+Similarly, four varieties are available for <TT>int</TT> channels:
+{@link jcsp.lang.One2OneChannelInt}, {@link jcsp.lang.Any2OneChannelInt},
+{@link jcsp.lang.One2AnyChannelInt} and {@link jcsp.lang.Any2AnyChannelInt}.
+Please note that the last two in each set are <I>not</I> broadcasting channels
+- broadcasting has to be achieved by active processes (e.g. {@link jcsp.plugNplay.Delta}).
+Channels are constructed by the <tt>static</tt> manufacturing methods of
+the {@link jcsp.lang.Channel} class.
+Input and output <i>channel ends</i> are obtained from channels by their <tt>in()</tt> and <tt>out</tt>
+methods, respectively.
+<P>
+Note that the default semantics for all the above channels are zero-buffering and full
+synchronisation.  This means that a writer to a channel will wait for a matching reader
+<I>and vice-versa</I> - whoever gets to the channel first will wait
+for its partner.  Various forms of buffering can be introduced by splicing active
+buffer processes into these channels.  However, because this is a common need,
+JCSP provides a range of <I>plug-ins</I> that can be used to create channels
+with the common varieties of buffering:
+{@link jcsp.util.Buffer <I></code>blocking FIFO<code></I>},
+{@link jcsp.util.OverWriteOldestBuffer <I></code>overwriting (oldest) FIFO<code></I>},
+{@link jcsp.util.OverWritingBuffer <I></code>overwriting (latest) FIFO<code></I>} and
+{@link jcsp.util.InfiniteBuffer <I></code>infinite FIFO<code></I>}.
+That set of <I>plug-ins</I> is for <TT>Object</TT> channels and comes from
+the {@link jcsp.util} package.
+A similar set for <TT>int</TT> channels is provided in {@link jcsp.util.ints}.
+<P>
+It is the network builder's responsibility to decide whether to use <i>1-1</i>,
+<i>any-1</i>, <i>1-any</i> or <i>any-any</i> channels and whether to incorporate
+buffers in them.
+The process designer is not concerned with these decisions - only with whether
+the channel is for input or output and what type of information it carries.
+
+<H3>Call Channels</H3>
+Call Channels provide a method interface for client-server communication between active
+processes, yet their semantics remain those of a synchronising zero-buffered channel.
+Without them, we would normally have to set up a pair of channels (giving bi-directional
+communication) and use a sequence of channel write(s) and read (at the client end)
+matched by a sequence of channel read(s) and write (at the server end).
+<P>
+The client process sees a server-specific method interface and invokes it in the normal
+way - however, the invocation will block until the server chooses to accept the call.
+The server sees the {@link jcsp.lang.ChannelAccept} interface - invoking
+an {@link jcsp.lang.ChannelAccept#accept <TT>accept</TT>} will block until the client
+makes a call.
+<P>
+The network builder constructs a server-specific actual call channel by sub-classing
+from one of 
+{@link jcsp.lang.One2OneCallChannel}, {@link jcsp.lang.Any2OneCallChannel},
+{@link jcsp.lang.One2AnyCallChannel} and {@link jcsp.lang.Any2AnyCallChannel}.
+Precise rules for making this extension are given in their documentation.
+
+<H3>Symmetric Channels</H3>
+Thanks to <i>alting barriers</i> ({@link jcsp.lang.AltingBarrier}),
+<i>symmetric</i> channels are now available:
+{@link jcsp.lang.One2OneChannelSymmetric} and {@link  jcsp.lang.One2OneChannelSymmetricInt}.
+These work the same as ordinary channels but, in addition, their <i>output ends</i>
+can be used as guards in a choice ({@link jcsp.lang.Alternative}).
+It is quite safe for both the sending and receiving process to be alting
+on these symmetric channels.
+
+</body>

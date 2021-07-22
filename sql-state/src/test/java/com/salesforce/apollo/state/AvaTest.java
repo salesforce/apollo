@@ -8,7 +8,6 @@ package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
 import static com.salesforce.apollo.state.Mutator.batchOf;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,7 +61,7 @@ import com.salesforce.apollo.consortium.ViewContext;
 import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -89,7 +88,7 @@ public class AvaTest {
     public static void beforeClass() {
         certs = IntStream.range(0, testCardinality)
                          .parallel()
-                         .mapToObj(i -> getMember(i))
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -131,7 +130,7 @@ public class AvaTest {
         for (CertificateWithPrivateKey cert : certs.values()) {
             if (members.size() < testCardinality) {
                 members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                        cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                        cert.getX509Certificate(), cert.getPrivateKey(), new SignerImpl(0, cert.getPrivateKey()),
                         cert.getX509Certificate().getPublicKey()));
             } else {
                 break;

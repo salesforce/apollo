@@ -6,15 +6,17 @@
  */
 package com.salesforce.apollo.causal;
 
+import com.salesfoce.apollo.utils.proto.StampedClock;
+
 /**
  * @author hal.hildebrand
  *
  */
-public interface StampedClockValue<T extends Comparable<T>, S> extends ClockValue {
+public interface StampedClockValue<T extends Comparable<T>> extends ClockValue {
 
     T instant();
 
     int sum();
 
-    S toStampedClock();
+    StampedClock toStampedClock();
 }

@@ -16,11 +16,10 @@ import com.salesfoce.apollo.utils.proto.StampedClock;
  * @author hal.hildebrand
  *
  */
-public record TimeStampedClockValue(BloomClockValue clock, Instant stamp)
-                                   implements StampedClockValue<Instant, StampedClock> {
+public record TimeStampedClockValue(BloomClockValue clock, Instant stamp) implements StampedClockValue<Instant> {
 
     public static TimeStampedClockValue from(StampedClock c) {
-        Timestamp ts = c.getStamp();
+        Timestamp ts = c.getTimestamp();
         return new TimeStampedClockValue(ClockValue.of(c.getClock()),
                                          Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos()));
     }
@@ -33,8 +32,8 @@ public record TimeStampedClockValue(BloomClockValue clock, Instant stamp)
     @Override
     public StampedClock toStampedClock() {
         return StampedClock.newBuilder().setClock(clock.toClock())
-                           .setStamp(Timestamp.newBuilder().setSeconds(stamp.getEpochSecond())
-                                              .setNanos(stamp.getNano()))
+                           .setTimestamp(Timestamp.newBuilder().setSeconds(stamp.getEpochSecond())
+                                                  .setNanos(stamp.getNano()))
                            .build();
     }
 

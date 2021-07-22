@@ -15,10 +15,6 @@
 			<artifactId>protocols</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>stereotomy</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>io.dropwizard</groupId>
 			<artifactId>dropwizard-metrics</artifactId>
 		</dependency>
@@ -35,11 +31,11 @@
 			<artifactId>junit-jupiter-engine</artifactId>
 			<scope>test</scope>
 		</dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
-        </dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-core</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
@@ -78,17 +74,6 @@
 								<source>${project.basedir}/target/generated-sources/protobuf/java</source>
 							</sources>
 						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-jar-plugin</artifactId>
-				<executions>
-					<execution>
-						<goals>
-							<goal>test-jar</goal>
-						</goals>
 					</execution>
 				</executions>
 			</plugin>

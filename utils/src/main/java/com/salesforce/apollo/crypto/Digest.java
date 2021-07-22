@@ -7,6 +7,7 @@
 package com.salesforce.apollo.crypto;
 
 import java.nio.ByteBuffer;
+import java.util.stream.Stream;
 
 import org.bouncycastle.util.encoders.Hex;
 
@@ -22,8 +23,12 @@ import com.salesforce.apollo.utils.bloomFilters.Hash;
  *
  */
 public class Digest implements Comparable<Digest> {
-
     public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
+
+    public static Digest combine(DigestAlgorithm algo, Digest[] digests) {
+        return algo.digest(Stream.of(digests).map(e -> e != null ? e : algo.getOrigin())
+                                 .map(e -> ByteBuffer.wrap(e.getBytes())).toList());
+    }
 
     public static int compare(byte[] o1, byte[] o2) {
         if (o1 == null) {
@@ -214,6 +219,10 @@ public class Digest implements Comparable<Digest> {
         buffer.flip();
         Digest d = getAlgorithm().digest(buffer);
         return new Digest(getAlgorithm(), d.getBytes());
+    }
+
+    public ByteBuffer toByteBuffer() {
+        return ByteBuffer.wrap(getBytes());
     }
 
     public Digeste toDigeste() {

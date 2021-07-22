@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.test.pregen.PregenPopulation;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -28,7 +28,7 @@ public class ContextTests {
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 3);
         List<SigningMember> members = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            SigningMemberImpl m = new SigningMemberImpl(PregenPopulation.getMember(i));
+            SigningMemberImpl m = new SigningMemberImpl(Utils.getMember(i));
             members.add(m);
             context.activate(m);
         }

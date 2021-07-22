@@ -22,6 +22,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
@@ -329,7 +330,7 @@ public class IdentifierSpecification {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
             }
 
-            signer = new Signer(keyIndex, requireNonNull(privateKey));
+            signer = new SignerImpl(keyIndex, requireNonNull(privateKey));
             return this;
         }
 

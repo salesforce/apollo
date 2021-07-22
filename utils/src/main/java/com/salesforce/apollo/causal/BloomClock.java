@@ -142,7 +142,7 @@ public class BloomClock implements ClockValue {
             return 0; // consider this a false positive, therefore uncomparable
         }
 
-        // all A <= B 
+        // all A <= B
         double cFPR = falsePositiveRate(sumA, sumB, m(abcCounts));
         assert cFPR >= 0.0;
         if (cFPR <= fpr) {

@@ -8,7 +8,6 @@ package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
 import static com.salesforce.apollo.state.Mutator.batchOf;
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -68,7 +67,7 @@ import com.salesforce.apollo.consortium.fsm.Transitions;
 import com.salesforce.apollo.consortium.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -93,7 +92,7 @@ public class MembershipTests {
     public static void beforeClass() {
         certs = IntStream.range(0, CARDINALITY)
                          .parallel()
-                         .mapToObj(i -> getMember(i))
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -139,7 +138,7 @@ public class MembershipTests {
         members = new ArrayList<>();
         for (CertificateWithPrivateKey cert : certs.values()) {
             members.add(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                    cert.getX509Certificate(), cert.getPrivateKey(), new Signer(0, cert.getPrivateKey()),
+                    cert.getX509Certificate(), cert.getPrivateKey(), new SignerImpl(0, cert.getPrivateKey()),
                     cert.getX509Certificate().getPublicKey()));
         }
 

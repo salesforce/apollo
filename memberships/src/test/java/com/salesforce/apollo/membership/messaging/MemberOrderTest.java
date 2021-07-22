@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.membership.messaging;
 
-import static com.salesforce.apollo.test.pregen.PregenPopulation.getMember;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -36,7 +35,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -103,7 +102,7 @@ public class MemberOrderTest {
     public static void beforeClass() {
         certs = IntStream.range(1, 101)
                          .parallel()
-                         .mapToObj(i -> getMember(i))
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -126,7 +125,7 @@ public class MemberOrderTest {
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
+                                                   new SignerImpl(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
                                            .limit(10)
                                            .collect(Collectors.toList());
@@ -203,7 +202,7 @@ public class MemberOrderTest {
                                            .map(cert -> new SigningMemberImpl(
                                                    Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert.getX509Certificate(), cert.getPrivateKey(),
-                                                   new Signer(0, cert.getPrivateKey()),
+                                                   new SignerImpl(0, cert.getPrivateKey()),
                                                    cert.getX509Certificate().getPublicKey()))
                                            .limit(10)
                                            .collect(Collectors.toList());
