@@ -74,7 +74,7 @@ public class EtherealTest {
         Ethereal e = new Ethereal();
         controller = e.deterministic(config, ds, out, synchronizer, connector);
         try {
-            controller.start().run();
+            controller.start();
             Utils.waitForCondition(1_000, () -> ord.get() != null);
             Orderer orderer = ord.get();
             assertNotNull(orderer);
@@ -152,7 +152,7 @@ public class EtherealTest {
             e.submit(p);
         })));
         try {
-            controllers.forEach(e -> e.start().run());
+            controllers.forEach(e -> e.start());
             Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
             for (var o : orderers) {
                 assertNotNull(o);
@@ -173,7 +173,7 @@ public class EtherealTest {
                 return true;
             });
         } finally {
-            controllers.forEach(e -> e.stop().run());
+            controllers.forEach(e -> e.stop());
         }
         for (int i = 0; i < nProc; i++) {
             assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);

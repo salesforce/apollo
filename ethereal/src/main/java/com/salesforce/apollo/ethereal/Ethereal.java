@@ -65,7 +65,15 @@ public class Ethereal {
         Verifier getVerifier(short pid);
     }
 
-    public record Controller(Runnable start, Runnable stop) {};
+    public record Controller(Runnable starte, Runnable stope) {
+        public void start() {
+            starte.run();
+        }
+        
+        public void stop() {
+            stope.run();
+        }
+    };
 
     private static final Logger log     = LoggerFactory.getLogger(Ethereal.class);
     private final AtomicBoolean started = new AtomicBoolean();
@@ -103,11 +111,11 @@ public class Ethereal {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
         return new Controller(() -> {
-            setup.start.run();
-            consensus.start.run();
+            setup.starte.run();
+            consensus.starte.run();
         }, () -> {
-            setup.stop.run();
-            consensus.stop.run();
+            setup.stope.run();
+            consensus.stope.run();
         });
     }
 
@@ -132,8 +140,8 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(() -> config.executor().execute(consensus.start),
-                              () -> config.executor().execute(consensus.stop));
+        return new Controller(() -> config.executor().execute(consensus.starte),
+                              () -> config.executor().execute(consensus.stope));
     }
 
     /**
@@ -157,13 +165,13 @@ public class Ethereal {
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, connector);
         return new Controller(() -> {
-            consensus.start.run();
+            consensus.starte.run();
             try {
                 wtkChan.exchange(WeakThresholdKey.seededWTK(conf.nProc(), conf.pid(), 2137, null));
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.stop);
+        }, consensus.starte);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
