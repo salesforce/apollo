@@ -47,7 +47,7 @@ public class ExtenderService {
     }
 
     public void chooseNextTimingUnits() {
-        log.info("Signaling to see if we can produce a block");
+        log.trace("Signaling to see if we can produce a block");
         trigger.submit(true);
     }
 
@@ -64,7 +64,7 @@ public class ExtenderService {
     private Consumer<TimingRound> roundSorter() {
         return round -> {
             var units = round.orderedUnits();
-            log.info("Output of: {} preBlock: {}", round, units);
+            log.trace("Output of: {} preBlock: {}", round, units);
             output.submit(units);
         };
     }
@@ -78,7 +78,7 @@ public class ExtenderService {
         return t -> {
             var round = ordering.nextRound();
             while (round != null) {
-                log.info("Producing round: {}", round);
+                log.trace("Producing timing round: {}", round);
                 timingRounds.submit(round);
                 round = ordering.nextRound();
             }

@@ -170,7 +170,10 @@ public class Ethereal {
                                  SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
                                  Consumer<Orderer> connector) {
         Consumer<List<Unit>> makePreblock = units -> {
-            preblockSink.submit(Data.toPreBlock(units));
+            PreBlock preBlock = Data.toPreBlock(units);
+            if (preBlock != null) {
+                preblockSink.submit(preBlock);
+            }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
@@ -216,7 +219,10 @@ public class Ethereal {
     private Controller deterministicConsensus(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
                                               SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
         Consumer<List<Unit>> makePreblock = units -> {
-            preblockSink.submit(Data.toPreBlock(units));
+            PreBlock preBlock = Data.toPreBlock(units);
+            if (preBlock != null) {
+                preblockSink.submit(preBlock);
+            }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 log.info("Closing at last level: {} and epochs: {}", timingUnit.level(), timingUnit.epoch());

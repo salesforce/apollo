@@ -127,7 +127,7 @@ public class Creator {
     }
 
     private void consume(List<Unit> units, Queue<Unit> lastTiming) {
-        log.info("Processing next units: {} ", units.size());
+        log.trace("Processing next units: {} ", units.size());
         mx.lock();
         try {
             for (Unit u : units) {
@@ -135,7 +135,7 @@ public class Creator {
                 update(u);
             }
             while (ready()) {
-                log.info("Ready, creating units");
+                log.trace("Ready, creating units");
                 // Step 2: get parents and level using current strategy
                 var built = buildParents();
                 // Step 3: create unit
@@ -153,7 +153,7 @@ public class Creator {
         assert parents.length == conf.nProc();
         Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data.data, rsData.rsData(level, parents, epoch),
                                      conf.signer(), conf.digestAlgorithm(), data.timing);
-        log.info("Created unit: {} ", u);
+        log.debug("Created unit: {} ", u);
         send.accept(u);
         update(u);
     }
@@ -174,7 +174,7 @@ public class Creator {
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            log.warn("No timing unit: {} on: {}", level, conf.pid());
+            log.trace("No timing unit: {} on: {}", level, conf.pid());
             return new TimingOrData(Any.getDefaultInstance(), false);
         }
         // in a rare case there can be timing units from previous epochs left on
@@ -186,10 +186,11 @@ public class Creator {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return new TimingOrData(Any.getDefaultInstance(), false);
                 }
-                log.warn("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
+                log.debug("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
                 return new TimingOrData(epochProof.buildShare(timingUnit), true);
             }
-            log.warn("Creator received timing unit from newer epoch: {} that it has seen", timingUnit.epoch());
+            log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
+                      timingUnit.epoch(), epoch, conf.pid());
             timingUnit = lastTiming.poll();
         }
         return new TimingOrData(Any.getDefaultInstance(), false);
@@ -224,7 +225,7 @@ public class Creator {
      * creates a dealing with the provided data.
      **/
     private void newEpoch(int epoch, Any data) {
-        log.info("Changing epoch to: {} : {}", epoch, data);
+        log.info("Changing epoch to: {}", epoch);
         this.epoch = epoch;
         epochDone = false;
         resetEpoch();
@@ -247,7 +248,7 @@ public class Creator {
      * with NProc nils). This is useful when switching to a new epoch.
      */
     private void resetEpoch() {
-        log.info("Resetting epoch");
+        log.debug("Resetting epoch");
         Arrays.setAll(candidates, u -> null);
         maxLvl = -1;
         onMaxLvl = 0;
@@ -259,11 +260,11 @@ public class Creator {
      * the unit.
      */
     private void update(Unit unit) {
-        log.info("updating: {}:{}", unit, unit.isTiming());
+        log.trace("updating: {}:{}", unit, unit.isTiming());
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
         if (frozen.contains(unit.creator()) || unit.epoch() < epoch) {
-            log.info("Unit rejected frozen: {} epoch: {} current: {}", frozen.contains(unit.creator()), unit.epoch(),
+            log.warn("Unit rejected frozen: {} epoch: {} current: {}", frozen.contains(unit.creator()), unit.epoch(),
                      epoch);
             return;
         }
@@ -273,7 +274,7 @@ public class Creator {
         // the first unit from a new epoch is always a dealing unit.
         if (unit.epoch() > epoch) {
             if (!epochProof.verify(unit)) {
-                log.info("Unit did not verify epoch, rejected");
+                log.warn("Unit did not verify epoch, rejected");
                 return;
             }
             newEpoch(unit.epoch(), unit.data());
@@ -288,7 +289,7 @@ public class Creator {
             newEpoch(epoch + 1, ep);
             return;
         }
-        log.info("No epoch proof generated from: {}", unit);
+        log.trace("No epoch proof generated from: {}", unit);
 
         updateCandidates(unit);
 
@@ -306,7 +307,7 @@ public class Creator {
         var prev = candidates[u.creator()];
         if (prev == null || prev.level() < u.level()) {
             candidates[u.creator()] = u;
-            log.info("Candidate  updated to: {} ", u);
+            log.trace("Candidate  updated to: {} ", u);
             if (u.level() == maxLvl) {
                 onMaxLvl++;
             }

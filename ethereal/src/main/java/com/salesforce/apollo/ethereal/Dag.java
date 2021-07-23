@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 import static com.salesforce.apollo.ethereal.SlottedUnits.newSlottedUnits;
 
@@ -30,7 +29,6 @@ import com.salesforce.apollo.ethereal.Adder.Correctness;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public interface Dag {
 
     record DagInfo(int epoch, int[] heights) {}
@@ -210,7 +208,7 @@ public interface Dag {
         @Override
         public void check(Unit u) {
             for (var check : checks) {
-                check(u);
+                check.accept(u, this);
             }
         }
 

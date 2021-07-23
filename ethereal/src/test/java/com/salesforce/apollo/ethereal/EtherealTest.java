@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -109,7 +108,6 @@ public class EtherealTest {
     @Test
     public void fourWay() {
         short nProc = 4;
-        SimpleChannel<PreBlock> out = new SimpleChannel<>(100);
         SimpleChannel<PreUnit> synchronizer = new SimpleChannel<>(100);
 
         List<Ethereal> ethereals = new ArrayList<>();
@@ -121,9 +119,17 @@ public class EtherealTest {
         Consumer<Orderer> connector = o -> orderers.add(o);
         List<SimpleChannel<PreUnit>> inputChannels = new ArrayList<>();
 
+        List<List<PreBlock>> produced = new ArrayList<>();
+        for (int i = 0; i < nProc; i++) {
+            produced.add(new ArrayList<>());
+        }
+
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
+            var out = new SimpleChannel<PreBlock>(100);
+            List<PreBlock> output = produced.get(i);
+            out.consume(l -> output.addAll(l));
             var controller = e.deterministic(builder.setPid(i).build(), ds, out, synchronizer, connector);
             ethereals.add(e);
             dataSources.add(ds);
@@ -139,18 +145,12 @@ public class EtherealTest {
 
         synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> {
             try {
-                Thread.sleep(2);
+                Thread.sleep(1);
             } catch (InterruptedException e1) {
                 return;
             }
             e.submit(p);
         })));
-
-        List<PreBlock> produced = new ArrayList<>();
-        out.consumeEach(pb -> {
-            System.out.println("Output: " + pb);
-            produced.add(pb);
-        });
         try {
             controllers.forEach(e -> e.start().run());
             Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
@@ -164,10 +164,25 @@ public class EtherealTest {
                 channel.consume(pus -> o.addPreunits((short) 0, pus));
             });
 
-            Utils.waitForCondition(10_000, 100, () -> produced.size() >= 369);
-            assertEquals(369, produced.size());
+            Utils.waitForCondition(5_000, 100, () -> {
+                for (var pb : produced) {
+                    if (pb.size() < 90) {
+                        return false;
+                    }
+                }
+                return true;
+            });
         } finally {
             controllers.forEach(e -> e.stop().run());
+        }
+        for (int i = 0; i < nProc; i++) {
+            assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
+        }
+        List<PreBlock> preblocks = produced.get(0);
+        for (int i = 1; i < nProc; i++) {
+            for (int j = 0; j < preblocks.size(); j++) {
+                assertEquals(preblocks.get(j), produced.get(i).get(j));
+            }
         }
     }
 }

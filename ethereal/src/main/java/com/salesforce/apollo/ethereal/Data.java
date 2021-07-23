@@ -54,11 +54,11 @@ public interface Data {
     static PreBlock toPreBlock(List<Unit> round) {
         var data = new ArrayList<Any>();
         for (Unit u : round) {
-            if (u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
+            if (!u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
                 data.add(u.data());
             }
         }
         var randomBytes = round.get(round.size() - 1).randomSourceData();
-        return new PreBlock(data, randomBytes);
+        return data.isEmpty() ? null : new PreBlock(data, randomBytes);
     }
 }

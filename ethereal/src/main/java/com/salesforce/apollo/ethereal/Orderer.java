@@ -321,7 +321,7 @@ public class Orderer {
                 }
                 if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
                     toPreblock.accept(round);
-                    log.info("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+                    log.debug("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
                 }
                 current.set(epoch);
             }
@@ -345,11 +345,11 @@ public class Orderer {
         }
         if (ep != null) {
             ep.dag.insert(unit);
-            log.info("Inserted Unit creator: {} epoch: {} height: {} level: {}", unit.creator(), unit.epoch(),
-                     unit.height(), unit.level());
+            log.trace("Inserted Unit creator: {} epoch: {} height: {} level: {}", unit.creator(), unit.epoch(),
+                      unit.height(), unit.level());
         } else {
-            log.info("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {}", unit.creator(),
-                     unit.epoch(), unit.height(), unit.level());
+            log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {}", unit.creator(),
+                      unit.epoch(), unit.height(), unit.level());
         }
     }
 
@@ -416,7 +416,6 @@ public class Orderer {
                 }
             }
             if (result != null) {
-                log.error("where orderer.rsData");
                 return new byte[0];
             }
             return result;

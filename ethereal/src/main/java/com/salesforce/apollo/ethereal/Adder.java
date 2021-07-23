@@ -76,11 +76,11 @@ public interface Adder {
                 if (alreadyInDag.get(i) != null) {
                     Correctness check = checkCorrectness(pu);
                     if (check != Correctness.CORRECT) {
-                        log.info("Failed correctness check: {} : {}", pu, check);
+                        log.debug("Failed correctness check: {} : {}", pu, check);
                         errors.put(pu.hash(), check);
                         failed.set(i, true);
                     } else {
-                        log.info("Duplicate unit: {} on: {}", pu, conf.pid());
+                        log.trace("Duplicate unit: {} on: {}", pu, conf.pid());
                         errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
                         failed.set(i, true);
                     }
@@ -108,7 +108,7 @@ public interface Adder {
 
         private void handleReady(waitingPreUnit wp) {
             if (wp.pu.creator() == conf.pid()) {
-                log.info("Ignore ready: {} on creator: {}", wp, conf.pid());
+                log.trace("Ignore ready: {} on creator: {}", wp, conf.pid());
                 return;
             }
             try {
@@ -146,7 +146,7 @@ public interface Adder {
 
                 // 4. Insert
                 dag.insert(freeUnit);
-                log.info("Inserted: {} on: {}", freeUnit, conf.pid());
+                log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
             } finally {
                 remove(wp);
             }
@@ -155,7 +155,7 @@ public interface Adder {
         // addPreunit as a waitingPreunit to the buffer zone.
         private void addToWaiting(PreUnit pu, short source) {
             if (waiting.containsKey(pu.hash())) {
-                log.info("Already waiting unit: {} ", pu);
+                log.trace("Already waiting unit: {} ", pu);
                 return;
             }
             var id = pu.id();
@@ -171,7 +171,7 @@ public interface Adder {
             if (wp.missingParents().get() > 0) {
                 return;
             }
-            log.info("Unit now waiting: {} ", pu);
+            log.trace("Unit now waiting: {} ", pu);
             sendIfReady(wp);
         }
 
@@ -228,7 +228,7 @@ public interface Adder {
         }
 
         private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
-            log.info("Invalid control hash from: {} winess: {} parents: {} on: {}", sourcePID, witness, parents,
+            log.warn("Invalid control hash from: {} winess: {} parents: {} on: {}", sourcePID, witness, parents,
                      conf.pid());
             var ids = new ArrayList<Long>();
             short pid = 0;
@@ -284,7 +284,7 @@ public interface Adder {
          */
         private void sendIfReady(waitingPreUnit wp) {
             if (wp.waitingParents().get() == 0 && wp.missingParents().get() == 0) {
-                log.info("Sending unit for processing: {} ", wp);
+                log.trace("Sending unit for processing: {} ", wp);
                 ready[wp.pu().creator()].submit(wp);
             }
         }
