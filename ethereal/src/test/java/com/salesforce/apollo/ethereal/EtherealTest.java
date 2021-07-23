@@ -106,7 +106,7 @@ public class EtherealTest {
     }
 
     @Test
-    public void fourWay() {
+    public void fourWay() throws Exception {
         short nProc = 4;
         SimpleChannel<PreUnit> synchronizer = new SimpleChannel<>(100);
 
@@ -179,10 +179,20 @@ public class EtherealTest {
             assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
         }
         List<PreBlock> preblocks = produced.get(0);
+        List<String> outputOrder = new ArrayList<>();
+
         for (int i = 1; i < nProc; i++) {
             for (int j = 0; j < preblocks.size(); j++) {
-                assertEquals(preblocks.get(j), produced.get(i).get(j));
+                var a = preblocks.get(j);
+                var b = produced.get(i).get(j);
+                assertEquals(a.data().size(), b.data().size());
+                for (int k = 0; k < a.data().size(); k++) {
+                    assertEquals(a.data().get(k), b.data().get(k));
+                    outputOrder.add(new String(a.data().get(k).unpack(ByteMessage.class).getContents().toByteArray()));
+                }
+                assertEquals(a.randomBytes(), b.randomBytes());
             }
         }
+        assertEquals(1113, outputOrder.size());
     }
 }
