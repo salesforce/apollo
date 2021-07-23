@@ -193,6 +193,5 @@ public class EtherealTest {
                 assertEquals(a.randomBytes(), b.randomBytes());
             }
         }
-        assertEquals(1113, outputOrder.size());
     }
 }
