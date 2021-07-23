@@ -51,6 +51,8 @@ public class Creator {
 
     private record built(Unit[] parents, int level) {}
 
+    private record TimingOrData(Any data, boolean timing) {}
+
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     /**
@@ -89,7 +91,8 @@ public class Creator {
     private short                                      onMaxLvl;
     private final int                                  quorum;
     private final RsData                               rsData;
-    private final Consumer<Unit>                       send;
+
+    private final Consumer<Unit> send;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -103,13 +106,13 @@ public class Creator {
     }
 
     /**
-     * CreateUnits executes the main loop of the creator. Units appearing on
-     * unitBelt are examined and stored to be used as parents of future units. When
-     * there are enough new parents, a new unit is produced. lastTiming is a channel
-     * on which the last timing unit of each epoch is expected to appear. This
-     * method is stopped by closing unitBelt channel.
+     * Spawns the main loop of the creator. Units appearing on unitBelt are examined
+     * and stored to be used as parents of future units. When there are enough new
+     * parents, a new unit is produced. lastTiming is a channel on which the last
+     * timing unit of each epoch is expected to appear. This method is stopped by
+     * closing unitBelt channel.
      */
-    public void creatUnits(SimpleChannel<Unit> unitBelt, Queue<Unit> lastTiming) {
+    public void createUnits(SimpleChannel<Unit> unitBelt, Queue<Unit> lastTiming) {
         newEpoch(epoch, Any.getDefaultInstance());
         unitBelt.consume(units -> consume(units, lastTiming));
     }
@@ -136,7 +139,8 @@ public class Creator {
                 // Step 2: get parents and level using current strategy
                 var built = buildParents();
                 // Step 3: create unit
-                createUnit(built.parents, built.level, getData(built.level, lastTiming));
+                TimingOrData data = getData(built.level, lastTiming);
+                createUnit(built.parents, built.level, data);
             }
         } catch (Throwable e) {
             log.error("Error in processing units", e);
@@ -145,10 +149,10 @@ public class Creator {
         }
     }
 
-    private void createUnit(Unit[] parents, int level, Any data) {
+    private void createUnit(Unit[] parents, int level, TimingOrData data) {
         assert parents.length == conf.nProc();
-        Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
-                                     conf.signer(), conf.digestAlgorithm());
+        Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data.data, rsData.rsData(level, parents, epoch),
+                                     conf.signer(), conf.digestAlgorithm(), data.timing);
         log.info("Created unit: {} ", u);
         send.accept(u);
         update(u);
@@ -161,16 +165,17 @@ public class Creator {
      * id of the last timing unit (obtained from preblockMaker on lastTiming
      * channel)
      **/
-    private Any getData(int level, Queue<Unit> lastTiming) {
+    private TimingOrData getData(int level, Queue<Unit> lastTiming) {
         if (level <= conf.lastLevel()) {
             if (ds != null) {
-                return ds.getData();
+                return new TimingOrData(ds.getData(), false);
             }
-            return Any.getDefaultInstance();
+            return new TimingOrData(Any.getDefaultInstance(), false);
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            return Any.getDefaultInstance();
+            log.warn("No timing unit: {} on: {}", level, conf.pid());
+            return new TimingOrData(Any.getDefaultInstance(), false);
         }
         // in a rare case there can be timing units from previous epochs left on
         // lastTiming channel. the purpose of this loop is to drain and ignore them.
@@ -179,14 +184,15 @@ public class Creator {
                 epochDone = true;
                 if (epoch == conf.numberOfEpochs() - 1) {
                     // the epoch we just finished is the last epoch we were supposed to produce
-                    return Any.getDefaultInstance();
+                    return new TimingOrData(Any.getDefaultInstance(), false);
                 }
-                return epochProof.buildShare(timingUnit);
+                log.warn("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
+                return new TimingOrData(epochProof.buildShare(timingUnit), true);
             }
             log.warn("Creator received timing unit from newer epoch: {} that it has seen", timingUnit.epoch());
             timingUnit = lastTiming.poll();
         }
-        return Any.getDefaultInstance();
+        return new TimingOrData(Any.getDefaultInstance(), false);
     }
 
     private Unit[] getParents() {
@@ -223,7 +229,7 @@ public class Creator {
         epochDone = false;
         resetEpoch();
         epochProof = epochProofBuilder.apply(epoch);
-        createUnit(new Unit[conf.nProc()], 0, data);
+        createUnit(new Unit[conf.nProc()], 0, new TimingOrData(data, true));
     }
 
     /**
@@ -253,6 +259,7 @@ public class Creator {
      * the unit.
      */
     private void update(Unit unit) {
+        log.info("updating: {}:{}", unit, unit.isTiming());
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
         if (frozen.contains(unit.creator()) || unit.epoch() < epoch) {
@@ -277,9 +284,11 @@ public class Creator {
         // that the current epoch is finished) switch to a new epoch.
         Any ep = epochProof.tryBuilding(unit);
         if (ep != null) {
+            log.info("Advancing epoch to: {} using: {}", epoch + 1, unit);
             newEpoch(epoch + 1, ep);
             return;
         }
+        log.info("No epoch proof generated from: {}", unit);
 
         updateCandidates(unit);
 

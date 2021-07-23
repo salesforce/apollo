@@ -43,7 +43,7 @@ public class EtherealTest {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
         return new preUnit(t.creator(), t.epoch(), t.height(), null, PreUnit.computeHash(algo, id, crown, data, rsData),
-                           crown, data, rsData);
+                           crown, data, rsData, false);
     }
 
     private static class SimpleDataSource implements DataSource {
@@ -130,7 +130,7 @@ public class EtherealTest {
             controllers.add(controller);
             SimpleChannel<PreUnit> channel = new SimpleChannel<>(100);
             inputChannels.add(channel);
-            for (int d = 0; d < 100; d++) {
+            for (int d = 0; d < 500; d++) {
                 ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
                                                      .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
                                                      .build()));
@@ -165,7 +165,7 @@ public class EtherealTest {
             });
 
             Utils.waitForCondition(10_000, 100, () -> produced.size() >= 369);
-            assertTrue(produced.size() >= 369);
+            assertEquals(369, produced.size());
         } finally {
             controllers.forEach(e -> e.stop().run());
         }

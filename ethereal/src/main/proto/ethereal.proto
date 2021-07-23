@@ -12,7 +12,8 @@ package ethereal;
 
 message EpochProof {
     Proof msg = 1;
-    utils.Sig signature = 2;
+    int32 owner = 2;
+    utils.Sig signature = 3;
 }
 
 message Proof {

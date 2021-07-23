@@ -212,7 +212,7 @@ public class Orderer {
         newEpoch(0);
 
         // Start creator
-        creator.creatUnits(unitBelt, lastTiming);
+        creator.createUnits(unitBelt, lastTiming);
 
         // Start preblock builder
         orderedUnits.consume(handleTimingRounds());

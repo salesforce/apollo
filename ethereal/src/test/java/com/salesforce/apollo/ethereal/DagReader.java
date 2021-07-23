@@ -102,6 +102,6 @@ public class DagReader {
                                                byte[] rsData, JohnHancock signature, DigestAlgorithm default1) {
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature,
                            PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
-                           defaultInstance, rsData);
+                           defaultInstance, rsData, false);
     }
 }

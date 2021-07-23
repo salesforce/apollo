@@ -18,6 +18,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.ethereal.Ethereal.Committee;
 import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
+import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 
 /**
  * Configuration for an Ethereal instantiation.
@@ -29,7 +30,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine,
-                     Committee committee, Clock clock, boolean useWTK) {
+                     Committee committee, Clock clock) {
 
     public static Config empty() {
         return Builder.empty().build();
@@ -66,10 +67,9 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private double                      pByz            = 0.33;
         private short                       pid;
         private Signer                      signer          = new MockSigner();
-        private boolean                     useWTK          = false;
         private WeakThresholdKey            wtk;
 
-        private int zeroVotRoundForCommonVote;
+        private int zeroVoteRoundForCommonVote;
 
         public Builder() {
         }
@@ -88,7 +88,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             orderStartLevel = config.orderStartLevel;
             pid = config.pid;
             signer = config.signer;
-            zeroVotRoundForCommonVote = config.zeroVoteRoundForCommonVote;
+            zeroVoteRoundForCommonVote = config.zeroVoteRoundForCommonVote;
         }
 
         public Builder addConsensusConfig() {
@@ -116,16 +116,16 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 byzantine = (int) ((nProc) * pByz);
             }
             if (wtk == null) {
-                useWTK = false;
+                wtk = new NoOpWeakThresholdKey((2 * byzantine) + 1);
             }
             lastLevel = epochLength + orderStartLevel;
             Objects.requireNonNull(committee, "Committee cannot be null");
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
 
-            return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
+            return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock, useWTK);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock);
         }
 
         public int getByzantine() {
@@ -201,21 +201,17 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         }
 
         public int getZeroVotRoundForCommonVote() {
-            return zeroVotRoundForCommonVote;
+            return zeroVoteRoundForCommonVote;
         }
 
         public boolean isCanSkipLevel() {
             return canSkipLevel;
         }
 
-        public boolean isUseWTK() {
-            return useWTK;
-        }
-
         public Builder requiredByLinear() {
             firstDecidedRound = 3;
             commonVoteDeterministicPrefix = 10;
-            zeroVotRoundForCommonVote = 3;
+            zeroVoteRoundForCommonVote = 3;
             return this;
         }
 
@@ -309,18 +305,13 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return this;
         }
 
-        public Builder setUseWTK(boolean useWTK) {
-            this.useWTK = useWTK;
-            return this;
-        }
-
         public Builder setWtk(WeakThresholdKey wtk) {
             this.wtk = wtk;
             return this;
         }
 
-        public Builder setZeroVotRoundForCommonVote(int zeroVotRoundForCommonVote) {
-            this.zeroVotRoundForCommonVote = zeroVotRoundForCommonVote;
+        public Builder setZeroVoteRoundForCommonVote(int zeroVoteRoundForCommonVote) {
+            this.zeroVoteRoundForCommonVote = zeroVoteRoundForCommonVote;
             return this;
         }
     }

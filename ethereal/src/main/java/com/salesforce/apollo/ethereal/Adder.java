@@ -80,7 +80,7 @@ public interface Adder {
                         errors.put(pu.hash(), check);
                         failed.set(i, true);
                     } else {
-                        log.info("Duplicate unit: {} ", pu);
+                        log.info("Duplicate unit: {} on: {}", pu, conf.pid());
                         errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
                         failed.set(i, true);
                     }
@@ -108,6 +108,7 @@ public interface Adder {
 
         private void handleReady(waitingPreUnit wp) {
             if (wp.pu.creator() == conf.pid()) {
+                log.info("Ignore ready: {} on creator: {}", wp, conf.pid());
                 return;
             }
             try {
@@ -145,6 +146,7 @@ public interface Adder {
 
                 // 4. Insert
                 dag.insert(freeUnit);
+                log.info("Inserted: {} on: {}", freeUnit, conf.pid());
             } finally {
                 remove(wp);
             }
@@ -226,6 +228,8 @@ public interface Adder {
         }
 
         private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
+            log.info("Invalid control hash from: {} winess: {} parents: {} on: {}", sourcePID, witness, parents,
+                     conf.pid());
             var ids = new ArrayList<Long>();
             short pid = 0;
             for (var height : witness.view().heights()) {
