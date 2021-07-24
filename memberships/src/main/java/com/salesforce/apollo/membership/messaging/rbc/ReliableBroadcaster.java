@@ -18,6 +18,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -38,10 +39,12 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.comms.RbcServer;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -54,10 +57,109 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  *
  */
 public class ReliableBroadcaster {
+    public record Msg(Digest source, ByteString content) {}
+
     @FunctionalInterface
     public interface MessageHandler {
 
-        void message(Digest context, List<AgedMessage> messages);
+        void message(Digest context, List<Msg> messages);
+    }
+
+    public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
+                             Executor executor, SigningMember member, MessagingMetrics metrics,
+                             double falsePositiveRate) {
+        public static class Builder {
+            private int              bufferSize        = 500;
+            private Context<Member>  context;
+            private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
+            private Executor         executor;
+            private double           falsePositiveRate = 0.125;
+            private int              maxMessages       = 100;
+            private SigningMember    member;
+            private MessagingMetrics metrics;
+
+            public Parameters build() {
+                return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, executor, member, metrics,
+                                      falsePositiveRate);
+            }
+
+            public int getBufferSize() {
+                return bufferSize;
+            }
+
+            public Context<Member> getContext() {
+                return context;
+            }
+
+            public DigestAlgorithm getDigestAlgorithm() {
+                return digestAlgorithm;
+            }
+
+            public Executor getExecutor() {
+                return executor;
+            }
+
+            public double getFalsePositiveRate() {
+                return falsePositiveRate;
+            }
+
+            public int getMaxMessages() {
+                return maxMessages;
+            }
+
+            public SigningMember getMember() {
+                return member;
+            }
+
+            public MessagingMetrics getMetrics() {
+                return metrics;
+            }
+
+            public Parameters.Builder setBufferSize(int bufferSize) {
+                this.bufferSize = bufferSize;
+                return this;
+            }
+
+            public Parameters.Builder setContext(Context<Member> context) {
+                this.context = context;
+                return this;
+            }
+
+            public Parameters.Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
+                this.digestAlgorithm = digestAlgorithm;
+                return this;
+            }
+
+            public Builder setExecutor(Executor executor) {
+                this.executor = executor;
+                return this;
+            }
+
+            public Builder setFalsePositiveRate(double falsePositiveRate) {
+                this.falsePositiveRate = falsePositiveRate;
+                return this;
+            }
+
+            public Builder setMaxMessages(int maxMessages) {
+                this.maxMessages = maxMessages;
+                return this;
+            }
+
+            public Parameters.Builder setMember(SigningMember member) {
+                this.member = member;
+                return this;
+            }
+
+            public Parameters.Builder setMetrics(MessagingMetrics metrics) {
+                this.metrics = metrics;
+                return this;
+            }
+        }
+
+        public static Parameters.Builder newBuilder() {
+            return new Builder();
+        }
+
     }
 
     public class Service {
@@ -95,9 +197,11 @@ public class ReliableBroadcaster {
         private final AtomicInteger      round             = new AtomicInteger();
         private final Map<Digest, state> state             = new ConcurrentHashMap<>();
         private final Semaphore          tickGate          = new Semaphore(1);
+        private final int                highWaterMark;
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
+            highWaterMark = (params.bufferSize - (int) (params.bufferSize + (((double) params.bufferSize) * 0.1)));
         }
 
         public void clear() {
@@ -126,7 +230,7 @@ public class ReliableBroadcaster {
                                 boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), s.msg.getContent());
                                 return verify;
                             }).map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
-                            .map(s -> s.msg.build()).toList());
+                            .map(s -> new Msg(s.from, s.msg.getContent())).toList());
             gc();
         }
 
@@ -205,7 +309,7 @@ public class ReliableBroadcaster {
         }
 
         private void gc() {
-            if (size() < params.bufferSize) {
+            if (size() < highWaterMark) {
                 return;
             }
             if (!garbageCollecting.tryAcquire()) {
@@ -214,13 +318,13 @@ public class ReliableBroadcaster {
             params.executor.execute(Utils.wrapped(() -> {
                 try {
                     int startSize = state.size();
-                    if (startSize < params.bufferSize) {
+                    if (startSize < highWaterMark) {
                         return;
                     }
                     log.trace("Compacting buffer: {} size: {} on: {}", params.context.getId(), startSize,
                               params.member);
                     purgeTheAged();
-                    if (buffer.size() > (params.bufferSize + (((double) params.bufferSize) * 0.1))) {
+                    if (buffer.size() > params.bufferSize) {
                         log.warn("Buffer overflow: {} > {} after compact for: {} on: {} ", buffer.size(),
                                  params.bufferSize, params.context.getId(), params.member);
                     }
@@ -312,7 +416,7 @@ public class ReliableBroadcaster {
         }
         AgedMessage m = buffer.send(message, params.member);
         if (notifyLocal) {
-            deliver(Collections.singletonList(m));
+            deliver(Collections.singletonList(new Msg(params.member.getId(), m.getContent())));
         }
     }
 
@@ -344,7 +448,7 @@ public class ReliableBroadcaster {
         comm.deregister(params.context.getId());
     }
 
-    private void deliver(List<AgedMessage> newMsgs) {
+    private void deliver(List<Msg> newMsgs) {
         if (newMsgs.isEmpty()) {
             return;
         }

@@ -31,7 +31,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.messaging.proto.AgedMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -43,9 +42,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.membership.messaging.rbc.Parameters;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -64,13 +64,13 @@ public class RbcTest {
         }
 
         @Override
-        public void message(Digest context, List<AgedMessage> messages) {
+        public void message(Digest context, List<Msg> messages) {
             messages.forEach(m -> {
-                assert m.getSource() != null : "null member";
-                ByteBuffer buf = m.getContent().asReadOnlyByteBuffer();
+                assert m.source() != null : "null member";
+                ByteBuffer buf = m.content().asReadOnlyByteBuffer();
                 assert buf.remaining() > 4 : "buffer: " + buf.remaining();
                 if (buf.getInt() == current.get() + 1) {
-                    if (counted.add(new Digest(m.getSource()))) {
+                    if (counted.add(m.source())) {
                         int totalCount = totalReceived.incrementAndGet();
                         if (totalCount % 1_000 == 0) {
                             System.out.print(".");

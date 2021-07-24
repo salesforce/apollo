@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.choam.proto";
+option java_outer_classname = "ChoamProto";
+option objc_class_prefix = "Chp";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "util.proto";
+
+package apollo.choam;
+
+service CHOAM {
+    rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
+    rpc join (JoinRequest) returns (JoinResponse) {}
+}
+
+message JoinRequest {
+    utils.Digeste context = 1;
+    ViewMember member = 2;
+}
+
+message JoinResponse {
+    utils.Sig signature = 1;
+    ViewMember nextView = 2;
+}
+
+message SubmitTransaction {
+    utils.Digeste context = 1;
+    Transaction transaction = 2;
+}
+
+message Block {
+    Header header = 1;
+    oneof body {
+        Genesis genesis = 2;
+        Reconfigure reconfigure = 3;
+        Checkpoint checkpoint = 4;
+        Executions executions = 5;
+    }
+    repeated Certification certifications = 6;
+}
+
+message Header {
+    int64 height = 1; 
+    int64 lastCheckpoint = 2;
+    int64 lastReconfig = 3;
+    utils.Digeste lastCheckpointHash = 4;
+    utils.Digeste lastReconfigHash = 5;
+    utils.Digeste nonce = 6;
+    utils.Digeste previous = 7;
+}
+
+message Genesis { 
+    Reconfigure initialView = 1;
+    repeated ExecutedTransaction initialize = 2;
+}
+
+message Reconfigure {
+    utils.Digeste id = 1;
+    int32 checkpointBlocks = 2;
+    int32 keyBlock = 3; 
+    repeated ViewMember view = 4;
+}
+
+message Checkpoint { 
+    int64 byteSize = 1;
+    int32 segmentSize = 2;
+    utils.Digeste stateHash = 3;
+    repeated utils.Digeste segments = 4;
+}
+
+message Executions {
+    repeated ExecutedTransaction executions = 1;
+}
+
+message ExecutedTransaction {
+    Transaction transation = 1;
+    bytes result = 2;
+}
+
+message Transaction { 
+    utils.Digeste source = 1; 
+    utils.Sig signature = 2;
+    oneof transaction {
+        Join join = 5;
+        Leave leave = 6;
+        Checkpoint checkpoint = 7;
+        bytes user = 8;
+    }
+}
+
+message Join {
+    ViewMember member = 1;
+    repeated Certification endorsements = 2;
+}
+
+message Leave {
+    ViewMember member = 1;
+}
+
+message ViewMember {
+    utils.Digeste id = 1;
+    utils.PubKey consensusKey = 2;
+    utils.Sig signature = 3;
+}
+
+message Certification {
+    utils.Digeste id = 1;
+    utils.Sig signature = 2;
+} 
+
+message ByteTransaction {
+    bytes content = 1;
+}
+
+message CheckpointProcessing {
+    int64 checkpoint = 1;
+}
+
+/** Bootstrapping **/
+
+service Boostrap {
+    rpc sync(Synchronize) returns (Initial) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
+}
+
+message Synchronize {
+    utils.Digeste context = 1;
+    utils.Digeste from = 2;
+    int64 height = 3;
+}
+
+message Initial {
+    Block genesis = 1;
+    Block checkpoint = 2;
+    Block checkpointView = 3;
+    repeated Block viewChain = 4;
+}
+
+message BlockReplication {
+    utils.Digeste context = 1;
+    int64 from = 2;
+    int64 to = 3;
+    utils.Biff blocksBff = 4;
+}
+
+message Blocks {
+    repeated Block blocks = 1;
+}
+
+message CheckpointReplication {
+    utils.Digeste context = 1;
+    int64 checkpoint = 2;
+    utils.Biff checkpointSegments = 3;
+}
+
+message CheckpointSegments {
+    repeated Slice segments = 1;
+    repeated utils.Digeste blocks = 2;
+}
+
+message Slice {
+    int32 index = 1;
+    bytes block = 2;
+}

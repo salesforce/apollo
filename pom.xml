@@ -26,6 +26,7 @@
 		<module>ghost</module>
 		<module>miracl</module>
 		<module>ethereal</module>
+		<module>choam</module>
 	</modules>
 
 	<properties>
