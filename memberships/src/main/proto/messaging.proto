@@ -68,3 +68,25 @@ message CausalMessages {
 message ByteMessage {
     bytes contents = 1;
 }
+
+service RBC {
+    rpc gossip (MessageBff) returns (Reconcile) {}
+    rpc update (Reconciliation) returns (google.protobuf.Empty) {}
+}
+
+message Reconciliation {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated  AgedMessage updates = 3;
+}
+
+message Reconcile {
+    utils.Biff  bff = 1;
+    repeated  AgedMessage updates = 2;
+}
+message AgedMessage {
+    int32 age = 1;
+    bytes content = 2;
+    utils.Digeste source = 3;
+    utils.Sig signature = 4;
+}
