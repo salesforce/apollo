@@ -11,7 +11,7 @@ import "util.proto";
 
 package apollo.choam;
 
-service CHOAM {
+service CHOAMService {
     rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
     rpc join (JoinRequest) returns (JoinResponse) {}
 }
@@ -39,7 +39,6 @@ message Block {
         Checkpoint checkpoint = 4;
         Executions executions = 5;
     }
-    repeated Certification certifications = 6;
 }
 
 message Header {
@@ -109,7 +108,16 @@ message ViewMember {
 message Certification {
     utils.Digeste id = 1;
     utils.Sig signature = 2;
-} 
+}
+
+message Certifications {
+    repeated Certification certs = 1;
+}
+
+message CertifiedBlock {
+    Block block = 1;
+    repeated Certification certifications = 2;
+}
 
 message ByteTransaction {
     bytes content = 1;
@@ -118,6 +126,14 @@ message ByteTransaction {
 message CheckpointProcessing {
     int64 checkpoint = 1;
 }
+
+message Validate {
+    utils.Digeste context = 1;
+    utils.Digeste witness = 2;
+    utils.Digeste hash = 3;
+    utils.Sig signature = 4;
+}
+
 
 /** Bootstrapping **/
 
@@ -135,10 +151,10 @@ message Synchronize {
 }
 
 message Initial {
-    Block genesis = 1;
-    Block checkpoint = 2;
-    Block checkpointView = 3;
-    repeated Block viewChain = 4;
+    CertifiedBlock genesis = 1;
+    CertifiedBlock checkpoint = 2;
+    CertifiedBlock checkpointView = 3;
+    repeated CertifiedBlock viewChain = 4;
 }
 
 message BlockReplication {
@@ -149,7 +165,7 @@ message BlockReplication {
 }
 
 message Blocks {
-    repeated Block blocks = 1;
+    repeated CertifiedBlock blocks = 1;
 }
 
 message CheckpointReplication {

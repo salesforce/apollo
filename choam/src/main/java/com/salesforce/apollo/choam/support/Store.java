@@ -12,7 +12,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
@@ -30,8 +32,12 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Blocks;
+import com.salesfoce.apollo.choam.proto.Certification;
+import com.salesfoce.apollo.choam.proto.Certifications;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.DigestType;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -44,6 +50,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 public class Store {
 
     private static final String BLOCKS              = "BLOCKS";
+    private static final String CERTIFICATIONS      = "CERTIFICATIONS";
     private static final String CHECKPOINT_TEMPLATE = "CHECKPOINT-%s";
     private static final String HASH_TO_HEIGHT      = "HASH_TO_HEIGHT";
     private static final String HASHES              = "HASHES";
@@ -51,15 +58,19 @@ public class Store {
     private static final String VIEW_CHAIN          = "VIEW_CHAIN";
 
     private final MVMap<Long, byte[]>                   blocks;
+    private final MVMap<Long, byte[]>                   certifications;
     private final TreeMap<Long, MVMap<Integer, byte[]>> checkpoints = new TreeMap<>();
     private final MVMap<Long, Digest>                   hashes;
     private final MVMap<Digest, Long>                   hashToHeight;
     private final MVMap<Long, Long>                     viewChain;
+    private final DigestAlgorithm                       digestAlgorithm;
 
-    public Store(MVStore store) {
+    public Store(DigestAlgorithm digestAlgorithm, MVStore store) {
+        this.digestAlgorithm = digestAlgorithm;
         hashes = store.openMap(HASHES, new MVMap.Builder<Long, Digest>().valueType(new DigestType()));
         blocks = store.openMap(BLOCKS);
         hashToHeight = store.openMap(HASH_TO_HEIGHT, new MVMap.Builder<Digest, Long>().keyType(new DigestType()));
+        certifications = store.openMap(CERTIFICATIONS);
         viewChain = store.openMap(VIEW_CHAIN);
     }
 
@@ -120,6 +131,19 @@ public class Store {
         };
     }
 
+    public List<Certification> certifications(long height) {
+        byte[] bs = certifications.get(height);
+        if (bs == null) {
+            return null;
+        }
+        try {
+            return Certifications.parseFrom(bs).getCertsList();
+        } catch (InvalidProtocolBufferException e) {
+            log.error("Could not deserialize certifications for {}", height);
+            return Collections.emptyList();
+        }
+    }
+
     public boolean completeFrom(long from) {
         return lastViewChainFrom(from) == 0;
     }
@@ -135,15 +159,15 @@ public class Store {
     public void fetchBlocks(BloomFilter<Long> blocksBff, Blocks.Builder replication, int max, long from,
                             long to) throws IllegalStateException {
         StreamSupport.stream(((Iterable<Long>) () -> blocksFrom(from, to, max)).spliterator(), false)
-                     .filter(s -> !blocksBff.contains(s)).map(height -> getBlock(height))
-                     .forEach(block -> replication.addBlocks(block.block));
+                     .filter(s -> !blocksBff.contains(s)).map(height -> getCertifiedBlock(height))
+                     .forEach(block -> replication.addBlocks(block));
     }
 
     public void fetchViewChain(BloomFilter<Long> chainBff, Blocks.Builder replication, int maxChainCount,
                                long incompleteStart, long target) throws IllegalStateException {
         StreamSupport.stream(((Iterable<Long>) () -> viewChainFrom(incompleteStart, target)).spliterator(), false)
-                     .filter(s -> !chainBff.contains(s)).map(height -> getBlock(height))
-                     .forEach(block -> replication.addBlocks(block.block));
+                     .filter(s -> !chainBff.contains(s)).map(height -> getCertifiedBlock(height))
+                     .forEach(block -> replication.addBlocks(block));
     }
 
     public long firstGap(long from, long to) {
@@ -182,14 +206,29 @@ public class Store {
         return blocks.get(height);
     }
 
-    public HashedBlock getLastBlock() {
-        Long lastBlock = blocks.lastKey();
-        return getBlock(lastBlock);
+    public CertifiedBlock getCertifiedBlock(long height) {
+        CertifiedBlock.Builder builder = CertifiedBlock.newBuilder();
+        HashedBlock block = getBlock(height);
+        if (block != null) {
+            builder.setBlock(block.block);
+        } else {
+            return null;
+        }
+        List<Certification> certs = certifications(height);
+        if (certs != null) {
+            builder.addAllCertifications(certs);
+        }
+        return builder.build();
     }
 
-    public HashedBlock getLastView() {
+    public HashedCertifiedBlock getLastBlock() {
+        Long lastBlock = blocks.lastKey();
+        return lastBlock == null ? null : new HashedCertifiedBlock(digestAlgorithm, getCertifiedBlock(lastBlock));
+    }
+
+    public HashedCertifiedBlock getLastView() {
         Long lastView = checkpoints.lastKey();
-        return getBlock(lastView);
+        return new HashedCertifiedBlock(digestAlgorithm, getCertifiedBlock(lastView));
     }
 
     public Digest hash(long height) {
@@ -216,9 +255,12 @@ public class Store {
         return last;
     }
 
-    public void put(HashedBlock cb) {
+    public void put(HashedCertifiedBlock cb) {
         transactionally(() -> {
+            Certifications certs = Certifications.newBuilder().addAllCerts(cb.certifiedBlock.getCertificationsList())
+                                                 .build();
             put(cb.hash, cb.block);
+            certifications.put(cb.height(), certs.toByteArray());
         });
     }
 

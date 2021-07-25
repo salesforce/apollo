@@ -7,11 +7,13 @@
 package choamcom.salesforce.apollo.choam;
 
 import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
@@ -21,14 +23,14 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  */
 public class TestChain {
 
-    private HashedBlock anchor;
-    private HashedBlock checkpoint;
-    private HashedBlock genesis;
-    private HashedBlock lastBlock;
-    private HashedBlock lastView;
-    private final Store store;
-    private HashedBlock synchronizeCheckpoint;
-    private HashedBlock synchronizeView;
+    private HashedCertifiedBlock anchor;
+    private HashedCertifiedBlock checkpoint;
+    private HashedCertifiedBlock genesis;
+    private HashedCertifiedBlock lastBlock;
+    private HashedCertifiedBlock lastView;
+    private final Store          store;
+    private HashedCertifiedBlock synchronizeCheckpoint;
+    private HashedCertifiedBlock synchronizeView;
 
     public TestChain(Store store) {
         this.store = store;
@@ -45,33 +47,37 @@ public class TestChain {
     }
 
     public TestChain genesis() {
-        genesis = new HashedBlock(DigestAlgorithm.DEFAULT,
-                                  Block.newBuilder()
-                                       .setHeader(Header.newBuilder().setHeight(0).setLastCheckpoint(-1)
-                                                        .setLastReconfig(-1))
-                                       .setGenesis(Genesis.getDefaultInstance()).build());
+        genesis = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
+                                           CertifiedBlock.newBuilder()
+                                                         .setBlock(Block.newBuilder()
+                                                                        .setHeader(Header.newBuilder().setHeight(0)
+                                                                                         .setLastCheckpoint(-1)
+                                                                                         .setLastReconfig(-1))
+                                                                        .setGenesis(Genesis.getDefaultInstance())
+                                                                        .build())
+                                                         .build());
         store.put(genesis);
         lastBlock = lastView = checkpoint = genesis;
         return this;
     }
 
-    public HashedBlock getAnchor() {
+    public HashedCertifiedBlock getAnchor() {
         return anchor;
     }
 
-    public HashedBlock getGenesis() {
+    public HashedCertifiedBlock getGenesis() {
         return genesis;
     }
 
-    public HashedBlock getLastBlock() {
+    public HashedCertifiedBlock getLastBlock() {
         return lastBlock;
     }
 
-    public HashedBlock getSynchronizeCheckpoint() {
+    public HashedCertifiedBlock getSynchronizeCheckpoint() {
         return synchronizeCheckpoint;
     }
 
-    public HashedBlock getSynchronizeView() {
+    public HashedCertifiedBlock getSynchronizeView() {
         return synchronizeView;
     }
 
@@ -97,46 +103,63 @@ public class TestChain {
         return this;
     }
 
-    private HashedBlock checkpointBlock() {
-        lastBlock = new HashedBlock(DigestAlgorithm.DEFAULT,
-                                    Block.newBuilder()
-                                         .setHeader(Header.newBuilder().setLastCheckpoint(checkpoint.height())
-                                                          .setLastCheckpointHash(checkpoint.hash.toDigeste())
-                                                          .setLastReconfig(lastView.height())
-                                                          .setLastReconfigHash(lastView.hash.toDigeste())
-                                                          .setHeight(lastBlock.height() + 1)
-                                                          .setPrevious(lastBlock.hash.toDigeste()))
-                                         .setCheckpoint(HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, null, 0))
-                                         .build());
+    private HashedCertifiedBlock checkpointBlock() {
+        lastBlock = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
+                                             CertifiedBlock.newBuilder()
+                                                           .setBlock(Block.newBuilder()
+                                                                          .setHeader(Header.newBuilder()
+                                                                                           .setLastCheckpoint(checkpoint.height())
+                                                                                           .setLastCheckpointHash(checkpoint.hash.toDigeste())
+                                                                                           .setLastReconfig(lastView.height())
+                                                                                           .setLastReconfigHash(lastView.hash.toDigeste())
+                                                                                           .setHeight(lastBlock.height()
+                                                                                           + 1)
+                                                                                           .setPrevious(lastBlock.hash.toDigeste()))
+                                                                          .setCheckpoint(HashedBlock.checkpoint(DigestAlgorithm.DEFAULT,
+                                                                                                                null,
+                                                                                                                0))
+                                                                          .build())
+                                                           .build());
         store.put(lastBlock);
         return lastBlock;
     }
 
-    private HashedBlock reconfigureBlock() {
-        lastBlock = new HashedBlock(DigestAlgorithm.DEFAULT,
-                                    Block.newBuilder()
-                                         .setHeader(Header.newBuilder().setLastCheckpoint(checkpoint.height())
-                                                          .setLastCheckpointHash(checkpoint.hash.toDigeste())
-                                                          .setLastReconfig(lastView.height())
-                                                          .setLastReconfigHash(lastView.hash.toDigeste())
-                                                          .setHeight(lastBlock.height() + 1)
-                                                          .setPrevious(lastBlock.hash.toDigeste()))
-                                         .setReconfigure(Reconfigure.getDefaultInstance()).build());
+    private HashedCertifiedBlock reconfigureBlock() {
+        lastBlock = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
+                                             CertifiedBlock.newBuilder()
+                                                           .setBlock(Block.newBuilder()
+                                                                          .setHeader(Header.newBuilder()
+                                                                                           .setLastCheckpoint(checkpoint.height())
+                                                                                           .setLastCheckpointHash(checkpoint.hash.toDigeste())
+                                                                                           .setLastReconfig(lastView.height())
+                                                                                           .setLastReconfigHash(lastView.hash.toDigeste())
+                                                                                           .setHeight(lastBlock.height()
+                                                                                           + 1)
+                                                                                           .setPrevious(lastBlock.hash.toDigeste()))
+                                                                          .setReconfigure(Reconfigure.getDefaultInstance())
+                                                                          .build())
+                                                           .build());
         store.put(lastBlock);
         return lastBlock;
     }
 
-    private HashedBlock userBlock() {
-        lastBlock = new HashedBlock(DigestAlgorithm.DEFAULT,
-                                    Block.newBuilder()
-                                         .setHeader(Header.newBuilder().setLastCheckpoint(checkpoint.height())
-                                                          .setLastCheckpointHash(checkpoint.hash.toDigeste())
-                                                          .setLastReconfig(lastView.height())
-                                                          .setLastReconfigHash(lastView.hash.toDigeste())
-                                                          .setHeight(lastBlock.height() + 1)
-                                                          .setPrevious(lastBlock.hash.toDigeste()))
-                                         .setExecutions(Executions.getDefaultInstance()).build());
-        store.put(lastBlock);
+    private HashedCertifiedBlock userBlock() {
+        HashedCertifiedBlock block = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
+                                                              CertifiedBlock.newBuilder()
+                                                                            .setBlock(Block.newBuilder()
+                                                                                           .setHeader(Header.newBuilder()
+                                                                                                            .setLastCheckpoint(checkpoint.height())
+                                                                                                            .setLastCheckpointHash(checkpoint.hash.toDigeste())
+                                                                                                            .setLastReconfig(lastView.height())
+                                                                                                            .setLastReconfigHash(lastView.hash.toDigeste())
+                                                                                                            .setHeight(lastBlock.height()
+                                                                                                            + 1)
+                                                                                                            .setPrevious(lastBlock.hash.toDigeste()))
+                                                                                           .setExecutions(Executions.getDefaultInstance())
+                                                                                           .build())
+                                                                            .build());
+        store.put(block);
+        lastBlock = block;
         return lastBlock;
     }
 }

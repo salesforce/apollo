@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -43,7 +44,6 @@ public class HashedBlock implements Comparable<HashedBlock> {
         public long height() {
             return -1;
         }
-
     }
 
     private static final int    HEADER_BYTE_SIZE = 22 * 8;
@@ -117,6 +117,10 @@ public class HashedBlock implements Comparable<HashedBlock> {
 
     public static long height(Block block) {
         return block.getHeader().getHeight();
+    }
+
+    public static long height(CertifiedBlock cb) {
+        return height(cb.getBlock());
     }
 
     private static void encode(Digeste hash, ByteBuffer buffer) {

@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
@@ -32,19 +33,19 @@ import com.salesforce.apollo.membership.Member;
 public interface Committee {
 
     public abstract class CommitteeCommon implements Committee {
+        protected final Map<Member, Verifier> validators;
         private final long                    height;
         private final Digest                  id;
-        protected final Map<Member, Verifier> validators;
+
+        public CommitteeCommon(HashedBlock block, Context<Member> context) {
+            this(block.height(), new Digest(block.block.getReconfigure().getId()),
+                 validatorsOf(block.block.getReconfigure(), context));
+        }
 
         public CommitteeCommon(long height, Digest id, Map<Member, Verifier> validators) {
             this.height = height;
             this.id = id;
             this.validators = validators;
-        }
-
-        public CommitteeCommon(HashedBlock block, Context<Member> context) {
-            this(block.height(), new Digest(block.block.getReconfigure().getId()),
-                 validatorsOf(block.block.getReconfigure(), context));
         }
 
         @Override
@@ -58,17 +59,23 @@ public interface Committee {
         }
 
         @Override
-        public boolean validate(HashedBlock hb) {
+        public boolean validate(HashedCertifiedBlock hb) {
             Parameters params = params();
             byte[] headerHash = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
-            return hb.block.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
-                           .count() > params.context().toleranceLevel() + 1;
+            return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
+                                    .count() > params.context().toleranceLevel() + 1;
         }
     }
 
     static final Logger log = LoggerFactory.getLogger(CommitteeCommon.class);
 
-    void accept(HashedBlock next);
+    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
+        return reconfigure.getViewList().stream()
+                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
+                                                    e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
+    }
+
+    void accept(HashedCertifiedBlock next);
 
     long getHeight();
 
@@ -97,11 +104,5 @@ public interface Committee {
         return true;
     }
 
-    boolean validate(HashedBlock block);
-
-    static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getViewList().stream()
-                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
-                                                    e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
-    }
+    boolean validate(HashedCertifiedBlock block);
 }

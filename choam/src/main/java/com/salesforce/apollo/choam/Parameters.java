@@ -15,6 +15,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import com.google.protobuf.Message;
+import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;

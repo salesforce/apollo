@@ -17,13 +17,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesforce.apollo.choam.Committee.CommitteeCommon;
 import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.choam.support.HashedBlock.NullBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -37,7 +38,7 @@ import com.salesforce.apollo.utils.SimpleChannel;
  * @author hal.hildebrand
  *
  */
-public class CHOAM { 
+public class CHOAM {
     private class Associate extends CommitteeCommon {
 
         public Associate(HashedBlock block, Context<Member> context) {
@@ -46,7 +47,7 @@ public class CHOAM {
         }
 
         @Override
-        public void accept(HashedBlock next) {
+        public void accept(HashedCertifiedBlock next) {
             // TODO Auto-generated method stub
         }
 
@@ -56,7 +57,7 @@ public class CHOAM {
         }
 
     }
- 
+
     private class Client extends CommitteeCommon {
 
         public Client(HashedBlock block, Context<Member> context) {
@@ -65,7 +66,7 @@ public class CHOAM {
         }
 
         @Override
-        public void accept(HashedBlock next) {
+        public void accept(HashedCertifiedBlock next) {
             // TODO Auto-generated method stub
         }
 
@@ -79,7 +80,7 @@ public class CHOAM {
     private class Formation implements Committee {
 
         @Override
-        public void accept(HashedBlock next) {
+        public void accept(HashedCertifiedBlock next) {
             Genesis genesis = next.block.getGenesis();
             formCommittee(next);
             process(genesis.getInitializeList());
@@ -96,7 +97,12 @@ public class CHOAM {
         }
 
         @Override
-        public boolean validate(HashedBlock hb) {
+        public Parameters params() {
+            return params;
+        }
+
+        @Override
+        public boolean validate(HashedCertifiedBlock hb) {
             var block = hb.block;
             if (!block.hasGenesis()) {
                 log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
@@ -104,24 +110,19 @@ public class CHOAM {
             }
             var validators = validatorsOf(block.getGenesis().getInitialView(), params.context());
             var headerHash = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
-            return hb.block.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
-                           .count() > params.context().toleranceLevel() + 1;
-        }
-
-        @Override
-        public Parameters params() {
-            return params;
+            return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
+                                    .count() > params.context().toleranceLevel() + 1;
         }
     }
 
-    private final ReliableBroadcaster        combine;
-    private Committee                        current;
-    private HashedBlock                      head;
-    private final SimpleChannel<HashedBlock> linear;
-    private final Logger                     log     = LoggerFactory.getLogger(CHOAM.class);
-    private final Parameters                 params;
-    private final PriorityQueue<HashedBlock> pending = new PriorityQueue<>();
-    private final AtomicBoolean              started = new AtomicBoolean();
+    private final ReliableBroadcaster                 combine;
+    private Committee                                 current;
+    private HashedCertifiedBlock                      head;
+    private final SimpleChannel<HashedCertifiedBlock> linear;
+    private final Logger                              log     = LoggerFactory.getLogger(CHOAM.class);
+    private final Parameters                          params;
+    private final PriorityQueue<HashedCertifiedBlock> pending = new PriorityQueue<>();
+    private final AtomicBoolean                       started = new AtomicBoolean();
 
     public CHOAM(Parameters params) {
         this.params = params;
@@ -136,6 +137,7 @@ public class CHOAM {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        linear.open();
         linear.consumeEach(b -> accept(b));
     }
 
@@ -146,7 +148,7 @@ public class CHOAM {
         linear.close();
     }
 
-    private void accept(HashedBlock next) {
+    private void accept(HashedCertifiedBlock next) {
         head = next;
         current.accept(next);
     }
@@ -155,7 +157,7 @@ public class CHOAM {
         var next = pending.peek();
         while (isNext(next)) {
             if (current.validate(next)) {
-                HashedBlock nextBlock = pending.poll();
+                HashedCertifiedBlock nextBlock = pending.poll();
                 if (nextBlock == null) {
                     return;
                 }
@@ -173,14 +175,14 @@ public class CHOAM {
     }
 
     private void combine(Msg m) {
-        Block block;
+        CertifiedBlock block;
         try {
-            block = Block.parseFrom(m.content());
+            block = CertifiedBlock.parseFrom(m.content());
         } catch (InvalidProtocolBufferException e) {
             log.debug("unable to parse block content from {} on: {}", m.source(), params.member());
             return;
         }
-        pending.add(new HashedBlock(params.digestAlgorithm(), block));
+        pending.add(new HashedCertifiedBlock(params.digestAlgorithm(), block));
     }
 
     private void formCommittee(HashedBlock hb) {
