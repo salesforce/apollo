@@ -6,11 +6,9 @@
  */
 package com.salesforce.apollo.utils;
 
-import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -22,18 +20,21 @@ import org.slf4j.LoggerFactory;
  * @author hal.hildebrand
  *
  */
-public class SimpleChannel<T> implements Closeable, Channel<T> {
-    static final Logger log = LoggerFactory.getLogger(SimpleChannel.class);
+public class ChannelConsumer<T> {
+    private static final Logger log = LoggerFactory.getLogger(ChannelConsumer.class);
 
-    AtomicBoolean    closed = new AtomicBoolean();
-    Thread           handler;
-    BlockingQueue<T> queue;
+    private AtomicBoolean          closed = new AtomicBoolean();
+    private Thread                 handler;
+    private final BlockingQueue<T> queue;
 
-    public SimpleChannel(int capacity) {
-        queue = new LinkedBlockingDeque<>(capacity);
+    public BlockingQueue<T> getChannel() {
+        return queue;
     }
 
-    @Override
+    public ChannelConsumer(BlockingQueue<T> queue) {
+        this.queue = queue;
+    }
+
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
@@ -44,10 +45,9 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
         }
     }
 
-    @Override
     public void consume(Consumer<List<T>> consumer) {
         if (closed.get()) {
-            throw new IllegalStateException("Channel already closed");
+            throw new IllegalStateException("Consumer already closed");
         }
         if (handler != null) {
             throw new IllegalStateException("Handler already established");
@@ -71,49 +71,16 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
                 }
 
             }
-        }, "Consumer");
+        }, "ChannelConsumer");
         handler.setDaemon(true);
         handler.start();
     }
 
-    @Override
     public void consumeEach(Consumer<T> consumer) {
         consume(elements -> {
             for (T element : elements) {
                 consumer.accept(element);
             }
         });
-    }
-
-    @Override
-    public boolean offer(T element) {
-        if (closed.get()) {
-            return false;
-        }
-        return queue.offer(element);
-    }
-
-    @Override
-    public void open() {
-        if (!closed.compareAndSet(false, true)) {
-            queue.clear();
-        }
-    }
-
-    @Override
-    public int size() {
-        return queue.size();
-    }
-
-    @Override
-    public void submit(T element) {
-        if (closed.get()) {
-            return;
-        }
-        try {
-            queue.put(element);
-        } catch (InterruptedException e) {
-            log.warn("Interrupted in submit", e);
-        }
     }
 }

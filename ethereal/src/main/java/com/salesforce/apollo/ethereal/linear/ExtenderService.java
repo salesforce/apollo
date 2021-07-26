@@ -16,6 +16,7 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
+import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -31,12 +32,12 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
-    private final Extender                   ordering;
-    private final SimpleChannel<List<Unit>>  output;
-    private final SimpleChannel<TimingRound> timingRounds;
-    private final SimpleChannel<Boolean>     trigger;
+    private final Extender             ordering;
+    private final Channel<List<Unit>>  output;
+    private final Channel<TimingRound> timingRounds;
+    private final Channel<Boolean>     trigger;
 
-    public ExtenderService(Dag dag, RandomSource rs, Config config, SimpleChannel<List<Unit>> output) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, Channel<List<Unit>> output) {
         ordering = new Extender(dag, rs, config);
         this.output = output;
         trigger = new SimpleChannel<>(100);

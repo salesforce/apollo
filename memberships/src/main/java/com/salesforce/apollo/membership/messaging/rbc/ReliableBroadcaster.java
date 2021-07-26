@@ -15,10 +15,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -57,22 +58,22 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  *
  */
 public class ReliableBroadcaster {
-    public record Msg(Digest source, ByteString content) {}
-
     @FunctionalInterface
     public interface MessageHandler {
 
         void message(Digest context, List<Msg> messages);
     }
 
+    public record Msg(Digest source, ByteString content) {}
+
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
                              Executor executor, SigningMember member, MessagingMetrics metrics,
                              double falsePositiveRate) {
-        public static class Builder {
+        public static class Builder implements Cloneable {
             private int              bufferSize        = 500;
             private Context<Member>  context;
             private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
-            private Executor         executor;
+            private Executor         executor          = ForkJoinPool.commonPool();
             private double           falsePositiveRate = 0.125;
             private int              maxMessages       = 100;
             private SigningMember    member;
@@ -81,6 +82,15 @@ public class ReliableBroadcaster {
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, executor, member, metrics,
                                       falsePositiveRate);
+            }
+
+            @Override
+            public Builder clone() {
+                try {
+                    return (Builder) super.clone();
+                } catch (CloneNotSupportedException e) {
+                    throw new IllegalStateException();
+                }
             }
 
             public int getBufferSize() {
@@ -193,15 +203,15 @@ public class ReliableBroadcaster {
 
     private class Buffer {
         private final Semaphore          garbageCollecting = new Semaphore(1);
+        private final int                highWaterMark;
         private final int                maxAge;
         private final AtomicInteger      round             = new AtomicInteger();
         private final Map<Digest, state> state             = new ConcurrentHashMap<>();
         private final Semaphore          tickGate          = new Semaphore(1);
-        private final int                highWaterMark;
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
-            highWaterMark = (params.bufferSize - (int) (params.bufferSize + (((double) params.bufferSize) * 0.1)));
+            highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
         }
 
         public void clear() {
@@ -309,10 +319,7 @@ public class ReliableBroadcaster {
         }
 
         private void gc() {
-            if (size() < highWaterMark) {
-                return;
-            }
-            if (!garbageCollecting.tryAcquire()) {
+            if ((size() < highWaterMark) || !garbageCollecting.tryAcquire()) {
                 return;
             }
             params.executor.execute(Utils.wrapped(() -> {
@@ -371,11 +378,11 @@ public class ReliableBroadcaster {
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
     private final Buffer                                           buffer;
-    private final List<MessageHandler>                             channelHandlers = new CopyOnWriteArrayList<>();
+    private final Map<UUID, MessageHandler>                        channelHandlers = new ConcurrentHashMap<>();
     private final CommonCommunications<ReliableBroadcast, Service> comm;
     private final RingCommunications<ReliableBroadcast>            gossiper;
     private final Parameters                                       params;
-    private final List<Consumer<Integer>>                          roundListeners  = new CopyOnWriteArrayList<>();
+    private final Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
     private final AtomicBoolean                                    started         = new AtomicBoolean();
 
     public ReliableBroadcaster(Parameters parameters, Router communications) {
@@ -420,12 +427,24 @@ public class ReliableBroadcaster {
         }
     }
 
-    public void register(Consumer<Integer> roundListener) {
-        roundListeners.add(roundListener);
+    public UUID register(Consumer<Integer> roundListener) {
+        UUID reg = UUID.randomUUID();
+        roundListeners.put(reg, roundListener);
+        return reg;
     }
 
-    public void registerHandler(MessageHandler listener) {
-        channelHandlers.add(listener);
+    public UUID registerHandler(MessageHandler listener) {
+        UUID reg = UUID.randomUUID();
+        channelHandlers.put(reg, listener);
+        return reg;
+    }
+
+    public void removeHandler(UUID registration) {
+        channelHandlers.remove(registration);
+    }
+
+    public void removeRoundListener(UUID registration) {
+        roundListeners.remove(registration);
     }
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
@@ -453,7 +472,7 @@ public class ReliableBroadcaster {
             return;
         }
         log.trace("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), params.context.getId(), params.member);
-        channelHandlers.forEach(handler -> {
+        channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(params.context.getId(), newMsgs);
             } catch (Throwable e) {
@@ -501,7 +520,7 @@ public class ReliableBroadcaster {
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
                 buffer.tick();
                 int gossipRound = buffer.round();
-                roundListeners.forEach(l -> {
+                roundListeners.values().forEach(l -> {
                     try {
                         l.accept(gossipRound);
                     } catch (Throwable e) {

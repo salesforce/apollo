@@ -25,7 +25,7 @@ import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.utils.SimpleChannel;
+import com.salesforce.apollo.utils.Channel;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -112,7 +112,7 @@ public class Creator {
      * timing unit of each epoch is expected to appear. This method is stopped by
      * closing unitBelt channel.
      */
-    public void createUnits(SimpleChannel<Unit> unitBelt, Queue<Unit> lastTiming) {
+    public void createUnits(Channel<Unit> unitBelt, Queue<Unit> lastTiming) {
         newEpoch(epoch, Any.getDefaultInstance());
         unitBelt.consume(units -> consume(units, lastTiming));
     }

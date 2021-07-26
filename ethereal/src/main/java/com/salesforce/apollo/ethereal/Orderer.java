@@ -36,6 +36,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -80,8 +81,8 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
-    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, SimpleChannel<Unit> unitBelt,
-                                 SimpleChannel<List<Unit>> orderedUnits, Clock clock) {
+    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, Channel<Unit> unitBelt,
+                                 Channel<List<Unit>> orderedUnits, Clock clock) {
         Dag dg = newDag(config, id);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
@@ -95,18 +96,18 @@ public class Orderer {
         return new epoch(id, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
-    private final Clock                     clock;
-    private final Config                    config;
-    private Creator                         creator;
-    private epoch                           current;
-    private final DataSource                ds;
-    private final Queue<Unit>               lastTiming;
-    private final ReadWriteLock             mx = new ReentrantReadWriteLock();
-    private final SimpleChannel<List<Unit>> orderedUnits;
-    private epoch                           previous;
-    private RandomSourceFactory             rsf;
-    private final Consumer<List<Unit>>      toPreblock;
-    private final SimpleChannel<Unit>       unitBelt;
+    private final Clock                clock;
+    private final Config               config;
+    private Creator                    creator;
+    private epoch                      current;
+    private final DataSource           ds;
+    private final Queue<Unit>          lastTiming;
+    private final ReadWriteLock        mx = new ReentrantReadWriteLock();
+    private final Channel<List<Unit>>  orderedUnits;
+    private epoch                      previous;
+    private RandomSourceFactory        rsf;
+    private final Consumer<List<Unit>> toPreblock;
+    private final Channel<Unit>        unitBelt;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
@@ -202,11 +203,11 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf, SimpleChannel<PreUnit> synchronizer) {
+    public void start(RandomSourceFactory rsf, Consumer<PreUnit> synchronizer) {
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             insert(u);
-            synchronizer.submit(u);
+            synchronizer.accept(u);
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new HashMap<>())));
 
         newEpoch(0);

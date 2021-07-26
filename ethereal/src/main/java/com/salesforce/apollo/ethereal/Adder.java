@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
+import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -35,24 +36,19 @@ public interface Adder {
     class AdderImpl implements Adder {
         private static final Logger log = LoggerFactory.getLogger(Adder.class);
 
-        private final Config                          conf;
-        private final Dag                             dag;
-        private final Map<Long, missingPreUnit>       missing     = new ConcurrentHashMap<>();
-        private final Lock                            mtx         = new ReentrantLock();
-        private final Map<Digest, waitingPreUnit>     waiting     = new ConcurrentHashMap<>();
-        private final Map<Long, waitingPreUnit>       waitingById = new ConcurrentHashMap<>();
-        private final SimpleChannel<waitingPreUnit>[] ready;
+        private final Config                      conf;
+        private final Dag                         dag;
+        private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
+        private final Lock                        mtx         = new ReentrantLock();
+        private final Map<Digest, waitingPreUnit> waiting     = new ConcurrentHashMap<>();
+        private final Map<Long, waitingPreUnit>   waitingById = new ConcurrentHashMap<>();
+        private final Channel<waitingPreUnit>     ready;
 
-        @SuppressWarnings("unchecked")
         public AdderImpl(Dag dag, Config conf) {
             this.dag = dag;
             this.conf = conf;
-            ready = new SimpleChannel[conf.nProc()];
-            for (int i = 0; i < conf.nProc(); i++) {
-                SimpleChannel<waitingPreUnit> channel = new SimpleChannel<>(conf.epochLength());
-                channel.consume(wpus -> wpus.forEach(wpu -> handleReady(wpu)));
-                ready[i] = channel;
-            }
+            ready = new SimpleChannel<>(conf.epochLength() * conf.nProc());
+            ready.consume(wpus -> wpus.forEach(wpu -> handleReady(wpu)));
         }
 
         /**
@@ -101,9 +97,7 @@ public interface Adder {
 
         @Override
         public void close() {
-            for (var channel : ready) {
-                channel.close();
-            }
+            ready.close();
         }
 
         private void handleReady(waitingPreUnit wp) {
@@ -285,7 +279,7 @@ public interface Adder {
         private void sendIfReady(waitingPreUnit wp) {
             if (wp.waitingParents().get() == 0 && wp.missingParents().get() == 0) {
                 log.trace("Sending unit for processing: {} ", wp);
-                ready[wp.pu().creator()].submit(wp);
+                ready.submit(wp);
             }
         }
 

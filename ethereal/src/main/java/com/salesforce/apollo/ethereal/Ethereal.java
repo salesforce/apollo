@@ -24,7 +24,6 @@ import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
-import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -69,7 +68,7 @@ public class Ethereal {
         public void start() {
             starte.run();
         }
-        
+
         public void stop() {
             stope.run();
         }
@@ -99,7 +98,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
+                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
                                        Consumer<Orderer> connector) {
         if (!started.compareAndSet(false, true)) {
             return null;
@@ -131,12 +130,12 @@ public class Ethereal {
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller deterministic(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                    SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+    public Controller deterministic(Config config, DataSource ds, Consumer<PreBlock> blocker,
+                                    Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, preblockSink, synchronizer, connector);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, connector);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -157,8 +156,8 @@ public class Ethereal {
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller weakBeacon(Config conf, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                 SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+    public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
+                                 Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -175,17 +174,16 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
+                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
                                  Consumer<Orderer> connector) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
-                preblockSink.submit(preBlock);
+                preblockSink.accept(preBlock);
             }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
-                preblockSink.close();
             }
         };
 
@@ -224,18 +222,16 @@ public class Ethereal {
         return new Controller(start, stop);
     }
 
-    private Controller deterministicConsensus(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                              SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+    private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
+                                              Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
-                preblockSink.submit(preBlock);
+                blocker.accept(preBlock);
             }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 log.info("Closing at last level: {} and epochs: {}", timingUnit.level(), timingUnit.epoch());
-                // we have just sent the last preblock of the last epoch, it's safe to quit
-                preblockSink.close();
             }
         };
 
@@ -289,8 +285,8 @@ public class Ethereal {
             }
         };
 
-        SimpleChannel<PreUnit> syn = new SimpleChannel<>(1000);
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
-        return new Controller(() -> ord.start(rsf, syn), () -> ord.stop());
+        return new Controller(() -> ord.start(rsf, p -> {
+        }), () -> ord.stop());
     }
 }

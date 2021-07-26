@@ -44,7 +44,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         return new Builder(config);
     }
 
-    public static class Builder {
+    public static class Builder implements Cloneable {
         public static Builder empty() {
             return new Builder().requiredByLinear();
         }
@@ -68,8 +68,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private short                       pid;
         private Signer                      signer          = new MockSigner();
         private WeakThresholdKey            wtk;
-
-        private int zeroVoteRoundForCommonVote;
+        private int                         zeroVoteRoundForCommonVote;
 
         public Builder() {
         }
@@ -126,6 +125,15 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
                               canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock);
+        }
+
+        @Override
+        public Builder clone() {
+            try {
+                return (Builder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException(e);
+            }
         }
 
         public int getByzantine() {

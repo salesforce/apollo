@@ -13,8 +13,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -23,10 +26,20 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
+import com.salesforce.apollo.utils.Channel;
+import com.salesforce.apollo.utils.ChannelConsumer;
 import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
@@ -64,15 +77,15 @@ public class EtherealTest {
         var config = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
                                    .setnProc(nProc).setNumberOfEpochs(2).build();
         DataSource ds = new SimpleDataSource();
-        SimpleChannel<PreBlock> out = new SimpleChannel<>(100);
-        SimpleChannel<PreUnit> synchronizer = new SimpleChannel<>(100);
+        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>(100));
         Consumer<Orderer> connector = a -> ord.set(a);
 
         List<PreUnit> syncd = new ArrayList<>();
         synchronizer.consumeEach(pu -> syncd.add(pu));
 
         Ethereal e = new Ethereal();
-        controller = e.deterministic(config, ds, out, synchronizer, connector);
+        controller = e.deterministic(config, ds, i -> {
+        }, pu -> synchronizer.getChannel().offer(pu), connector);
         try {
             controller.start();
             Utils.waitForCondition(1_000, () -> ord.get() != null);
@@ -108,7 +121,7 @@ public class EtherealTest {
     @Test
     public void fourWay() throws Exception {
         short nProc = 4;
-        SimpleChannel<PreUnit> synchronizer = new SimpleChannel<>(100);
+        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -117,7 +130,7 @@ public class EtherealTest {
         var builder = Config.Builder.empty().addConsensusConfig().setExecutor(ForkJoinPool.commonPool())
                                     .setnProc(nProc);
         Consumer<Orderer> connector = o -> orderers.add(o);
-        List<SimpleChannel<PreUnit>> inputChannels = new ArrayList<>();
+        List<Channel<PreUnit>> inputChannels = new ArrayList<>();
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
@@ -127,10 +140,114 @@ public class EtherealTest {
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
-            var out = new SimpleChannel<PreBlock>(100);
+            var out = new ChannelConsumer<>(new LinkedBlockingDeque<PreBlock>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
-            var controller = e.deterministic(builder.setPid(i).build(), ds, out, synchronizer, connector);
+            var controller = e.deterministic(builder.setPid(i).build(), ds,
+                                             pb -> out.getChannel().offer(pb),
+                                             pu -> synchronizer.getChannel().offer(pu),
+                                             connector);
+            ethereals.add(e);
+            dataSources.add(ds);
+            controllers.add(controller);
+            Channel<PreUnit> channel = new SimpleChannel<>(100);
+            inputChannels.add(channel);
+            for (int d = 0; d < 500; d++) {
+                ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
+                                                     .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
+                                                     .build()));
+            }
+        }
+
+        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e1) {
+                return;
+            }
+            e.submit(p);
+        })));
+        try {
+            controllers.forEach(e -> e.start());
+            Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
+            for (var o : orderers) {
+                assertNotNull(o);
+            }
+
+            Deque<Orderer> deque = new ArrayDeque<>(orderers);
+            inputChannels.forEach(channel -> {
+                var o = deque.remove();
+                channel.consume(pus -> o.addPreunits((short) 0, pus));
+            });
+
+            Utils.waitForCondition(5_000, 100, () -> {
+                for (var pb : produced) {
+                    if (pb.size() < 90) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+        } finally {
+            controllers.forEach(e -> e.stop());
+        }
+        for (int i = 0; i < nProc; i++) {
+            assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
+        }
+        List<PreBlock> preblocks = produced.get(0);
+        List<String> outputOrder = new ArrayList<>();
+
+        for (int i = 1; i < nProc; i++) {
+            for (int j = 0; j < preblocks.size(); j++) {
+                var a = preblocks.get(j);
+                var b = produced.get(i).get(j);
+                assertEquals(a.data().size(), b.data().size());
+                for (int k = 0; k < a.data().size(); k++) {
+                    assertEquals(a.data().get(k), b.data().get(k));
+                    outputOrder.add(new String(a.data().get(k).unpack(ByteMessage.class).getContents().toByteArray()));
+                }
+                assertEquals(a.randomBytes(), b.randomBytes());
+            }
+        }
+    }
+
+    @Test
+    public void rbc() throws Exception {
+        short nProc = 4;
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, 4);
+        Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();
+        List<LocalRouter> comms = new ArrayList<>();
+        Parameters.Builder params = Parameters.newBuilder().setContext(context);
+        for (int i = 0; i < nProc; i++) {
+            SigningMember member = new SigningMemberImpl(Utils.getMember(i));
+            LocalRouter router = new LocalRouter(member, ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+            comms.add(router);
+            casting.put(member, new ReliableBroadcaster(params.setMember(member).build(), router));
+        }
+        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>(100));
+
+        List<Ethereal> ethereals = new ArrayList<>();
+        List<DataSource> dataSources = new ArrayList<>();
+        List<Orderer> orderers = new ArrayList<>();
+        List<Controller> controllers = new ArrayList<>();
+        var builder = Config.Builder.empty().addConsensusConfig().setExecutor(ForkJoinPool.commonPool())
+                                    .setnProc(nProc);
+        Consumer<Orderer> connector = o -> orderers.add(o);
+        List<Channel<PreUnit>> inputChannels = new ArrayList<>();
+
+        List<List<PreBlock>> produced = new ArrayList<>();
+        for (int i = 0; i < nProc; i++) {
+            produced.add(new ArrayList<>());
+        }
+
+        for (short i = 0; i < nProc; i++) {
+            var e = new Ethereal();
+            var ds = new SimpleDataSource();
+            var out = new ChannelConsumer<PreBlock>(new LinkedBlockingDeque<>(100));
+            List<PreBlock> output = produced.get(i);
+            out.consume(l -> output.addAll(l));
+            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb), pu -> synchronizer.getChannel().offer(pu),
+                                             connector);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
