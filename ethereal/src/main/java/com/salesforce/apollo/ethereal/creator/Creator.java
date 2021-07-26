@@ -152,7 +152,7 @@ public class Creator {
     private void createUnit(Unit[] parents, int level, TimingOrData data) {
         assert parents.length == conf.nProc();
         Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data.data, rsData.rsData(level, parents, epoch),
-                                     conf.signer(), conf.digestAlgorithm(), data.timing);
+                                     conf.signer(), conf.digestAlgorithm());
         log.debug("Created unit: {} ", u);
         send.accept(u);
         update(u);
@@ -260,7 +260,7 @@ public class Creator {
      * the unit.
      */
     private void update(Unit unit) {
-        log.trace("updating: {}:{}", unit, unit.isTiming());
+        log.trace("updating: {}", unit);
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
         if (frozen.contains(unit.creator()) || unit.epoch() < epoch) {

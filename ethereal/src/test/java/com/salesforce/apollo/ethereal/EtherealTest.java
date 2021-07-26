@@ -55,7 +55,7 @@ public class EtherealTest {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
         return new preUnit(t.creator(), t.epoch(), t.height(), null, PreUnit.computeHash(algo, id, crown, data, rsData),
-                           crown, data, rsData, false);
+                           crown, data, rsData);
     }
 
     private static class SimpleDataSource implements DataSource {
@@ -143,10 +143,8 @@ public class EtherealTest {
             var out = new ChannelConsumer<>(new LinkedBlockingDeque<PreBlock>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
-            var controller = e.deterministic(builder.setPid(i).build(), ds,
-                                             pb -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu),
-                                             connector);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb),
+                                             pu -> synchronizer.getChannel().offer(pu), connector);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -246,8 +244,8 @@ public class EtherealTest {
             var out = new ChannelConsumer<PreBlock>(new LinkedBlockingDeque<>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
-            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb), pu -> synchronizer.getChannel().offer(pu),
-                                             connector);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb),
+                                             pu -> synchronizer.getChannel().offer(pu), connector);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);

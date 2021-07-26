@@ -100,7 +100,7 @@ public class CreatorTest {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
         return new preUnit(t.creator(), t.epoch(), t.height(), null, PreUnit.computeHash(algo, id, crown, data, rsData),
-                           crown, data, rsData, false);
+                           crown, data, rsData);
     }
 
     @Test
@@ -109,7 +109,8 @@ public class CreatorTest {
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1).build();
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
+                                .build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -432,8 +433,8 @@ public class CreatorTest {
         assertNotNull(createdUnit);
         assertEquals(0, createdUnit.level());
         assertEquals(0, createdUnit.creator());
-        assertEquals(0, createdUnit.height()); 
-        
+        assertEquals(0, createdUnit.height());
+
         unitBelt.close();
         assertEquals(0, unitRec.size());
 

@@ -77,9 +77,9 @@ public interface PreUnit {
         public Crown view() {
             return p.view();
         }
-        
+
         @Override
-        public Unit from(Unit[] parents) { 
+        public Unit from(Unit[] parents) {
             freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents), new HashMap<>());
             u.computeFloor();
             return u;
@@ -132,15 +132,10 @@ public interface PreUnit {
         public String shortString() {
             return p.shortString();
         }
-
-        @Override
-        public boolean isTiming() {
-            return p.isTiming();
-        }
     }
 
     public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
-                          Any data, byte[] rsData, boolean isTiming)
+                          Any data, byte[] rsData)
                          implements PreUnit {
 
         @Override
@@ -222,14 +217,14 @@ public interface PreUnit {
     }
 
     static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, Any data, byte[] rsBytes,
-                            Signer signer, DigestAlgorithm algo, boolean isTiming) {
+                            Signer signer, DigestAlgorithm algo) {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
         var hash = computeHash(algo, id, crown, data, rsBytes);
         var signature = signer.sign(hash.toByteBuffer());
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes, isTiming),
-                             parents, level, new HashMap<>());
+        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
+                             new HashMap<>());
         u.computeFloor();
         return u;
 
@@ -262,8 +257,6 @@ public interface PreUnit {
     default long id() {
         return id(height(), creator(), epoch());
     }
-
-    boolean isTiming();
 
     default String nickName() {
         return hash().toString();

@@ -21,7 +21,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
  */
 public interface Unit extends PreUnit {
 
-    record unitInDag(Unit unit, int forkingHeight, boolean isTiming) implements Unit {
+    record unitInDag(Unit unit, int forkingHeight) implements Unit {
 
         @Override
         public int hashCode() {
@@ -259,12 +259,10 @@ public interface Unit extends PreUnit {
 
     default Unit embed(Dag dag) {
         assert this.parents().length == dag.nProc();
-        return new unitInDag(this, computeForkingHeight(dag), isTiming());
+        return new unitInDag(this, computeForkingHeight(dag));
     }
 
     Unit[] floor(short slice);
-
-    boolean isTiming();
 
     int level();
 

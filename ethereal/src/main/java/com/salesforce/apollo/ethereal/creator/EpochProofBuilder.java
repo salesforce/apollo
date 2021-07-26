@@ -74,7 +74,7 @@ public interface EpochProofBuilder {
                     }
                 } else {
                     log.trace("Share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
-                             conf.pid());
+                              conf.pid());
                 }
             } else {
                 log.trace("No shares decoded");
@@ -98,7 +98,7 @@ public interface EpochProofBuilder {
             }
             var share = decodeShare(u.data());
             if (share == null) {
-                log.warn("Cannot decode: {} share: {} data: {}", u.isTiming(), u, u.data());
+                log.warn("Cannot decode: {} data: {}", u, u.data());
                 return null;
             }
             if (!conf.WTKey().verifyShare(share)) {
