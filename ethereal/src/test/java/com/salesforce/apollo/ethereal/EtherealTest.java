@@ -70,7 +70,7 @@ public class EtherealTest {
     }
 
     @Test
-    public void assembled() {
+    public void assembled() throws Exception {
         Controller controller;
         short nProc = 4;
 
@@ -88,6 +88,7 @@ public class EtherealTest {
         try {
             controller.start();
             assertNotNull(controller.input());
+            Thread.sleep(1);
 
             for (short pid = 1; pid < config.nProc(); pid++) {
                 var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
