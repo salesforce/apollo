@@ -10,6 +10,8 @@ import static com.salesforce.apollo.crypto.Digest.combine;
 
 import java.util.stream.IntStream;
 
+import com.salesfoce.apollo.ethereal.proto.Crown_s;
+import com.salesfoce.apollo.ethereal.proto.Crown_s.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
@@ -23,6 +25,14 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  *
  */
 public record Crown(int[] heights, Digest controlHash) {
+
+    public Crown_s toCrown_s() {
+        Builder builder = Crown_s.newBuilder().setControlHash(controlHash.toDigeste());
+        for (int i : heights) {
+            builder.addHeights(i);
+        }
+        return builder.build();
+    }
 
     public static Crown crownFromParents(Unit[] parents, DigestAlgorithm algo) {
         var nProc = parents.length;
@@ -66,5 +76,13 @@ public record Crown(int[] heights, Digest controlHash) {
             i++;
         }
         return new Crown(heights, combine(algo, hashes));
+    }
+
+    public static Crown from(Crown_s crown) {
+        var heights = new int[crown.getHeightsCount()];
+        for (int i = 0; i < heights.length; i++) {
+            heights[i] = crown.getHeights(i);
+        }
+        return new Crown(heights, new Digest(crown.getControlHash()));
     }
 }

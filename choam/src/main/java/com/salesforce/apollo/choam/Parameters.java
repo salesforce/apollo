@@ -20,6 +20,7 @@ import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -35,45 +36,54 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          Duration submitTimeout, int processedBufferSize, Message genesisData, Digest genesisViewId,
                          int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
                          int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Executor dispatcher,
-                         BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm) {
+                         BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
+                         ReliableBroadcaster.Parameters.Builder coordination, int key, Config.Builder ethereal,
+                         int lifetime) {
+    
+    
 
     public static Builder newBuilder() {
         return new Builder();
     }
+
     public static class Builder {
-        private int                               checkpointBlockSize   = 8192;
-        private Function<Long, File>              checkpointer          = c -> {
-                                                                            throw new IllegalStateException("No checkpointer defined");
-                                                                        };
-        private ReliableBroadcaster.Parameters    combineParams;
-        private Router                            communications;
-        private Context<Member>                   context;
-        private int                               deltaCheckpointBlocks = 500;
-        private DigestAlgorithm                   digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Executor                          dispatcher            = ForkJoinPool.commonPool();
-        private TransactionExecutor               executor              = (bh, et, c) -> {
-                                                                        };
-        private Message                           genesisData;
-        private Digest                            genesisViewId;
-        private Duration                          gossipDuration;
-        private int                               maxBatchByteSize      = 4 * 1024;
-        private int                               maxBatchSize          = 10;
-        private int                               maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
-        private int                               maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
-        private SigningMember                     member;
-        private int                               processedBufferSize   = 1000;
-        private BiConsumer<Long, CheckpointState> restorer              = (height, checkpointState) -> {
-                                                                        };
-        private ScheduledExecutorService          scheduler;
-        private File                              storeFile;
-        private Duration                          submitTimeout         = Duration.ofSeconds(30);
+        private int                                    checkpointBlockSize   = 8192;
+        private Function<Long, File>                   checkpointer          = c -> {
+                                                                                 throw new IllegalStateException("No checkpointer defined");
+                                                                             };
+        private ReliableBroadcaster.Parameters         combineParams;
+        private Router                                 communications;
+        private Context<Member>                        context;
+        private ReliableBroadcaster.Parameters.Builder coordination;
+        private int                                    deltaCheckpointBlocks = 500;
+        private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private Executor                               dispatcher            = ForkJoinPool.commonPool();
+        private Config.Builder                         ethereal;
+        private TransactionExecutor                    executor              = (bh, et, c) -> {
+                                                                             };
+        private Message                                genesisData;
+        private Digest                                 genesisViewId;
+        private Duration                               gossipDuration;
+        private int                                    key                   = 75;
+        private int                                    lifetime              = 100;
+        private int                                    maxBatchByteSize      = 4 * 1024;
+        private int                                    maxBatchSize          = 10;
+        private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
+        private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
+        private SigningMember                          member;
+        private int                                    processedBufferSize   = 1000;
+        private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
+                                                                             };
+        private ScheduledExecutorService               scheduler;
+        private File                                   storeFile;
+        private Duration                               submitTimeout         = Duration.ofSeconds(30);
 
         public Parameters build() {
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
-                                  restorer, digestAlgorithm);
+                                  restorer, digestAlgorithm, coordination, key, ethereal, lifetime);
         }
 
         public int getCheckpointBlockSize() {
@@ -96,6 +106,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return context;
         }
 
+        public ReliableBroadcaster.Parameters.Builder getCoordination() {
+            return coordination;
+        }
+
         public int getDeltaCheckpointBlocks() {
             return deltaCheckpointBlocks;
         }
@@ -106,6 +120,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Executor getDispatcher() {
             return dispatcher;
+        }
+
+        public Config.Builder getEthereal() {
+            return ethereal;
         }
 
         public TransactionExecutor getExecutor() {
@@ -122,6 +140,14 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getGossipDuration() {
             return gossipDuration;
+        }
+
+        public int getKey() {
+            return key;
+        }
+
+        public int getLifetime() {
+            return lifetime;
         }
 
         public int getMaxBatchByteSize() {
@@ -194,6 +220,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
+        public Builder setCoordination(ReliableBroadcaster.Parameters.Builder coordination) {
+            this.coordination = coordination;
+            return this;
+        }
+
         public Builder setDeltaCheckpointBlocks(int deltaCheckpointBlocks) {
             this.deltaCheckpointBlocks = deltaCheckpointBlocks;
             return this;
@@ -206,6 +237,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setDispatcher(Executor dispatcher) {
             this.dispatcher = dispatcher;
+            return this;
+        }
+
+        public Builder setEthereal(Config.Builder ethereal) {
+            this.ethereal = ethereal;
             return this;
         }
 
@@ -226,6 +262,16 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setGossipDuration(Duration gossipDuration) {
             this.gossipDuration = gossipDuration;
+            return this;
+        }
+
+        public Builder setKey(int key) {
+            this.key = key;
+            return this;
+        }
+
+        public Builder setLifetime(int lifetime) {
+            this.lifetime = lifetime;
             return this;
         }
 

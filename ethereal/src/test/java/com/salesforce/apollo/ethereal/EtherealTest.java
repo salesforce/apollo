@@ -9,6 +9,7 @@ package com.salesforce.apollo.ethereal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,16 +17,18 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -38,9 +41,7 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
-import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.ChannelConsumer;
-import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -54,7 +55,7 @@ public class EtherealTest {
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        return new preUnit(t.creator(), t.epoch(), t.height(), null, PreUnit.computeHash(algo, id, crown, data, rsData),
+        return new preUnit(t.creator(), t.epoch(), t.height(), PreUnit.computeHash(algo, id, crown, data, rsData),
                            crown, data, rsData);
     }
 
@@ -73,24 +74,20 @@ public class EtherealTest {
         Controller controller;
         short nProc = 4;
 
-        AtomicReference<Orderer> ord = new AtomicReference<>();
-        var config = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
-                                   .setnProc(nProc).setNumberOfEpochs(2).build();
+        var config = Config.deterministic().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
+                           .setnProc(nProc).setNumberOfEpochs(2).build();
         DataSource ds = new SimpleDataSource();
         ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>(100));
-        Consumer<Orderer> connector = a -> ord.set(a);
 
         List<PreUnit> syncd = new ArrayList<>();
         synchronizer.consumeEach(pu -> syncd.add(pu));
 
         Ethereal e = new Ethereal();
         controller = e.deterministic(config, ds, i -> {
-        }, pu -> synchronizer.getChannel().offer(pu), connector);
+        }, pu -> synchronizer.getChannel().offer(pu));
         try {
             controller.start();
-            Utils.waitForCondition(1_000, () -> ord.get() != null);
-            Orderer orderer = ord.get();
-            assertNotNull(orderer);
+            assertNotNull(controller.input());
 
             for (short pid = 1; pid < config.nProc(); pid++) {
                 var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
@@ -98,7 +95,7 @@ public class EtherealTest {
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
                 var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-                orderer.addPreunits(config.pid(), Collections.singletonList(pu));
+                controller.input().accept(config.pid(), Collections.singletonList(pu));
             }
             Utils.waitForCondition(2_000, () -> syncd.size() >= 2);
 
@@ -125,12 +122,8 @@ public class EtherealTest {
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
-        List<Orderer> orderers = new ArrayList<>();
         List<Controller> controllers = new ArrayList<>();
-        var builder = Config.Builder.empty().addConsensusConfig().setExecutor(ForkJoinPool.commonPool())
-                                    .setnProc(nProc);
-        Consumer<Orderer> connector = o -> orderers.add(o);
-        List<Channel<PreUnit>> inputChannels = new ArrayList<>();
+        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc);
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
@@ -144,12 +137,10 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
             var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu), connector);
+                                             pu -> synchronizer.getChannel().offer(pu));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
-            Channel<PreUnit> channel = new SimpleChannel<>(100);
-            inputChannels.add(channel);
             for (int d = 0; d < 500; d++) {
                 ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
                                                      .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
@@ -157,30 +148,31 @@ public class EtherealTest {
             }
         }
 
-        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> {
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e1) {
-                return;
+        synchronizer.consume(pu -> {
+            for (short i = 0; i < controllers.size(); i++) {
+                var controller = controllers.get(i);
+                short pid = i;
+                pu.forEach(p -> {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e1) {
+                        return;
+                    }
+                    if (pid == p.creator()) {
+                    } else {
+                        controller.input().accept((short) 0, Collections.singletonList(p));
+                    }
+                });
             }
-            e.submit(p);
-        })));
+            controllers.forEach(e -> {
+            });
+        });
         try {
             controllers.forEach(e -> e.start());
-            Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
-            for (var o : orderers) {
-                assertNotNull(o);
-            }
 
-            Deque<Orderer> deque = new ArrayDeque<>(orderers);
-            inputChannels.forEach(channel -> {
-                var o = deque.remove();
-                channel.consume(pus -> o.addPreunits((short) 0, pus));
-            });
-
-            Utils.waitForCondition(5_000, 100, () -> {
+            Utils.waitForCondition(15_000, 100, () -> {
                 for (var pb : produced) {
-                    if (pb.size() < 90) {
+                    if (pb.size() < 87) {
                         return false;
                     }
                 }
@@ -190,7 +182,7 @@ public class EtherealTest {
             controllers.forEach(e -> e.stop());
         }
         for (int i = 0; i < nProc; i++) {
-            assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
+            assertEquals(87, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
         }
         List<PreBlock> preblocks = produced.get(0);
         List<String> outputOrder = new ArrayList<>();
@@ -211,27 +203,31 @@ public class EtherealTest {
 
     @Test
     public void rbc() throws Exception {
-        short nProc = 4;
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, 4);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+        short nProc = 50;
+        SigningMember[] members = new SigningMember[nProc];
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, nProc);
         Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();
         List<LocalRouter> comms = new ArrayList<>();
-        Parameters.Builder params = Parameters.newBuilder().setContext(context);
+        Parameters.Builder params = Parameters.newBuilder().setBufferSize(1500).setContext(context);
         for (int i = 0; i < nProc; i++) {
             SigningMember member = new SigningMemberImpl(Utils.getMember(i));
+            context.activate(member);
+            members[i] = member;
+        }
+
+        for (int i = 0; i < nProc; i++) {
+            var member = members[i];
             LocalRouter router = new LocalRouter(member, ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
             comms.add(router);
             casting.put(member, new ReliableBroadcaster(params.setMember(member).build(), router));
+            router.start();
         }
-        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>(100));
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
-        List<Orderer> orderers = new ArrayList<>();
         List<Controller> controllers = new ArrayList<>();
-        var builder = Config.Builder.empty().addConsensusConfig().setExecutor(ForkJoinPool.commonPool())
-                                    .setnProc(nProc);
-        Consumer<Orderer> connector = o -> orderers.add(o);
-        List<Channel<PreUnit>> inputChannels = new ArrayList<>();
+        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc);
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
@@ -244,44 +240,41 @@ public class EtherealTest {
             var out = new ChannelConsumer<PreBlock>(new LinkedBlockingDeque<>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
-            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu), connector);
+            ReliableBroadcaster caster = casting.get(members[i]);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb), pu -> {
+                caster.publish(pu.toPreUnit_s().toByteArray());
+//                System.out.println("Broadcasting: "+ pu + " on: " + caster.getMember());
+            });
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
-            SimpleChannel<PreUnit> channel = new SimpleChannel<>(100);
-            inputChannels.add(channel);
-            for (int d = 0; d < 500; d++) {
+            for (int d = 0; d < 2500; d++) {
                 ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
                                                      .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
                                                      .build()));
             }
         }
-
-        synchronizer.consume(pu -> inputChannels.forEach(e -> pu.forEach(p -> {
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e1) {
-                return;
-            }
-            e.submit(p);
-        })));
         try {
-            controllers.forEach(e -> e.start());
-            Utils.waitForCondition(1_000, () -> orderers.size() == nProc);
-            for (var o : orderers) {
-                assertNotNull(o);
+            for (int i = 0; i < nProc; i++) {
+                var controller = controllers.get(i);
+                var caster = casting.get(members[i]);
+                caster.registerHandler((ctx, msgs) -> msgs.forEach(msg -> {
+                    preUnit pu;
+                    try {
+                        pu = PreUnit.from(PreUnit_s.parseFrom(msg.content()), DigestAlgorithm.DEFAULT);
+                    } catch (InvalidProtocolBufferException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    controller.input().accept(pu.creator(), Collections.singletonList(pu));
+//                    System.out.println("Input: "+ pu + " on: " + caster.getMember());
+                }));
+                caster.start(Duration.ofMillis(5), scheduler);
             }
+            controllers.forEach(e -> e.start());
 
-            Deque<Orderer> deque = new ArrayDeque<>(orderers);
-            inputChannels.forEach(channel -> {
-                var o = deque.remove();
-                channel.consume(pus -> o.addPreunits((short) 0, pus));
-            });
-
-            Utils.waitForCondition(5_000, 100, () -> {
+            Utils.waitForCondition(60_000, 100, () -> {
                 for (var pb : produced) {
-                    if (pb.size() < 90) {
+                    if (pb.size() < 87) {
                         return false;
                     }
                 }
@@ -291,7 +284,7 @@ public class EtherealTest {
             controllers.forEach(e -> e.stop());
         }
         for (int i = 0; i < nProc; i++) {
-            assertEquals(90, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
+            assertEquals(87, produced.get(i).size(), "Failed to receive all preblocks on process: " + i);
         }
         List<PreBlock> preblocks = produced.get(0);
         List<String> outputOrder = new ArrayList<>();

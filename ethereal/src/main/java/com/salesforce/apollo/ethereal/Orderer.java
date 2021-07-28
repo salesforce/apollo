@@ -81,9 +81,9 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
-    public static epoch newEpoch(int id, Config config, RandomSourceFactory rsf, Channel<Unit> unitBelt,
+    public static epoch newEpoch(int epoch, Config config, RandomSourceFactory rsf, Channel<Unit> unitBelt,
                                  Channel<List<Unit>> orderedUnits, Clock clock) {
-        Dag dg = newDag(config, id);
+        Dag dg = newDag(config, epoch);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
         dg.afterInsert(u -> ext.chooseNextTimingUnits());
@@ -93,7 +93,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(id, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
     private final Clock                clock;
@@ -125,6 +125,7 @@ public class Orderer {
      * epoch, they are topologically sorted.
      */
     public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        log.debug("Adding: {} from: {} on: {}", preunits, source, config.pid());
         var errors = new HashMap<Digest, Correctness>();
         while (preunits.size() > 0) {
             var epoch = preunits.get(0).epoch();
@@ -206,8 +207,9 @@ public class Orderer {
     public void start(RandomSourceFactory rsf, Consumer<PreUnit> synchronizer) {
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
+            log.trace("Sending: {} on: {}", u, config.pid());
             insert(u);
-            synchronizer.accept(u);
+            synchronizer.accept(u.toPreUnit());
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new HashMap<>())));
 
         newEpoch(0);
@@ -229,7 +231,7 @@ public class Orderer {
         }
         orderedUnits.close();
         unitBelt.close();
-        log.info("Orderer stopped");
+        log.info("Orderer stopped on: {}", config.pid());
     }
 
     /**
@@ -322,7 +324,7 @@ public class Orderer {
                 }
                 if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
                     toPreblock.accept(round);
-                    log.debug("Preblock produced level: {}, epoch: {}", timingUnit.level(), epoch);
+                    log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
                 }
                 current.set(epoch);
             }
@@ -336,7 +338,7 @@ public class Orderer {
      */
     private void insert(Unit unit) {
         if (unit.creator() != config.pid()) {
-            log.warn("Invalid unit creator: {}", unit.creator());
+            log.warn("Invalid unit creator: {} on: {}", unit.creator(), config.pid());
             return;
         }
         var rslt = getEpoch(unit.epoch());
@@ -346,11 +348,11 @@ public class Orderer {
         }
         if (ep != null) {
             ep.dag.insert(unit);
-            log.trace("Inserted Unit creator: {} epoch: {} height: {} level: {}", unit.creator(), unit.epoch(),
-                      unit.height(), unit.level());
+            log.trace("Inserted Unit creator: {} epoch: {} height: {} level: {} on: {}", unit.creator(), unit.epoch(),
+                      unit.height(), unit.level(), config.pid());
         } else {
-            log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {}", unit.creator(),
-                      unit.epoch(), unit.height(), unit.level());
+            log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
+                      unit.creator(), unit.epoch(), unit.height(), unit.level(), config.pid());
         }
     }
 

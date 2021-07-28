@@ -36,6 +36,7 @@ public class ExtenderService {
     private final Channel<List<Unit>>  output;
     private final Channel<TimingRound> timingRounds;
     private final Channel<Boolean>     trigger;
+    private final Config               config;
 
     public ExtenderService(Dag dag, RandomSource rs, Config config, Channel<List<Unit>> output) {
         ordering = new Extender(dag, rs, config);
@@ -45,10 +46,11 @@ public class ExtenderService {
 
         trigger.consumeEach(timingUnitDecider());
         timingRounds.consumeEach(roundSorter());
+        this.config = config;
     }
 
     public void chooseNextTimingUnits() {
-        log.trace("Signaling to see if we can produce a block");
+        log.trace("Signaling to see if we can produce a block on: {}", config.pid());
         trigger.submit(true);
     }
 
@@ -65,7 +67,7 @@ public class ExtenderService {
     private Consumer<TimingRound> roundSorter() {
         return round -> {
             var units = round.orderedUnits();
-            log.trace("Output of: {} preBlock: {}", round, units);
+            log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
             output.submit(units);
         };
     }
@@ -78,8 +80,9 @@ public class ExtenderService {
     private Consumer<Boolean> timingUnitDecider() {
         return t -> {
             var round = ordering.nextRound();
+            log.trace("Starting timing round: {} on: {}", round, config.pid());
             while (round != null) {
-                log.trace("Producing timing round: {}", round);
+                log.trace("Producing timing round: {} on: {}", round, config.pid());
                 timingRounds.submit(round);
                 round = ordering.nextRound();
             }

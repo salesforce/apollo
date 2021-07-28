@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,13 +18,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.Header;
-import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.Utils;
 
 public class HashedBlock implements Comparable<HashedBlock> {
     public static class NullBlock extends HashedBlock {
@@ -46,8 +48,23 @@ public class HashedBlock implements Comparable<HashedBlock> {
         }
     }
 
-    private static final int    HEADER_BYTE_SIZE = 22 * 8;
-    private static final Logger log              = LoggerFactory.getLogger(HashedBlock.class);
+    private static final Logger log = LoggerFactory.getLogger(HashedBlock.class);
+
+    public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, long height,
+                               long lastCheckpoint, Digest lastCheckpointHash, long lastReconfig,
+                               Digest lastReconfigHash) {
+        long[] nonce = new long[digestAlgorithm.longLength()];
+        for (int i = 0; i < nonce.length; i++) {
+            SecureRandom entropy = Utils.secureEntropy();
+            nonce[i] = entropy.nextLong();
+        }
+        return Header.newBuilder().setLastCheckpoint(lastCheckpoint)
+                     .setLastCheckpointHash(lastCheckpointHash.toDigeste()).setLastReconfig(lastReconfig)
+                     .setLastReconfigHash(lastReconfigHash.toDigeste()).setHeight(height)
+                     .setPrevious(previous.toDigeste()).setNonce(new Digest(digestAlgorithm, nonce).toDigeste())
+                     .setBodyHash(digestAlgorithm.digest(body.toByteString().asReadOnlyByteBufferList()).toDigeste())
+                     .build();
+    }
 
     public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
         Digest stateHash = algo.getOrigin();
@@ -80,8 +97,15 @@ public class HashedBlock implements Comparable<HashedBlock> {
 
     /** Canonical hash of block */
     public static Digest hash(Block block, DigestAlgorithm algo) {
+        return algo.digest(block.toByteString().asReadOnlyByteBufferList());
+    }
+
+    public static Digest hash(Header header, DigestAlgorithm algo) {
+        return algo.digest(header.toByteString().asReadOnlyByteBufferList());
+    }
+
+    public static Digest hashBody(Block block, DigestAlgorithm algo) {
         List<ByteBuffer> buffers = new ArrayList<>();
-        buffers.add(hash(block.getHeader(), algo).toByteBuffer());
         switch (block.getBodyCase()) {
         case BODY_NOT_SET:
             break;
@@ -104,29 +128,12 @@ public class HashedBlock implements Comparable<HashedBlock> {
         return algo.digest(buffers);
     }
 
-    public static Digest hash(Header header, DigestAlgorithm algo) {
-        ByteBuffer buffer = ByteBuffer.allocate(HEADER_BYTE_SIZE);
-        encode(header.getPrevious(), buffer);
-        buffer.putLong(header.getHeight()).putLong(header.getLastCheckpoint()).putLong(header.getLastReconfig());
-        encode(header.getLastCheckpointHash(), buffer);
-        encode(header.getLastReconfigHash(), buffer);
-        encode(header.getNonce(), buffer);
-        buffer.flip();
-        return algo.digest(buffer);
-    }
-
     public static long height(Block block) {
         return block.getHeader().getHeight();
     }
 
     public static long height(CertifiedBlock cb) {
         return height(cb.getBlock());
-    }
-
-    private static void encode(Digeste hash, ByteBuffer buffer) {
-        for (var l : hash.getHashList()) {
-            buffer.putLong(l);
-        }
     }
 
     public final Block  block;

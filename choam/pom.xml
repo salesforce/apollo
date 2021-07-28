@@ -13,8 +13,12 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>memberships</artifactId>
+			<artifactId>ethereal</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>memberships</artifactId>
+        </dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>tron</artifactId>

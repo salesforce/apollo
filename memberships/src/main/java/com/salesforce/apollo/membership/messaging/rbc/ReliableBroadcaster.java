@@ -10,6 +10,7 @@ import static com.salesforce.apollo.membership.messaging.comms.RbcClient.getCrea
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -245,9 +246,10 @@ public class ReliableBroadcaster {
         }
 
         public Iterable<? extends AgedMessage> reconcile(BloomFilter<Digest> biff, Digest from) {
-            List<AgedMessage> reconciled = state.values().stream().filter(s -> !biff.contains(s.hash))
-                                                .filter(s -> !s.from.equals(from)).filter(s -> s.msg.getAge() < maxAge)
-                                                .limit(params.maxMessages).map(s -> s.msg.build()).toList();
+            PriorityQueue<AgedMessage.Builder> mailBox = new PriorityQueue<>(Comparator.comparingInt(s -> s.getAge()));
+            state.values().stream().filter(s -> !biff.contains(s.hash)).filter(s -> !s.from.equals(from))
+                 .filter(s -> s.msg.getAge() < maxAge).forEach(s -> mailBox.add(s.msg));
+            List<AgedMessage> reconciled = mailBox.stream().limit(params.maxMessages).map(b -> b.build()).toList();
             if (!reconciled.isEmpty()) {
                 log.trace("reconciled: {} for: {} on: {}", reconciled.size(), from, params.member);
             }

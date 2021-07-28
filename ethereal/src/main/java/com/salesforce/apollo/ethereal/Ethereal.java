@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -64,7 +65,7 @@ public class Ethereal {
         Verifier getVerifier(short pid);
     }
 
-    public record Controller(Runnable starte, Runnable stope) {
+    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input) {
         public void start() {
             starte.run();
         }
@@ -93,19 +94,17 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
-                                       Consumer<Orderer> connector) {
+                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, connector);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -115,7 +114,7 @@ public class Ethereal {
         }, () -> {
             setup.stope.run();
             consensus.stope.run();
-        });
+        }, consensus.input);
     }
 
     /**
@@ -126,21 +125,20 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller deterministic(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                    Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
+                                    Consumer<PreUnit> synchronizer) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, connector);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
         return new Controller(() -> config.executor().execute(consensus.starte),
-                              () -> config.executor().execute(consensus.stope));
+                              () -> config.executor().execute(consensus.stope), consensus.input);
     }
 
     /**
@@ -157,12 +155,12 @@ public class Ethereal {
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
+                                 Consumer<PreUnit> synchronizer) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, connector);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer);
         return new Controller(() -> {
             consensus.starte.run();
             try {
@@ -170,12 +168,11 @@ public class Ethereal {
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.starte);
+        }, consensus.starte, consensus.input);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
-                                 Consumer<Orderer> connector) {
+                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
@@ -188,7 +185,7 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -204,7 +201,6 @@ public class Ethereal {
                                               Clock.systemUTC());
                     ord.set(orderer);
                     orderer.start(Coin.newFactory(config.pid(), wtkey), synchronizer);
-                    connector.accept(orderer);
                 } finally {
                     started.set(true);
                 }
@@ -219,11 +215,11 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop);
+        return new Controller(start, stop, input);
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                              Consumer<PreUnit> synchronizer, Consumer<Orderer> connector) {
+                                              Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
@@ -236,15 +232,14 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
         AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
                 try {
-                    var orderer = new Orderer(Config.builderFrom(config).build(), ds, makePreblock, Clock.systemUTC());
+                    var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());
                     ord.set(orderer);
                     orderer.start(new DsrFactory(), synchronizer);
-                    connector.accept(orderer);
                 } finally {
                     started.set(true);
                 }
@@ -259,7 +254,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop);
+        return new Controller(start, stop, input);
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -287,6 +282,6 @@ public class Ethereal {
 
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
         return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> ord.stop());
+        }), () -> ord.stop(), null);
     }
 }

@@ -9,11 +9,12 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import com.google.protobuf.Any;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
  * @author hal.hildebrand
@@ -67,11 +68,6 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public JohnHancock signature() {
-            return unit.signature();
-        }
-
-        @Override
         public Crown view() {
             return unit.view();
         }
@@ -122,6 +118,16 @@ public interface Unit extends PreUnit {
         @Override
         public String shortString() {
             return creator() + ":" + level() + ":" + epoch();
+        }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return unit.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return unit.toPreUnit_s();
         }
     }
 
@@ -189,6 +195,32 @@ public interface Unit extends PreUnit {
         }
 
         return maximal.toArray(new Unit[maximal.size()]);
+    }
+
+    static List<Unit> topologicalSort(List<Unit> units) {
+        List<Unit> result = new ArrayList<>();
+        return buildReverseDfsOrder(units, result);
+    }
+
+    private static List<Unit> buildReverseDfsOrder(List<Unit> units, List<Unit> result) {
+        var notVisited = new HashMap<Digest, Boolean>();
+        for (var unit : units) {
+            notVisited.put(unit.hash(), true);
+        }
+        for (var unit : units) {
+            result = reverseDfsOrder(unit, notVisited, result);
+        }
+        return result;
+    }
+
+    private static List<Unit> reverseDfsOrder(Unit unit, HashMap<Digest, Boolean> notVisited, List<Unit> result) {
+        if (notVisited.put(unit.hash(), false)) {
+            for (var parent : unit.parents()) {
+                result = reverseDfsOrder(parent, notVisited, result);
+            }
+            result.add(unit);
+        }
+        return result;
     }
 
     /** Is the receiver above the specified unit? */

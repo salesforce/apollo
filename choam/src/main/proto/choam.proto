@@ -11,7 +11,7 @@ import "util.proto";
 
 package apollo.choam;
 
-service CHOAMService {
+service Terminal {
     rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
     rpc join (JoinRequest) returns (JoinResponse) {}
 }
@@ -49,6 +49,7 @@ message Header {
     utils.Digeste lastReconfigHash = 5;
     utils.Digeste nonce = 6;
     utils.Digeste previous = 7;
+    utils.Digeste bodyHash = 8;
 }
 
 message Genesis { 
@@ -59,8 +60,9 @@ message Genesis {
 message Reconfigure {
     utils.Digeste id = 1;
     int32 checkpointBlocks = 2;
-    int32 keyBlock = 3; 
-    repeated ViewMember view = 4;
+    int32 lifetime = 3;
+    int32 key = 4;
+    repeated ViewMember view = 5;
 }
 
 message Checkpoint { 
@@ -85,14 +87,14 @@ message Transaction {
     oneof transaction {
         Join join = 5;
         Leave leave = 6;
-        Checkpoint checkpoint = 7;
-        bytes user = 8;
+        bytes user = 7;
     }
 }
 
 message Join {
-    ViewMember member = 1;
-    repeated Certification endorsements = 2;
+    utils.Digeste view = 1;
+    ViewMember member = 2;
+    repeated Certification endorsements = 3;
 }
 
 message Leave {

@@ -17,10 +17,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
@@ -180,12 +183,12 @@ public interface Dag {
     }
 
     record dag(short nProc, int epoch, ConcurrentMap<Digest, Unit> units, fiberMap levelUnits, fiberMap heightUnits,
-               SlottedUnits maxUnits, List<BiConsumer<Unit, Dag>> checks, List<Consumer<Unit>> preInsert,
+               SlottedUnits maxUnits, List<BiFunction<Unit, Dag, Correctness>> checks, List<Consumer<Unit>> preInsert,
                List<Consumer<Unit>> postInsert)
               implements Dag {
 
         @Override
-        public void addCheck(BiConsumer<Unit, Dag> checker) {
+        public void addCheck(BiFunction<Unit, Dag, Correctness> checker) {
             checks.add(checker);
         }
 
@@ -206,10 +209,14 @@ public interface Dag {
         }
 
         @Override
-        public void check(Unit u) {
+        public Correctness check(Unit u) {
             for (var check : checks) {
-                check.accept(u, this);
+                var err = check.apply(u, this);
+                if (err != null) {
+                    return err;
+                }
             }
+            return null;
         }
 
         @Override
@@ -261,6 +268,7 @@ public interface Dag {
                 return null;
             }
             var fiber = heightUnits.getFiber(decoded.height());
+
             return fiber == null ? null : fiber.get(decoded.creator());
         }
 
@@ -283,7 +291,7 @@ public interface Dag {
             var height = u.height();
             var creator = u.creator();
             if (height >= heightUnits.len.get()) {
-                heightUnits.extendBy(10);
+                heightUnits.extendBy(Math.max(10, height - heightUnits.len.get()));
             }
             var su = heightUnits.getFiber(height);
 
@@ -361,19 +369,24 @@ public interface Dag {
 
     }
 
-    static short minimalQuorum(short nProcesses) {
-        return (short) (nProcesses - nProcesses / 3);
+    static final Logger log = LoggerFactory.getLogger(Dag.class);
+
+    static short minimalQuorum(short np) {
+        var nProcesses = (double) np;
+        return (short) (nProcesses - nProcesses / 3.0);
     }
 
-    static short minimalTrusted(short nProcesses) {
-        return (short) ((nProcesses - 1) / 3 + 1);
+    static short minimalTrusted(short np) {
+        var nProcesses = (double) np;
+        return (short) ((nProcesses - 1.0) / 3.0 + 1.0);
     }
 
     static Dag newDag(Config config, int epoch) {
+        log.trace("New dag for epoch: {} on: {}", epoch, config.pid());
         return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
                        newFiberMap(config.nProc(), config.epochLength()),
                        newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),
-                       new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+                       config.checks(), new ArrayList<>(), new ArrayList<>());
     }
 
     private static fiberMap newFiberMap(short width, int initialLength) {
@@ -385,7 +398,7 @@ public interface Dag {
         return newMap;
     }
 
-    void addCheck(BiConsumer<Unit, Dag> checker);
+    void addCheck(BiFunction<Unit, Dag, Correctness> checker);
 
     void afterInsert(Consumer<Unit> h);
 
@@ -393,7 +406,7 @@ public interface Dag {
 
     Unit build(PreUnit base, Unit[] parents);
 
-    void check(Unit u);
+    Correctness check(Unit u);
 
     /** return a slce of parents of the specified unit if control hash matches */
     Decoded decodeParents(PreUnit unit);

@@ -21,6 +21,17 @@ message Proof {
     utils.Digeste hash = 2;
 }
 
+message PreUnit_s {
+    int64 id = 1;
+    Crown_s crown = 2;
+    google.protobuf.Any data = 3;
+    bytes rsData = 4;
+}
+
+message Crown_s {
+    repeated int32 heights = 1;
+    utils.Digeste controlHash = 2;
+}
 
 message ByteMessage {
     bytes contents = 1;

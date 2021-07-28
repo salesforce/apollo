@@ -15,10 +15,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.Signer;
 
 /**
  * @author hal.hildebrand
@@ -66,11 +67,6 @@ public interface PreUnit {
         @Override
         public byte[] randomSourceData() {
             return p.randomSourceData();
-        }
-
-        @Override
-        public JohnHancock signature() {
-            return p.signature();
         }
 
         @Override
@@ -132,10 +128,19 @@ public interface PreUnit {
         public String shortString() {
             return p.shortString();
         }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return p.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return p.toPreUnit_s();
+        }
     }
 
-    public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
-                          Any data, byte[] rsData)
+    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, Any data, byte[] rsData)
                          implements PreUnit {
 
         @Override
@@ -159,6 +164,17 @@ public interface PreUnit {
             return rsData;
         }
 
+        public PreUnit_s toPreUnit_s() {
+            Builder builder = PreUnit_s.newBuilder().setId(id()).setCrown(crown.toCrown_s());
+            if (data != null) {
+                builder.setData(data);
+            }
+            if (rsData != null) {
+                builder.setRsData(ByteString.copyFrom(rsData));
+            }
+            return builder.build();
+        }
+
         @Override
         public Crown view() {
             return crown;
@@ -166,16 +182,35 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "preUnit[" + shortString() + "]";
+            return "pu[" + shortString() + "]";
         }
 
         @Override
         public String shortString() {
             return creator() + ":" + height() + ":" + epoch();
         }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return this;
+        }
     }
 
-    public record DecodedId(int height, short creator, int epoch) {}
+    public record DecodedId(int height, short creator, int epoch) {
+        public String toString() {
+            return "[" + creator + ":" + height + ":" + epoch + "]";
+        }
+    }
+
+    public static preUnit from(PreUnit_s pus, DigestAlgorithm algo) {
+        var decoded = decode(pus.getId());
+        byte[] rsData = pus.getRsData().size() > 0 ? pus.getRsData().toByteArray() : null;
+
+        Crown crown = Crown.from(pus.getCrown());
+        Any data = pus.hasData() ? pus.getData() : null;
+        return new preUnit(decoded.creator, decoded.epoch, decoded.height,
+                           computeHash(algo, pus.getId(), crown, data, rsData), crown, data, rsData);
+    }
 
     static Digest computeHash(DigestAlgorithm algo, long id, Crown crown, Any data, byte[] rsData) {
         var buffers = new ArrayList<ByteBuffer>();
@@ -217,13 +252,12 @@ public interface PreUnit {
     }
 
     static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, Any data, byte[] rsBytes,
-                            Signer signer, DigestAlgorithm algo) {
+                            DigestAlgorithm algo) {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
         var hash = computeHash(algo, id, crown, data, rsBytes);
-        var signature = signer.sign(hash.toByteBuffer());
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
+        var u = new freeUnit(new preUnit(creator, epoch, height, hash, crown, data, rsBytes), parents, level,
                              new HashMap<>());
         u.computeFloor();
         return u;
@@ -266,7 +300,9 @@ public interface PreUnit {
 
     String shortString();
 
-    JohnHancock signature();
+    PreUnit toPreUnit();
+
+    PreUnit_s toPreUnit_s();
 
     Crown view();
 }

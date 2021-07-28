@@ -22,6 +22,8 @@ public interface Channel<T> {
 
     void consumeEach(Consumer<T> consumer);
 
+    boolean isClosed();
+
     boolean offer(T element);
 
     void open();

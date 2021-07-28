@@ -32,6 +32,10 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
     public SimpleChannel(int capacity) {
         queue = new LinkedBlockingDeque<>(capacity);
     }
+    
+    public boolean isClosed() {
+        return closed.get();
+    }
 
     @Override
     public void close() {
@@ -53,13 +57,17 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
             throw new IllegalStateException("Handler already established");
         }
         handler = new Thread(() -> {
-            while (!closed.get()) {
+            while (!closed.getAcquire()) {
                 try {
                     List<T> available = new ArrayList<T>();
                     var polled = queue.poll(1, TimeUnit.SECONDS);
+                    if (closed.get()) {
+                        return;
+                    }
                     if (polled != null) {
                         available.add(polled);
-                        queue.drainTo(available);
+                        int count = queue.size();
+                        queue.drainTo(available, count);
                         try {
                             consumer.accept(available);
                         } catch (Throwable e) {
@@ -67,6 +75,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
                         }
                     }
                 } catch (InterruptedException e) {
+//                    log.info("stopping consumer", e);
                     return; // Normal exit
                 }
 
@@ -113,7 +122,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
         try {
             queue.put(element);
         } catch (InterruptedException e) {
-            log.warn("Interrupted in submit", e);
+//            log.warn("Interrupted in submit", e);
         }
     }
 }

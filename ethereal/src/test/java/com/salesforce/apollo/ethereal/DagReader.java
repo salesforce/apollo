@@ -17,8 +17,6 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.Any;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 
@@ -38,7 +36,6 @@ public class DagReader {
         scanner.nextLine();
         DagAdder da = df.createDag(n);
         var preUnitHashes = new HashMap<String, Digest>();
-        JohnHancock signature = new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]);
         var rsData = new byte[0];
         while (scanner.hasNextLine()) {
             String line = scanner.nextLine();
@@ -81,7 +78,7 @@ public class DagReader {
                 }
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
-                                Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
+                                Any.getDefaultInstance(), rsData, DigestAlgorithm.DEFAULT);
             var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
             if (errors != null) {
                 log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
@@ -93,14 +90,14 @@ public class DagReader {
     }
 
     private static PreUnit newPreUnit(short puCreator, Crown crown, Any defaultInstance, byte[] rsData,
-                                      JohnHancock signature, DigestAlgorithm default1) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, signature, default1);
+                                      DigestAlgorithm default1) {
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, default1);
         return newsie;
     }
 
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, Any defaultInstance,
-                                               byte[] rsData, JohnHancock signature, DigestAlgorithm default1) {
-        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature,
+                                               byte[] rsData, DigestAlgorithm default1) {
+        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1,
                            PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
                            defaultInstance, rsData);
     }

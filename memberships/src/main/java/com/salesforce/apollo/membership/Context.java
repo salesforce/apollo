@@ -114,11 +114,16 @@ public class Context<T extends Member> {
         for (int t = 1; t <= cardinality; t++) {
             double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
             if (e >= pf) {
-                return t;
+                if (cardinality >= (2 * t) + 1) {
+                    return t;
+                } else {
+                    throw new IllegalArgumentException("Cardinality: " + cardinality
+                    + " cannot support required tolerance: " + t);
+                }
             }
         }
         throw new IllegalArgumentException("Cannot compute number of rings from pByz=" + pByz + " cardinality: "
-                + cardinality + " epsilon: " + epsilon);
+        + cardinality + " epsilon: " + epsilon);
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
