@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -28,12 +28,13 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
  *
  */
 @SuppressWarnings("unused")
-public class Producer implements DataSource {
+public class Producer {
     private record broadcast(short source, List<PreUnit> pus) {}
 
     private final Associate                  associate;
     private final Controller                 controller;
     private final ReliableBroadcaster        coordinator;
+    private final DataSource                 ds;
     private final Ethereal                   ethereal;
     private final CertifiedBlock.Builder     reconfiguration = CertifiedBlock.newBuilder();
     private final BlockingDeque<Transaction> transactions    = new LinkedBlockingDeque<>();
@@ -46,18 +47,24 @@ public class Producer implements DataSource {
         }
         this.coordinator = coordinator;
         this.coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
-        controller = ethereal.deterministic(associate.params().ethereal().clone().build(), this,
+        ds = new DataSource() {
+            @Override
+            public ByteString getData() {
+                return Producer.this.getData();
+            }
+        };
+        controller = ethereal.deterministic(associate.params().ethereal().clone().build(), ds,
                                             preblock -> preblock(preblock), preUnit -> broadcast(preUnit));
-    }
 
-    @Override
-    public Any getData() {
-        // TODO Auto-generated method stub
-        return null;
     }
 
     private void broadcast(PreUnit preUnit) {
         // TODO Auto-generated method stub
+    }
+
+    private ByteString getData() {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private void preblock(PreBlock preblock) {

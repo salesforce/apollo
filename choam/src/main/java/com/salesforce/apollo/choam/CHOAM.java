@@ -55,6 +55,7 @@ import com.salesforce.apollo.utils.SimpleChannel;
 @SuppressWarnings("unused")
 public class CHOAM {
 
+    /** A member of the current committee */
     class Associate extends Administration {
         private final Producer       producer;
         private HashedCertifiedBlock viewChange;
@@ -107,6 +108,7 @@ public class CHOAM {
         }
     }
 
+    /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
         private final long                  key;
         private final long                  target;
@@ -151,6 +153,7 @@ public class CHOAM {
         }
     }
 
+    /** the assembly for the next committee. */
     private class Assembly {
         private final Set<Member>       appointed;
         private final Digest            id;
@@ -199,6 +202,7 @@ public class CHOAM {
         }
     }
 
+    /** we are but a client of the current committee */
     private class Client extends Administration {
         protected final HashedBlock viewChange;
 
@@ -216,6 +220,7 @@ public class CHOAM {
         }
     }
 
+    /** The Genesis formation comittee */
     private class Formation implements Committee {
         private HashedCertifiedBlock genesis;
 

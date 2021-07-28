@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
@@ -54,7 +53,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class EtherealTest {
 
-    static PreUnit newPreUnit(long id, Crown crown, Any data, byte[] rsData, DigestAlgorithm algo) {
+    static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
         var t = PreUnit.decode(id);
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
@@ -64,10 +63,10 @@ public class EtherealTest {
     }
 
     private static class SimpleDataSource implements DataSource {
-        final Deque<Any> dataStack = new ArrayDeque<>();
+        final Deque<ByteString> dataStack = new ArrayDeque<>();
 
         @Override
-        public Any getData() {
+        public ByteString getData() {
             return dataStack.pollFirst();
         }
 
@@ -100,9 +99,9 @@ public class EtherealTest {
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 500; d++) {
-                ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
-                                                     .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
-                                                     .build()));
+                ds.dataStack.add(ByteMessage.newBuilder()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d)).build()
+                                            .toByteString());
             }
         }
 
@@ -152,7 +151,7 @@ public class EtherealTest {
                 assertEquals(a.data().size(), b.data().size());
                 for (int k = 0; k < a.data().size(); k++) {
                     assertEquals(a.data().get(k), b.data().get(k));
-                    outputOrder.add(new String(a.data().get(k).unpack(ByteMessage.class).getContents().toByteArray()));
+                    outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
                 assertEquals(a.randomBytes(), b.randomBytes());
             }
@@ -163,7 +162,7 @@ public class EtherealTest {
     public void rbc() throws Exception {
         MetricRegistry registry = new MetricRegistry();
         RouterMetrics metrics = new RouterMetricsImpl(registry);
-        
+
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
         short nProc = 50;
         SigningMember[] members = new SigningMember[nProc];
@@ -179,9 +178,8 @@ public class EtherealTest {
 
         for (int i = 0; i < nProc; i++) {
             var member = members[i];
-            LocalRouter router = new LocalRouter(member,
-                                                 ServerConnectionCache.newBuilder()
-                                                                      .setMetrics(metrics), ForkJoinPool.commonPool());
+            LocalRouter router = new LocalRouter(member, ServerConnectionCache.newBuilder().setMetrics(metrics),
+                                                 ForkJoinPool.commonPool());
             comms.add(router);
             casting.put(member, new ReliableBroadcaster(params.setMember(member).build(), router));
             router.start();
@@ -212,9 +210,9 @@ public class EtherealTest {
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 2500; d++) {
-                ds.dataStack.add(Any.pack(ByteMessage.newBuilder()
-                                                     .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d))
-                                                     .build()));
+                ds.dataStack.add(ByteMessage.newBuilder()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d)).build()
+                                            .toByteString());
             }
         }
         try {
@@ -259,7 +257,7 @@ public class EtherealTest {
                 assertEquals(a.data().size(), b.data().size());
                 for (int k = 0; k < a.data().size(); k++) {
                     assertEquals(a.data().get(k), b.data().get(k));
-                    outputOrder.add(new String(a.data().get(k).unpack(ByteMessage.class).getContents().toByteArray()));
+                    outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
                 assertEquals(a.randomBytes(), b.randomBytes());
             }

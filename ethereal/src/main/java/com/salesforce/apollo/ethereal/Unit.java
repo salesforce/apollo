@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -43,7 +43,7 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public Any data() {
+        public ByteString data() {
             return unit.data();
         }
 

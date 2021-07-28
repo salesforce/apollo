@@ -24,7 +24,7 @@ message Proof {
 message PreUnit_s {
     int64 id = 1;
     Crown_s crown = 2;
-    google.protobuf.Any data = 3;
+    bytes data = 3;
     bytes rsData = 4;
 }
 

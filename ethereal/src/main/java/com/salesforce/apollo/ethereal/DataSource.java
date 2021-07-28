@@ -6,12 +6,12 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 
 /**
  * @author hal.hildebrand
  *
  */
 public interface DataSource {
-    Any getData();
+    ByteString getData();
 }

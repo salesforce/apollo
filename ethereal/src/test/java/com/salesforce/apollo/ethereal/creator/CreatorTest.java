@@ -22,7 +22,6 @@ import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -52,22 +51,22 @@ public class CreatorTest {
         }
 
         @Override
-        public Any getData() {
+        public ByteString getData() {
             byte[] data = new byte[size];
             entropy.nextBytes(data);
-            return Any.pack(ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build());
+            return ByteMessage.newBuilder().setContents(ByteString.copyFrom(data)).build().toByteString();
         }
     }
 
     record testEpochProofBuilder(Function<Unit, Boolean> verify) implements EpochProofBuilder {
 
         @Override
-        public Any buildShare(Unit timingUnit) {
+        public ByteString buildShare(Unit timingUnit) {
             return null;
         }
 
         @Override
-        public Any tryBuilding(Unit unit) {
+        public ByteString tryBuilding(Unit unit) {
             return null;
         }
 
@@ -94,7 +93,7 @@ public class CreatorTest {
         return new Creator(cnf, dataSource, send, rsData, epochProofBuilder);
     }
 
-    static PreUnit newPreUnit(long id, Crown crown, Any data, byte[] rsData, DigestAlgorithm algo) {
+    static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
         var t = PreUnit.decode(id);
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
@@ -132,7 +131,7 @@ public class CreatorTest {
 
         Unit[] parents = new Unit[nProc];
         var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-        var unitData = Any.getDefaultInstance();
+        var unitData = ByteString.copyFromUtf8(" ");
         var rsData = new byte[0];
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
@@ -189,7 +188,7 @@ public class CreatorTest {
             var newParents = new ArrayList<Unit>();
             for (short pid = 1; pid < cnf.nProc(); pid++) {
                 var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-                var unitData = Any.getDefaultInstance();
+                var unitData = ByteString.copyFromUtf8(" ");
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
                 var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
@@ -237,7 +236,7 @@ public class CreatorTest {
             var newParents = new ArrayList<Unit>();
             for (short pid = 1; pid < cnf.nProc(); pid++) {
                 var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-                var unitData = Any.getDefaultInstance();
+                var unitData = ByteString.copyFromUtf8(" ");
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
                 var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
@@ -293,7 +292,7 @@ public class CreatorTest {
         Unit[] parents = new Unit[nProc];
         for (short pid = 1; pid < cnf.nProc(); pid++) {
             var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-            var unitData = Any.getDefaultInstance();
+            var unitData = ByteString.copyFromUtf8(" ");
             var rsData = new byte[0];
             long id = PreUnit.id(0, pid, 0);
             var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
@@ -355,7 +354,7 @@ public class CreatorTest {
 
         Unit[] parents = new Unit[nProc];
         var crown = Crown.newCrownFromParents(parents, DigestAlgorithm.DEFAULT);
-        var unitData = Any.getDefaultInstance();
+        var unitData = ByteString.copyFromUtf8(" ");
         var rsData = new byte[0];
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
@@ -373,7 +372,7 @@ public class CreatorTest {
 
         for (pid = 2; pid < cnf.nProc(); pid++) {
             crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-            unitData = Any.getDefaultInstance();
+            unitData = ByteString.copyFromUtf8(" ");
             rsData = new byte[0];
             id = PreUnit.id(0, pid, 0);
             pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
@@ -419,7 +418,7 @@ public class CreatorTest {
 
         for (short pid = 3; pid < cnf.nProc(); pid++) {
             var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-            var unitData = Any.getDefaultInstance();
+            var unitData = ByteString.copyFromUtf8(" ");
             var rsData = new byte[0];
             var id = PreUnit.id(0, pid, 0);
             var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);

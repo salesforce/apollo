@@ -19,7 +19,7 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -111,7 +111,7 @@ public class Creator {
      * closing unitBelt channel.
      */
     public void createUnits(Channel<Unit> unitBelt, Queue<Unit> lastTiming) {
-        newEpoch(epoch, Any.getDefaultInstance());
+        newEpoch(epoch, ByteString.EMPTY);
         unitBelt.consume(units -> consume(units, lastTiming));
     }
 
@@ -146,7 +146,7 @@ public class Creator {
         }
     }
 
-    private void createUnit(Unit[] parents, int level, Any data) {
+    private void createUnit(Unit[] parents, int level, ByteString data) {
         assert parents.length == conf.nProc();
         Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
                                      conf.digestAlgorithm());
@@ -162,17 +162,17 @@ public class Creator {
      * id of the last timing unit (obtained from preblockMaker on lastTiming
      * channel)
      **/
-    private Any getData(int level, Queue<Unit> lastTiming) {
+    private ByteString getData(int level, Queue<Unit> lastTiming) {
         if (level <= conf.lastLevel()) {
             if (ds != null) {
                 return ds.getData();
             }
-            return Any.getDefaultInstance();
+            return ByteString.EMPTY;
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
             log.trace("No timing unit: {} on: {}", level, conf.pid());
-            return Any.getDefaultInstance();
+            return ByteString.EMPTY;
         }
         // in a rare case there can be timing units from previous epochs left on
         // lastTiming channel. the purpose of this loop is to drain and ignore them.
@@ -181,7 +181,7 @@ public class Creator {
                 epochDone = true;
                 if (epoch == conf.numberOfEpochs() - 1) {
                     // the epoch we just finished is the last epoch we were supposed to produce
-                    return Any.getDefaultInstance();
+                    return ByteString.EMPTY;
                 }
                 log.debug("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
                 return epochProof.buildShare(timingUnit);
@@ -190,7 +190,7 @@ public class Creator {
                       timingUnit.epoch(), epoch, conf.pid());
             timingUnit = lastTiming.poll();
         }
-        return Any.getDefaultInstance();
+        return ByteString.EMPTY;
     }
 
     private Unit[] getParents() {
@@ -221,7 +221,7 @@ public class Creator {
      * switches the creator to a chosen epoch, resets candidates and shares and
      * creates a dealing with the provided data.
      **/
-    private void newEpoch(int epoch, Any data) {
+    private void newEpoch(int epoch, ByteString data) {
         log.trace("Changing epoch to: {} on: {}", epoch, conf.pid());
         this.epoch = epoch;
         epochDone = false;
@@ -283,7 +283,7 @@ public class Creator {
         // If this is a finishing unit try to extract threshold signature share from it.
         // If there are enough shares to produce the signature (and therefore a proof
         // that the current epoch is finished) switch to a new epoch.
-        Any ep = epochProof.tryBuilding(unit);
+        ByteString ep = epochProof.tryBuilding(unit);
         if (ep != null) {
             log.info("Advancing epoch to: {} using: {} on: {}", epoch + 1, unit, conf.pid());
             newEpoch(epoch + 1, ep);

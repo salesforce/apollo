@@ -14,7 +14,7 @@ import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
@@ -78,7 +78,7 @@ public class DagReader {
                 }
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
-                                Any.getDefaultInstance(), rsData, DigestAlgorithm.DEFAULT);
+                                ByteString.copyFromUtf8(" "), rsData, DigestAlgorithm.DEFAULT);
             var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
             if (errors != null) {
                 log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
@@ -89,16 +89,15 @@ public class DagReader {
         return da;
     }
 
-    private static PreUnit newPreUnit(short puCreator, Crown crown, Any defaultInstance, byte[] rsData,
+    private static PreUnit newPreUnit(short puCreator, Crown crown, ByteString data, byte[] rsData,
                                       DigestAlgorithm default1) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, default1);
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, default1);
         return newsie;
     }
 
-    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, Any defaultInstance,
-                                               byte[] rsData, DigestAlgorithm default1) {
+    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
+                                               DigestAlgorithm default1) {
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1,
-                           PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
-                           defaultInstance, rsData);
+                           PreUnit.computeHash(default1, puCreator, crown, data, rsData), crown, data, rsData);
     }
 }

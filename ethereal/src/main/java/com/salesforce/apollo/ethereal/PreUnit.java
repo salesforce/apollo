@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s.Builder;
@@ -45,7 +44,7 @@ public interface PreUnit {
         }
 
         @Override
-        public Any data() {
+        public ByteString data() {
             return p.data();
         }
 
@@ -140,7 +139,8 @@ public interface PreUnit {
         }
     }
 
-    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, Any data, byte[] rsData)
+    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
+                          byte[] rsData)
                          implements PreUnit {
 
         @Override
@@ -207,12 +207,12 @@ public interface PreUnit {
         byte[] rsData = pus.getRsData().size() > 0 ? pus.getRsData().toByteArray() : null;
 
         Crown crown = Crown.from(pus.getCrown());
-        Any data = pus.hasData() ? pus.getData() : null;
+        ByteString data = pus.getData();
         return new preUnit(decoded.creator, decoded.epoch, decoded.height,
                            computeHash(algo, pus.getId(), crown, data, rsData), crown, data, rsData);
     }
 
-    static Digest computeHash(DigestAlgorithm algo, long id, Crown crown, Any data, byte[] rsData) {
+    static Digest computeHash(DigestAlgorithm algo, long id, Crown crown, ByteString data, byte[] rsData) {
         var buffers = new ArrayList<ByteBuffer>();
         ByteBuffer idBuff = ByteBuffer.allocate(8);
         idBuff.putLong(id);
@@ -220,7 +220,7 @@ public interface PreUnit {
 
         buffers.add(idBuff);
         if (data != null) {
-            buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
+            buffers.addAll(data.asReadOnlyByteBufferList());
         }
         if (rsData != null) {
             buffers.add(ByteBuffer.wrap(rsData));
@@ -251,7 +251,7 @@ public interface PreUnit {
         return result;
     }
 
-    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, Any data, byte[] rsBytes,
+    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, ByteString data, byte[] rsBytes,
                             DigestAlgorithm algo) {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
@@ -266,7 +266,7 @@ public interface PreUnit {
 
     short creator();
 
-    Any data();
+    ByteString data();
 
     default boolean dealing() {
         return height() == 0;

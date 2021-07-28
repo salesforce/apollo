@@ -15,7 +15,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.EpochProof.Builder;
@@ -70,7 +70,8 @@ public interface EpochProofBuilder {
                         log.trace("WTK threshold reached on: {}", conf.pid());
                         return sig;
                     } else {
-                        log.trace("WTK threshold reached, but combined shares failed to produce signature on: {}", conf.pid());
+                        log.trace("WTK threshold reached, but combined shares failed to produce signature on: {}",
+                                  conf.pid());
                     }
                 } else {
                     log.trace("Share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
@@ -91,9 +92,9 @@ public interface EpochProofBuilder {
          * Otherwise, null is returned.
          */
         @Override
-        public Any tryBuilding(Unit u) {
+        public ByteString tryBuilding(Unit u) {
             // ignore regular units and finishing units with empty data
-            if (u.level() <= conf.lastLevel() || (u.data() == null || u.data().getSerializedSize() == 0)) {
+            if (u.level() <= conf.lastLevel() || (u.data() == null || u.data().isEmpty())) {
                 return null;
             }
             var share = decodeShare(u.data());
@@ -114,8 +115,8 @@ public interface EpochProofBuilder {
             return null;
         }
 
-        private Any encodeSignature(JohnHancock sig, EpochProof proof) {
-            return Any.pack(proof);
+        private ByteString encodeSignature(JohnHancock sig, EpochProof proof) {
+            return proof.toByteString();
         }
 
         @Override
@@ -127,14 +128,15 @@ public interface EpochProofBuilder {
         }
 
         @Override
-        public Any buildShare(Unit lastTimingUnit) {
+        public ByteString buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
             Share share = conf.WTKey().createShare(proof, conf.pid());
-            log.debug("Share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof, share, conf.pid());
+            log.debug("Share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof,
+                      share, conf.pid());
             if (share != null) {
                 return encodeShare(share, proof);
             }
-            return Any.getDefaultInstance();
+            return ByteString.EMPTY;
         }
 
     }
@@ -147,9 +149,9 @@ public interface EpochProofBuilder {
      * decodeShare reads signature share and the signed message from Data contained
      * in some unit.
      */
-    static DecodedShare decodeShare(Any data) {
+    static DecodedShare decodeShare(ByteString data) {
         try {
-            EpochProof proof = data.unpack(EpochProof.class);
+            EpochProof proof = EpochProof.parseFrom(data);
             return new DecodedShare(Share.from(proof), proof);
         } catch (InvalidProtocolBufferException e) {
             return null;
@@ -169,7 +171,7 @@ public interface EpochProofBuilder {
         }
         EpochProof decoded;
         try {
-            decoded = pu.data().unpack(EpochProof.class);
+            decoded = EpochProof.parseFrom(pu.data());
         } catch (InvalidProtocolBufferException e) {
             return false;
         }
@@ -188,17 +190,17 @@ public interface EpochProofBuilder {
      * converts signature share and the signed message into Data that can be put
      * into unit.
      */
-    private static Any encodeShare(Share share, Proof proof) {
+    private static ByteString encodeShare(Share share, Proof proof) {
         Builder builder = EpochProof.newBuilder();
         if (share != null) {
             builder.setOwner(share.owner).setSignature(share.signature().toSig());
         }
-        return Any.pack(builder.setMsg(proof).build());
+        return builder.setMsg(proof).build().toByteString();
     }
 
-    Any buildShare(Unit timingUnit);
+    ByteString buildShare(Unit timingUnit);
 
-    Any tryBuilding(Unit unit);
+    ByteString tryBuilding(Unit unit);
 
     boolean verify(Unit unit);
 
