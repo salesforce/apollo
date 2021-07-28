@@ -31,8 +31,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.RouterMetrics;
+import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -121,6 +125,9 @@ public class RbcTest {
 
     @Test
     public void broadcast() throws Exception {
+        MetricRegistry registry = new MetricRegistry();
+        RouterMetrics metrics = new RouterMetricsImpl(registry);
+
         List<SigningMember> members = certs.values().stream()
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
@@ -130,14 +137,16 @@ public class RbcTest {
                                            .collect(Collectors.toList());
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
-        parameters.setContext(context);
+        parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         Executor commExec = Executors.newCachedThreadPool();
 
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, ServerConnectionCache.newBuilder().setTarget(30), commExec);
+            LocalRouter comms = new LocalRouter(node,
+                                                ServerConnectionCache.newBuilder().setMetrics(metrics).setTarget(30),
+                                                commExec);
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(parameters.setMember(node).setExecutor(ForkJoinPool.commonPool()).build(),
@@ -180,5 +189,8 @@ public class RbcTest {
             }
         }
         System.out.println();
+
+        ConsoleReporter.forRegistry(registry).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build().report();
     }
 }

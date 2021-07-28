@@ -20,15 +20,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.RouterMetrics;
+import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
@@ -156,13 +161,16 @@ public class EtherealTest {
 
     @Test
     public void rbc() throws Exception {
+        MetricRegistry registry = new MetricRegistry();
+        RouterMetrics metrics = new RouterMetricsImpl(registry);
+        
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
         short nProc = 50;
         SigningMember[] members = new SigningMember[nProc];
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, nProc);
         Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();
         List<LocalRouter> comms = new ArrayList<>();
-        Parameters.Builder params = Parameters.newBuilder().setBufferSize(1500).setContext(context);
+        Parameters.Builder params = Parameters.newBuilder().setMetrics(metrics).setBufferSize(1500).setContext(context);
         for (int i = 0; i < nProc; i++) {
             SigningMember member = new SigningMemberImpl(Utils.getMember(i));
             context.activate(member);
@@ -171,7 +179,9 @@ public class EtherealTest {
 
         for (int i = 0; i < nProc; i++) {
             var member = members[i];
-            LocalRouter router = new LocalRouter(member, ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+            LocalRouter router = new LocalRouter(member,
+                                                 ServerConnectionCache.newBuilder()
+                                                                      .setMetrics(metrics), ForkJoinPool.commonPool());
             comms.add(router);
             casting.put(member, new ReliableBroadcaster(params.setMember(member).build(), router));
             router.start();
@@ -254,5 +264,9 @@ public class EtherealTest {
                 assertEquals(a.randomBytes(), b.randomBytes());
             }
         }
+        System.out.println();
+
+        ConsoleReporter.forRegistry(registry).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build().report();
     }
 }

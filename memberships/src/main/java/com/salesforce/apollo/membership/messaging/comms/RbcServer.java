@@ -12,8 +12,8 @@ import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.RoutableService;
+import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
@@ -65,10 +65,10 @@ public class RbcServer extends RBCImplBase {
     }
 
     private ClientIdentity                 identity;
-    private final MessagingMetrics         metrics;
+    private final RouterMetrics         metrics;
     private final RoutableService<Service> routing;
 
-    public RbcServer(ClientIdentity identity, MessagingMetrics metrics, RoutableService<Service> r) {
+    public RbcServer(ClientIdentity identity, RouterMetrics metrics, RoutableService<Service> r) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = r;

@@ -15,10 +15,10 @@ import com.salesfoce.apollo.messaging.proto.RBCGrpc;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCFutureStub;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.Reconciliation;
+import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcast;
 
 /**
@@ -27,8 +27,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcast;
  */
 public class RbcClient implements ReliableBroadcast {
 
-    public static CreateClientCommunications<ReliableBroadcast> getCreate(MessagingMetrics metrics,
-                                                                          Executor exeucutor) {
+    public static CreateClientCommunications<ReliableBroadcast> getCreate(RouterMetrics metrics, Executor exeucutor) {
         return (t, f, c) -> {
             return new RbcClient(c, t, metrics, exeucutor);
         };
@@ -39,9 +38,9 @@ public class RbcClient implements ReliableBroadcast {
     private final RBCFutureStub           client;
     private final Executor                executor;
     private final Member                  member;
-    private final MessagingMetrics        metrics;
+    private final RouterMetrics          metrics;
 
-    public RbcClient(ManagedServerConnection channel, Member member, MessagingMetrics metrics, Executor executor) {
+    public RbcClient(ManagedServerConnection channel, Member member, RouterMetrics metrics, Executor executor) {
         this.member = member;
         this.channel = channel;
         this.client = RBCGrpc.newFutureStub(channel.channel).withCompression("gzip");

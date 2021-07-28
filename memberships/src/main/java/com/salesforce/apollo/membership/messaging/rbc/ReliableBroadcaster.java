@@ -40,13 +40,13 @@ import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 import com.salesforce.apollo.membership.messaging.comms.RbcServer;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -68,17 +68,16 @@ public class ReliableBroadcaster {
     public record Msg(Digest source, ByteString content) {}
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
-                             Executor executor, SigningMember member, MessagingMetrics metrics,
-                             double falsePositiveRate) {
+                             Executor executor, SigningMember member, RouterMetrics metrics, double falsePositiveRate) {
         public static class Builder implements Cloneable {
-            private int              bufferSize        = 500;
-            private Context<Member>  context;
-            private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
-            private Executor         executor          = ForkJoinPool.commonPool();
-            private double           falsePositiveRate = 0.125;
-            private int              maxMessages       = 100;
-            private SigningMember    member;
-            private MessagingMetrics metrics;
+            private int             bufferSize        = 500;
+            private Context<Member> context;
+            private DigestAlgorithm digestAlgorithm   = DigestAlgorithm.DEFAULT;
+            private Executor        executor          = ForkJoinPool.commonPool();
+            private double          falsePositiveRate = 0.125;
+            private int             maxMessages       = 100;
+            private SigningMember   member;
+            private RouterMetrics   metrics;
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, executor, member, metrics,
@@ -122,7 +121,7 @@ public class ReliableBroadcaster {
                 return member;
             }
 
-            public MessagingMetrics getMetrics() {
+            public RouterMetrics getMetrics() {
                 return metrics;
             }
 
@@ -161,7 +160,7 @@ public class ReliableBroadcaster {
                 return this;
             }
 
-            public Parameters.Builder setMetrics(MessagingMetrics metrics) {
+            public Parameters.Builder setMetrics(RouterMetrics metrics) {
                 this.metrics = metrics;
                 return this;
             }
