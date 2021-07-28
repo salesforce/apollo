@@ -9,6 +9,7 @@ package com.salesforce.apollo.membership.messaging.comms;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
+import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc;
@@ -38,7 +39,7 @@ public class RbcClient implements ReliableBroadcast {
     private final RBCFutureStub           client;
     private final Executor                executor;
     private final Member                  member;
-    private final RouterMetrics          metrics;
+    private final RouterMetrics           metrics;
 
     public RbcClient(ManagedServerConnection channel, Member member, RouterMetrics metrics, Executor executor) {
         this.member = member;
@@ -60,23 +61,33 @@ public class RbcClient implements ReliableBroadcast {
 
     @Override
     public ListenableFuture<Reconcile> gossip(MessageBff request) {
-        ListenableFuture<Reconcile> result = client.gossip(request);
-        result.addListener(() -> {
-            if (metrics != null) {
-                Reconcile messages;
-                try {
-                    messages = result.get();
-                    metrics.inboundBandwidth().mark(messages.getSerializedSize());
-                    metrics.gossipResponse().update(messages.getSerializedSize());
-                } catch (InterruptedException | ExecutionException e) {
-                    // purposefully ignored
+        Context timer = null;
+        if (metrics != null) {
+            timer = metrics.outboundGossipTimer().time();
+        }
+        try {
+            ListenableFuture<Reconcile> result = client.gossip(request);
+            result.addListener(() -> {
+                if (metrics != null) {
+                    Reconcile messages;
+                    try {
+                        messages = result.get();
+                        metrics.inboundBandwidth().mark(messages.getSerializedSize());
+                        metrics.gossipResponse().update(messages.getSerializedSize());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // purposefully ignored
+                    }
+                    metrics.outboundGossip().update(request.getSerializedSize());
+                    metrics.outboundBandwidth().mark(request.getSerializedSize());
+                    metrics.outboundGossipRate().mark();
                 }
-                metrics.outboundGossip().update(request.getSerializedSize());
-                metrics.outboundBandwidth().mark(request.getSerializedSize());
-                metrics.outboundGossipRate().mark();
+            }, executor);
+            return result;
+        } finally {
+            if (timer != null) {
+                timer.stop();
             }
-        }, executor);
-        return result;
+        }
     }
 
     public void start() {
@@ -90,11 +101,21 @@ public class RbcClient implements ReliableBroadcast {
 
     @Override
     public void update(Reconciliation push) {
-        client.update(push);
+        Context timer = null;
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(push.getSerializedSize());
-            metrics.outboundUpdate().update(push.getSerializedSize());
-            metrics.outboundUpdateRate().mark();
+            timer = metrics.outboundUpdateTimer().time();
+        }
+        try {
+            client.update(push);
+            if (metrics != null) {
+                metrics.outboundBandwidth().mark(push.getSerializedSize());
+                metrics.outboundUpdate().update(push.getSerializedSize());
+                metrics.outboundUpdateRate().mark();
+            }
+        } finally {
+            if (timer != null) {
+                timer.stop();
+            }
         }
     }
 }
