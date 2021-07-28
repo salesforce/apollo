@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -67,53 +66,6 @@ public class EtherealTest {
             return dataStack.pollFirst();
         }
 
-    }
-
-    @Test
-    public void assembled() throws Exception {
-        Controller controller;
-        short nProc = 4;
-
-        var config = Config.deterministic().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool())
-                           .setnProc(nProc).setNumberOfEpochs(2).build();
-        DataSource ds = new SimpleDataSource();
-        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>(100));
-
-        List<PreUnit> syncd = new ArrayList<>();
-        synchronizer.consumeEach(pu -> syncd.add(pu));
-
-        Ethereal e = new Ethereal();
-        controller = e.deterministic(config, ds, i -> {
-        }, pu -> synchronizer.getChannel().offer(pu));
-        try {
-            controller.start();
-            assertNotNull(controller.input());
-            Thread.sleep(1);
-
-            for (short pid = 1; pid < config.nProc(); pid++) {
-                var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
-                var unitData = Any.getDefaultInstance();
-                var rsData = new byte[0];
-                long id = PreUnit.id(0, pid, 0);
-                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-                controller.input().accept(config.pid(), Collections.singletonList(pu));
-            }
-            Utils.waitForCondition(2_000, () -> syncd.size() >= 2);
-
-            assertEquals(2, syncd.size());
-
-            PreUnit pu = syncd.get(0);
-            assertEquals(0, pu.creator());
-            assertEquals(0, pu.epoch());
-            assertEquals(0, pu.height());
-
-            pu = syncd.get(1);
-            assertEquals(0, pu.creator());
-            assertEquals(0, pu.epoch());
-            assertEquals(1, pu.height());
-        } finally {
-            controller.stop();
-        }
     }
 
     @Test

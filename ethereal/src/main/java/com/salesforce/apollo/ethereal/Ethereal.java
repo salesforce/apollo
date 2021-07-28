@@ -232,7 +232,14 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> {
+            Orderer orderer = ord.get();
+            if (orderer != null) {
+                orderer.addPreunits(source, pus);
+            } else {
+                log.info("Received: {} before orderer created on: {} ", pus, config.pid());
+            }
+        };
         AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
