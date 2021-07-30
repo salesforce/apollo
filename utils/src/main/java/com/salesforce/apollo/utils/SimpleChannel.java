@@ -29,10 +29,15 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
     Thread           handler;
     BlockingQueue<T> queue;
 
+    public SimpleChannel(BlockingQueue<T> queue) {
+        this.queue = queue;
+    }
+
     public SimpleChannel(int capacity) {
         queue = new LinkedBlockingDeque<>(capacity);
     }
-    
+
+    @Override
     public boolean isClosed() {
         return closed.get();
     }

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Sets;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
@@ -36,6 +37,13 @@ public interface Committee {
 
     static final Logger log = LoggerFactory.getLogger(Committee.class);
 
+    static Map<Member, Verifier> validators(Map<Member, ViewMember> validators) {
+        return validators.entrySet().stream()
+                         .collect(Collectors.toMap(e -> e.getKey(),
+                                                   e -> new DefaultVerifier(publicKey(e.getValue()
+                                                                                       .getConsensusKey()))));
+    }
+
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
         return reconfigure.getViewList().stream()
                           .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
@@ -47,6 +55,7 @@ public interface Committee {
     HashedBlock getViewChange();
 
     Parameters params();
+ 
 
     default boolean validate(byte[] headerHash, Certification c, Map<Member, Verifier> validators) {
         Parameters params = params();
@@ -78,7 +87,11 @@ public interface Committee {
                                 .count() > params.context().toleranceLevel() + 1;
     }
 
-    default boolean validateReconfiguration(HashedCertifiedBlock hb, Reconfigure reconfigure) {
+    default boolean validateRegeneration(HashedCertifiedBlock hb) {
+        if (!hb.block.hasGenesis()) {
+            return false;
+        }
+        var reconfigure = hb.block.getGenesis().getInitialView();
         var validators = validatorsOf(reconfigure, params().context());
         Sets.difference(validators.keySet(),
                         new HashSet<>(params().context().successors(new Digest(reconfigure.getId()))))

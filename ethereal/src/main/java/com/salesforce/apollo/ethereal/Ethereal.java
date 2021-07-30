@@ -8,9 +8,7 @@ package com.salesforce.apollo.ethereal;
 
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,7 +18,6 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
@@ -48,22 +45,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class Ethereal {
-    public interface Committee {
-        class Default implements Committee {
-            private final Map<Short, Verifier> verifiers;
-
-            public Default(Map<Short, Verifier> verifiers) {
-                this.verifiers = new HashMap<>(verifiers);
-            }
-
-            @Override
-            public Verifier getVerifier(short pid) {
-                return verifiers.get(pid);
-            }
-        }
-
-        Verifier getVerifier(short pid);
-    }
 
     public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input) {
         public void start() {

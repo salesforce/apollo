@@ -38,9 +38,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Executor dispatcher,
                          BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
                          ReliableBroadcaster.Parameters.Builder coordination, int key, Config.Builder ethereal,
-                         int lifetime) {
-    
-    
+                         int lifetime, ChoamMetrics metrics) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -71,6 +69,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
         private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
         private SigningMember                          member;
+        private ChoamMetrics                           metrics;
         private int                                    processedBufferSize   = 1000;
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
@@ -83,7 +82,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
-                                  restorer, digestAlgorithm, coordination, key, ethereal, lifetime);
+                                  restorer, digestAlgorithm, coordination, key, ethereal, lifetime, metrics);
         }
 
         public int getCheckpointBlockSize() {
@@ -168,6 +167,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public SigningMember getMember() {
             return member;
+        }
+
+        public ChoamMetrics getMetrics() {
+            return metrics;
         }
 
         public int getProcessedBufferSize() {
@@ -297,6 +300,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setMember(SigningMember member) {
             this.member = member;
+            return this;
+        }
+
+        public Builder setMetrics(ChoamMetrics metrics) {
+            this.metrics = metrics;
             return this;
         }
 

@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -18,8 +17,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
-import com.salesforce.apollo.ethereal.Ethereal.Committee;
-import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 
 /**
@@ -32,7 +29,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     int byzantine, Committee committee, Clock clock) {
+                     int byzantine, Clock clock) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -63,7 +60,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private boolean                                  canSkipLevel    = false;
         private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
         private Clock                                    clock           = Clock.systemUTC();
-        private Committee                                committee       = new Default(Collections.emptyMap());
         private int                                      commonVoteDeterministicPrefix;
         private short                                    crpFixedPrefix;
         private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
@@ -132,13 +128,12 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (wtk == null) {
                 wtk = new NoOpWeakThresholdKey((2 * byzantine) + 1);
             }
-            Objects.requireNonNull(committee, "Committee cannot be null");
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
 
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, clock);
         }
 
         @Override
@@ -160,10 +155,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Clock getClock() {
             return clock;
-        }
-
-        public Committee getCommittee() {
-            return committee;
         }
 
         public int getCommonVoteDeterministicPrefix() {
@@ -254,11 +245,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setClock(Clock clock) {
             this.clock = clock;
-            return this;
-        }
-
-        public Builder setCommittee(Committee committee) {
-            this.committee = committee;
             return this;
         }
 

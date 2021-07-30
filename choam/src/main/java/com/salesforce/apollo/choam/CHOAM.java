@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.choam.Committee.validatorsOf;
 import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
-import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,7 +29,6 @@ import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesfoce.apollo.choam.proto.Reconfigure.Builder;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -38,7 +36,6 @@ import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -61,7 +58,7 @@ public class CHOAM {
         private HashedCertifiedBlock viewChange;
 
         Associate(Digest id, Set<Member> appointed, Map<Member, Verifier> validators, Map<Member, Join> joins) {
-            super(head.height() + params.lifetime(), validators, head.height() + params.key());
+            super(validators, head.height() + params.key());
             var context = new Context<>(id, 0.33, params.context().getRingCount());
             params.context().successors(id).forEach(m -> {
                 if (appointed.contains(m)) {
@@ -71,7 +68,7 @@ public class CHOAM {
                 }
             });
             if (params.member().equals(context.ring(0).get(0))) {
-                producer = new Producer(this, reconfigure(id, joins, context),
+                producer = new Producer(this,
                                         new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                       .setContext(context).build(),
                                                                 params.communications()));
@@ -89,43 +86,20 @@ public class CHOAM {
         void install() {
         }
 
-        private Block reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context) {
-            Builder builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize())
-                                         .setId(id.toDigeste()).setKey(params.key()).setLifetime(params.lifetime());
-
-            // Canonical labeling of the members for Ethereal
-            context.ring(0).iterator().forEachRemaining(m -> builder.addView(joins.get(m).getMember()));
-
-            Reconfigure reconfigure = builder.build();
-            HashedBlock lastViewChange = current.getViewChange();
-
-            return Block.newBuilder()
-                        .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
-                                               lastViewChange.height(), lastViewChange.hash,
-                                               lastViewChange.block.getHeader().getLastReconfig(),
-                                               new Digest(lastViewChange.block.getHeader().getLastReconfigHash())))
-                        .build();
-        }
     }
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
         private final long                  key;
-        private final long                  target;
         private final Map<Member, Verifier> validators;
 
-        public Administration(long target, Map<Member, Verifier> validator, long key) {
-            this.target = target;
+        public Administration(Map<Member, Verifier> validator, long key) {
             this.key = key;
             this.validators = validator;
         }
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            if (hb.height() == target) {
-                next.install();
-                return;
-            }
             if (hb.height() == key) {
                 next();
             }
@@ -139,16 +113,6 @@ public class CHOAM {
 
         @Override
         public boolean validate(HashedCertifiedBlock hb) {
-            if (hb.height() == target) {
-                if (!hb.block.hasReconfigure()) {
-                    return false;
-                }
-                Reconfigure reconfigure = hb.block.getReconfigure();
-                if (!next.id.equals(new Digest(reconfigure.getId()))) {
-                    return false;
-                }
-                return validateReconfiguration(hb, reconfigure);
-            }
             return validate(hb, validators);
         }
     }
@@ -174,12 +138,7 @@ public class CHOAM {
                 return;
             }
             if (validators.containsKey(params.member())) {
-                current = new Associate(id, appointed,
-                                        validators.entrySet().stream()
-                                                  .collect(Collectors.toMap(e -> e.getKey(),
-                                                                            e -> new DefaultVerifier(publicKey(e.getValue()
-                                                                                                                .getConsensusKey())))),
-                                        joins);
+                current = new Associate(id, appointed, Committee.validators(validators), joins);
                 next = null;
             }
         }
@@ -207,8 +166,7 @@ public class CHOAM {
         protected final HashedBlock viewChange;
 
         public Client(HashedBlock viewChange) {
-            super(viewChange.height() + viewChange.block.getReconfigure().getLifetime(),
-                  validatorsOf(viewChange.block.getReconfigure(), params.context()),
+            super(validatorsOf(viewChange.block.getReconfigure(), params.context()),
                   viewChange.height() + viewChange.block.getReconfigure().getKey());
             this.viewChange = viewChange;
 
@@ -222,11 +180,10 @@ public class CHOAM {
 
     /** The Genesis formation comittee */
     private class Formation implements Committee {
-        private HashedCertifiedBlock genesis;
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            this.genesis = hb;
+            genesis = hb;
             Genesis genesis = hb.block.getGenesis();
             current = new Client(hb);
             next = null;
@@ -251,12 +208,35 @@ public class CHOAM {
                 log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
                 return false;
             }
-            return validateReconfiguration(hb, block.getGenesis().getInitialView());
+            return validateRegeneration(hb);
         }
     }
 
+    public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
+                                    HashedBlock lastViewChange, Parameters params) {
+        var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
+                                 .setKey(params.key()).setEpochLength(params.ethereal().getEpochLength())
+                                 .setNumberOfEpochs(params.ethereal().getNumberOfEpochs());
+
+        // Canonical labeling of the view members for Ethereal
+        var ring0 = context.ring(0);
+        var remapped = joins.keySet().stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
+        remapped.keySet().stream().sorted().map(d -> remapped.get(d)).peek(m -> builder.addJoins(joins.get(m)))
+                .forEach(m -> builder.addView(joins.get(m).getMember()));
+
+        var reconfigure = builder.build();
+        return Block.newBuilder()
+                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
+                                           lastViewChange.height(), lastViewChange.hash,
+                                           lastViewChange.block.getHeader().getLastReconfig(),
+                                           new Digest(lastViewChange.block.getHeader().getLastReconfigHash())))
+                    .setReconfigure(reconfigure).build();
+    }
+
+    private HashedCertifiedBlock                      checkpoint;
     private final ReliableBroadcaster                 combine;
     private Committee                                 current;
+    private HashedCertifiedBlock                      genesis;
     private HashedCertifiedBlock                      head;
     private final Channel<HashedCertifiedBlock>       linear;
     private final Logger                              log     = LoggerFactory.getLogger(CHOAM.class);

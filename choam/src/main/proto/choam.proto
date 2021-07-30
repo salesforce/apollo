@@ -8,6 +8,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "util.proto";
+import "ethereal.proto";
 
 package apollo.choam;
 
@@ -18,12 +19,12 @@ service Terminal {
 
 message JoinRequest {
     utils.Digeste context = 1;
-    ViewMember member = 2;
+    utils.Digeste nextView = 2;
 }
 
 message JoinResponse {
     utils.Sig signature = 1;
-    ViewMember nextView = 2;
+    ViewMember member = 2;
 }
 
 message SubmitTransaction {
@@ -60,9 +61,11 @@ message Genesis {
 message Reconfigure {
     utils.Digeste id = 1;
     int32 checkpointBlocks = 2;
-    int32 lifetime = 3;
-    int32 key = 4;
-    repeated ViewMember view = 5;
+    int32 key = 3;
+    int32 numberOfEpochs = 4;
+    int32 epochLength = 5;
+    repeated ViewMember view = 6;
+    repeated Join joins = 7;
 }
 
 message Checkpoint { 
@@ -129,11 +132,26 @@ message CheckpointProcessing {
     int64 checkpoint = 1;
 }
 
-message Validate {
-    utils.Digeste context = 1;
-    utils.Digeste witness = 2;
-    utils.Digeste hash = 3;
-    utils.Sig signature = 4;
+message Validate {  
+    utils.Digeste hash = 1;
+    Certification witness = 2;
+}
+
+/** Coordination **/
+
+message Coordinate {
+    oneof msg {
+        ethereal.PreUnit_s unit = 1;
+        Validate validate = 2;
+        Publish publish = 3;
+        Block reconfigure = 4;
+    }
+}
+
+/** Or Perish */
+message Publish {
+    Header header = 1;
+    repeated Certification certifications = 2;
 }
 
 

@@ -6,72 +6,263 @@
  */
 package com.salesforce.apollo.choam;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.Block;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.CHOAM.Associate;
+import com.salesforce.apollo.choam.fsm.DrivenTransitions;
+import com.salesforce.apollo.choam.fsm.Earner;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
+ * An "Earner"
+ * 
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class Producer {
-    private record broadcast(short source, List<PreUnit> pus) {}
+    /**
+     * Leaf action interface for the Producer FSM
+     *
+     */
+    public interface Driven {
+        void awaitView();
 
-    private final Associate                  associate;
-    private final Controller                 controller;
-    private final ReliableBroadcaster        coordinator;
-    private final DataSource                 ds;
-    private final Ethereal                   ethereal;
-    private final CertifiedBlock.Builder     reconfiguration = CertifiedBlock.newBuilder();
-    private final BlockingDeque<Transaction> transactions    = new LinkedBlockingDeque<>();
+        void establishPrincipal();
 
-    public Producer(Associate associate, Block viewChange, ReliableBroadcaster coordinator) {
-        ethereal = new Ethereal();
-        this.associate = associate;
-        if (viewChange != null) {
-            reconfiguration.setBlock(viewChange);
+        void generateView();
+
+        void initialState();
+    }
+
+    /**
+     * Leaf action driver coupling for the Producer FSM
+     *
+     */
+    private class DriveIn implements Driven {
+        private int principal = 0;
+
+        @Override
+        public void awaitView() {
+            // TODO Auto-generated method stub
+
         }
+
+        @Override
+        public void establishPrincipal() {
+            if (params().member().equals(regent())) {
+                transitions.assumePrincipal();
+            } else {
+                transitions.assumeDelegate();
+            }
+        }
+
+        @Override
+        public void generateView() {
+        }
+
+        @Override
+        public void initialState() {
+            if (reconfiguration.hasBlock()) {
+                if (reconfiguration.getCertificationsCount() > params().context().toleranceLevel()) {
+                    transitions.generated();
+                }
+                establishPrincipal();
+            }
+            transitions.regenerate();
+        }
+
+        private Member regent() {
+            return coordinator.getContext().ring(0).get(principal);
+        }
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(Producer.class);
+
+    private final Associate                      associate;
+    private final Controller                     controller;
+    private final ReliableBroadcaster            coordinator;
+    private final Ethereal                       ethereal;
+    private final Fsm<Driven, DrivenTransitions> fsm;
+    private final SimpleChannel<Coordinate>      linear;
+    private final Deque<PreBlock>                pending         = new LinkedList<>();
+    private final CertifiedBlock.Builder         reconfiguration = CertifiedBlock.newBuilder();
+    private final Map<Digest, Short>             roster          = new HashMap<>();
+    private final BlockingDeque<Transaction>     transactions    = new LinkedBlockingDeque<>();
+    private final DrivenTransitions              transitions;
+
+    public Producer(Associate associate, ReliableBroadcaster coordinator) {
+        this.associate = associate;
+
+        // Ethereal consensus
+        ethereal = new Ethereal();
+
+        // Reliable broadcast of both Units and Coordination messages between valid
+        // members of this committee
         this.coordinator = coordinator;
         this.coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
-        ds = new DataSource() {
+
+        // FSM driving this Earner
+        fsm = Fsm.construct(new DriveIn(), DrivenTransitions.class, Earner.INITIAL, true);
+        fsm.setName(params().member().getId().toString());
+        transitions = fsm.getTransitions();
+
+        // buffer for coordination messages
+        linear = new SimpleChannel<>(100);
+        linear.consumeEach(coordination -> coordinate(coordination));
+
+        // Our handle on consensus
+        controller = ethereal.deterministic(params().ethereal().clone().build(), dataSource(),
+                                            preblock -> pending.add(preblock), preUnit -> broadcast(preUnit));
+        transitions.start();
+    }
+
+    /**
+     * Reliably broadcast this preUnit to all valid members of this committee
+     */
+    private void broadcast(PreUnit preUnit) {
+        if (metrics() != null) {
+            metrics().broadcast(preUnit);
+        }
+        coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build().toByteArray());
+    }
+
+    /**
+     * Dispatch the coordination message through the FSM
+     */
+    private void coordinate(Coordinate coordination) {
+        switch (coordination.getMsgCase()) {
+        case PUBLISH:
+            transitions.publish(coordination.getPublish());
+            break;
+        case RECONFIGURE:
+            transitions.reconfigure(coordination.getReconfigure());
+            break;
+        case VALIDATE:
+            transitions.validate(coordination.getValidate());
+            break;
+        default:
+            break;
+        }
+    }
+
+    /**
+     * DataSource that feeds Ethereal consensus
+     */
+    private DataSource dataSource() {
+        return new DataSource() {
             @Override
             public ByteString getData() {
                 return Producer.this.getData();
             }
         };
-        controller = ethereal.deterministic(associate.params().ethereal().clone().build(), ds,
-                                            preblock -> preblock(preblock), preUnit -> broadcast(preUnit));
-
     }
 
-    private void broadcast(PreUnit preUnit) {
-        // TODO Auto-generated method stub
-    }
-
+    /**
+     * The data to be used for a the next Unit produced by this Producer
+     */
     private ByteString getData() {
-        // TODO Auto-generated method stub
-        return null;
+        Parameters params = params();
+        int bytesRemaining = params.maxBatchByteSize();
+        int txnsRemaining = params.maxBatchSize();
+        List<ByteString> batch = new ArrayList<>();
+        while (txnsRemaining > 0 && transactions.peek() != null
+        && bytesRemaining >= transactions.peek().getSerializedSize()) {
+            txnsRemaining--;
+            Transaction next = transactions.poll();
+            bytesRemaining -= next.getSerializedSize();
+            batch.add(next.toByteString());
+        }
+        int byteSize = params.maxBatchByteSize() - bytesRemaining;
+        int batchSize = params.maxBatchSize() - txnsRemaining;
+        log.info("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
+                 roster.get(params.member().getId()), params.member());
+        if (metrics() != null) {
+            metrics().publishedBatch(batchSize, byteSize);
+        }
+        return ByteString.copyFrom(batch);
     }
 
-    private void preblock(PreBlock preblock) {
-        // TODO Auto-generated method stub
+    private ChoamMetrics metrics() {
+        return params().metrics();
     }
 
+    private Parameters params() {
+        return associate.params();
+    }
+
+    /**
+     * Reliable broadcast message processing
+     */
     private void process(Msg msg) {
-        // TODO Auto-generated method stub
+        Short source = roster.get(msg.source());
+        Parameters params = params();
+        if (source == null) {
+            log.debug("No pid in roster matching: {} on: {}", msg.source(), params.member());
+            if (metrics() != null) {
+                metrics().invalidSourcePid();
+            }
+            return;
+        }
+        Coordinate coordination;
+        try {
+            coordination = Coordinate.parseFrom(msg.content());
+        } catch (InvalidProtocolBufferException e) {
+            log.debug("Error deserializing from: {} on: {}", msg.source(), params.member());
+            if (metrics() != null) {
+                metrics().coordDeserEx();
+            }
+            return;
+        }
+        log.debug("Received msg from: {} on: {}", msg.source(), params.member());
+        if (metrics() != null) {
+            metrics().incTotalMessages();
+        }
+        if (coordination.hasUnit()) {
+            publish(msg.source(), source, PreUnit.from(coordination.getUnit(), params.digestAlgorithm()));
+        } else {
+            linear.submit(coordination);
+        }
+    }
+
+    /**
+     * Publish or perish
+     */
+    private void publish(Digest member, short source, preUnit pu) {
+        if (pu.creator() != source) {
+            log.debug("Received invalid unit: {} from: {} should be creator: {} on: {}", pu, member, source,
+                      params().member());
+            if (metrics() != null) {
+                metrics().invalidUnit();
+            }
+            return;
+        }
+        controller.input().accept(source, Collections.singletonList(pu));
     }
 }
