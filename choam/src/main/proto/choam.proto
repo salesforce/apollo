@@ -13,8 +13,16 @@ import "ethereal.proto";
 package apollo.choam;
 
 service Terminal {
-    rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
+    rpc submit (SubmitTransaction) returns (SubmitResult) {}
+    
+    /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
+    
+    /* bootstrapping */
+    rpc sync(Synchronize) returns (Initial) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
 }
 
 message JoinRequest {
@@ -25,6 +33,9 @@ message JoinRequest {
 message SubmitTransaction {
     utils.Digeste context = 1;
     Transaction transaction = 2;
+}
+
+message SubmitResult {
 }
 
 message Block {
@@ -142,16 +153,6 @@ message Coordinate {
 message Publish {
     Header header = 1;
     repeated Certification certifications = 2;
-}
-
-
-/** Bootstrapping **/
-
-service Boostrap {
-    rpc sync(Synchronize) returns (Initial) {}
-    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
-    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
-    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
 }
 
 message Synchronize {

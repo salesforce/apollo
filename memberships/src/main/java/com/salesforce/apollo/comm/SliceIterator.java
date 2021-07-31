@@ -1,0 +1,139 @@
+/*
+ * Copyright (c) 2021, salesforce.com, inc.
+ * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+package com.salesforce.apollo.comm;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executor;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.util.concurrent.ListenableFuture;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Utils;
+
+/**
+ * @author hal.hildebrand
+ *
+ */
+public class SliceIterator<Comm extends Link> {
+    @FunctionalInterface
+    public interface SlicePredicateHandler<T, Comm> {
+        boolean handle(Optional<ListenableFuture<T>> futureSailor, Comm communications, int ring);
+    }
+
+    private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
+    private final CommonCommunications<Comm, ?> comm;
+    private volatile int                        current = -1;
+    private final Executor                      executor;
+    private String                              label;
+    private final SigningMember                 member;
+
+    private final List<Member> slice;
+
+    public SliceIterator(String label, SigningMember member, List<Member> slice, CommonCommunications<Comm, ?> comm,
+                         Executor executor) {
+        this.member = member;
+        this.slice = slice;
+        this.comm = comm;
+        this.executor = executor;
+    }
+
+    public <T> void iterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            SlicePredicateHandler<T, Comm> handler) {
+        iterate(round, handler, null);
+    }
+
+    public <T> void iterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                            SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
+        executor.execute(Utils.wrapped(() -> internalIterate(round, handler, onComplete), log));
+
+    }
+
+    private <T> void internalIterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
+                                     SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
+        Runnable proceed = () -> internalIterate(round, handler, onComplete);
+
+        boolean finalIteration = current % slice.size() >= slice.size() - 1;
+
+        Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete);
+        try (Comm link = next()) {
+            if (link == null) {
+                log.trace("No successor found on: {} ring: {}  on: {}", label, current, member);
+                final boolean allow = handler.handle(Optional.empty(), link, current);
+                allowed.accept(allow);
+                return;
+            }
+            log.trace("Iteration on: {} ring: {} to: {} on: {}", label, current, link.getMember(), member);
+            ListenableFuture<T> futureSailor = round.apply(link, current);
+            if (futureSailor == null) {
+                log.trace("No asynchronous response  on: {} ring: {} from: {} on: {}", label, current, link.getMember(),
+                          member);
+                final boolean allow = handler.handle(Optional.empty(), link, current);
+                allowed.accept(allow);
+                return;
+            }
+            futureSailor.addListener(Utils.wrapped(() -> {
+                allowed.accept(handler.handle(Optional.of(futureSailor), link, current));
+            }, log), executor);
+        } catch (IOException e) {
+            log.debug("Error closing", e);
+        }
+    }
+
+    private Comm linkFor(int index) {
+        try {
+            return comm.apply(slice.get(index), member);
+        } catch (Throwable e) {
+            log.trace("error opening connection to {}: {}", slice.get(index).getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage());
+        }
+        return null;
+    }
+
+    private Comm next() {
+        Comm link = null;
+        final int last = current;
+        int c = (last + 1) % slice.size();
+        for (int i = 0; i < slice.size(); i++) {
+            if (c == 0) {
+                Collections.shuffle(slice);
+            }
+            link = linkFor(c);
+            if (link != null) {
+                break;
+            }
+            current = (c + 1) % slice.size();
+        }
+        current = c;
+        return link;
+    }
+
+    private void proceed(final boolean allow, Runnable proceed, boolean finalIteration, Runnable onComplete) {
+        log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, finalIteration, allow,
+                  member);
+        if (finalIteration && allow) {
+            log.trace("Final iteration of: {} for: {}   on: {}", label, member);
+            if (onComplete != null) {
+                log.trace("Completing iteration for: {}   on: {}", label, member);
+                onComplete.run();
+            }
+        } else if (allow) {
+            log.trace("Proceeding for: {} tally: {} on: {}", label, member);
+            executor.execute(Utils.wrapped(proceed, log));
+        } else {
+            log.trace("Termination for: {} tally: {} on: {}", label, member);
+        }
+    }
+}

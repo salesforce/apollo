@@ -50,7 +50,11 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions reconfigure(Block reconfigure) {
+        default Transitions reconfigure() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default void reconfigure(Block reconfigure) {
             throw fsm().invalidTransitionOn();
         }
 
@@ -65,6 +69,7 @@ public interface Driven {
         default Transitions validate(Validate validate) {
             throw fsm().invalidTransitionOn();
         }
+
     }
 
     void awaitView();

@@ -18,6 +18,11 @@ public enum Earner implements Driven.Transitions {
     DELEGATE, INITIAL {
 
         @Override
+        public Transitions reconfigure() {
+            return Reconfigure.GATHER;
+        }
+
+        @Override
         public Transitions start() {
             context().initialState();
             return null;

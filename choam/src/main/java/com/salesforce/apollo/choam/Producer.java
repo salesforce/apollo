@@ -25,7 +25,6 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.CHOAM.Associate;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 import com.salesforce.apollo.choam.fsm.Earner;
@@ -60,7 +59,7 @@ public class Producer {
 
         @Override
         public void establishPrincipal() {
-            if (params().member().equals(regent())) {
+            if (params.member().equals(regent())) {
                 transitions.assumePrincipal();
             } else {
                 transitions.assumeDelegate();
@@ -74,7 +73,7 @@ public class Producer {
         @Override
         public void initialState() {
             if (reconfiguration.hasBlock()) {
-                if (reconfiguration.getCertificationsCount() > params().context().toleranceLevel()) {
+                if (reconfiguration.getCertificationsCount() > params.context().toleranceLevel()) {
                     transitions.generated();
                 }
                 establishPrincipal();
@@ -89,21 +88,20 @@ public class Producer {
 
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
-    private final Associate                      associate;
-    private final Controller                     controller;
-    private final ReliableBroadcaster            coordinator;
-    private final Ethereal                       ethereal;
-    private final Fsm<Driven, Transitions> fsm;
-    private final SimpleChannel<Coordinate>      linear;
-    private final Deque<PreBlock>                pending         = new LinkedList<>();
-    private final CertifiedBlock.Builder         reconfiguration = CertifiedBlock.newBuilder();
-    private final Map<Digest, Short>             roster          = new HashMap<>();
-    private final BlockingDeque<Transaction>     transactions    = new LinkedBlockingDeque<>();
-    private final Transitions              transitions;
+    private final Parameters                 params;
+    private final Controller                 controller;
+    private final ReliableBroadcaster        coordinator;
+    private final Ethereal                   ethereal;
+    private final Fsm<Driven, Transitions>   fsm;
+    private final SimpleChannel<Coordinate>  linear;
+    private final Deque<PreBlock>            pending         = new LinkedList<>();
+    private final CertifiedBlock.Builder     reconfiguration = CertifiedBlock.newBuilder();
+    private final Map<Digest, Short>         roster          = new HashMap<>();
+    private final BlockingDeque<Transaction> transactions    = new LinkedBlockingDeque<>();
+    private final Transitions                transitions;
 
-    public Producer(Associate associate, ReliableBroadcaster coordinator) {
-        this.associate = associate;
-
+    public Producer(ReliableBroadcaster coordinator, Parameters params) {
+        this.params = params;
         // Ethereal consensus
         ethereal = new Ethereal();
 
@@ -114,7 +112,7 @@ public class Producer {
 
         // FSM driving this Earner
         fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
-        fsm.setName(params().member().getId().toString());
+        fsm.setName(params.member().getId().toString());
         transitions = fsm.getTransitions();
 
         // buffer for coordination messages
@@ -122,15 +120,22 @@ public class Producer {
         linear.consumeEach(coordination -> coordinate(coordination));
 
         // Our handle on consensus
-        controller = ethereal.deterministic(params().ethereal().clone().build(), dataSource(),
+        controller = ethereal.deterministic(params.ethereal().clone().build(), dataSource(),
                                             preblock -> pending.add(preblock), preUnit -> broadcast(preUnit));
-        transitions.start();
     }
 
     public void complete() {
         controller.stop();
         linear.close();
         coordinator.stop();
+    }
+
+    public void reconfigure() {
+        transitions.reconfigure();
+    }
+
+    public void start() {
+        transitions.start();
     }
 
     /**
@@ -178,7 +183,6 @@ public class Producer {
      * The data to be used for a the next Unit produced by this Producer
      */
     private ByteString getData() {
-        Parameters params = params();
         int bytesRemaining = params.maxBatchByteSize();
         int txnsRemaining = params.maxBatchSize();
         List<ByteString> batch = new ArrayList<>();
@@ -200,11 +204,7 @@ public class Producer {
     }
 
     private ChoamMetrics metrics() {
-        return params().metrics();
-    }
-
-    private Parameters params() {
-        return associate.params();
+        return params.metrics();
     }
 
     /**
@@ -212,7 +212,6 @@ public class Producer {
      */
     private void process(Msg msg) {
         Short source = roster.get(msg.source());
-        Parameters params = params();
         if (source == null) {
             log.debug("No pid in roster matching: {} on: {}", msg.source(), params.member());
             if (metrics() != null) {
@@ -247,7 +246,7 @@ public class Producer {
     private void publish(Digest member, short source, preUnit pu) {
         if (pu.creator() != source) {
             log.debug("Received invalid unit: {} from: {} should be creator: {} on: {}", pu, member, source,
-                      params().member());
+                      params.member());
             if (metrics() != null) {
                 metrics().invalidUnit();
             }

@@ -20,10 +20,20 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.BlockReplication;
+import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.CheckpointReplication;
+import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
+import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitTransaction;
+import com.salesfoce.apollo.choam.proto.Synchronize;
+import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
@@ -45,28 +55,55 @@ import com.salesforce.apollo.utils.SimpleChannel;
  */
 public class CHOAM {
 
+    public class Concierge {
+
+        public SubmitResult clientSubmit(SubmitTransaction request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public Blocks fetchBlocks(BlockReplication request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public Blocks fetchViewChain(BlockReplication request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public ViewMember join(JoinRequest request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        public Initial sync(Synchronize request, Digest from) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+    }
+
     /** a member of the current committee */
-    class Associate extends Administration { 
-        private final Producer       producer;
-        private HashedCertifiedBlock viewChange;
+    class Associate extends Administration {
+        private final Producer             producer;
+        private final HashedCertifiedBlock viewChange;
 
         Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators) {
             super(validators);
             this.viewChange = block;
-            var reconfigure = viewChange.block.getReconfigure();
-            Digest id = new Digest(reconfigure.getId());
-            var context = new Context<>(id, 0.33, params.context().getRingCount());
-            params.context().successors(id).forEach(m -> {
-                if (validators.containsKey(m)) {
-                    context.activate(m);
-                } else {
-                    context.offline(m);
-                }
-            });
-            producer = new Producer(this,
-                                    new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
+            var context = new Context<>(new Digest(viewChange.block.getReconfigure().getId()), 0.33,
+                                        params.context().getRingCount());
+            validators.keySet().forEach(m -> context.activate(m));
+            producer = new Producer(new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(context).build(),
-                                                            params.communications()));
+                                                            params.communications()),
+                                    params);
         }
 
         @Override
@@ -76,7 +113,6 @@ public class CHOAM {
 
         @Override
         public HashedBlock getViewChange() {
-            assert viewChange != null;
             return viewChange;
         }
 
@@ -142,7 +178,7 @@ public class CHOAM {
         @Override
         public void complete() {
             // TODO Auto-generated method stub
-            
+
         }
 
         @Override
