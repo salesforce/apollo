@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import com.chiralbehaviors.tron.Entry;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
 /**
@@ -13,5 +14,28 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Reconfigure implements Transitions {
-    GATHER, NOMINATE, RECONFIGURED, CHANGE_PRINCIPAL;
+    CHANGE_PRINCIPAL, GATHER {
+        @Override
+        public Transitions assembled() {
+            return NOMINATE;
+        }
+
+        @Entry
+        public void assembly() {
+            context().gatherAssembly();
+        }
+    },
+    NOMINATE {
+        @Entry
+        public void consolidate() {
+            context().convene();
+        }
+
+        @Override
+        public Transitions reconfigured() {
+            return RECONFIGURED;
+        }
+    },
+    RECONFIGURED {
+    };
 }

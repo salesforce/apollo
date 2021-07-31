@@ -91,7 +91,7 @@ public class TerminalServer extends TerminalImplBase {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
-            responseObserver.onNext(s.clientSubmit(request, from));
+            responseObserver.onNext(s.submit(request, from));
             responseObserver.onCompleted();
         });
     }

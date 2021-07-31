@@ -24,7 +24,6 @@
 		<module>utils</module>
 		<module>stereotomy-services</module>
 		<module>ghost</module>
-		<module>miracl</module>
 		<module>ethereal</module>
 		<module>choam</module>
 	</modules>
@@ -115,11 +114,11 @@
 				<artifactId>memberships</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>ethereal</artifactId>
-                <version>${project.version}</version>
-            </dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>ethereal</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>apollo</artifactId>

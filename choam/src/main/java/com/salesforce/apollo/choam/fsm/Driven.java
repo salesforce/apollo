@@ -70,6 +70,14 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions assembled() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions reconfigured() {
+            throw fsm().invalidTransitionOn();
+        }
+
     }
 
     void awaitView();
@@ -79,4 +87,8 @@ public interface Driven {
     void generateView();
 
     void initialState();
+
+    void gatherAssembly();
+
+    void convene();
 }

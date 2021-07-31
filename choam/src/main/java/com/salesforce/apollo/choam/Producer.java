@@ -27,8 +27,8 @@ import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
-import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.fsm.Earner;
+import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -50,7 +50,6 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public class Producer {
     /** Leaf action driver coupling for the Producer FSM */
     private class DriveIn implements Driven {
-        private int principal = 0;
 
         @Override
         public void awaitView() {
@@ -60,7 +59,7 @@ public class Producer {
 
         @Override
         public void establishPrincipal() {
-            if (params.member().equals(regent())) {
+            if (params.member().equals(principal())) {
                 transitions.assumePrincipal();
             } else {
                 transitions.assumeDelegate();
@@ -73,29 +72,33 @@ public class Producer {
 
         @Override
         public void initialState() {
-            if (reconfiguration.hasBlock()) {
-                if (reconfiguration.getCertificationsCount() > params.context().toleranceLevel()) {
-                    transitions.generated();
-                }
-                establishPrincipal();
-            }
-            transitions.regenerate();
+            establishPrincipal();
         }
 
-        private Member regent() {
-            return coordinator.getContext().ring(0).get(principal);
+        @Override
+        public void gatherAssembly() {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void convene() {
+            // TODO Auto-generated method stub
+            
         }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
-    private final Parameters                 params;
     private final Controller                 controller;
     private final ReliableBroadcaster        coordinator;
     private final Ethereal                   ethereal;
     private final Fsm<Driven, Transitions>   fsm;
     private final SimpleChannel<Coordinate>  linear;
+    private final Parameters                 params;
     private final Deque<PreBlock>            pending         = new LinkedList<>();
+    private int                              principal       = 0;
+    @SuppressWarnings("unused")
     private final CertifiedBlock.Builder     reconfiguration = CertifiedBlock.newBuilder();
     private final Map<Digest, Short>         roster          = new HashMap<>();
     private final BlockingDeque<Transaction> transactions    = new LinkedBlockingDeque<>();
@@ -131,12 +134,12 @@ public class Producer {
         coordinator.stop();
     }
 
-    public void reconfigure() {
-        transitions.reconfigure();
-    }
-
     public void start() {
         transitions.start();
+    }
+
+    public void regenerate() {
+        transitions.regenerate();
     }
 
     /**
@@ -254,5 +257,9 @@ public class Producer {
             return;
         }
         controller.input().accept(source, Collections.singletonList(pu));
+    }
+
+    private Member principal() {
+        return coordinator.getContext().ring(0).get(principal);
     }
 }

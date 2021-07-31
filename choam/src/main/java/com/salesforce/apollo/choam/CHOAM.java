@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
@@ -36,6 +37,8 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
+import com.salesforce.apollo.choam.fsm.Combine;
+import com.salesforce.apollo.choam.fsm.Merchantile;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
@@ -58,11 +61,24 @@ import com.salesforce.apollo.utils.SimpleChannel;
  */
 public class CHOAM {
 
-    public class Concierge {
+    public class Combiner implements Combine {
 
-        public SubmitResult clientSubmit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.clientSubmit(request, from);
+        @Override
+        public void awaitSynchronization() {
+            // TODO Auto-generated method stub
+
         }
+
+        @Override
+        public void regenerate() {
+            // TODO Auto-generated method stub
+
+        }
+
+    }
+
+    /** service trampoline */
+    public class Concierge {
 
         public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
             return CHOAM.this.fetch(request, from);
@@ -78,6 +94,10 @@ public class CHOAM {
 
         public ViewMember join(JoinRequest request, Digest from) {
             return CHOAM.this.join(request, from);
+        }
+
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
         }
 
         public Initial sync(Synchronize request, Digest from) {
@@ -162,6 +182,17 @@ public class CHOAM {
 
     /** The Genesis formation comittee */
     private class Formation implements Committee {
+        @SuppressWarnings("unused")
+        private final Producer producer;
+
+        private Formation() {
+            var context = new Context<>(params.genesisViewId(), 0.33, params.context().getRingCount());
+            context.successors(params.genesisViewId()).forEach(m -> context.activate(m));
+            producer = new Producer(new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
+                                                                  .setContext(context).build(),
+                                                            params.communications()),
+                                    params);
+        }
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
@@ -200,6 +231,8 @@ public class CHOAM {
         }
     }
 
+    private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
+
     public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                     HashedBlock lastViewChange, Parameters params) {
         var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
@@ -227,14 +260,16 @@ public class CHOAM {
     @SuppressWarnings("unused")
     private final CommonCommunications<Terminal, Concierge> comm;
     private Committee                                       current;
+    private final Fsm<Combine, Combine.Transitions>         fsm;
     private HashedCertifiedBlock                            genesis;
     private HashedCertifiedBlock                            head;
     private final Channel<HashedCertifiedBlock>             linear;
-    private final Logger                                    log     = LoggerFactory.getLogger(CHOAM.class);
     private final Parameters                                params;
     private final PriorityQueue<HashedCertifiedBlock>       pending = new PriorityQueue<>();
     private final AtomicBoolean                             started = new AtomicBoolean();
     private final Store                                     store;
+    @SuppressWarnings("unused")
+    private final Combine.Transitions                       transitions;
     @SuppressWarnings("unused")
     private HashedCertifiedBlock                            view;
 
@@ -251,6 +286,8 @@ public class CHOAM {
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
                                                      params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
+        fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
+        transitions = fsm.getTransitions();
     }
 
     public void start() {
@@ -259,6 +296,7 @@ public class CHOAM {
         }
         linear.open();
         linear.consumeEach(b -> accept(b));
+        fsm.enterStartState();
     }
 
     public void stop() {
@@ -277,11 +315,6 @@ public class CHOAM {
     private void checkpoint() {
         // TODO Auto-generated method stub
 
-    }
-
-    private SubmitResult clientSubmit(SubmitTransaction request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
     }
 
     private void combine() {
@@ -373,6 +406,12 @@ public class CHOAM {
         } else {
             current = new Client(head, validators);
         }
+    }
+
+    /** Submit a transaction from a client */
+    private SubmitResult submit(SubmitTransaction request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private Initial sync(Synchronize request, Digest from) {

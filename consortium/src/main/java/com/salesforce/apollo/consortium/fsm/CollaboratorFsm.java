@@ -25,8 +25,6 @@ import com.salesforce.apollo.membership.Member;
  */
 public enum CollaboratorFsm implements Transitions {
 
-    CHECKPOINT_RECOVERY {
-    },
     CLIENT {
 
         @Override
