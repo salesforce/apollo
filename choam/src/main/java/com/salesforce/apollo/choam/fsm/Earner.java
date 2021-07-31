@@ -6,22 +6,19 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import com.salesforce.apollo.choam.fsm.Driven.Transitions;
+
 /**
  * Producer Finite State Machine
  * 
  * @author hal.hildebrand
  *
  */
-public enum Earner implements DrivenTransitions {
+public enum Earner implements Driven.Transitions {
     DELEGATE, INITIAL {
 
         @Override
-        public DrivenTransitions regenerate() {
-            return Regenerate.BUILD;
-        }
-
-        @Override
-        public DrivenTransitions start() {
+        public Transitions start() {
             context().initialState();
             return null;
         }
@@ -30,12 +27,12 @@ public enum Earner implements DrivenTransitions {
     PRINCIPAL, PROTOCOL_FAILURE;
 
     @Override
-    public DrivenTransitions assumeDelegate() {
+    public Transitions assumeDelegate() {
         return DELEGATE;
     }
 
     @Override
-    public DrivenTransitions assumePrincipal() {
+    public Transitions assumePrincipal() {
         return PRINCIPAL;
     }
 }

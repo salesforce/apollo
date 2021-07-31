@@ -37,8 +37,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
                          int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Executor dispatcher,
                          BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
-                         ReliableBroadcaster.Parameters.Builder coordination, int key, Config.Builder ethereal,
-                         int lifetime, ChoamMetrics metrics) {
+                         ReliableBroadcaster.Parameters.Builder coordination, Config.Builder ethereal, int lifetime,
+                         ChoamMetrics metrics) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -62,7 +62,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Message                                genesisData;
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration;
-        private int                                    key                   = 75;
         private int                                    lifetime              = 100;
         private int                                    maxBatchByteSize      = 4 * 1024;
         private int                                    maxBatchSize          = 10;
@@ -82,7 +81,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
-                                  restorer, digestAlgorithm, coordination, key, ethereal, lifetime, metrics);
+                                  restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics);
         }
 
         public int getCheckpointBlockSize() {
@@ -139,10 +138,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getGossipDuration() {
             return gossipDuration;
-        }
-
-        public int getKey() {
-            return key;
         }
 
         public int getLifetime() {
@@ -265,11 +260,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setGossipDuration(Duration gossipDuration) {
             this.gossipDuration = gossipDuration;
-            return this;
-        }
-
-        public Builder setKey(int key) {
-            this.key = key;
             return this;
         }
 

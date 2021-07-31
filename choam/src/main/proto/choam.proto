@@ -14,17 +14,12 @@ package apollo.choam;
 
 service Terminal {
     rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
-    rpc join (JoinRequest) returns (JoinResponse) {}
+    rpc join (JoinRequest) returns (ViewMember) {}
 }
 
 message JoinRequest {
     utils.Digeste context = 1;
     utils.Digeste nextView = 2;
-}
-
-message JoinResponse {
-    utils.Sig signature = 1;
-    ViewMember member = 2;
 }
 
 message SubmitTransaction {
@@ -61,11 +56,10 @@ message Genesis {
 message Reconfigure {
     utils.Digeste id = 1;
     int32 checkpointBlocks = 2;
-    int32 key = 3;
-    int32 numberOfEpochs = 4;
-    int32 epochLength = 5;
-    repeated ViewMember view = 6;
-    repeated Join joins = 7;
+    int32 numberOfEpochs = 3;
+    int32 epochLength = 4;
+    repeated ViewMember view = 5;
+    repeated Join joins = 6;
 }
 
 message Checkpoint { 
@@ -85,13 +79,9 @@ message ExecutedTransaction {
 }
 
 message Transaction { 
-    utils.Digeste source = 1; 
-    utils.Sig signature = 2;
-    oneof transaction {
-        Join join = 5;
-        Leave leave = 6;
-        bytes user = 7;
-    }
+    utils.Digeste source = 1;
+    bytes content = 2; 
+    utils.Sig signature = 3; 
 }
 
 message Join {

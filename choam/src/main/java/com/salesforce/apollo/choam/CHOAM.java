@@ -9,12 +9,9 @@ package com.salesforce.apollo.choam;
 import static com.salesforce.apollo.choam.Committee.validatorsOf;
 import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -24,12 +21,9 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
-import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
@@ -49,32 +43,35 @@ import com.salesforce.apollo.utils.SimpleChannel;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class CHOAM {
 
-    /** A member of the current committee */
-    class Associate extends Administration {
+    /** a member of the current committee */
+    class Associate extends Administration { 
         private final Producer       producer;
         private HashedCertifiedBlock viewChange;
 
-        Associate(Digest id, Set<Member> appointed, Map<Member, Verifier> validators, Map<Member, Join> joins) {
-            super(validators, head.height() + params.key());
+        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators) {
+            super(validators);
+            this.viewChange = block;
+            var reconfigure = viewChange.block.getReconfigure();
+            Digest id = new Digest(reconfigure.getId());
             var context = new Context<>(id, 0.33, params.context().getRingCount());
             params.context().successors(id).forEach(m -> {
-                if (appointed.contains(m)) {
+                if (validators.containsKey(m)) {
                     context.activate(m);
                 } else {
                     context.offline(m);
                 }
             });
-            if (params.member().equals(context.ring(0).get(0))) {
-                producer = new Producer(this,
-                                        new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
-                                                                      .setContext(context).build(),
-                                                                params.communications()));
-            } else {
-                producer = null;
-            }
+            producer = new Producer(this,
+                                    new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
+                                                                  .setContext(context).build(),
+                                                            params.communications()));
+        }
+
+        @Override
+        public void complete() {
+            producer.complete();
         }
 
         @Override
@@ -83,27 +80,24 @@ public class CHOAM {
             return viewChange;
         }
 
-        void install() {
-        }
-
     }
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        private final long                  key;
         private final Map<Member, Verifier> validators;
 
-        public Administration(Map<Member, Verifier> validator, long key) {
-            this.key = key;
+        public Administration(Map<Member, Verifier> validator) {
             this.validators = validator;
         }
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            if (hb.height() == key) {
-                next();
-            }
+            head = hb;
             process();
+        }
+
+        @Override
+        public void complete() {
         }
 
         @Override
@@ -117,57 +111,12 @@ public class CHOAM {
         }
     }
 
-    /** the assembly for the next committee. */
-    private class Assembly {
-        private final Set<Member>       appointed;
-        private final Digest            id;
-        private final Map<Member, Join> joins = new HashMap<>();
-
-        Assembly(Digest id) {
-            this.id = id;
-            appointed = new HashSet<>(params.context().successors(id));
-        }
-
-        void install() {
-            Map<Member, ViewMember> validators = joins.entrySet().stream()
-                                                      .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                e -> e.getValue().getMember()));
-            if (validators.size() <= params.context().toleranceLevel()) {
-                log.error("Unable to install view: {} due to insufficient members joining: {} required: {} on: {}", id,
-                          joins.size(), params.context().toleranceLevel() + 1, params.member());
-                return;
-            }
-            if (validators.containsKey(params.member())) {
-                current = new Associate(id, appointed, Committee.validators(validators), joins);
-                next = null;
-            }
-        }
-
-        void join(ExecutedTransaction execution) {
-            assert execution.getTransation().hasJoin();
-
-            Join join = execution.getTransation().getJoin();
-            if (!id.equals(new Digest(join.getView()))) {
-                return;
-            }
-            Member joining = params.context().getMember(new Digest(join.getMember().getId()));
-            if (joining == null) {
-                return;
-            }
-            if (!appointed.contains(joining)) {
-                return;
-            }
-            joins.put(joining, join);
-        }
-    }
-
-    /** we are but a client of the current committee */
+    /** a client of the current committee */
     private class Client extends Administration {
         protected final HashedBlock viewChange;
 
-        public Client(HashedBlock viewChange) {
-            super(validatorsOf(viewChange.block.getReconfigure(), params.context()),
-                  viewChange.height() + viewChange.block.getReconfigure().getKey());
+        public Client(HashedBlock viewChange, Map<Member, Verifier> validators) {
+            super(validators);
             this.viewChange = viewChange;
 
         }
@@ -183,11 +132,17 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            genesis = hb;
-            Genesis genesis = hb.block.getGenesis();
-            current = new Client(hb);
-            next = null;
-            process(genesis.getInitializeList());
+            head = hb;
+            genesis = head;
+            checkpoint = head;
+            view = head;
+            process();
+        }
+
+        @Override
+        public void complete() {
+            // TODO Auto-generated method stub
+            
         }
 
         @Override
@@ -215,7 +170,7 @@ public class CHOAM {
     public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                     HashedBlock lastViewChange, Parameters params) {
         var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
-                                 .setKey(params.key()).setEpochLength(params.ethereal().getEpochLength())
+                                 .setEpochLength(params.ethereal().getEpochLength())
                                  .setNumberOfEpochs(params.ethereal().getNumberOfEpochs());
 
         // Canonical labeling of the view members for Ethereal
@@ -233,6 +188,7 @@ public class CHOAM {
                     .setReconfigure(reconfigure).build();
     }
 
+    @SuppressWarnings("unused")
     private HashedCertifiedBlock                      checkpoint;
     private final ReliableBroadcaster                 combine;
     private Committee                                 current;
@@ -240,11 +196,12 @@ public class CHOAM {
     private HashedCertifiedBlock                      head;
     private final Channel<HashedCertifiedBlock>       linear;
     private final Logger                              log     = LoggerFactory.getLogger(CHOAM.class);
-    private Assembly                                  next;
     private final Parameters                          params;
     private final PriorityQueue<HashedCertifiedBlock> pending = new PriorityQueue<>();
     private final AtomicBoolean                       started = new AtomicBoolean();
     private final Store                               store;
+    @SuppressWarnings("unused")
+    private HashedCertifiedBlock                      view;
 
     public CHOAM(Parameters params, Store store) {
         this.store = store;
@@ -254,7 +211,6 @@ public class CHOAM {
         linear = new SimpleChannel<>(100);
         head = new NullBlock(params.digestAlgorithm());
         current = new Formation();
-        next = new Assembly(params.genesisViewId());
     }
 
     public void start() {
@@ -278,7 +234,7 @@ public class CHOAM {
         current.accept(next);
     }
 
-    private void checkpoint(Checkpoint checkpoint) {
+    private void checkpoint() {
         // TODO Auto-generated method stub
 
     }
@@ -324,35 +280,33 @@ public class CHOAM {
         return next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
     }
 
-    private void next() {
-        next = new Assembly(head.hash);
-    }
-
     private void process() {
-        if (head.block.hasExecutions()) {
-            process(head.block.getExecutions().getExecutionsList());
-        } else if (head.block.hasCheckpoint()) {
-            checkpoint(head.block.getCheckpoint());
+        switch (head.block.getBodyCase()) {
+        case CHECKPOINT:
+            checkpoint();
+            break;
+        case EXECUTIONS:
+            head.block.getExecutions().getExecutionsList().forEach(et -> execute(et));
+            break;
+        case RECONFIGURE:
+            reconfigure(head.block.getReconfigure());
+            break;
+        case GENESIS:
+            reconfigure(head.block.getGenesis().getInitialView());
+            head.block.getGenesis().getInitializeList().forEach(et -> execute(et));
+            break;
+        default:
+            break;
         }
-        throw new IllegalStateException("Should have already installed assembly or processed genesis");
-
     }
 
-    private void process(List<ExecutedTransaction> executions) {
-        for (ExecutedTransaction execution : executions) {
-            switch (execution.getTransation().getTransactionCase()) {
-            case JOIN: {
-                if (next != null) {
-                    next.join(execution);
-                }
-                break;
-            }
-            case USER:
-                execute(execution);
-                break;
-            default:
-                break;
-            }
+    private void reconfigure(Reconfigure reconfigure) {
+        current.complete();
+        var validators = validatorsOf(reconfigure, params.context());
+        if (validators.containsKey(params.member())) {
+            current = new Associate(head, validators);
+        } else {
+            current = new Client(head, validators);
         }
     }
 }

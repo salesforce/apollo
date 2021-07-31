@@ -100,4 +100,6 @@ public interface Committee {
         return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
                                 .count() > params().context().toleranceLevel() + 1;
     }
+
+    void complete();
 }

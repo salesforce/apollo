@@ -26,7 +26,8 @@ import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.CHOAM.Associate;
-import com.salesforce.apollo.choam.fsm.DrivenTransitions;
+import com.salesforce.apollo.choam.fsm.Driven;
+import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 import com.salesforce.apollo.choam.fsm.Earner;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
@@ -47,24 +48,7 @@ import com.salesforce.apollo.utils.SimpleChannel;
  *
  */
 public class Producer {
-    /**
-     * Leaf action interface for the Producer FSM
-     *
-     */
-    public interface Driven {
-        void awaitView();
-
-        void establishPrincipal();
-
-        void generateView();
-
-        void initialState();
-    }
-
-    /**
-     * Leaf action driver coupling for the Producer FSM
-     *
-     */
+    /** Leaf action driver coupling for the Producer FSM */
     private class DriveIn implements Driven {
         private int principal = 0;
 
@@ -109,13 +93,13 @@ public class Producer {
     private final Controller                     controller;
     private final ReliableBroadcaster            coordinator;
     private final Ethereal                       ethereal;
-    private final Fsm<Driven, DrivenTransitions> fsm;
+    private final Fsm<Driven, Transitions> fsm;
     private final SimpleChannel<Coordinate>      linear;
     private final Deque<PreBlock>                pending         = new LinkedList<>();
     private final CertifiedBlock.Builder         reconfiguration = CertifiedBlock.newBuilder();
     private final Map<Digest, Short>             roster          = new HashMap<>();
     private final BlockingDeque<Transaction>     transactions    = new LinkedBlockingDeque<>();
-    private final DrivenTransitions              transitions;
+    private final Transitions              transitions;
 
     public Producer(Associate associate, ReliableBroadcaster coordinator) {
         this.associate = associate;
@@ -129,7 +113,7 @@ public class Producer {
         this.coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
 
         // FSM driving this Earner
-        fsm = Fsm.construct(new DriveIn(), DrivenTransitions.class, Earner.INITIAL, true);
+        fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName(params().member().getId().toString());
         transitions = fsm.getTransitions();
 
@@ -141,6 +125,12 @@ public class Producer {
         controller = ethereal.deterministic(params().ethereal().clone().build(), dataSource(),
                                             preblock -> pending.add(preblock), preUnit -> broadcast(preUnit));
         transitions.start();
+    }
+
+    public void complete() {
+        controller.stop();
+        linear.close();
+        coordinator.stop();
     }
 
     /**

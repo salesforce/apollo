@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
-import com.chiralbehaviors.tron.Entry;
+import com.chiralbehaviors.tron.Entry; 
 
 /**
  * Reconfigures the view for the committee
@@ -14,16 +14,16 @@ import com.chiralbehaviors.tron.Entry;
  * @author hal.hildebrand
  *
  */
-public enum Regenerate implements DrivenTransitions {
+public enum Regenerate implements Regeneration.Transitions {
     BUILD {
 
         @Override
-        public DrivenTransitions assumeDelegate() {
+        public Regeneration.Transitions assumeDelegate() {
             return DELEGATE;
         }
 
         @Override
-        public DrivenTransitions assumePrincipal() {
+        public Regeneration.Transitions assumePrincipal() {
             return PRINCIPAL;
         }
 
@@ -32,42 +32,34 @@ public enum Regenerate implements DrivenTransitions {
             context().establishPrincipal();
         }
     },
-    DELEGATE { 
+    DELEGATE {
         @Entry
         public void awaitView() {
             context().awaitView();
         }
-    }, ESTABLISHED, GENERATED   {
-
-        @Override
-        public DrivenTransitions assumeDelegate() {
-            return Earner.DELEGATE;
-        }
-
-        @Override
-        public DrivenTransitions assumePrincipal() {
-            return Earner.PRINCIPAL;
-        }
+    },
+    ESTABLISHED, GENERATED {
+ 
 
         @Entry
         public void establishPrincipal() {
             context().establishPrincipal();
         }
     },
-    PRINCIPAL { 
+    PRINCIPAL {
         @Entry
         public void generateView() {
             context().generateView();
         }
     };
-
+  
     @Override
-    public DrivenTransitions establish() {
+    public Regeneration.Transitions establish() {
         return ESTABLISHED;
     }
-
+ 
     @Override
-    public DrivenTransitions generated() {
+    public Regeneration.Transitions generated() {
         return GENERATED;
     }
 }
