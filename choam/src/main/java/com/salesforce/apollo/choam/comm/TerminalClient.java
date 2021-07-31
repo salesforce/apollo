@@ -12,11 +12,15 @@ import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
+import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
-import com.salesforce.apollo.choam.ChoamMetrics;
+import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.Terminal;
+import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -46,6 +50,11 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
+    public void close() {
+        channel.release();
+    }
+
+    @Override
     public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
         return client.fetch(request);
     }
@@ -65,18 +74,22 @@ public class TerminalClient implements Terminal {
         return member;
     }
 
+    @Override
+    public ListenableFuture<ViewMember> join(JoinRequest join) {
+        return client.join(join);
+    }
+
     public void release() {
         close();
     }
 
     @Override
-    public void close() {
-        channel.release();
+    public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+        return client.submit(request);
     }
 
     @Override
     public ListenableFuture<Initial> sync(Synchronize sync) {
         return client.sync(sync);
     }
-
 }

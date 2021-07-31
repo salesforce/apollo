@@ -27,6 +27,7 @@ import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
+import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.fsm.Earner;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Data.PreBlock;

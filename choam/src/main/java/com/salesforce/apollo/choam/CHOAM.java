@@ -34,10 +34,13 @@ import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesforce.apollo.choam.comm.TerminalClient;
+import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.Store;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
@@ -58,33 +61,27 @@ public class CHOAM {
     public class Concierge {
 
         public SubmitResult clientSubmit(SubmitTransaction request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.clientSubmit(request, from);
         }
 
         public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.fetch(request, from);
         }
 
         public Blocks fetchBlocks(BlockReplication request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.fetchBlocks(request, from);
         }
 
         public Blocks fetchViewChain(BlockReplication request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.fetchViewChain(request, from);
         }
 
         public ViewMember join(JoinRequest request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.join(request, from);
         }
 
         public Initial sync(Synchronize request, Digest from) {
-            // TODO Auto-generated method stub
-            return null;
+            return CHOAM.this.sync(request, from);
         }
 
     }
@@ -225,19 +222,21 @@ public class CHOAM {
     }
 
     @SuppressWarnings("unused")
-    private HashedCertifiedBlock                      checkpoint;
-    private final ReliableBroadcaster                 combine;
-    private Committee                                 current;
-    private HashedCertifiedBlock                      genesis;
-    private HashedCertifiedBlock                      head;
-    private final Channel<HashedCertifiedBlock>       linear;
-    private final Logger                              log     = LoggerFactory.getLogger(CHOAM.class);
-    private final Parameters                          params;
-    private final PriorityQueue<HashedCertifiedBlock> pending = new PriorityQueue<>();
-    private final AtomicBoolean                       started = new AtomicBoolean();
-    private final Store                               store;
+    private HashedCertifiedBlock                            checkpoint;
+    private final ReliableBroadcaster                       combine;
     @SuppressWarnings("unused")
-    private HashedCertifiedBlock                      view;
+    private final CommonCommunications<Terminal, Concierge> comm;
+    private Committee                                       current;
+    private HashedCertifiedBlock                            genesis;
+    private HashedCertifiedBlock                            head;
+    private final Channel<HashedCertifiedBlock>             linear;
+    private final Logger                                    log     = LoggerFactory.getLogger(CHOAM.class);
+    private final Parameters                                params;
+    private final PriorityQueue<HashedCertifiedBlock>       pending = new PriorityQueue<>();
+    private final AtomicBoolean                             started = new AtomicBoolean();
+    private final Store                                     store;
+    @SuppressWarnings("unused")
+    private HashedCertifiedBlock                            view;
 
     public CHOAM(Parameters params, Store store) {
         this.store = store;
@@ -247,6 +246,11 @@ public class CHOAM {
         linear = new SimpleChannel<>(100);
         head = new NullBlock(params.digestAlgorithm());
         current = new Formation();
+        comm = params.communications()
+                     .create(params.member(), params.context().getId(), new Concierge(),
+                             r -> new TerminalServer(params.communications().getClientIdentityProvider(),
+                                                     params.metrics(), r),
+                             TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
     }
 
     public void start() {
@@ -273,6 +277,11 @@ public class CHOAM {
     private void checkpoint() {
         // TODO Auto-generated method stub
 
+    }
+
+    private SubmitResult clientSubmit(SubmitTransaction request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private void combine() {
@@ -312,8 +321,28 @@ public class CHOAM {
         });
     }
 
+    private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private Blocks fetchBlocks(BlockReplication request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private Blocks fetchViewChain(BlockReplication request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     private boolean isNext(HashedBlock next) {
         return next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
+    }
+
+    private ViewMember join(JoinRequest request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     private void process() {
@@ -344,5 +373,10 @@ public class CHOAM {
         } else {
             current = new Client(head, validators);
         }
+    }
+
+    private Initial sync(Synchronize request, Digest from) {
+        // TODO Auto-generated method stub
+        return null;
     }
 }

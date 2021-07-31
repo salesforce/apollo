@@ -14,11 +14,17 @@ import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
+import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
+import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
 
 /**
+ * Terminal RPC endpoint for CHOAM
+ * 
  * @author hal.hildebrand
  *
  */
@@ -55,6 +61,16 @@ public interface Terminal extends Link {
             public ListenableFuture<Initial> sync(Synchronize sync) {
                 return null;
             }
+
+            @Override
+            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) { 
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<ViewMember> join(JoinRequest join) { 
+                return null;
+            }
         };
     }
 
@@ -65,4 +81,8 @@ public interface Terminal extends Link {
     ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
 
     ListenableFuture<Initial> sync(Synchronize sync);
+
+    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
+
+    ListenableFuture<ViewMember> join(JoinRequest join);
 }

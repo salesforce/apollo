@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.MetricRegistry;
 import com.salesfoce.apollo.choam.proto.Coordinate;
-import com.salesforce.apollo.choam.ChoamMetrics;
 import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
