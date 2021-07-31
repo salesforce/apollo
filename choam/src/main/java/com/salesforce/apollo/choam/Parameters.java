@@ -32,7 +32,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
  *
  */
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
-                         ReliableBroadcaster.Parameters combineParameters, ScheduledExecutorService scheduler,
+                         ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxBatchSize, int maxBatchByteSize, int maxCheckpointSegments,
                          Duration submitTimeout, int processedBufferSize, Message genesisData, Digest genesisViewId,
                          int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
@@ -50,14 +50,14 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Function<Long, File>                   checkpointer          = c -> {
                                                                                  throw new IllegalStateException("No checkpointer defined");
                                                                              };
-        private ReliableBroadcaster.Parameters         combineParams;
+        private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private Router                                 communications;
         private Context<Member>                        context;
-        private ReliableBroadcaster.Parameters.Builder coordination;
+        private ReliableBroadcaster.Parameters.Builder coordination          = ReliableBroadcaster.Parameters.newBuilder();
         private int                                    deltaCheckpointBlocks = 500;
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
-        private Config.Builder                         ethereal;
+        private Config.Builder                         ethereal              = Config.newBuilder();
         private TransactionExecutor                    executor              = (bh, et, c) -> {
                                                                              };
         private Message                                genesisData;
@@ -93,7 +93,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return checkpointer;
         }
 
-        public ReliableBroadcaster.Parameters getCombineParams() {
+        public ReliableBroadcaster.Parameters.Builder getCombineParams() {
             return combineParams;
         }
 
@@ -203,7 +203,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setCombineParams(ReliableBroadcaster.Parameters combineParams) {
+        public Builder setCombineParams(ReliableBroadcaster.Parameters.Builder combineParams) {
             this.combineParams = combineParams;
             return this;
         }

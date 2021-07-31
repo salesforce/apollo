@@ -15,6 +15,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.Channel;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -266,6 +268,7 @@ public class CHOAM {
     private final Channel<HashedCertifiedBlock>             linear;
     private final Parameters                                params;
     private final PriorityQueue<HashedCertifiedBlock>       pending = new PriorityQueue<>();
+    private RoundScheduler                                  roundScheduler;
     private final AtomicBoolean                             started = new AtomicBoolean();
     private final Store                                     store;
     @SuppressWarnings("unused")
@@ -273,10 +276,16 @@ public class CHOAM {
     @SuppressWarnings("unused")
     private HashedCertifiedBlock                            view;
 
+    public CHOAM(Parameters params, MVStore store) {
+        this(params, new Store(params.digestAlgorithm(), store));
+    }
+
     public CHOAM(Parameters params, Store store) {
         this.store = store;
         this.params = params;
-        combine = new ReliableBroadcaster(params.combineParameters(), params.communications());
+        combine = new ReliableBroadcaster(params.combineParameters().setMember(params.member())
+                                                .setContext(params.context()).build(),
+                                          params.communications());
         combine.registerHandler((ctx, messages) -> combine(messages));
         linear = new SimpleChannel<>(100);
         head = new NullBlock(params.digestAlgorithm());
@@ -288,6 +297,8 @@ public class CHOAM {
                              TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
         fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         transitions = fsm.getTransitions();
+        roundScheduler = new RoundScheduler(params.context().getRingCount());
+        combine.register(i -> roundScheduler.tick(i));
     }
 
     public void start() {
@@ -296,6 +307,7 @@ public class CHOAM {
         }
         linear.open();
         linear.consumeEach(b -> accept(b));
+        combine.start(params.gossipDuration(), params.scheduler());
         fsm.enterStartState();
     }
 

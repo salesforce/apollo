@@ -54,9 +54,8 @@ message Header {
     int64 lastReconfig = 3;
     utils.Digeste lastCheckpointHash = 4;
     utils.Digeste lastReconfigHash = 5;
-    utils.Digeste nonce = 6;
-    utils.Digeste previous = 7;
-    utils.Digeste bodyHash = 8;
+    utils.Digeste previous = 6;
+    utils.Digeste bodyHash = 7;
 }
 
 message Genesis { 

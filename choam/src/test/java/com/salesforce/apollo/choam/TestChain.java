@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package choamcom.salesforce.apollo.choam;
+package com.salesforce.apollo.choam;
 
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;

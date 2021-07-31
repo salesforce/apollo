@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam.support;
 
 import com.salesfoce.apollo.choam.proto.Coordinate;
+import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
 
@@ -14,7 +15,7 @@ import com.salesforce.apollo.ethereal.PreUnit;
  * @author hal.hildebrand
  *
  */
-public interface ChoamMetrics {
+public interface ChoamMetrics extends RouterMetrics {
 
     void publishedBatch(int batchSize, int byteSize);
 

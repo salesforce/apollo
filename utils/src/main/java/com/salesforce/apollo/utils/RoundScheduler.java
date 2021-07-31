@@ -73,7 +73,6 @@ public class RoundScheduler extends AtomicInteger {
 
     private final int                  roundDuration;
     private final PriorityQueue<Timer> scheduled = new PriorityQueue<>();
-    private volatile int               tick      = 0;
 
     public RoundScheduler(int roundDuration) {
         this.roundDuration = roundDuration;
@@ -88,8 +87,8 @@ public class RoundScheduler extends AtomicInteger {
         return timer;
     }
 
-    public void tick() {
-        if (tick++ % roundDuration != 0) {
+    public void tick(int i) {
+        if (i % roundDuration != 0) {
             return;
         }
         int current = incrementAndGet();

@@ -18,7 +18,7 @@ public class HashedCertifiedBlock extends HashedBlock {
     public static class NullBlock extends HashedCertifiedBlock {
 
         public NullBlock(DigestAlgorithm algo) {
-            super(algo.getOrigin(), null);
+            super(algo.getOrigin());
         }
 
         @Override
@@ -39,6 +39,11 @@ public class HashedCertifiedBlock extends HashedBlock {
 
     public HashedCertifiedBlock(DigestAlgorithm digestAlgorithm, CertifiedBlock block) {
         this(digestAlgorithm.digest(block.getBlock().toByteString()), block);
+    }
+
+    HashedCertifiedBlock(Digest hash) {
+        super(hash);
+        this.certifiedBlock = null;
     }
 
     private HashedCertifiedBlock(Digest hash, CertifiedBlock block) {

@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,7 +24,6 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.Utils;
 
 public class HashedBlock implements Comparable<HashedBlock> {
     public static class NullBlock extends HashedBlock {
@@ -51,17 +49,12 @@ public class HashedBlock implements Comparable<HashedBlock> {
     private static final Logger log = LoggerFactory.getLogger(HashedBlock.class);
 
     public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, long height,
-                               long lastCheckpoint, Digest lastCheckpointHash, long lastReconfig,
-                               Digest lastReconfigHash) {
-        long[] nonce = new long[digestAlgorithm.longLength()];
-        for (int i = 0; i < nonce.length; i++) {
-            SecureRandom entropy = Utils.secureEntropy();
-            nonce[i] = entropy.nextLong();
-        }
+                                     long lastCheckpoint, Digest lastCheckpointHash, long lastReconfig,
+                                     Digest lastReconfigHash) {
         return Header.newBuilder().setLastCheckpoint(lastCheckpoint)
                      .setLastCheckpointHash(lastCheckpointHash.toDigeste()).setLastReconfig(lastReconfig)
                      .setLastReconfigHash(lastReconfigHash.toDigeste()).setHeight(height)
-                     .setPrevious(previous.toDigeste()).setNonce(new Digest(digestAlgorithm, nonce).toDigeste())
+                     .setPrevious(previous.toDigeste())
                      .setBodyHash(digestAlgorithm.digest(body.toByteString().asReadOnlyByteBufferList()).toDigeste())
                      .build();
     }
@@ -141,6 +134,11 @@ public class HashedBlock implements Comparable<HashedBlock> {
 
     public HashedBlock(DigestAlgorithm digestAlgorithm, Block block) {
         this(digestAlgorithm.digest(block.toByteString()), block);
+    }
+
+    HashedBlock(Digest hash) {
+        this.hash = hash;
+        block = null;
     }
 
     HashedBlock(Digest hash, Block block) {
