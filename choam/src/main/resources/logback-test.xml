@@ -26,7 +26,7 @@
 		<appender-ref ref="STDOUT" />
 	</logger>
 
-	<logger name="com.salesforce.apollo.choam" level="info"
+	<logger name="com.salesforce.apollo.choam" level="trace"
 		additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger>
@@ -36,7 +36,7 @@
 		<appender-ref ref="STDOUT" />
 	</logger>
 
-	<logger name="com.chiralbehaviors.tron" level="INFO"
+	<logger name="com.chiralbehaviors.tron" level="trace"
 		additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger>

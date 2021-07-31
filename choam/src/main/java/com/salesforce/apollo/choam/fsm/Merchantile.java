@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.Entry;
+import com.chiralbehaviors.tron.Exit;
 import com.salesforce.apollo.choam.fsm.Combine.Transitions;
 
 /**
@@ -15,25 +16,28 @@ import com.salesforce.apollo.choam.fsm.Combine.Transitions;
  */
 public enum Merchantile implements Transitions {
     AWAITING_REGENERATION {
-
         @Override
         public Transitions synchronizationFailed() {
-            context().awaitSynchronization();
+            context().awaitRegeneration();
             return null;
         }
 
         @Entry
         public void synchronizeContext() {
-            context().awaitSynchronization();
+            context().awaitRegeneration();
         }
     },
-    INITIAL {
+    BOOTSTRAPPING, INITIAL {
         @Override
         public Transitions start() {
             return RECOVERING;
         }
     },
     OPERATIONAL, PROTOCOL_FAILURE, RECOVERING {
+        @Exit
+        public void cancelTimer() {
+            context().cancelTimer(Combine.AWAIT_SYNC);
+        }
 
         @Override
         public Transitions regenerate() {
@@ -56,7 +60,6 @@ public enum Merchantile implements Transitions {
         }
     },
     REGENERATING {
-
         @Entry
         public void regenerateView() {
             context().regenerate();

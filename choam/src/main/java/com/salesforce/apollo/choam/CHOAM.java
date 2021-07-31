@@ -66,15 +66,33 @@ public class CHOAM {
     public class Combiner implements Combine {
 
         @Override
-        public void awaitSynchronization() {
+        public void awaitRegeneration() {
             // TODO Auto-generated method stub
 
+        }
+
+        @Override
+        public void awaitSynchronization() {
+            roundScheduler.schedule(AWAIT_SYNC, () -> synchronizationFailed(), 2);
+        }
+
+        @Override
+        public void cancelTimer(String timer) {
+            roundScheduler.cancel(timer);
         }
 
         @Override
         public void regenerate() {
             // TODO Auto-generated method stub
 
+        }
+
+        private void synchronizationFailed() {
+            if (current.isMember()) {
+                transitions.regenerate();
+            } else {
+                transitions.synchronizationFailed();
+            }
         }
 
     }
@@ -156,6 +174,11 @@ public class CHOAM {
         }
 
         @Override
+        public boolean isMember() {
+            return validators.containsKey(params.member());
+        }
+
+        @Override
         public Parameters params() {
             return params;
         }
@@ -184,14 +207,13 @@ public class CHOAM {
 
     /** The Genesis formation comittee */
     private class Formation implements Committee {
-        @SuppressWarnings("unused")
-        private final Producer producer;
+        private final Context<Member> formation;
+        private final Producer        producer;
 
         private Formation() {
-            var context = new Context<>(params.genesisViewId(), 0.33, params.context().getRingCount());
-            context.successors(params.genesisViewId()).forEach(m -> context.activate(m));
+            formation = Committee.viewFor(params.genesisViewId(), params.context());
             producer = new Producer(new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
-                                                                  .setContext(context).build(),
+                                                                  .setContext(formation).build(),
                                                             params.communications()),
                                     params);
         }
@@ -207,14 +229,18 @@ public class CHOAM {
 
         @Override
         public void complete() {
-            // TODO Auto-generated method stub
-
+            producer.complete();
         }
 
         @Override
         public HashedBlock getViewChange() {
             assert genesis != null;
             return genesis;
+        }
+
+        @Override
+        public boolean isMember() {
+            return formation.isActive(params.member());
         }
 
         @Override
@@ -271,7 +297,6 @@ public class CHOAM {
     private RoundScheduler                                  roundScheduler;
     private final AtomicBoolean                             started = new AtomicBoolean();
     private final Store                                     store;
-    @SuppressWarnings("unused")
     private final Combine.Transitions                       transitions;
     @SuppressWarnings("unused")
     private HashedCertifiedBlock                            view;
@@ -296,6 +321,7 @@ public class CHOAM {
                                                      params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
         fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
+        fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler(params.context().getRingCount());
         combine.register(i -> roundScheduler.tick(i));
@@ -309,6 +335,7 @@ public class CHOAM {
         linear.consumeEach(b -> accept(b));
         combine.start(params.gossipDuration(), params.scheduler());
         fsm.enterStartState();
+        transitions.start();
     }
 
     public void stop() {

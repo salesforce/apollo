@@ -56,7 +56,8 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
     @Override
     public void consume(Consumer<List<T>> consumer) {
         if (closed.get()) {
-            throw new IllegalStateException("Channel already closed");
+            log.debug("Channel is already closed");
+            return;
         }
         if (handler != null) {
             throw new IllegalStateException("Handler already established");

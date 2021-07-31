@@ -11,6 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -34,7 +35,6 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public interface Committee {
-
     static final Logger log = LoggerFactory.getLogger(Committee.class);
 
     static Map<Member, Verifier> validators(Map<Member, ViewMember> validators) {
@@ -50,12 +50,42 @@ public interface Committee {
                                                     e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
     }
 
+    /**
+     * Create a view based on the cut of the supplied hash across the rings of the
+     * base context
+     */
+    static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
+        Context<Member> newView = new Context<>(hash, 0.33, baseContext.getRingCount());
+        Set<Member> successors = new HashSet<>();
+        baseContext.successors(hash, m -> {
+            if (successors.size() == baseContext.getRingCount()) {
+                return false;
+            }
+            boolean contained = successors.contains(m);
+            successors.add(m);
+            return !contained;
+        });
+        assert successors.size() == baseContext.getRingCount();
+        successors.forEach(e -> {
+            if (baseContext.isActive(e)) {
+                newView.activate(e);
+            } else {
+                newView.offline(e);
+            }
+        });
+        assert newView.getActive().size() + newView.getOffline().size() == baseContext.getRingCount();
+        return newView;
+    }
+
     void accept(HashedCertifiedBlock next);
+
+    void complete();
 
     HashedBlock getViewChange();
 
+    boolean isMember();
+
     Parameters params();
- 
 
     default boolean validate(byte[] headerHash, Certification c, Map<Member, Verifier> validators) {
         Parameters params = params();
@@ -100,6 +130,4 @@ public interface Committee {
         return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
                                 .count() > params().context().toleranceLevel() + 1;
     }
-
-    void complete();
 }

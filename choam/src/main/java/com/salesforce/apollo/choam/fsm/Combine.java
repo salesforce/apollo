@@ -13,16 +13,17 @@ import com.chiralbehaviors.tron.FsmExecutor;
  *
  */
 public interface Combine {
+
     interface Transitions extends FsmExecutor<Combine, Combine.Transitions> {
         default Transitions fail() {
             return Merchantile.PROTOCOL_FAILURE;
         }
 
-        default Transitions regenerated() {
+        default Transitions regenerate() {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions regenerate() {
+        default Transitions regenerated() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -39,7 +40,13 @@ public interface Combine {
         }
     }
 
+    static final String AWAIT_SYNC = "AWAIT_SYNC";
+
+    void awaitRegeneration();
+
     void awaitSynchronization();
 
     void regenerate();
+    
+    void cancelTimer(String timer);
 }

@@ -7,7 +7,9 @@
 package com.salesforce.apollo.utils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -35,7 +37,9 @@ public class RoundScheduler extends AtomicInteger {
 
         public boolean cancel() {
             cancelled = true;
-            return scheduled.remove(this);
+            boolean remove = scheduled.remove(this);
+            timers.remove(label);
+            return remove;
         }
 
         @Override
@@ -52,6 +56,7 @@ public class RoundScheduler extends AtomicInteger {
             if (isCancelled) {
                 return;
             }
+            timers.remove(label);
             try {
                 action.run();
             } catch (Throwable t) {
@@ -73,15 +78,27 @@ public class RoundScheduler extends AtomicInteger {
 
     private final int                  roundDuration;
     private final PriorityQueue<Timer> scheduled = new PriorityQueue<>();
+    private final Map<String, Timer>   timers    = new HashMap<>();
 
     public RoundScheduler(int roundDuration) {
         this.roundDuration = roundDuration;
+    }
+
+    public void cancel(String label) {
+        var t = timers.remove(label);
+        if (t != null) {
+            t.cancel();
+        }
     }
 
     public Timer schedule(String label, Runnable action, int delayRounds) {
         Timer timer = new Timer(label, get() + delayRounds, action);
         if (delayRounds == 0) {
             return timer;
+        }
+        Timer prev = timers.put(label, timer);
+        if (prev != null) {
+            prev.cancel();
         }
         scheduled.add(timer);
         return timer;

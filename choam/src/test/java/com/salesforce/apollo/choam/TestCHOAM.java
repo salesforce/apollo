@@ -6,12 +6,15 @@
  */
 package com.salesforce.apollo.choam;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +36,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int CARDINALITY = 4;
+    private static final int CARDINALITY = 5;
 
     private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;
@@ -56,7 +59,9 @@ public class TestCHOAM {
     public void before() {
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, CARDINALITY);
         Parameters.Builder params = Parameters.newBuilder().setContext(context)
-                                              .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638));
+                                              .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
+                                              .setGossipDuration(Duration.ofMillis(10))
+                                              .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
@@ -75,7 +80,8 @@ public class TestCHOAM {
     }
 
     @Test
-    public void smoke() {
-
+    public void regenerateGenesis() throws Exception {
+        choams.values().forEach(ch -> ch.start());
+        Thread.sleep(1000);
     }
 }
