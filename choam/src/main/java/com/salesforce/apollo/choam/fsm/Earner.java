@@ -18,7 +18,7 @@ public enum Earner implements Driven.Transitions {
     DELEGATE, INITIAL {
 
         @Override
-        public Transitions reconfigure() {
+        public Transitions regenerate() {
             return Reconfigure.GATHER;
         }
 

@@ -8,19 +8,22 @@ package com.salesforce.apollo.choam;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import com.google.protobuf.Message;
+import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -34,12 +37,13 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
                          ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxBatchSize, int maxBatchByteSize, int maxCheckpointSegments,
-                         Duration submitTimeout, int processedBufferSize, Message genesisData, Digest genesisViewId,
-                         int maxCheckpointBlocks, TransactionExecutor executor, Function<Long, File> checkpointer,
-                         int deltaCheckpointBlocks, File storeFile, int checkpointBlockSize, Executor dispatcher,
-                         BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
-                         ReliableBroadcaster.Parameters.Builder coordination, Config.Builder ethereal, int lifetime,
-                         ChoamMetrics metrics) {
+                         Duration submitTimeout, int processedBufferSize, List<ExecutedTransaction> genesisData,
+                         Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor executor,
+                         Function<Long, File> checkpointer, int deltaCheckpointBlocks, File storeFile,
+                         int checkpointBlockSize, Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
+                         DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
+                         Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
+                         SignatureAlgorithm viewSigAlgorithm) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -60,7 +64,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Config.Builder                         ethereal              = Config.newBuilder();
         private TransactionExecutor                    executor              = (bh, et, c) -> {
                                                                              };
-        private Message                                genesisData;
+        private List<ExecutedTransaction>              genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration;
         private int                                    lifetime              = 100;
@@ -76,13 +80,15 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private ScheduledExecutorService               scheduler;
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
+        private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
-                                  restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics);
+                                  restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
+                                  viewSigAlgorithm);
         }
 
         public int getCheckpointBlockSize() {
@@ -129,7 +135,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return executor;
         }
 
-        public Message getGenesisData() {
+        public List<ExecutedTransaction> getGenesisData() {
             return genesisData;
         }
 
@@ -193,6 +199,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return submitTimeout;
         }
 
+        public SignatureAlgorithm getViewSigAlgorithm() {
+            return viewSigAlgorithm;
+        }
+
         public Builder setCheckpointBlockSize(int checkpointBlockSize) {
             this.checkpointBlockSize = checkpointBlockSize;
             return this;
@@ -249,7 +259,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setGenesisData(Message genesisData) {
+        public Builder setGenesisData(List<ExecutedTransaction> genesisData) {
             this.genesisData = genesisData;
             return this;
         }
@@ -326,6 +336,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
+            return this;
+        }
+
+        public Builder setViewSigAlgorithm(SignatureAlgorithm viewSigAlgorithm) {
+            this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
 

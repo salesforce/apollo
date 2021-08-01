@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.choam.proto.Block;
+import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Publish;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -26,6 +27,10 @@ public interface Driven {
     interface Transitions extends FsmExecutor<Driven, Transitions> {
         static Logger log = LoggerFactory.getLogger(Transitions.class);
 
+        default Transitions assembled() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions assumeDelegate() {
             throw fsm().invalidTransitionOn();
         }
@@ -38,11 +43,23 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions failed() {
+            return Earner.PROTOCOL_FAILURE;
+        }
+
         default Transitions generated() {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions joins(Joins joins) {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions key(HashedCertifiedBlock keyBlock) {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions nominated() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -54,7 +71,11 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default void reconfigure(Block reconfigure) {
+        default Transitions reconfigure(Block reconfigure) {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions reconfigured() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -70,25 +91,32 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions assembled() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions reconfigured() {
-            throw fsm().invalidTransitionOn();
-        }
-
     }
+
+    String RECONFIGURE = "RECONFIGURE";
+    String RECONVENE   = "RECONVENE";
+
+    void assemble(Joins joins);
 
     void awaitView();
 
+    void cancelTimer(String label);
+
+    void convene();
+
     void establishPrincipal();
+
+    void gatherAssembly();
 
     void generateView();
 
     void initialState();
 
-    void gatherAssembly();
+    void reconfigure();
 
-    void convene();
+    void reconfigure(Block reconfigure);
+
+    void reform();
+
+    void validation(Validate validate);
 }

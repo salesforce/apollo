@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import static com.salesforce.apollo.choam.support.HashedBlock.hash;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 import com.salesfoce.apollo.choam.proto.Certification;
+import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
@@ -56,16 +58,7 @@ public interface Committee {
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
         Context<Member> newView = new Context<>(hash, 0.33, baseContext.getRingCount());
-        Set<Member> successors = new HashSet<>();
-        baseContext.successors(hash, m -> {
-            if (successors.size() == baseContext.getRingCount()) {
-                return false;
-            }
-            boolean contained = successors.contains(m);
-            successors.add(m);
-            return !contained;
-        });
-        assert successors.size() == baseContext.getRingCount();
+        Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> {
             if (baseContext.isActive(e)) {
                 newView.activate(e);
@@ -77,6 +70,20 @@ public interface Committee {
         return newView;
     }
 
+    static Set<Member> viewMembersOf(Digest hash, Context<? super Member> baseContext) {
+        Set<Member> successors = new HashSet<>();
+        baseContext.successors(hash, m -> {
+            if (successors.size() == baseContext.getRingCount()) {
+                return false;
+            }
+            boolean contained = successors.contains(m);
+            successors.add(m);
+            return !contained;
+        });
+        assert successors.size() == baseContext.getRingCount();
+        return successors;
+    }
+
     void accept(HashedCertifiedBlock next);
 
     void complete();
@@ -85,7 +92,13 @@ public interface Committee {
 
     boolean isMember();
 
+    ViewMember join(JoinRequest request, Digest from);
+
     Parameters params();
+
+    default void regenerate() {
+        throw new IllegalStateException("Should not be called on this implementation");
+    }
 
     default boolean validate(byte[] headerHash, Certification c, Map<Member, Verifier> validators) {
         Parameters params = params();
@@ -123,9 +136,10 @@ public interface Committee {
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
         var validators = validatorsOf(reconfigure, params().context());
-        Sets.difference(validators.keySet(),
-                        new HashSet<>(params().context().successors(new Digest(reconfigure.getId()))))
-            .forEach(m -> validators.remove(m));
+        ArrayList<Member> diff = new ArrayList<>(Sets.difference(validators.keySet(),
+                                                                 viewMembersOf(new Digest(reconfigure.getId()),
+                                                                               params().context())));
+        diff.forEach(m -> validators.remove(m));
         var headerHash = HashedBlock.hash(hb.block.getHeader(), params().digestAlgorithm()).getBytes();
         return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
                                 .count() > params().context().toleranceLevel() + 1;

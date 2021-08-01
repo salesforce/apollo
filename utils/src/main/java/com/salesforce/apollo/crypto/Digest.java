@@ -235,7 +235,8 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public String toString() {
-        return "[" + Hex.toHexString(getBytes()).substring(0, 12) + ":" + algorithm.digestCode() + "]";
+        String hexString = Hex.toHexString(getBytes());
+        return "[" + hexString.substring(0, Math.min(hexString.length(), 12)) + ":" + algorithm.digestCode() + "]";
     }
 
     public Digest xor(Digest b) {

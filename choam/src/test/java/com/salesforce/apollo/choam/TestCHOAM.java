@@ -81,7 +81,8 @@ public class TestCHOAM {
 
     @Test
     public void regenerateGenesis() throws Exception {
+        routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Thread.sleep(1000);
+        Thread.sleep(10_000);
     }
 }

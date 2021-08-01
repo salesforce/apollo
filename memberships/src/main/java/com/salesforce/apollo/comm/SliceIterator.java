@@ -30,7 +30,7 @@ import com.salesforce.apollo.utils.Utils;
 public class SliceIterator<Comm extends Link> {
     @FunctionalInterface
     public interface SlicePredicateHandler<T, Comm> {
-        boolean handle(Optional<ListenableFuture<T>> futureSailor, Comm communications, int ring);
+        boolean handle(Optional<ListenableFuture<T>> futureSailor, Comm communications, Member member);
     }
 
     private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
@@ -39,29 +39,30 @@ public class SliceIterator<Comm extends Link> {
     private final Executor                      executor;
     private String                              label;
     private final SigningMember                 member;
+    private final List<? extends Member>        slice;
 
-    private final List<Member> slice;
-
-    public SliceIterator(String label, SigningMember member, List<Member> slice, CommonCommunications<Comm, ?> comm,
-                         Executor executor) {
+    public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
+                         CommonCommunications<Comm, ?> comm, Executor executor) {
+        assert member != null && slice != null && comm != null && executor != null;
+        this.label = label;
         this.member = member;
         this.slice = slice;
         this.comm = comm;
         this.executor = executor;
     }
 
-    public <T> void iterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
+    public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
                             SlicePredicateHandler<T, Comm> handler) {
         iterate(round, handler, null);
     }
 
-    public <T> void iterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
+    public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,
+                            Runnable onComplete) {
         executor.execute(Utils.wrapped(() -> internalIterate(round, handler, onComplete), log));
 
     }
 
-    private <T> void internalIterate(BiFunction<Comm, Integer, ListenableFuture<T>> round,
+    private <T> void internalIterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
                                      SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
         Runnable proceed = () -> internalIterate(round, handler, onComplete);
 
@@ -70,22 +71,22 @@ public class SliceIterator<Comm extends Link> {
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete);
         try (Comm link = next()) {
             if (link == null) {
-                log.trace("No successor found on: {} ring: {}  on: {}", label, current, member);
-                final boolean allow = handler.handle(Optional.empty(), link, current);
+                log.trace("No link found on: {} member: {}  on: {}", label, slice.get(current), member);
+                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current));
                 allowed.accept(allow);
                 return;
             }
-            log.trace("Iteration on: {} ring: {} to: {} on: {}", label, current, link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, current);
+            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current, link.getMember(), member);
+            ListenableFuture<T> futureSailor = round.apply(link, slice.get(current));
             if (futureSailor == null) {
-                log.trace("No asynchronous response  on: {} ring: {} from: {} on: {}", label, current, link.getMember(),
+                log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current, link.getMember(),
                           member);
-                final boolean allow = handler.handle(Optional.empty(), link, current);
+                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current));
                 allowed.accept(allow);
                 return;
             }
             futureSailor.addListener(Utils.wrapped(() -> {
-                allowed.accept(handler.handle(Optional.of(futureSailor), link, current));
+                allowed.accept(handler.handle(Optional.of(futureSailor), link, slice.get(current)));
             }, log), executor);
         } catch (IOException e) {
             log.debug("Error closing", e);
@@ -124,16 +125,16 @@ public class SliceIterator<Comm extends Link> {
         log.trace("Determining continuation for: {} final itr: {} allow: {} on: {}", label, finalIteration, allow,
                   member);
         if (finalIteration && allow) {
-            log.trace("Final iteration of: {} for: {}   on: {}", label, member);
+            log.trace("Final iteration of: {} on: {}", label, member);
             if (onComplete != null) {
-                log.trace("Completing iteration for: {}   on: {}", label, member);
+                log.trace("Completing iteration for: {} on: {}", label, member);
                 onComplete.run();
             }
         } else if (allow) {
-            log.trace("Proceeding for: {} tally: {} on: {}", label, member);
+            log.trace("Proceeding for: {} on: {}", label, member);
             executor.execute(Utils.wrapped(proceed, log));
         } else {
-            log.trace("Termination for: {} tally: {} on: {}", label, member);
+            log.trace("Termination for: {} on: {}", label, member);
         }
     }
 }

@@ -137,6 +137,10 @@ message Validate {
     Certification witness = 2;
 }
 
+message Joins {
+    repeated Join joins = 1;
+}
+
 /** Coordination **/
 
 message Coordinate {
@@ -145,6 +149,7 @@ message Coordinate {
         Validate validate = 2;
         Publish publish = 3;
         Block reconfigure = 4;
+        Joins joins = 5;
     }
 }
 
