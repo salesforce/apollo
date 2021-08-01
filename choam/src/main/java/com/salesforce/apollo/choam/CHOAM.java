@@ -174,12 +174,14 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            head = hb;
+            log.info("Accepted block: {} on: {}", hb.hash, params.member());
             process();
         }
 
         @Override
         public void complete() {
+            log.info("Committee completion of: {} on: {}", getViewChange().block.getReconfigure().getId(),
+                     params.member());
         }
 
         @Override
@@ -250,15 +252,17 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            head = hb;
             genesis = head;
             checkpoint = head;
             view = head;
+            log.info("Accepted genesis block: {} on: {}", hb.hash, params.member());
             process();
         }
 
         @Override
         public void complete() {
+            log.info("Committee completion of: {} on: {}", getViewChange().block.getReconfigure().getId(),
+                     params.member());
             producer.complete();
         }
 
@@ -435,6 +439,7 @@ public class CHOAM {
                 linear.submit(nextBlock);
             } else {
                 log.debug("unable to validate block: {} on: {}", next.hash, params.member());
+//                pending.poll();
             }
             next = pending.peek();
         }

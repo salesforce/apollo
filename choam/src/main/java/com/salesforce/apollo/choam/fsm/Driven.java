@@ -96,9 +96,7 @@ public interface Driven {
     String RECONFIGURE = "RECONFIGURE";
     String RECONVENE   = "RECONVENE";
 
-    void assemble(Joins joins);
-
-    void awaitView();
+    void assemble(Joins joins); 
 
     void cancelTimer(String label);
 
@@ -106,17 +104,15 @@ public interface Driven {
 
     void establishPrincipal();
 
-    void gatherAssembly();
-
-    void generateView();
+    void gatherAssembly(); 
 
     void initialState();
 
+    void published(Publish published);
+
     void reconfigure();
 
-    void reconfigure(Block reconfigure);
-
-    void reform();
+    void reconfigure(Block reconfigure); 
 
     void validation(Validate validate);
 }

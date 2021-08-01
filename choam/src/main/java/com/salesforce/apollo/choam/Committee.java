@@ -142,6 +142,6 @@ public interface Committee {
         diff.forEach(m -> validators.remove(m));
         var headerHash = HashedBlock.hash(hb.block.getHeader(), params().digestAlgorithm()).getBytes();
         return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
-                                .count() > params().context().toleranceLevel() + 1;
+                                .count() > params().context().toleranceLevel();
     }
 }

@@ -110,7 +110,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
 
     @Override
     public void open() {
-        if (!closed.compareAndSet(false, true)) {
+        if (!closed.compareAndSet(true, false)) {
             queue.clear();
         }
     }

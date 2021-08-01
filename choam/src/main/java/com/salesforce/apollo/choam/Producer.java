@@ -45,6 +45,7 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Join.Builder;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Joins;
+import com.salesfoce.apollo.choam.proto.Publish;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -131,12 +132,6 @@ public class Producer {
         }
 
         @Override
-        public void awaitView() {
-            // TODO Auto-generated method stub
-
-        }
-
-        @Override
         public void cancelTimer(String label) {
             roundScheduler.cancel(label);
         }
@@ -187,14 +182,13 @@ public class Producer {
         }
 
         @Override
-        public void generateView() {
-            // TODO Auto-generated method stub
-
+        public void initialState() {
+            establishPrincipal();
         }
 
         @Override
-        public void initialState() {
-            establishPrincipal();
+        public void published(Publish published) {
+            transitions.reconfigured(); // TODO verification
         }
 
         @Override
@@ -209,12 +203,6 @@ public class Producer {
             if (validation != null) {
                 coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
             }
-        }
-
-        @Override
-        public void reform() {
-            // TODO Auto-generated method stub
-
         }
 
         @Override
@@ -304,7 +292,14 @@ public class Producer {
         private void reconfigure(AtomicInteger countdown) {
             if (isPrincipal()) {
                 if (reconfiguration.getCertificationsCount() > coordinator.getContext().toleranceLevel()) {
+                    log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, coordinator.getContext().getId(),
+                              params.member());
                     publisher.accept(new HashedCertifiedBlock(params.digestAlgorithm(), reconfiguration.build()));
+                    coordinator.publish(Coordinate.newBuilder()
+                                                  .setPublish(Publish.newBuilder()
+                                                                     .addAllCertifications(reconfiguration.getCertificationsList())
+                                                                     .setHeader(reconfiguration.getBlock().getHeader()))
+                                                  .build().toByteArray());
                     transitions.reconfigured();
                     return;
                 }
@@ -379,12 +374,14 @@ public class Producer {
     }
 
     public void complete() {
+        log.info("Closing producer for: {} on: {}", coordinator.getContext().getId(), params.member());
         controller.stop();
         linear.close();
         coordinator.stop();
     }
 
     public void regenerate() {
+        log.info("Regenerating: {} on: {}", coordinator.getContext().getId(), params.member());
         transitions.regenerate();
     }
 
