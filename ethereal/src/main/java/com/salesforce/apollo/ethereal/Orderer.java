@@ -231,7 +231,7 @@ public class Orderer {
         }
         orderedUnits.close();
         unitBelt.close();
-        log.info("Orderer stopped on: {}", config.pid());
+        log.trace("Orderer stopped on: {}", config.pid());
     }
 
     /**

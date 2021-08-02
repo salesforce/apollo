@@ -15,12 +15,12 @@
 		</encoder>
 	</appender>  
     
-    <logger name="com.salesforce.apollo.choam" level="trace"
+    <logger name="com.salesforce.apollo.choam" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>  
     
-    <logger name="com.chiralbehaviors.tron" level="trace"
+    <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -30,7 +30,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
     
-    <logger name="com.salesforce.apollo.ethereal" level="trace"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

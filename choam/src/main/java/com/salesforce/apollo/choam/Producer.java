@@ -64,10 +64,10 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
+import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.membership.Context;
@@ -208,7 +208,7 @@ public class Producer {
 
         @Override
         public void startProduction() {
-            log.info("Starting production of: {} on: {}", getViewId(), params.member());
+            log.debug("Starting production of: {} on: {}", getViewId(), params.member());
             coordinator.start(params.gossipDuration(), params.scheduler());
             controller.start();
         }
@@ -384,28 +384,27 @@ public class Producer {
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
         } else {
-            log.info("Pid: {} for: {} on: {}", pid, getViewId(), params.member());
+            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params.member());
             config.setPid(pid).setnProc((short) roster.size());
         }
 
         // Our handle on consensus
         controller = ethereal.deterministic(config.build(), dataSource(), preblock -> {
-            log.info("Emitted pending preblock: {} on: {}", preblock, params.member());
+            log.trace("Emitted pending preblock on: {}", params.member());
             pending.add(preblock);
         }, preUnit -> broadcast(preUnit));
 
-        log.info("Roster for: {} is: {} on: {}", getViewId(), roster, params.member());
+        log.debug("Roster for: {} is: {} on: {}", getViewId(), roster, params.member());
     }
 
     public void complete() {
-        log.info("Closing producer for: {} on: {}", getViewId(), params.member());
+        log.debug("Closing producer for: {} on: {}", getViewId(), params.member());
         controller.stop();
         linear.close();
         coordinator.stop();
     }
 
     public void regenerate() {
-        log.info("Regenerating: {} on: {}", getViewId(), params.member());
         transitions.regenerate();
     }
 
@@ -414,7 +413,7 @@ public class Producer {
     }
 
     void setNextViewId(Digest nextViewId) {
-        log.info("Startging: {} on: {}", getViewId(), params.member());
+        log.info("Regenerating next view: {} from: {} on: {}", nextViewId, getViewId(), params.member());
         this.nextViewId = nextViewId;
     }
 
@@ -425,7 +424,7 @@ public class Producer {
         if (metrics() != null) {
             metrics().broadcast(preUnit);
         }
-        log.info("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params.member());
+        log.trace("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params.member());
         coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build().toByteArray());
     }
 
@@ -493,8 +492,8 @@ public class Producer {
         }
         int byteSize = params.maxBatchByteSize() - bytesRemaining;
         int batchSize = params.maxBatchSize() - txnsRemaining;
-        log.info("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
-                 roster.get(params.member().getId()), params.member());
+        log.debug("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
+                  roster.get(params.member().getId()), params.member());
         if (metrics() != null) {
             metrics().publishedBatch(batchSize, byteSize);
         }

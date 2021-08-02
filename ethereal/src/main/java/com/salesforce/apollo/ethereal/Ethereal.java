@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.ethereal.Data.PreBlock;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
@@ -54,9 +54,28 @@ public class Ethereal {
         public void stop() {
             stope.run();
         }
-    };
+    }
 
-    private static final Logger log     = LoggerFactory.getLogger(Ethereal.class);
+    public record PreBlock(List<ByteString> data, byte[] randomBytes) {}
+
+    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);;
+
+    /**
+     * return a preblock from a slice of units containing a timing round. It assumes
+     * that the timing unit is the last unit in the slice, and that random source
+     * data of the timing unit starts with random bytes from the previous level.
+     */
+    public static PreBlock toPreBlock(List<Unit> round) {
+        var data = new ArrayList<ByteString>();
+        for (Unit u : round) {
+            if (!u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
+                data.add(u.data());
+            }
+        }
+        var randomBytes = round.get(round.size() - 1).randomSourceData();
+        return data.isEmpty() ? null : new PreBlock(data, randomBytes);
+    }
+
     private final AtomicBoolean started = new AtomicBoolean();
 
     /**
@@ -155,7 +174,7 @@ public class Ethereal {
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
                                  Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
-            PreBlock preBlock = Data.toPreBlock(units);
+            PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
                 log.info("Emitting pre block: {} on: {}");
                 preblockSink.accept(preBlock);
@@ -204,10 +223,10 @@ public class Ethereal {
     private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
                                               Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
-            log.info("Make pre block: {} on: {}", units, config.pid());
-            PreBlock preBlock = Data.toPreBlock(units);
+            log.trace("Make pre block: {} on: {}", units, config.pid());
+            PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
-                log.info("Emitting pre block: {} on: {}", units, config.pid());
+                log.debug("Emitting pre block: {} on: {}", units, config.pid());
                 blocker.accept(preBlock);
             }
             var timingUnit = units.get(units.size() - 1);
@@ -222,7 +241,7 @@ public class Ethereal {
             if (orderer != null) {
                 orderer.addPreunits(source, pus);
             } else {
-                log.info("Received: {} before orderer created on: {} ", pus, config.pid());
+                log.warn("Received: {} before orderer created on: {} ", pus, config.pid());
             }
         };
         AtomicBoolean started = new AtomicBoolean();

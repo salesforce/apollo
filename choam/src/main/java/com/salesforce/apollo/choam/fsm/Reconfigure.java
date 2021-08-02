@@ -94,6 +94,11 @@ public enum Reconfigure implements Transitions {
     RECONFIGURED {
 
         @Override
+        public Transitions joins(Joins joins) {
+            return null; // ignored after reconfiguration
+        }
+
+        @Override
         public Transitions publish(Publish publish) {
             return null; // ignored after reconfiguration
         }

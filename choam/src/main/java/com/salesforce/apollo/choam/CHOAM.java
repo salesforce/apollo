@@ -182,14 +182,11 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            log.info("Accepted block: {} on: {}", hb.hash, params.member());
             process();
         }
 
         @Override
         public void complete() {
-            log.info("Committee completion of: {} on: {}", getViewChange().block.getReconfigure().getId(),
-                     params.member());
         }
 
         @Override
@@ -201,16 +198,16 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = params.context().getActiveMember(from);
             if (source == null) {
-                log.info("Request to join from non member: {} on: {}", from, params.member());
+                log.debug("Request to join from non member: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             if (!validators.containsKey(source)) {
-                log.info("Request to join from non validator: {} on: {}", source, params.member());
+                log.debug("Request to join from non validator: {} on: {}", source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
             if (!Committee.viewMembersOf(nextView, params.context()).contains(source)) {
-                log.info("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
@@ -263,14 +260,11 @@ public class CHOAM {
             genesis = head;
             checkpoint = head;
             view = head;
-            log.info("Accepted genesis block: {} on: {}", hb.hash, params.member());
             process();
         }
 
         @Override
         public void complete() {
-            log.info("Committee completion of: {} on: {}", getViewChange().block.getReconfigure().getId(),
-                     params.member());
             producer.complete();
         }
 
@@ -289,12 +283,12 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = formation.getActiveMember(from);
             if (source == null) {
-                log.info("Request to join from non validator: {} on: {}", from, params.member());
+                log.debug("Request to join from non validator: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
             if (!params.genesisViewId().equals(nextView)) {
-                log.info("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
@@ -428,6 +422,7 @@ public class CHOAM {
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
+        log.info("Accepted block: {} on: {}", next.hash, params.member());
         current.accept(next);
     }
 
@@ -505,7 +500,7 @@ public class CHOAM {
     }
 
     private void nextView() {
-        log.info("Generating next view consensus key on: {}", params.member());
+        log.trace("Generating next view consensus key on: {}", params.member());
         KeyPair keyPair = params.viewSigAlgorithm().generateKeyPair();
         PubKey pubKey = bs(keyPair.getPublic());
         JohnHancock signed = params.member().sign(pubKey.toByteString());

@@ -8,7 +8,7 @@ package com.salesforce.apollo.choam.support;
 
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesforce.apollo.comm.RouterMetrics;
-import com.salesforce.apollo.ethereal.Data.PreBlock;
+import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
 
 /**
