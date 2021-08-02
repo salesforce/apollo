@@ -157,8 +157,10 @@ public class Ethereal {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
+                log.info("Emitting pre block: {} on: {}");
                 preblockSink.accept(preBlock);
             }
+            log.info("Emitting pre block: {} on: {}");
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
@@ -188,8 +190,8 @@ public class Ethereal {
             });
         };
         Runnable stop = () -> {
-            if (!Utils.waitForCondition(2_000, () -> started.get())) {
-                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
+            if (!Utils.waitForCondition(10, () -> started.get())) {
+                log.trace("Waited 10ms for start and unsuccessful, proceeding");
             }
             Orderer orderer = ord.get();
             if (orderer != null) {
@@ -202,8 +204,10 @@ public class Ethereal {
     private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
                                               Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
+            log.info("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = Data.toPreBlock(units);
             if (preBlock != null) {
+                log.info("Emitting pre block: {} on: {}", units, config.pid());
                 blocker.accept(preBlock);
             }
             var timingUnit = units.get(units.size() - 1);
@@ -234,8 +238,8 @@ public class Ethereal {
             });
         };
         Runnable stop = () -> {
-            if (!Utils.waitForCondition(2_000, () -> started.get())) {
-                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
+            if (!Utils.waitForCondition(10, () -> started.get())) {
+                log.trace("Waited 10ms for start and unsuccessful, proceeding");
             }
             Orderer orderer = ord.get();
             if (orderer != null) {

@@ -24,11 +24,16 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    
+   
     <logger name="com.salesforce.apollo.membership.messaging.rbc" level="WARN"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
+    
+    <logger name="com.salesforce.apollo.ethereal" level="trace"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
     
     <logger name="com.salesforce.apollo.comm.SliceIterator" level="info"
         additivity="false">

@@ -164,7 +164,7 @@ public class EtherealTest {
         RouterMetrics metrics = new RouterMetricsImpl(registry);
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        short nProc = 50;
+        short nProc = 30;
         SigningMember[] members = new SigningMember[nProc];
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, nProc);
         Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();
@@ -233,7 +233,7 @@ public class EtherealTest {
             }
             controllers.forEach(e -> e.start());
 
-            Utils.waitForCondition(60_000, 100, () -> {
+            Utils.waitForCondition(80_000, 100, () -> {
                 for (var pb : produced) {
                     if (pb.size() < 87) {
                         return false;

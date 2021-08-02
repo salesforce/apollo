@@ -115,4 +115,6 @@ public interface Driven {
     void reconfigure(Block reconfigure); 
 
     void validation(Validate validate);
+
+    void startProduction();
 }

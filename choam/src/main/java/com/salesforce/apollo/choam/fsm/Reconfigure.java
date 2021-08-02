@@ -97,5 +97,15 @@ public enum Reconfigure implements Transitions {
         public Transitions publish(Publish publish) {
             return null; // ignored after reconfiguration
         }
+
+        @Override
+        public Transitions reconfigure(Block reconfigure) {
+            return null; // ignored after reconfiguration
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            return null; // ignored after reconfiguration
+        }
     };
 }

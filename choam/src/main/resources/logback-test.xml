@@ -16,8 +16,8 @@
 		</encoder>
 	</appender>
 
-	<logger name="com.salesforce.apollo.comm.RingCommunications"
-		level="info" additivity="false">
+	<logger name="com.salesforce.apollo.ethereal" level="trace" 
+	     additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger>
 

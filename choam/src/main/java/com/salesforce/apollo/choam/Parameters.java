@@ -61,7 +61,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    deltaCheckpointBlocks = 500;
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
-        private Config.Builder                         ethereal              = Config.newBuilder();
+        private Config.Builder                         ethereal              = Config.deterministic();
         private TransactionExecutor                    executor              = (bh, et, c) -> {
                                                                              };
         private List<ExecutedTransaction>              genesisData           = new ArrayList<>();

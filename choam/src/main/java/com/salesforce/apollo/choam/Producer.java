@@ -63,6 +63,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Data.PreBlock;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -206,6 +207,13 @@ public class Producer {
         }
 
         @Override
+        public void startProduction() {
+            log.info("Starting production of: {} on: {}", getViewId(), params.member());
+            coordinator.start(params.gossipDuration(), params.scheduler());
+            controller.start();
+        }
+
+        @Override
         public void validation(Validate validate) {
             reconfiguration.addCertifications(validate.getWitness());
         }
@@ -262,8 +270,7 @@ public class Producer {
                 log.debug("Could not sign consensus key from: {} on: {}", term.getMember().getId(), params.member());
                 return proceed.get();
             }
-            log.debug("Adding delegate to: {} from: {} on: {}", coordinator.getContext().getId(),
-                      term.getMember().getId(), params.member());
+            log.debug("Adding delegate to: {} from: {} on: {}", getViewId(), term.getMember().getId(), params.member());
             joins.get(term.getMember()).setMember(member)
                  .addEndorsements(Certification.newBuilder().setId(params.member().getId().toDigeste())
                                                .setSignature(signed.toSig()));
@@ -292,8 +299,7 @@ public class Producer {
         private void reconfigure(AtomicInteger countdown) {
             if (isPrincipal()) {
                 if (reconfiguration.getCertificationsCount() > coordinator.getContext().toleranceLevel()) {
-                    log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, coordinator.getContext().getId(),
-                              params.member());
+                    log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, getViewId(), params.member());
                     publisher.accept(new HashedCertifiedBlock(params.digestAlgorithm(), reconfiguration.build()));
                     coordinator.publish(Coordinate.newBuilder()
                                                   .setPublish(Publish.newBuilder()
@@ -341,13 +347,17 @@ public class Producer {
 
     public Producer(nextView viewMember, ReliableBroadcaster coordinator, CommonCommunications<Terminal, ?> comms,
                     Parameters params, BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock,
-                    Consumer<HashedCertifiedBlock> publisher) {
+                    Consumer<HashedCertifiedBlock> publisher, List<Digest> order) {
         assert comms != null && params != null;
         this.params = params;
         this.comms = comms;
         this.reconfigureBlock = reconfigureBlock;
         this.publisher = publisher;
         signer = new SignerImpl(0, viewMember.consensusKeyPair().getPrivate());
+        short i = 0;
+        for (var d : order) {
+            roster.put(d, i++);
+        }
 
         // Ethereal consensus
         ethereal = new Ethereal();
@@ -369,19 +379,31 @@ public class Producer {
         linear.consumeEach(coordination -> coordinate(coordination));
 
         // Our handle on consensus
-        controller = ethereal.deterministic(params.ethereal().clone().build(), dataSource(),
-                                            preblock -> pending.add(preblock), preUnit -> broadcast(preUnit));
+        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).clone();
+        Short pid = roster.get(params.member().getId());
+        if (pid == null) {
+            config.setPid((short) 0).setnProc((short) 1);
+        } else {
+            log.info("Pid: {} for: {} on: {}", pid, getViewId(), params.member());
+            config.setPid(pid).setnProc((short) roster.size());
+        }
+        controller = ethereal.deterministic(config.build(), dataSource(), preblock -> {
+            log.info("Emitted pending preblock: {} on: {}", preblock, params.member());
+            pending.add(preblock);
+        }, preUnit -> broadcast(preUnit));
+
+        log.info("Roster for: {} is: {} on: {}", getViewId(), roster, params.member());
     }
 
     public void complete() {
-        log.info("Closing producer for: {} on: {}", coordinator.getContext().getId(), params.member());
+        log.info("Closing producer for: {} on: {}", getViewId(), params.member());
         controller.stop();
         linear.close();
         coordinator.stop();
     }
 
     public void regenerate() {
-        log.info("Regenerating: {} on: {}", coordinator.getContext().getId(), params.member());
+        log.info("Regenerating: {} on: {}", getViewId(), params.member());
         transitions.regenerate();
     }
 
@@ -390,6 +412,7 @@ public class Producer {
     }
 
     void setNextViewId(Digest nextViewId) {
+        log.info("Startging: {} on: {}", getViewId(), params.member());
         this.nextViewId = nextViewId;
     }
 
@@ -400,6 +423,7 @@ public class Producer {
         if (metrics() != null) {
             metrics().broadcast(preUnit);
         }
+        log.info("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params.member());
         coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build().toByteArray());
     }
 
@@ -472,7 +496,12 @@ public class Producer {
         if (metrics() != null) {
             metrics().publishedBatch(batchSize, byteSize);
         }
-        return ByteString.copyFrom(batch);
+        return batch.isEmpty() ? ByteString.copyFromUtf8("Give me food or give me slack or kill me")
+                               : ByteString.copyFrom(batch);
+    }
+
+    private Digest getViewId() {
+        return coordinator.getContext().getId();
     }
 
     private ChoamMetrics metrics() {
@@ -500,7 +529,7 @@ public class Producer {
         if (coordination.hasUnit()) {
             Short source = roster.get(msg.source());
             if (source == null) {
-                log.debug("No pid in roster matching: {} on: {}", msg.source(), params.member());
+                log.debug("No pid in roster: {} matching: {} on: {}", roster, msg.source(), params.member());
                 if (metrics() != null) {
                     metrics().invalidSourcePid();
                 }
@@ -524,6 +553,7 @@ public class Producer {
             }
             return;
         }
+        log.debug("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params.member());
         controller.input().accept(source, Collections.singletonList(pu));
     }
 

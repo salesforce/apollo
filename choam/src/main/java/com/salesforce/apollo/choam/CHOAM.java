@@ -11,6 +11,7 @@ import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 
 import java.security.KeyPair;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -147,7 +148,9 @@ public class CHOAM {
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(context).build(),
                                                             params.communications()),
-                                    comm, params, reconfigureBlock(), publisher());
+                                    comm, params, reconfigureBlock(), publisher(),
+                                    getReconfigure().getViewList().stream().map(vm -> new Digest(vm.getId())).toList());
+            producer.start();
         }
 
         @Override
@@ -158,6 +161,11 @@ public class CHOAM {
         @Override
         public HashedBlock getViewChange() {
             return viewChange;
+        }
+
+        private Reconfigure getReconfigure() {
+            return viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView()
+                                                 : viewChange.block.getReconfigure();
         }
 
     }
@@ -246,7 +254,7 @@ public class CHOAM {
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(formation).build(),
                                                             params.communications()),
-                                    comm, params, genesisBlock(), publisher());
+                                    comm, params, genesisBlock(), publisher(), Collections.emptyList());
             producer.setNextViewId(params.genesisViewId());
         }
 
@@ -315,6 +323,18 @@ public class CHOAM {
 
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
+    public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
+                                HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
+                                Iterable<? extends ExecutedTransaction> initialization) {
+        var reconfigure = reconfigure(id, joins, context, params);
+        return Block.newBuilder()
+                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
+                                           lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
+                                           lastViewChange.hash))
+                    .setGenesis(Genesis.newBuilder().setInitialView(reconfigure).addAllInitialize(initialization))
+                    .build();
+    }
+
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params) {
         var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
@@ -329,18 +349,6 @@ public class CHOAM {
 
         var reconfigure = builder.build();
         return reconfigure;
-    }
-
-    public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
-                                HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
-                                Iterable<? extends ExecutedTransaction> initialization) {
-        var reconfigure = reconfigure(id, joins, context, params);
-        return Block.newBuilder()
-                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
-                                           lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
-                                           lastViewChange.hash))
-                    .setGenesis(Genesis.newBuilder().setInitialView(reconfigure).addAllInitialize(initialization))
-                    .build();
     }
 
     public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
@@ -439,7 +447,7 @@ public class CHOAM {
                 linear.submit(nextBlock);
             } else {
                 log.debug("unable to validate block: {} on: {}", next.hash, params.member());
-//                pending.poll();
+                pending.poll();
             }
             next = pending.peek();
         }
@@ -458,7 +466,9 @@ public class CHOAM {
             log.debug("unable to parse block content from {} on: {}", m.source(), params.member());
             return;
         }
-        pending.add(new HashedCertifiedBlock(params.digestAlgorithm(), block));
+        HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), block);
+        log.debug("Received block: {} from {} on: {}", hcb.hash, m.source(), params.member());
+        pending.add(hcb);
     }
 
     private void execute(ExecutedTransaction execution) {
@@ -495,6 +505,7 @@ public class CHOAM {
     }
 
     private void nextView() {
+        log.info("Generating next view consensus key on: {}", params.member());
         KeyPair keyPair = params.viewSigAlgorithm().generateKeyPair();
         PubKey pubKey = bs(keyPair.getPublic());
         JohnHancock signed = params.member().sign(pubKey.toByteString());
@@ -528,17 +539,19 @@ public class CHOAM {
     }
 
     private Consumer<HashedCertifiedBlock> publisher() {
-        return cb -> combine.publish(cb.certifiedBlock.toByteArray());
+        return cb -> combine.publish(cb.certifiedBlock.toByteArray(), true);
     }
 
     private void reconfigure(Reconfigure reconfigure) {
         current.complete();
         var validators = validatorsOf(reconfigure, params.context());
+        nextView();
         if (validators.containsKey(params.member())) {
             current = new Associate(head, validators);
         } else {
             current = new Client(head, validators);
         }
+        log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
     }
 
     private BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock() {

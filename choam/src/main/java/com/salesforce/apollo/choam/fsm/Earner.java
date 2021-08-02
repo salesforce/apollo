@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import com.chiralbehaviors.tron.Entry;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
 /**
@@ -15,8 +16,13 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Earner implements Driven.Transitions {
-    DELEGATE, INITIAL {
-
+    DELEGATE {
+        @Entry
+        public void startProduction() {
+            context().startProduction();
+        }
+    },
+    INITIAL {
         @Override
         public Transitions regenerate() {
             return Reconfigure.GATHER;
@@ -27,9 +33,14 @@ public enum Earner implements Driven.Transitions {
             context().initialState();
             return null;
         }
-
     },
-    PRINCIPAL, PROTOCOL_FAILURE;
+    PRINCIPAL {
+        @Entry
+        public void startProduction() {
+            context().startProduction();
+        }
+    },
+    PROTOCOL_FAILURE;
 
     @Override
     public Transitions assumeDelegate() {
