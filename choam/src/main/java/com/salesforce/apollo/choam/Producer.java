@@ -378,8 +378,8 @@ public class Producer {
         linear = new SimpleChannel<>(100);
         linear.consumeEach(coordination -> coordinate(coordination));
 
-        // Our handle on consensus
-        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).clone();
+        // Canonical assignment of members -> pid for Ethereal
+        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
         Short pid = roster.get(params.member().getId());
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
@@ -387,6 +387,8 @@ public class Producer {
             log.info("Pid: {} for: {} on: {}", pid, getViewId(), params.member());
             config.setPid(pid).setnProc((short) roster.size());
         }
+
+        // Our handle on consensus
         controller = ethereal.deterministic(config.build(), dataSource(), preblock -> {
             log.info("Emitted pending preblock: {} on: {}", preblock, params.member());
             pending.add(preblock);
