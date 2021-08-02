@@ -231,7 +231,8 @@ public class Ethereal {
             }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
-                log.info("Closing at last level: {} and epochs: {}", timingUnit.level(), timingUnit.epoch());
+                log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                         config.pid());
             }
         };
 
@@ -258,7 +259,7 @@ public class Ethereal {
         };
         Runnable stop = () -> {
             if (!Utils.waitForCondition(10, () -> started.get())) {
-                log.trace("Waited 10ms for start and unsuccessful, proceeding");
+                log.trace("Waited 10ms for start and unsuccessful, proceeding on: {}", config.pid());
             }
             Orderer orderer = ord.get();
             if (orderer != null) {

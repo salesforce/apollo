@@ -35,7 +35,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int CARDINALITY = 5;
+    private static final int CARDINALITY = 20;
 
     private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;

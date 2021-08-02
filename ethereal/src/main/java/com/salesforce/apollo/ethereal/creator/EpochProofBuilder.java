@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.decodeShare;
-import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProof;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,7 +32,6 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public interface EpochProofBuilder {
 
     /**
@@ -99,7 +95,7 @@ public interface EpochProofBuilder {
             }
             var share = decodeShare(u.data());
             if (share == null) {
-                log.warn("Cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
+                log.debug("Cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
                 return null;
             }
             if (!conf.WTKey().verifyShare(share)) {
