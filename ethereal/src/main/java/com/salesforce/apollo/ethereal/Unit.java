@@ -131,7 +131,7 @@ public interface Unit extends PreUnit {
         }
     }
 
-    static int levelFromParents(Unit[] parents) {
+    static int levelFromParents(Unit[] parents, double bias) {
         var nProc = (short) parents.length;
         var level = 0;
         var onLevel = (short) 0;
@@ -146,7 +146,7 @@ public interface Unit extends PreUnit {
                 level = p.level();
             }
         }
-        if (onLevel >= minimalQuorum(nProc)) {
+        if (onLevel >= minimalQuorum(nProc, bias)) {
             level++;
         }
 

@@ -58,6 +58,8 @@ public class CreatorTest {
         }
     }
 
+    private double bias = 3.0;
+
     record testEpochProofBuilder(Function<Unit, Boolean> verify) implements EpochProofBuilder {
 
         @Override
@@ -136,7 +138,7 @@ public class CreatorTest {
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
         var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-        var unit = pu.from(parents);
+        var unit = pu.from(parents, bias);
         assertEquals(epoch, unit.epoch());
         unitBelt.submit(unit);
 
@@ -192,7 +194,7 @@ public class CreatorTest {
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
                 var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-                var unit = pu.from(parents);
+                var unit = pu.from(parents, bias);
                 newParents.add(unit);
                 unitBelt.submit(unit);
             }
@@ -240,7 +242,7 @@ public class CreatorTest {
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
                 var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-                var unit = pu.from(parents);
+                var unit = pu.from(parents, bias);
                 newParents.add(unit);
                 unitBelt.submit(unit);
             }
@@ -296,7 +298,7 @@ public class CreatorTest {
             var rsData = new byte[0];
             long id = PreUnit.id(0, pid, 0);
             var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-            var unit = pu.from(parents);
+            var unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
@@ -359,7 +361,7 @@ public class CreatorTest {
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
         var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-        var unit = pu.from(parents);
+        var unit = pu.from(parents, bias);
         assertEquals(epoch, unit.epoch());
         unitBelt.submit(unit);
 
@@ -376,7 +378,7 @@ public class CreatorTest {
             rsData = new byte[0];
             id = PreUnit.id(0, pid, 0);
             pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-            unit = pu.from(parents);
+            unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
 
@@ -422,7 +424,7 @@ public class CreatorTest {
             var rsData = new byte[0];
             var id = PreUnit.id(0, pid, 0);
             var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
-            var unit = pu.from(parents);
+            var unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
 

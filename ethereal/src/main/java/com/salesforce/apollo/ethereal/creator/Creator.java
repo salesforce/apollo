@@ -100,7 +100,7 @@ public class Creator {
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
         this.candidates = new Unit[config.nProc()];
-        quorum = 2 * config.byzantine() + 1;
+        quorum = (int) ((config.bias() - 1.0) * ((double) config.byzantine()) + 1.0);
     }
 
     /**

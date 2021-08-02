@@ -184,7 +184,7 @@ public interface Dag {
 
     record dag(short nProc, int epoch, ConcurrentMap<Digest, Unit> units, fiberMap levelUnits, fiberMap heightUnits,
                SlottedUnits maxUnits, List<BiFunction<Unit, Dag, Correctness>> checks, List<Consumer<Unit>> preInsert,
-               List<Consumer<Unit>> postInsert)
+               List<Consumer<Unit>> postInsert, double bias)
               implements Dag {
 
         @Override
@@ -205,7 +205,7 @@ public interface Dag {
         @Override
         public Unit build(PreUnit base, Unit[] parents) {
             assert parents.length == nProc;
-            return base.from(parents);
+            return base.from(parents, bias);
         }
 
         @Override
@@ -332,7 +332,7 @@ public interface Dag {
 
         @Override
         public boolean isQuorum(short cardinality) {
-            return cardinality >= minimalQuorum(cardinality);
+            return cardinality >= minimalQuorum(cardinality, bias);
         }
 
         @Override
@@ -371,9 +371,9 @@ public interface Dag {
 
     static final Logger log = LoggerFactory.getLogger(Dag.class);
 
-    static short minimalQuorum(short np) {
+    static short minimalQuorum(short np, double bias) {
         var nProcesses = (double) np;
-        short minimalQuorum = (short) (nProcesses - nProcesses / 3.0);
+        short minimalQuorum = (short) Math.floor(nProcesses - nProcesses / bias);
         return minimalQuorum;
     }
 
@@ -388,7 +388,7 @@ public interface Dag {
         return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
                        newFiberMap(config.nProc(), config.epochLength()),
                        newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),
-                       config.checks(), new ArrayList<>(), new ArrayList<>());
+                       config.checks(), new ArrayList<>(), new ArrayList<>(), config.bias());
     }
 
     private static fiberMap newFiberMap(short width, int initialLength) {

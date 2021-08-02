@@ -29,7 +29,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     int byzantine, Clock clock, int quorum) {
+                     int byzantine, Clock clock, double bias) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -56,6 +56,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return new Builder().requiredByLinear();
         }
 
+        private int                                      bias            = 3;
         private int                                      byzantine       = -1;
         private boolean                                  canSkipLevel    = false;
         private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
@@ -70,9 +71,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private short                                    nProc;
         private int                                      numberOfEpochs  = 3;
         private int                                      orderStartLevel = 6;
-        private double                                   pByz            = 1.0 / 3.0;
+        private double                                   pByz            = -1;
         private short                                    pid;
-        private int                                      quorum          = -1;
         private Signer                                   signer          = new MockSigner();
         private WeakThresholdKey                         wtk;
         private int                                      zeroVoteRoundForCommonVote;
@@ -123,6 +123,9 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         }
 
         public Config build() {
+            if (pByz <= -1) {
+                pByz = 1.0 / (float) bias;
+            }
             if (byzantine <= -1) {
                 assert byzantine < nProc;
                 byzantine = (int) ((nProc) * pByz);
@@ -130,15 +133,12 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (wtk == null) {
                 wtk = new NoOpWeakThresholdKey((2 * byzantine) + 1);
             }
-            if (quorum <= -1) {
-                quorum = Math.min(nProc, 2 * byzantine + 1);
-            }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
 
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, clock, quorum);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, clock, bias);
         }
 
         @Override
@@ -148,6 +148,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             } catch (CloneNotSupportedException e) {
                 throw new IllegalStateException(e);
             }
+        }
+
+        public int getBias() {
+            return bias;
         }
 
         public int getByzantine() {
@@ -210,10 +214,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return pid;
         }
 
-        public int getQuorum() {
-            return quorum;
-        }
-
         public Signer getSigner() {
             return signer;
         }
@@ -234,6 +234,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             firstDecidedRound = 3;
             commonVoteDeterministicPrefix = 10;
             zeroVoteRoundForCommonVote = 3;
+            return this;
+        }
+
+        public Builder setBias(int bias) {
+            this.bias = bias;
             return this;
         }
 
@@ -314,11 +319,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setPid(short pid) {
             this.pid = pid;
-            return this;
-        }
-
-        public Builder setQuorum(int quorum) {
-            this.quorum = quorum;
             return this;
         }
 

@@ -74,8 +74,8 @@ public interface PreUnit {
         }
 
         @Override
-        public Unit from(Unit[] parents) {
-            freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents), new HashMap<>());
+        public Unit from(Unit[] parents, double bias) {
+            freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
             u.computeFloor();
             return u;
         }
@@ -278,8 +278,8 @@ public interface PreUnit {
         return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
     }
 
-    default Unit from(Unit[] parents) {
-        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents), new HashMap<>());
+    default Unit from(Unit[] parents, double bias) {
+        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
         u.computeFloor();
         return u;
     }
