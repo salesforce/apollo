@@ -52,7 +52,7 @@ public interface Driven {
         }
 
         default Transitions joins(Joins joins) {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
         default Transitions key(HashedCertifiedBlock keyBlock) {
@@ -64,7 +64,7 @@ public interface Driven {
         }
 
         default Transitions publish(Publish publish) {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
         default Transitions reconfigure() {
@@ -72,7 +72,7 @@ public interface Driven {
         }
 
         default Transitions reconfigure(Block reconfigure) {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
         default Transitions reconfigured() {
@@ -90,21 +90,22 @@ public interface Driven {
         default Transitions validate(Validate validate) {
             throw fsm().invalidTransitionOn();
         }
-
     }
 
     String RECONFIGURE = "RECONFIGURE";
     String RECONVENE   = "RECONVENE";
 
-    void assemble(Joins joins); 
+    void assemble(Joins joins);
 
     void cancelTimer(String label);
+
+    void complete();
 
     void convene();
 
     void establishPrincipal();
 
-    void gatherAssembly(); 
+    void gatherAssembly();
 
     void initialState();
 
@@ -112,9 +113,11 @@ public interface Driven {
 
     void reconfigure();
 
-    void reconfigure(Block reconfigure); 
-
-    void validation(Validate validate);
+    void reconfigure(Block reconfigure);
 
     void startProduction();
+
+    void valdateBlock(Validate validate);
+
+    void validation(Validate validate);
 }

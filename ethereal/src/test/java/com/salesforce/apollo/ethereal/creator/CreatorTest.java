@@ -120,7 +120,7 @@ public class CreatorTest {
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
 
         ForkJoinPool.commonPool().execute(() -> {
@@ -172,7 +172,7 @@ public class CreatorTest {
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         AtomicBoolean finished = new AtomicBoolean();
         var lastTiming = new ArrayBlockingQueue<Unit>(100);
@@ -229,7 +229,7 @@ public class CreatorTest {
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         Unit[] parents = new Unit[nProc];
         var maxLevel = 2;
@@ -289,7 +289,7 @@ public class CreatorTest {
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         Unit[] parents = new Unit[nProc];
         for (short pid = 1; pid < cnf.nProc(); pid++) {
@@ -343,7 +343,7 @@ public class CreatorTest {
 
         AtomicBoolean finished = new AtomicBoolean();
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
 
         ForkJoinPool.commonPool().execute(() -> {
@@ -405,7 +405,7 @@ public class CreatorTest {
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        var unitBelt = new SimpleChannel<Unit>(100);
+        var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         AtomicBoolean finished = new AtomicBoolean();
         var lastTiming = new ArrayBlockingQueue<Unit>(100);

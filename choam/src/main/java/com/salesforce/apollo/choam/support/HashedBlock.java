@@ -94,7 +94,7 @@ public class HashedBlock implements Comparable<HashedBlock> {
     }
 
     public static Digest hash(Header header, DigestAlgorithm algo) {
-        return algo.digest(header.toByteString().asReadOnlyByteBufferList());
+        return algo.digest(header.toByteString());
     }
 
     public static Digest hashBody(Block block, DigestAlgorithm algo) {

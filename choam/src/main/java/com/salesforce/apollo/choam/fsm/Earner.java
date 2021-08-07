@@ -6,8 +6,12 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.chiralbehaviors.tron.Entry;
-import com.salesforce.apollo.choam.fsm.Driven.Transitions;
+import com.salesfoce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.choam.fsm.Driven.Transitions; 
 
 /**
  * Producer Finite State Machine
@@ -17,9 +21,16 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  */
 public enum Earner implements Driven.Transitions {
     DELEGATE {
+
         @Entry
         public void startProduction() {
             context().startProduction();
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
         }
     },
     INITIAL {
@@ -39,8 +50,20 @@ public enum Earner implements Driven.Transitions {
         public void startProduction() {
             context().startProduction();
         }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
     },
-    PROTOCOL_FAILURE;
+    PROTOCOL_FAILURE {
+        @Entry
+        public void terminate() {
+            log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
+        }
+    };
+    private static final Logger log =  LoggerFactory.getLogger(Earner.class);
 
     @Override
     public Transitions assumeDelegate() {

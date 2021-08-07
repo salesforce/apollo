@@ -51,6 +51,18 @@ public enum Reconfigure implements Transitions {
         public Transitions nominated() {
             return NOMINATION;
         }
+
+        @Override
+        public Transitions reconfigure(Block reconfigure) {
+            context().reconfigure(reconfigure);
+            return NOMINATION;
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().validation(validate);
+            return NOMINATION;
+        }
     },
     NOMINATION {
         @Exit
@@ -106,6 +118,11 @@ public enum Reconfigure implements Transitions {
         @Override
         public Transitions reconfigure(Block reconfigure) {
             return null; // ignored after reconfiguration
+        }
+
+        @Entry
+        public void shutDown() {
+            context().complete();
         }
 
         @Override

@@ -124,14 +124,14 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Config build() {
             if (pByz <= -1) {
-                pByz = 1.0 / (float) bias;
+                pByz = 1.0 / (double) bias;
             }
             if (byzantine <= -1) {
                 assert byzantine < nProc;
-                byzantine = (int) ((nProc) * pByz);
+                byzantine = (int) (((double) nProc) * pByz);
             }
             if (wtk == null) {
-                wtk = new NoOpWeakThresholdKey((2 * byzantine) + 1);
+                wtk = new NoOpWeakThresholdKey((int) ((((double) bias - 1.0) * (double) byzantine) + 1.0));
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");

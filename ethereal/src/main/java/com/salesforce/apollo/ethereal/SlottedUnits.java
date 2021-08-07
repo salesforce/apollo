@@ -9,6 +9,7 @@ package com.salesforce.apollo.ethereal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -23,7 +24,8 @@ import java.util.function.Function;
  */
 public interface SlottedUnits {
 
-    record slottedUnits(List<List<Unit>> contents, List<ReadWriteLock> mxs) implements SlottedUnits {
+    record slottedUnits(CopyOnWriteArrayList<CopyOnWriteArrayList<Unit>> contents, List<ReadWriteLock> mxs)
+                       implements SlottedUnits {
 
         @Override
         public List<Unit> get(short pid) {
@@ -47,7 +49,7 @@ public interface SlottedUnits {
             Lock lock = mxs.get(pid).writeLock();
             lock.lock();
             try {
-                contents.set(pid, units);
+                contents.set(pid, new CopyOnWriteArrayList<>(units));
             } finally {
                 lock.unlock();
             }
@@ -65,10 +67,10 @@ public interface SlottedUnits {
     }
 
     static SlottedUnits newSlottedUnits(int n) {
-        List<List<Unit>> contents = new ArrayList<>();
+        CopyOnWriteArrayList<CopyOnWriteArrayList<Unit>> contents = new CopyOnWriteArrayList<>();
         List<ReadWriteLock> locks = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            contents.add(new ArrayList<>());
+            contents.add(new CopyOnWriteArrayList<>());
             locks.add(new ReentrantReadWriteLock());
         }
         return new slottedUnits(contents, locks);

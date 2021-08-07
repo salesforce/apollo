@@ -6,8 +6,8 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,11 +40,15 @@ public interface EpochProofBuilder {
      */
     public record Share(short owner, JohnHancock signature) {
         public static Share from(EpochProof proof) {
-            return new Share((short) proof.getOwner(), JohnHancock.from(proof.getSignature()));
+            try {
+                return new Share((short) proof.getOwner(), JohnHancock.from(proof.getSignature()));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
         }
     }
 
-    record sharesDB(Config conf, Map<Digest, Map<Short, Share>> data) {
+    record sharesDB(Config conf, ConcurrentMap<Digest, ConcurrentMap<Short, Share>> data) {
         /**
          * Add puts the share that signs msg to the storage. If there are enough shares
          * (for that msg), they are combined and the resulting signature is returned.
@@ -52,11 +56,8 @@ public interface EpochProofBuilder {
          */
         JohnHancock add(DecodedShare decoded) {
             Digest key = new Digest(decoded.proof.getMsg().getHash());
-            var shares = data.get(key);
-            if (shares == null) {
-                shares = new HashMap<>();
-                data.put(key, shares);
-            }
+            var shares = data.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+            log.trace("WTK current: {} threshold: {} on: {}", shares.size(), conf.WTKey().threshold(), conf.pid());
             if (decoded.share != null) {
                 shares.put(decoded.share.owner(), decoded.share);
                 log.trace("share: {} added: {} from: {} on: {}", key, shares.size(), decoded.share.owner(), conf.pid());
@@ -70,11 +71,11 @@ public interface EpochProofBuilder {
                                   conf.pid());
                     }
                 } else {
-                    log.trace("Share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
+                    log.trace("WTK share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
                               conf.pid());
                 }
             } else {
-                log.trace("No shares decoded on: {}", conf.pid());
+                log.trace("WTK no shares decoded: {} on: {}", shares.size(), conf.pid());
             }
             return null;
         }
@@ -104,7 +105,7 @@ public interface EpochProofBuilder {
             }
             var sig = shares.add(share);
             if (sig != null) {
-                log.trace("WTK signature generated on: {}", conf.pid());
+                log.debug("WTK signature generated on: {}", conf.pid());
                 return encodeSignature(sig, share.proof);
             }
             log.debug("WTK signature generation failed on: {}", conf.pid());

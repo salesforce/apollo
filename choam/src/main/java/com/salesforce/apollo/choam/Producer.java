@@ -6,21 +6,22 @@
  */
 package com.salesforce.apollo.choam;
 
+import static com.salesforce.apollo.choam.support.HashedBlock.hash;
+import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.security.PublicKey;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +42,8 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
+import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Join.Builder;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
@@ -50,6 +53,7 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.CHOAM.nextView;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
@@ -88,10 +92,10 @@ public class Producer {
 
     /** Leaf action driver coupling for the Producer FSM */
     private class DriveIn implements Driven {
-        private SliceIterator<Terminal>         committee;
+        private final SliceIterator<Terminal>   committee;
         private final Map<Member, Join.Builder> joins     = new HashMap<>();
-        private Set<Member>                     nextAssembly;
-        private int                             principal = 0;
+        private volatile Set<Member>            nextAssembly;
+        private volatile int                    principal = 0;
 
         DriveIn() {
             Context<? extends Member> context = coordinator.getContext();
@@ -135,6 +139,11 @@ public class Producer {
         @Override
         public void cancelTimer(String label) {
             roundScheduler.cancel(label);
+        }
+
+        @Override
+        public void complete() {
+            Producer.this.complete();
         }
 
         @Override
@@ -194,7 +203,7 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            reconfigure(new AtomicInteger(3));
+            reconfigure(new AtomicInteger(3 * coordinator.getContext().timeToLive()));
         }
 
         @Override
@@ -211,6 +220,21 @@ public class Producer {
             log.debug("Starting production of: {} on: {}", getViewId(), params.member());
             coordinator.start(params.gossipDuration(), params.scheduler());
             controller.start();
+        }
+
+        @Override
+        public void valdateBlock(Validate validate) {
+            var hash = new Digest(validate.getHash());
+            if (published.contains(hash)) {
+                log.debug("Block: {} already published on: {}", hash, params.member());
+                return;
+            }
+            var p = pending.computeIfAbsent(hash, h -> new pendingCertification(CertifiedBlock.newBuilder(),
+                                                                                new CopyOnWriteArrayList<>()));
+            p.certifications.add(validate.getWitness());
+            log.trace("Validation for block: {} height: {} on: {}", hash,
+                      p.builder.hasBlock() ? height(p.builder.getBlock()) : "missing", params.member());
+            maybePublish(hash, p);
         }
 
         @Override
@@ -298,7 +322,7 @@ public class Producer {
 
         private void reconfigure(AtomicInteger countdown) {
             if (isPrincipal()) {
-                if (reconfiguration.getCertificationsCount() > coordinator.getContext().toleranceLevel()) {
+                if (reconfiguration.getCertificationsCount() > params.context().toleranceLevel()) {
                     log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, getViewId(), params.member());
                     publisher.accept(new HashedCertifiedBlock(params.digestAlgorithm(), reconfiguration.build()));
                     coordinator.publish(Coordinate.newBuilder()
@@ -325,17 +349,28 @@ public class Producer {
         }
     }
 
+    private record pendingCertification(CertifiedBlock.Builder builder,
+                                        CopyOnWriteArrayList<Certification> certifications) {
+
+        public void addCertifications() {
+            builder.addAllCertifications(certifications);
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
+    private final BlockProducer                                blockProducer;
     private final CommonCommunications<Terminal, ?>            comms;
     private final Controller                                   controller;
     private final ReliableBroadcaster                          coordinator;
     private final Ethereal                                     ethereal;
     private final Fsm<Driven, Transitions>                     fsm;
+    private volatile HashedBlock                               lastBlock;
     private final SimpleChannel<Coordinate>                    linear;
-    private Digest                                             nextViewId;
+    private volatile Digest                                    nextViewId;
     private final Parameters                                   params;
-    private final Deque<PreBlock>                              pending         = new LinkedList<>();
+    private final Map<Digest, pendingCertification>            pending         = new ConcurrentHashMap<>();
+    private final Set<Digest>                                  published       = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Consumer<HashedCertifiedBlock>               publisher;
     private final CertifiedBlock.Builder                       reconfiguration = CertifiedBlock.newBuilder();
     private final BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock;
@@ -346,13 +381,16 @@ public class Producer {
     private final Transitions                                  transitions;
 
     public Producer(nextView viewMember, ReliableBroadcaster coordinator, CommonCommunications<Terminal, ?> comms,
-                    Parameters params, BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock,
-                    Consumer<HashedCertifiedBlock> publisher, List<Digest> order) {
-        assert comms != null && params != null;
-        this.params = params;
+                    Parameters p, BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock,
+                    Consumer<HashedCertifiedBlock> publisher, List<Digest> order, BlockProducer blockProducer,
+                    HashedBlock lastBlock) {
+        assert comms != null && p != null;
+        this.params = p;
         this.comms = comms;
         this.reconfigureBlock = reconfigureBlock;
         this.publisher = publisher;
+        this.blockProducer = blockProducer;
+        this.lastBlock = lastBlock;
         signer = new SignerImpl(0, viewMember.consensusKeyPair().getPrivate());
         short i = 0;
         for (var d : order) {
@@ -375,11 +413,12 @@ public class Producer {
         transitions = fsm.getTransitions();
 
         // buffer for coordination messages
-        linear = new SimpleChannel<>(100);
+        linear = new SimpleChannel<>("Publisher linear for: " + params.member(), 100);
         linear.consumeEach(coordination -> coordinate(coordination));
 
         // Canonical assignment of members -> pid for Ethereal
-        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
+//        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
+        Config.Builder config = params.ethereal().clone();
         Short pid = roster.get(params.member().getId());
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
@@ -389,10 +428,8 @@ public class Producer {
         }
 
         // Our handle on consensus
-        controller = ethereal.deterministic(config.build(), dataSource(), preblock -> {
-            log.trace("Emitted pending preblock on: {}", params.member());
-            pending.add(preblock);
-        }, preUnit -> broadcast(preUnit));
+        controller = ethereal.deterministic(config.build(), dataSource(), preblock -> create(preblock),
+                                            preUnit -> broadcast(preUnit));
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), roster, params.member());
     }
@@ -413,7 +450,7 @@ public class Producer {
     }
 
     void setNextViewId(Digest nextViewId) {
-        log.info("Regenerating next view: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+        log.debug("Regenerating next view: {} from: {} on: {}", nextViewId, getViewId(), params.member());
         this.nextViewId = nextViewId;
     }
 
@@ -451,6 +488,32 @@ public class Producer {
     }
 
     /**
+     * Block creation
+     */
+    private void create(PreBlock preblock) {
+        var builder = Executions.newBuilder();
+        preblock.data().stream().map(e -> {
+            try {
+                return Executions.parseFrom(e);
+            } catch (InvalidProtocolBufferException ex) {
+                log.error("Error parsing transaction executions on: {}", params.member());
+                return (Executions) null;
+            }
+        }).filter(e -> e != null).flatMap(e -> e.getExecutionsList().stream()).forEach(e -> builder.addExecutions(e));
+        var next = new HashedBlock(params.digestAlgorithm(),
+                                   blockProducer.produce(lastBlock.height() + 1, lastBlock.hash, builder.build()));
+        lastBlock = next;
+        var validation = generateValidation(next.hash, next.block);
+        coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
+        var cb = pending.computeIfAbsent(next.hash, h -> new pendingCertification(CertifiedBlock.newBuilder(),
+                                                                                  new CopyOnWriteArrayList<>()));
+        cb.builder.setBlock(next.block);
+        cb.certifications.add(validation.getWitness());
+        maybePublish(next.hash, cb);
+        log.debug("Block: {} height: {} created on: {}", next.hash, next.height(), params.member());
+    }
+
+    /**
      * DataSource that feeds Ethereal consensus
      */
     private DataSource dataSource() {
@@ -463,8 +526,9 @@ public class Producer {
     }
 
     private Validate generateValidation(Digest hash, Block block) {
-        JohnHancock signature = signer.sign(params.digestAlgorithm().digest(block.getHeader().toByteString())
-                                                  .toDigeste().toByteString());
+        byte[] bytes = hash(block.getHeader(), params.digestAlgorithm()).getBytes();
+//        log.info("Signing block: {} header hash: {} on: {}", hash, Hex.hex(bytes), params.member());
+        JohnHancock signature = signer.sign(bytes);
         if (signature == null) {
             log.error("Unable to sign block: {} on: {}", hash, params.member());
             return null;
@@ -480,29 +544,54 @@ public class Producer {
      * The data to be used for a the next Unit produced by this Producer
      */
     private ByteString getData() {
+        Executions.Builder builder = Executions.newBuilder();
         int bytesRemaining = params.maxBatchByteSize();
         int txnsRemaining = params.maxBatchSize();
-        List<ByteString> batch = new ArrayList<>();
         while (txnsRemaining > 0 && transactions.peek() != null
         && bytesRemaining >= transactions.peek().getSerializedSize()) {
             txnsRemaining--;
             Transaction next = transactions.poll();
             bytesRemaining -= next.getSerializedSize();
-            batch.add(next.toByteString());
+            builder.addExecutions(ExecutedTransaction.newBuilder().setTransation(next));
+        }
+        if (builder.getExecutionsCount() == 0) {
+            ExecutedTransaction et = ExecutedTransaction.newBuilder()
+                                                        .setTransation(Transaction.newBuilder()
+                                                                                  .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me")))
+                                                        .build();
+            builder.addExecutions(et);
+            bytesRemaining -= et.getSerializedSize();
+            txnsRemaining--;
         }
         int byteSize = params.maxBatchByteSize() - bytesRemaining;
         int batchSize = params.maxBatchSize() - txnsRemaining;
-        log.debug("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
-                  roster.get(params.member().getId()), params.member());
         if (metrics() != null) {
             metrics().publishedBatch(batchSize, byteSize);
         }
-        return batch.isEmpty() ? ByteString.copyFromUtf8("Give me food or give me slack or kill me")
-                               : ByteString.copyFrom(batch);
+        log.trace("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
+                  roster.get(params.member().getId()), params.member());
+        return builder.build().toByteString();
     }
 
     private Digest getViewId() {
         return coordinator.getContext().getId();
+    }
+
+    private void maybePublish(Digest hash, pendingCertification p) {
+        if (p.builder.hasBlock() && p.certifications.size() > params.context().toleranceLevel()) {
+            p.addCertifications();
+            var hcb = new HashedCertifiedBlock(params.digestAlgorithm(), p.builder.build());
+            published.add(hcb.hash);
+            pending.remove(hcb.hash);
+            publisher.accept(hcb);
+            log.debug("Block: {} height: {} certs: {} > {} published on: {}", hcb.hash, hcb.height(),
+                     hcb.certifiedBlock.getCertificationsCount(), params.context().toleranceLevel(), params.member());
+        } else if (p.builder.hasBlock()) {
+            log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(p.builder.getBlock()),
+                      p.builder.getCertificationsCount(), coordinator.getContext().toleranceLevel(), params.member());
+        } else {
+            log.trace("Block: {} empty, pending: {} on: {}", hash, p.builder.getCertificationsCount(), params.member());
+        }
     }
 
     private ChoamMetrics metrics() {
@@ -523,7 +612,7 @@ public class Producer {
             }
             return;
         }
-        log.debug("Received msg from: {} on: {}", msg.source(), params.member());
+        log.trace("Received msg from: {} on: {}", msg.source(), params.member());
         if (metrics() != null) {
             metrics().incTotalMessages();
         }
@@ -554,7 +643,7 @@ public class Producer {
             }
             return;
         }
-        log.debug("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params.member());
+        log.trace("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params.member());
         controller.input().accept(source, Collections.singletonList(pu));
     }
 

@@ -10,15 +10,18 @@ import static com.salesforce.apollo.ethereal.PreUnit.decode;
 import static com.salesforce.apollo.ethereal.SlottedUnits.newSlottedUnits;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -33,6 +36,298 @@ import com.salesforce.apollo.ethereal.Adder.Correctness;
  *
  */
 public interface Dag {
+    public class DagImpl implements Dag {
+        private final List<BiFunction<Unit, Dag, Correctness>> checks     = new ArrayList<>();
+        private final Config                                   config;
+        private final int                                      epoch;
+        private final fiberMap                                 heightUnits;
+        private final fiberMap                                 levelUnits;
+        private final SlottedUnits                             maxUnits;
+        private final List<Consumer<Unit>>                     postInsert = new ArrayList<>();
+        private final List<Consumer<Unit>>                     preInsert  = new ArrayList<>();
+        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock();
+        private final Map<Digest, Unit>                        units      = new HashMap<>();
+
+        public DagImpl(Config config, int epoch) {
+            this.config = config;
+            this.epoch = epoch;
+            levelUnits = Dag.newFiberMap(config.nProc(), config.epochLength());
+            heightUnits = Dag.newFiberMap(config.nProc(), config.epochLength());
+            maxUnits = SlottedUnits.newSlottedUnits(config.nProc());
+        }
+
+        @Override
+        public void addCheck(BiFunction<Unit, Dag, Correctness> checker) {
+            checks.add(checker);
+        }
+
+        @Override
+        public void afterInsert(Consumer<Unit> h) {
+            postInsert.add(h);
+        }
+
+        @Override
+        public void beforeInsert(Consumer<Unit> h) {
+            preInsert.add(h);
+        }
+
+        @Override
+        public Unit build(PreUnit base, Unit[] parents) {
+            assert parents.length == config.nProc();
+            return base.from(parents, config.bias());
+        }
+
+        @Override
+        public Correctness check(Unit u) {
+            for (var check : checks) {
+                var err = check.apply(u, this);
+                if (err != null) {
+                    return err;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Decoded decodeParents(PreUnit pu) {
+            return read(() -> {
+                var u = get(pu.hash());
+                if (u != null) {
+                    return new DuplicateUnit(u);
+                }
+                var heights = pu.view().heights();
+                var possibleParents = heightUnits.get(heights);
+                if (possibleParents.unknown() > 0) {
+                    return new UnknownParents(possibleParents.unknown());
+                }
+                Unit[] parents = new Unit[config.nProc()];
+
+                int i = -1;
+                for (List<Unit> units : possibleParents.result()) {
+                    i++;
+                    if (heights[i] == -1) {
+                        continue;
+                    }
+                    if (units.size() > 1) {
+                        return new AmbiguousParents(possibleParents.result());
+                    }
+                    parents[i] = units.get(0);
+                }
+                return new DecodedR(parents);
+            });
+        }
+
+        @Override
+        public int epoch() {
+            return epoch;
+        }
+
+        @Override
+        public Unit get(Digest digest) {
+            return read(() -> units.get(digest));
+        }
+
+        @Override
+        public List<Unit> get(List<Digest> digests) {
+            return read(() -> digests.stream().map(e -> units.get(e)).toList());
+        }
+
+        @Override
+        public List<Unit> get(long id) {
+            return read(() -> {
+                var decoded = decode(id);
+                if (decoded.epoch() != epoch) {
+                    return null;
+                }
+                var fiber = heightUnits.getFiber(decoded.height());
+
+                return fiber == null ? null : fiber.get(decoded.creator());
+            });
+        }
+
+        @Override
+        public void insert(Unit v) {
+            write(() -> {
+                var unit = v.embed(this);
+                for (var hook : preInsert) {
+                    hook.accept(unit);
+                }
+                updateUnitsOnHeight(unit);
+                updateUnitsOnLevel(unit);
+                units.put(unit.hash(), unit);
+                updateMaximal(unit);
+                for (var hook : postInsert) {
+                    hook.accept(unit);
+                }
+            });
+        }
+
+        @Override
+        public boolean isQuorum(short cardinality) {
+            return cardinality >= minimalQuorum(cardinality, config.bias());
+        }
+
+        @Override
+        public void iterateMaxUnitsPerProcess(Function<List<Unit>, Boolean> work) {
+            read(() -> maximalUnitsPerProcess().iterate(work));
+        }
+
+        @Override
+        public SlottedUnits maximalUnitsPerProcess() {
+            return maxUnits;
+        }
+
+        /** returns the maximal level of a unit in the dag. */
+        @Override
+        public int maxLevel() {
+            return read(() -> {
+                AtomicInteger maxLevel = new AtomicInteger(-1);
+                maximalUnitsPerProcess().iterate(units -> {
+                    for (Unit v : units) {
+                        if (v.level() > maxLevel.get()) {
+                            maxLevel.set(v.level());
+                        }
+                    }
+                    return true;
+                });
+                return maxLevel.get();
+            });
+        }
+
+        @Override
+        public DagInfo maxView() {
+            return read(() -> {
+                var maxes = maximalUnitsPerProcess();
+                var heights = new ArrayList<Integer>();
+                maxes.iterate(units -> {
+                    var h = -1;
+                    for (Unit u : units) {
+                        if (u.height() > h) {
+                            h = u.height();
+                        }
+                    }
+                    heights.add(h);
+                    return true;
+                });
+                return new DagInfo(epoch(), heights.stream().mapToInt(i -> i).toArray());
+            });
+        }
+
+        @Override
+        public short nProc() {
+            return config.nProc();
+        }
+
+        /**
+         * return all units present in dag that are above (in height sense) given
+         * heights. When called with null argument, returns all units in the dag. Units
+         * returned by this method are in random order.
+         */
+        @Override
+        public List<Unit> unitsAbove(int[] heights) {
+            return read(() -> {
+                if (heights == null) {
+                    return units.values().stream().toList();
+                }
+                return heightUnits.above(heights);
+            });
+        }
+
+        /**
+         * returns the prime units at the requested level, indexed by their creator ids.
+         */
+        @Override
+        public SlottedUnits unitsOnLevel(int level) {
+            return read(() -> {
+                var res = levelUnits.getFiber(level);
+                return res != null ? res : newSlottedUnits(config.nProc());
+            });
+        }
+
+        private <T> T read(Callable<T> call) {
+            final Lock lock = rwLock.readLock();
+            lock.lock();
+            try {
+                return call.call();
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during read locked call", e);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private void read(Runnable r) {
+            final Lock lock = rwLock.readLock();
+            lock.lock();
+            try {
+                r.run();
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during read locked call", e);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private void updateMaximal(Unit u) {
+            var creator = u.creator();
+            var maxByCreator = maxUnits.get(creator);
+            var newMaxByCreator = new ArrayList<Unit>();
+            // The below code works properly assuming that no unit in the dag created by
+            // creator is >= u
+            for (var v : maxByCreator) {
+                if (!u.above(v)) {
+                    newMaxByCreator.add(v);
+                }
+            }
+            newMaxByCreator.add(u);
+            maxUnits.set(creator, newMaxByCreator);
+
+        }
+
+        private void updateUnitsOnHeight(Unit u) {
+            var height = u.height();
+            var creator = u.creator();
+            if (height >= heightUnits.len().get()) {
+                heightUnits.extendBy(Math.max(10, height - heightUnits.len().get()));
+            }
+            var su = heightUnits.getFiber(height);
+
+            var oldUnitsOnHeightByCreator = su.get(creator);
+            var unitsOnHeightByCreator = new ArrayList<>(oldUnitsOnHeightByCreator);
+            unitsOnHeightByCreator.add(u);
+            su.set(creator, unitsOnHeightByCreator);
+        }
+
+        private void updateUnitsOnLevel(Unit u) {
+            if (u.level() >= levelUnits.len().get()) {
+                levelUnits.extendBy(10);
+            }
+            var su = levelUnits.getFiber(u.level());
+            var creator = u.creator();
+            var primesByCreator = new ArrayList<Unit>(su.get(creator));
+            primesByCreator.add(u);
+            su.set(creator, primesByCreator);
+
+        }
+
+        private void write(Runnable r) {
+            final Lock lock = rwLock.writeLock();
+            lock.lock();
+            try {
+                r.run();
+                ;
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during write locked call", e);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        @Override
+        public void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work) {
+            read(() -> unitsOnLevel(level).iterate(work));
+        }
+    }
 
     record DagInfo(int epoch, int[] heights) {}
 
@@ -57,7 +352,7 @@ public interface Dag {
         }
     }
 
-    record fiberMap(List<SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
+    record fiberMap(CopyOnWriteArrayList<SlottedUnits> content, short width, AtomicInteger len, ReadWriteLock mx) {
 
         public SlottedUnits getFiber(int value) {
             final Lock lock = mx.readLock();
@@ -182,193 +477,6 @@ public interface Dag {
         }
     }
 
-    record dag(short nProc, int epoch, ConcurrentMap<Digest, Unit> units, fiberMap levelUnits, fiberMap heightUnits,
-               SlottedUnits maxUnits, List<BiFunction<Unit, Dag, Correctness>> checks, List<Consumer<Unit>> preInsert,
-               List<Consumer<Unit>> postInsert, double bias)
-              implements Dag {
-
-        @Override
-        public void addCheck(BiFunction<Unit, Dag, Correctness> checker) {
-            checks.add(checker);
-        }
-
-        @Override
-        public void afterInsert(Consumer<Unit> h) {
-            postInsert.add(h);
-        }
-
-        @Override
-        public void beforeInsert(Consumer<Unit> h) {
-            preInsert.add(h);
-        }
-
-        @Override
-        public Unit build(PreUnit base, Unit[] parents) {
-            assert parents.length == nProc;
-            return base.from(parents, bias);
-        }
-
-        @Override
-        public Correctness check(Unit u) {
-            for (var check : checks) {
-                var err = check.apply(u, this);
-                if (err != null) {
-                    return err;
-                }
-            }
-            return null;
-        }
-
-        @Override
-        public Decoded decodeParents(PreUnit pu) {
-            var u = get(pu.hash());
-            if (u != null) {
-                return new DuplicateUnit(u);
-            }
-            var heights = pu.view().heights();
-            var possibleParents = heightUnits.get(heights);
-            if (possibleParents.unknown > 0) {
-                return new UnknownParents(possibleParents.unknown);
-            }
-            Unit[] parents = new Unit[nProc];
-
-            int i = -1;
-            for (List<Unit> units : possibleParents.result) {
-                i++;
-                if (heights[i] == -1) {
-                    continue;
-                }
-                if (units.size() > 1) {
-                    return new AmbiguousParents(possibleParents.result);
-                }
-                parents[i] = units.get(0);
-            }
-            return new DecodedR(parents);
-        }
-
-        @Override
-        public int epoch() {
-            return epoch;
-        }
-
-        @Override
-        public Unit get(Digest digest) {
-            return units.get(digest);
-        }
-
-        @Override
-        public List<Unit> get(List<Digest> digests) {
-            return digests.stream().map(e -> units.get(e)).toList();
-        }
-
-        @Override
-        public List<Unit> get(long id) {
-            var decoded = decode(id);
-            if (decoded.epoch() != epoch) {
-                return null;
-            }
-            var fiber = heightUnits.getFiber(decoded.height());
-
-            return fiber == null ? null : fiber.get(decoded.creator());
-        }
-
-        @Override
-        public void insert(Unit v) {
-            var unit = v.embed(this);
-            for (var hook : preInsert) {
-                hook.accept(unit);
-            }
-            updateUnitsOnHeight(unit);
-            updateUnitsOnLevel(unit);
-            units.put(unit.hash(), unit);
-            updateMaximal(unit);
-            for (var hook : postInsert) {
-                hook.accept(unit);
-            }
-        }
-
-        private void updateUnitsOnHeight(Unit u) {
-            var height = u.height();
-            var creator = u.creator();
-            if (height >= heightUnits.len.get()) {
-                heightUnits.extendBy(Math.max(10, height - heightUnits.len.get()));
-            }
-            var su = heightUnits.getFiber(height);
-
-            var oldUnitsOnHeightByCreator = su.get(creator);
-            var unitsOnHeightByCreator = new ArrayList<>(oldUnitsOnHeightByCreator);
-            unitsOnHeightByCreator.add(u);
-            su.set(creator, unitsOnHeightByCreator);
-
-        }
-
-        private void updateMaximal(Unit u) {
-            var creator = u.creator();
-            var maxByCreator = maxUnits.get(creator);
-            var newMaxByCreator = new ArrayList<Unit>();
-            // The below code works properly assuming that no unit in the dag created by
-            // creator is >= u
-            for (var v : maxByCreator) {
-                if (!u.above(v)) {
-                    newMaxByCreator.add(v);
-                }
-            }
-            newMaxByCreator.add(u);
-            maxUnits.set(creator, newMaxByCreator);
-
-        }
-
-        private void updateUnitsOnLevel(Unit u) {
-            if (u.level() >= levelUnits.len.get()) {
-                levelUnits.extendBy(10);
-            }
-            var su = levelUnits.getFiber(u.level());
-            var creator = u.creator();
-            var primesByCreator = new ArrayList<Unit>(su.get(creator));
-            primesByCreator.add(u);
-            su.set(creator, primesByCreator);
-
-        }
-
-        @Override
-        public boolean isQuorum(short cardinality) {
-            return cardinality >= minimalQuorum(cardinality, bias);
-        }
-
-        @Override
-        public SlottedUnits maximalUnitsPerProcess() {
-            return maxUnits;
-        }
-
-        @Override
-        public short nProc() {
-            return nProc;
-        }
-
-        /**
-         * return all units present in dag that are above (in height sense) given
-         * heights. When called with null argument, returns all units in the dag. Units
-         * returned by this method are in random order.
-         */
-        @Override
-        public List<Unit> unitsAbove(int[] heights) {
-            if (heights == null) {
-                return units.values().stream().toList();
-            }
-            return heightUnits.above(heights);
-        }
-
-        /**
-         * returns the prime units at the requested level, indexed by their creator ids.
-         */
-        @Override
-        public SlottedUnits unitsOnLevel(int level) {
-            var res = levelUnits.getFiber(level);
-            return res != null ? res : newSlottedUnits(nProc);
-        }
-
-    }
-
     static final Logger log = LoggerFactory.getLogger(Dag.class);
 
     static short minimalQuorum(short np, double bias) {
@@ -385,14 +493,15 @@ public interface Dag {
 
     static Dag newDag(Config config, int epoch) {
         log.trace("New dag for epoch: {} on: {}", epoch, config.pid());
-        return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
-                       newFiberMap(config.nProc(), config.epochLength()),
-                       newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),
-                       config.checks(), new ArrayList<>(), new ArrayList<>(), config.bias());
+//        return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
+//                       newFiberMap(config.nProc(), config.epochLength()),
+//                       newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),
+//                       config.checks(), new ArrayList<>(), new ArrayList<>(), config.bias());
+        return new DagImpl(config, epoch);
     }
 
-    private static fiberMap newFiberMap(short width, int initialLength) {
-        var newMap = new fiberMap(new ArrayList<SlottedUnits>(), width, new AtomicInteger(initialLength),
+    static fiberMap newFiberMap(short width, int initialLength) {
+        var newMap = new fiberMap(new CopyOnWriteArrayList<SlottedUnits>(), width, new AtomicInteger(initialLength),
                                   new ReentrantReadWriteLock());
         for (int i = 0; i < initialLength; i++) {
             newMap.content.add(newSlottedUnits(width));
@@ -425,41 +534,20 @@ public interface Dag {
 
     boolean isQuorum(short cardinality);
 
+    void iterateMaxUnitsPerProcess(Function<List<Unit>, Boolean> work);
+
     SlottedUnits maximalUnitsPerProcess();
 
     /** returns the maximal level of a unit in the dag. */
-    default int maxLevel() {
-        AtomicInteger maxLevel = new AtomicInteger(-1);
-        maximalUnitsPerProcess().iterate(units -> {
-            for (Unit v : units) {
-                if (v.level() > maxLevel.get()) {
-                    maxLevel.set(v.level());
-                }
-            }
-            return true;
-        });
-        return maxLevel.get();
-    }
+    int maxLevel();
 
-    default DagInfo maxView() {
-        var maxes = maximalUnitsPerProcess();
-        var heights = new ArrayList<Integer>();
-        maxes.iterate(units -> {
-            var h = -1;
-            for (Unit u : units) {
-                if (u.height() > h) {
-                    h = u.height();
-                }
-            }
-            heights.add(h);
-            return true;
-        });
-        return new DagInfo(epoch(), heights.stream().mapToInt(i -> i).toArray());
-    }
+    DagInfo maxView();
 
     short nProc();
 
     List<Unit> unitsAbove(int[] heights);
+
+    void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work);
 
     SlottedUnits unitsOnLevel(int level);
 }

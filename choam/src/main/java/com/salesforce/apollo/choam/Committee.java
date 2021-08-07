@@ -31,6 +31,7 @@ import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Hex;
 
 /**
  * @author hal.hildebrand
@@ -116,9 +117,7 @@ public interface Committee {
             return false;
         }
 
-        var signature = new JohnHancock(c.getSignature());
-        verify.verify(signature, headerHash);
-        return true;
+        return verify.verify(new JohnHancock(c.getSignature()), headerHash);
     }
 
     boolean validate(HashedCertifiedBlock hb);
@@ -126,8 +125,19 @@ public interface Committee {
     default boolean validate(HashedCertifiedBlock hb, Map<Member, Verifier> validators) {
         Parameters params = params();
         byte[] headerHash = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
-        return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
-                                .count() > params.context().toleranceLevel() + 1;
+        log.trace("Validating block: {} header hash: {} on: {}", hb.hash, Hex.hex(headerHash), params.member());
+        int valid = 0;
+        for (var w : hb.certifiedBlock.getCertificationsList()) {
+            if (!validate(headerHash, w, validators)) {
+                log.error("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
+                          new Digest(w.getId()), params.member());
+            } else {
+                valid++;
+            }
+        }
+        log.trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid,
+                  params.context().toleranceLevel(), params.member());
+        return valid > params.context().toleranceLevel();
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {
@@ -140,8 +150,6 @@ public interface Committee {
                                                                  viewMembersOf(new Digest(reconfigure.getId()),
                                                                                params().context())));
         diff.forEach(m -> validators.remove(m));
-        var headerHash = HashedBlock.hash(hb.block.getHeader(), params().digestAlgorithm()).getBytes();
-        return hb.certifiedBlock.getCertificationsList().stream().filter(c -> validate(headerHash, c, validators))
-                                .count() > params().context().toleranceLevel();
+        return validate(hb, validators);
     }
 }

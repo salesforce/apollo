@@ -1,6 +1,6 @@
 # Apollo Replicated SQL State Machine
 The  _sql-state_  module provides a high fidelity SQL Materialized View from a linear log.  The model provided by this module is a SQL database.
-This SQL database has a single writer, which is the linear log fed into the _SqlStateMachine_.
+This SQL database has a single writer, which is the linear log fed into the SqlStateMachine.
 The log is a sequence of transactions to execute against the current SQL state of the database.  As these transactions can contain SQL Data Definition Language statements,
 this also means that the manipulation of the meta data of the SQL database is also part of the log.  This allows this system to provide a full featured
 SQL database that represents the "current state" of the linear log.  This is, in essence, a Materialized View. Because this is a full featured SQL database,
@@ -23,7 +23,7 @@ the value returned - possibly null - and the error raised - if any.  This means 
 the normal SQL execution, providing a very powerful mechanism for transactions against a SQL store that we normally take for granted.
 
 ### Transaction Types
-Transactions are one of the following types, and are represented as Protobuffs defined in the _cdc.proto_ file.
+Transactions are one of the following types, and are represented as Protobuffs defined in the cdc.proto file.
 * Statement
 * Call
 * Batch
@@ -31,13 +31,13 @@ Transactions are one of the following types, and are represented as Protobuffs d
 * Script
 
 #### Statement
-The _Statement_  is the equivalent of the JDBC SQL prepared statement with or without arguments.
+The Statement  is the equivalent of the JDBC SQL prepared statement with or without arguments.
 #### Call
-The _Call_  is the transaction to execute SQL stored procedures.
+The Call  is the transaction to execute SQL stored procedures.
 ### Batch
-A batch of SQL statements with no arguments, executed in order
+A Batch of SQL statements with no arguments, executed in order
 ### BatchUpdate
-A single prepared statement that is executed in batch with a list of arguments, one argument set per batch entry
+A Single prepared statement that is executed in batch with a list of arguments, one argument set per batch entry
 ### Script
 A Java function that accepts a SQL connection and may return results - basically an anonymous function
 

@@ -22,6 +22,7 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
+import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -173,18 +174,19 @@ public class Ethereal {
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
                                  Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
-        Consumer<List<Unit>> makePreblock = units -> {
+        SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
+        makePreblock.consumeEach(units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
-                log.info("Emitting pre block: {} on: {}");
+                log.debug("Emitting pre block: {} on: {}");
                 preblockSink.accept(preBlock);
-            }
-            log.info("Emitting pre block: {} on: {}");
+            } 
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
+                makePreblock.close();
             }
-        };
+        });
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
         BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
@@ -212,6 +214,7 @@ public class Ethereal {
             if (!Utils.waitForCondition(10, () -> started.get())) {
                 log.trace("Waited 10ms for start and unsuccessful, proceeding");
             }
+            makePreblock.close();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -220,31 +223,43 @@ public class Ethereal {
         return new Controller(start, stop, input);
     }
 
+    private record published(short source, List<PreUnit> pus) {}
+
     private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
                                               Consumer<PreUnit> synchronizer) {
-        Consumer<List<Unit>> makePreblock = units -> {
+        SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
+        makePreblock.consumeEach(units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
                 log.debug("Emitting pre block: {} on: {}", units, config.pid());
-                blocker.accept(preBlock);
+                try {
+                    blocker.accept(preBlock);
+                } catch (Throwable t) {
+                    log.error("Error consuming pre block: {} on: {}", units, config.pid(), t);
+                }
             }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
                          config.pid());
+                makePreblock.close();
             }
-        };
+        });
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> {
+
+        SimpleChannel<published> in = new SimpleChannel<>("Input for: " + config.pid(), 100);
+        in.consumeEach(p -> {
             Orderer orderer = ord.get();
             if (orderer != null) {
-                orderer.addPreunits(source, pus);
+                orderer.addPreunits(p.source, p.pus);
             } else {
-                log.warn("Received: {} before orderer created on: {} ", pus, config.pid());
+                log.warn("Received: {} before orderer created on: {} ", p.pus, config.pid());
             }
-        };
+        });
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> in.submit(new published(source, pus));
+
         AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -261,6 +276,8 @@ public class Ethereal {
             if (!Utils.waitForCondition(10, () -> started.get())) {
                 log.trace("Waited 10ms for start and unsuccessful, proceeding on: {}", config.pid());
             }
+            in.close();
+            makePreblock.close();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -279,7 +296,8 @@ public class Ethereal {
 
     private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
         var rsf = new Beacon(conf);
-        Consumer<List<Unit>> extractHead = units -> {
+        SimpleChannel<List<Unit>> extractHead = new SimpleChannel<>("", 100);
+        extractHead.consumeEach(units -> {
             var head = units.get(units.size() - 1);
             if (head.level() == conf.orderStartLevel()) {
                 try {
@@ -290,10 +308,13 @@ public class Ethereal {
             } else {
                 throw new IllegalStateException("Setup phase: wrong level");
             }
-        };
+        });
 
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
         return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> ord.stop(), null);
+        }), () -> {
+            extractHead.close();
+            ord.stop();
+        }, null);
     }
 }

@@ -25,7 +25,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
    
-    <logger name="com.salesforce.apollo.membership.messaging.rbc" level="WARN"
+    <logger name="com.salesforce.apollo.membership.messaging.rbc" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -38,9 +38,9 @@
     <logger name="com.salesforce.apollo.comm.SliceIterator" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger> 
+    </logger>
 
-	<root level="WARN">
+	<root level="warn">
 		<appender-ref ref="STDOUT" />
 	</root>
 

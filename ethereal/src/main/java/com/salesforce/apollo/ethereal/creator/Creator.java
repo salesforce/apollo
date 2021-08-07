@@ -11,6 +11,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -78,15 +81,15 @@ public class Creator {
     private final Unit[]                               candidates;
     private final Config                               conf;
     private final DataSource                           ds;
-    private int                                        epoch;
-    private boolean                                    epochDone;
-    private EpochProofBuilder                          epochProof;
+    private final AtomicInteger                        epoch      = new AtomicInteger(0);
+    private final AtomicBoolean                        epochDone  = new AtomicBoolean();
+    private final AtomicReference<EpochProofBuilder>   epochProof = new AtomicReference<>();
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
-    private final Set<Short>                           frozen = new HashSet<>();
-    private int                                        level;
-    private int                                        maxLvl;
-    private final Lock                                 mx     = new ReentrantLock();
-    private short                                      onMaxLvl;
+    private final Set<Short>                           frozen     = new HashSet<>();
+    private final AtomicInteger                        level      = new AtomicInteger();
+    private final AtomicInteger                        maxLvl     = new AtomicInteger();
+    private final Lock                                 mx         = new ReentrantLock();
+    private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
     private final RsData                               rsData;
 
@@ -111,13 +114,13 @@ public class Creator {
      * closing unitBelt channel.
      */
     public void createUnits(Channel<Unit> unitBelt, Queue<Unit> lastTiming) {
-        newEpoch(epoch, ByteString.EMPTY);
+        newEpoch(epoch.get(), ByteString.EMPTY);
         unitBelt.consume(units -> consume(units, lastTiming));
     }
 
     private built buildParents() {
         if (conf.canSkipLevel()) {
-            return new built(getParents(), level);
+            return new built(getParents(), level.get());
         } else {
             var l = candidates[conf.pid()].level() + 1;
             return new built(getParentsForLevel(l), l);
@@ -148,7 +151,8 @@ public class Creator {
 
     private void createUnit(Unit[] parents, int level, ByteString data) {
         assert parents.length == conf.nProc();
-        Unit u = PreUnit.newFreeUnit(conf.pid(), epoch, parents, level, data, rsData.rsData(level, parents, epoch),
+        final int e = epoch.get();
+        Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm());
         log.debug("Created unit: {} on: {}", u, conf.pid());
         send.accept(u);
@@ -177,17 +181,18 @@ public class Creator {
         // in a rare case there can be timing units from previous epochs left on
         // lastTiming channel. the purpose of this loop is to drain and ignore them.
         while (timingUnit != null) {
-            if (timingUnit.epoch() == epoch) {
-                epochDone = true;
-                if (epoch == conf.numberOfEpochs() - 1) {
+            final int e = epoch.get();
+            if (timingUnit.epoch() == e) {
+                epochDone.set(true);
+                if (e == conf.numberOfEpochs() - 1) {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
                 log.debug("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
-                return epochProof.buildShare(timingUnit);
+                return epochProof.get().buildShare(timingUnit);
             }
             log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
-                      timingUnit.epoch(), epoch, conf.pid());
+                      timingUnit.epoch(), e, conf.pid());
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
@@ -223,10 +228,11 @@ public class Creator {
      **/
     private void newEpoch(int epoch, ByteString data) {
         log.trace("Changing epoch to: {} on: {}", epoch, conf.pid());
-        this.epoch = epoch;
-        epochDone = false;
+        this.epoch.set(epoch);
+        epochDone.set(false);
+        ;
         resetEpoch();
-        epochProof = epochProofBuilder.apply(epoch);
+        epochProof.set(epochProofBuilder.apply(epoch));
         createUnit(new Unit[conf.nProc()], 0, data);
     }
 
@@ -237,8 +243,8 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private boolean ready() {
-        boolean ready = !epochDone && level > candidates[conf.pid()].level();
-        log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level,
+        boolean ready = !epochDone.get() && level.get() > candidates[conf.pid()].level();
+        log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(),
                   candidates[conf.pid()].level(), conf.pid());
         return ready;
     }
@@ -250,9 +256,9 @@ public class Creator {
     private void resetEpoch() {
         log.debug("Resetting epoch on: {}", conf.pid());
         Arrays.setAll(candidates, u -> null);
-        maxLvl = -1;
-        onMaxLvl = 0;
-        level = 0;
+        maxLvl.set(-1);
+        onMaxLvl.set(0);
+        level.set(0);
     }
 
     /**
@@ -263,7 +269,8 @@ public class Creator {
         log.trace("updating: {} on: {}", unit, conf.pid());
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
-        if (frozen.contains(unit.creator()) || unit.epoch() < epoch) {
+        final int e = epoch.get();
+        if (frozen.contains(unit.creator()) || unit.epoch() < e) {
             log.debug("Unit: {} rejected frozen: {} current: {} on: {}", unit, frozen.contains(unit.creator()), epoch,
                       conf.pid());
             return;
@@ -272,8 +279,8 @@ public class Creator {
         // If the unit is from a new epoch, switch to that epoch.
         // Since units appear on the belt in order they were added to the dag,
         // the first unit from a new epoch is always a dealing unit.
-        if (unit.epoch() > epoch) {
-            if (!epochProof.verify(unit)) {
+        if (unit.epoch() > e) {
+            if (!epochProof.get().verify(unit)) {
                 log.warn("Unit did not verify epoch, rejected on: {}", conf.pid());
                 return;
             }
@@ -283,16 +290,15 @@ public class Creator {
         // If this is a finishing unit try to extract threshold signature share from it.
         // If there are enough shares to produce the signature (and therefore a proof
         // that the current epoch is finished) switch to a new epoch.
-        ByteString ep = epochProof.tryBuilding(unit);
+        ByteString ep = epochProof.get().tryBuilding(unit);
         if (ep != null) {
-            log.info("Advancing epoch to: {} using: {} on: {}", epoch + 1, unit, conf.pid());
-            newEpoch(epoch + 1, ep);
+            log.info("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
+            newEpoch(e + 1, ep);
             return;
         }
         log.trace("No epoch proof generated from: {} on: {}", unit, conf.pid());
 
         updateCandidates(unit);
-
     }
 
     /**
@@ -301,28 +307,28 @@ public class Creator {
      * creator.
      */
     private void updateCandidates(Unit u) {
-        if (u.epoch() != epoch) {
+        if (u.epoch() != epoch.get()) {
             return;
         }
         var prev = candidates[u.creator()];
         if (prev == null || prev.level() < u.level()) {
             candidates[u.creator()] = u;
             log.trace("Update candidate to: {} on: {}", u, conf.pid());
-            if (u.level() == maxLvl) {
-                onMaxLvl++;
-                log.trace("Update candidate onMaxLvl incremented to: {} by: {} on: {}", onMaxLvl, u, conf.pid());
+            if (u.level() == maxLvl.get()) {
+                onMaxLvl.incrementAndGet();
+                log.trace("Update candidate onMaxLvl incremented to: {} by: {} on: {}", onMaxLvl.get(), u, conf.pid());
             }
-            if (u.level() > maxLvl) {
-                maxLvl = u.level();
-                onMaxLvl = 1;
+            if (u.level() > maxLvl.get()) {
+                maxLvl.set(u.level());
+                onMaxLvl.set(1);
                 log.trace("Update candidate {} new maxLvl: {} on: {}", u, conf.pid());
             }
-            level = maxLvl;
+            level.set(maxLvl.get());
             log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.pid());
-            if (onMaxLvl >= quorum) {
-                level++;
-                log.trace("Update candidate onMaxLvl: {} >= quorum: {} level now: {} via: {} on: {}", onMaxLvl, quorum,
-                          level, u, conf.pid());
+            if (onMaxLvl.get() >= quorum) {
+                level.incrementAndGet();
+                log.trace("Update candidate onMaxLvl: {} >= quorum: {} level now: {} via: {} on: {}", onMaxLvl.get(),
+                          quorum, level.get(), u, conf.pid());
             }
         }
     }

@@ -39,6 +39,11 @@ public interface Verifier {
         }
 
         @Override
+        public PublicKey getPublicKey() {
+            return key;
+        }
+
+        @Override
         public boolean verify(JohnHancock signature, byte[]... message) {
             return algo.verify(key, signature, message);
         }
@@ -59,6 +64,8 @@ public interface Verifier {
         }
 
     }
+
+    PublicKey getPublicKey();
 
     boolean verify(JohnHancock signature, byte[]... message);
 

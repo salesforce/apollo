@@ -15,9 +15,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -96,26 +98,28 @@ public class Orderer {
         return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
-    private final Clock                clock;
-    private final Config               config;
-    private Creator                    creator;
-    private epoch                      current;
-    private final DataSource           ds;
-    private final Queue<Unit>          lastTiming;
-    private final ReadWriteLock        mx = new ReentrantReadWriteLock();
-    private final Channel<List<Unit>>  orderedUnits;
-    private epoch                      previous;
-    private RandomSourceFactory        rsf;
-    private final Consumer<List<Unit>> toPreblock;
-    private final Channel<Unit>        unitBelt;
+    private final Clock                     clock;
+    private final Config                    config;
+    private volatile Creator                creator;
+    private final AtomicReference<epoch>    current  = new AtomicReference<>();
+    private final DataSource                ds;
+    private final Queue<Unit>               lastTiming;
+    private final ReadWriteLock             mx       = new ReentrantReadWriteLock();
+    private final Channel<List<Unit>>       orderedUnits;
+    private final AtomicReference<epoch>    previous = new AtomicReference<>();
+    private volatile RandomSourceFactory    rsf;
+    private final SimpleChannel<List<Unit>> toPreblock;
+    private final Channel<Unit>             unitBelt;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
+    public Orderer(Config conf, DataSource ds, SimpleChannel<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
-        this.orderedUnits = new SimpleChannel<>(conf.epochLength());
+        this.orderedUnits = new SimpleChannel<>(String.format("Ordered Units for: %s", config.pid()),
+                                                conf.epochLength());
         this.toPreblock = toPreblock;
-        this.unitBelt = new SimpleChannel<>(conf.epochLength() * conf.nProc());
+        this.unitBelt = new SimpleChannel<>(String.format("Unit belt for: %s", config.pid()),
+                                            conf.epochLength() * conf.nProc());
         this.clock = clock;
     }
 
@@ -152,23 +156,24 @@ public class Orderer {
         lock.lock();
         try {
             List<Unit> result = new ArrayList<>();
+            final epoch c = current.get();
             Consumer<DagInfo> deltaResolver = dagInfo -> {
                 if (dagInfo == null) {
                     return;
                 }
-                if (previous != null && dagInfo.epoch() == previous.id()) {
-                    result.addAll(previous.unitsAbove(dagInfo.heights()));
+                final epoch p = previous.get();
+                if (p != null && dagInfo.epoch() == p.id()) {
+                    result.addAll(p.unitsAbove(dagInfo.heights()));
                 }
-                if (current != null && dagInfo.epoch() == current.id()) {
-                    result.addAll(current.unitsAbove(dagInfo.heights()));
+                if (c != null && dagInfo.epoch() == c.id()) {
+                    result.addAll(c.unitsAbove(dagInfo.heights()));
                 }
             };
             deltaResolver.accept(info[0]);
             deltaResolver.accept(info[1]);
-            if (current != null) {
-                if (info[0] != null && info[0].epoch() < current.id && info[1] != null
-                && info[1].epoch() < current.id()) {
-                    result.addAll(current.allUnits());
+            if (c != null) {
+                if (info[0] != null && info[0].epoch() < c.id && info[1] != null && info[1].epoch() < c.id()) {
+                    result.addAll(c.allUnits());
                 }
             }
             return result;
@@ -183,11 +188,13 @@ public class Orderer {
         lock.lock();
         try {
             var result = new DagInfo[2];
-            if (previous != null && !previous.wantsMoreUnits()) {
-                result[0] = previous.dag.maxView();
+            final epoch p = previous.get();
+            if (p != null && !p.wantsMoreUnits()) {
+                result[0] = p.dag.maxView();
             }
-            if (current != null && !current.wantsMoreUnits()) {
-                result[1] = current.dag().maxView();
+            final epoch c = current.get();
+            if (c != null && !c.wantsMoreUnits()) {
+                result[1] = c.dag().maxView();
             }
             return result;
         } finally {
@@ -210,7 +217,7 @@ public class Orderer {
             log.trace("Sending: {} on: {}", u, config.pid());
             insert(u);
             synchronizer.accept(u.toPreUnit());
-        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new HashMap<>())));
+        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
 
         newEpoch(0);
 
@@ -223,11 +230,11 @@ public class Orderer {
     }
 
     public void stop() {
-        if (previous != null) {
-            previous.close();
+        if (previous.get() != null) {
+            previous.get().close();
         }
         if (current != null) {
-            current.close();
+            current.get().close();
         }
         orderedUnits.close();
         unitBelt.close();
@@ -245,11 +252,13 @@ public class Orderer {
         final Lock lock = mx.readLock();
         lock.lock();
         try {
-            result = current != null ? current.dag.get(ids) : new ArrayList<>();
-            if (previous != null) {
+            final epoch c = current.get();
+            result = c != null ? c.dag.get(ids) : new ArrayList<>();
+            final epoch p = previous.get();
+            if (p != null) {
                 for (int i = 0; i < result.size(); i++) {
                     if (result.get(i) != null) {
-                        result.set(i, previous.dag.get(ids.get(i)));
+                        result.set(i, p.dag.get(ids.get(i)));
                     }
                 }
             }
@@ -291,14 +300,16 @@ public class Orderer {
     }
 
     private epochWithNewer getEpoch(int epoch) {
-        if (current == null || epoch > current.id) {
+        final epoch c = current.get();
+        if (c == null || epoch > c.id) {
             return new epochWithNewer(null, true);
         }
-        if (epoch == current.id()) {
-            return new epochWithNewer(current, false);
+        if (epoch == c.id()) {
+            return new epochWithNewer(c, false);
         }
-        if (epoch == previous.id()) {
-            return new epochWithNewer(previous, false);
+        final epoch p = previous.get();
+        if (epoch == p.id()) {
+            return new epochWithNewer(p, false);
         }
         return new epochWithNewer(null, false);
     }
@@ -323,7 +334,7 @@ public class Orderer {
                     finishEpoch(epoch);
                 }
                 if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                    toPreblock.accept(round);
+                    toPreblock.submit(round);
                     log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
                 }
                 current.set(epoch);
@@ -364,19 +375,23 @@ public class Orderer {
         final Lock lock = mx.writeLock();
         lock.lock();
         try {
-            if (current == null || epoch > current.id()) {
-                if (previous != null) {
-                    previous.close();
+            final epoch c = current.get();
+            if (c == null || epoch > c.id()) {
+                final epoch p = previous.get();
+                if (p != null) {
+                    p.close();
                 }
-                previous = current;
-                current = newEpoch(epoch, config, rsf, unitBelt, orderedUnits, clock);
-                return current;
+                previous.set(c);
+                epoch newEpoch = newEpoch(epoch, config, rsf, unitBelt, orderedUnits, clock);
+                current.set(newEpoch);
+                return newEpoch;
             }
-            if (epoch == current.id()) {
-                return current;
+            if (epoch == c.id()) {
+                return c;
             }
-            if (epoch == previous.id()) {
-                return previous;
+            epoch p = previous.get();
+            if (epoch == p.id()) {
+                return p;
             }
             return null;
         } finally {

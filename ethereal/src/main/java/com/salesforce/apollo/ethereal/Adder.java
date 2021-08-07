@@ -8,7 +8,9 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -47,8 +50,33 @@ public interface Adder {
         public AdderImpl(Dag dag, Config conf) {
             this.dag = dag;
             this.conf = conf;
-            ready = new SimpleChannel<>(conf.epochLength() * conf.nProc() * 10);
-            ready.consume(wpus -> wpus.forEach(wpu -> handleReady(wpu)));
+            ready = new SimpleChannel<>(String.format("Ready units for: %s", conf.pid()),
+                                        conf.epochLength() * conf.nProc() * 10);
+            ready.consume(readyHandler());
+        }
+
+        private Consumer<List<waitingPreUnit>> readyHandler() {
+            @SuppressWarnings("unchecked")
+            Deque<waitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
+            for (int i = 0; i < ready.length; i++) {
+                ready[i] = new ArrayDeque<>();
+            }
+            return wpus -> {
+                wpus.forEach(wpu -> {
+                    ready[wpu.pu.creator()].add(wpu);
+                });
+                boolean handled = true;
+                while (handled) {
+                    handled = false;
+                    for (int i = 0; i < ready.length; i++) {
+                        final Deque<waitingPreUnit> q = ready[i];
+                        if (!q.isEmpty()) {
+                            handleReady(q.removeFirst());
+                            handled = true;
+                        }
+                    }
+                }
+            };
         }
 
         /**
@@ -60,50 +88,50 @@ public interface Adder {
          */
         @Override
         public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
-            var errors = new HashMap<Digest, Correctness>();
-            var failed = new ArrayList<Boolean>();
-            for (int i = 0; i < preunits.size(); i++) {
-                failed.add(false);
-            }
-            var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
-
-            log.debug("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
-
-            for (int i = 0; i < preunits.size(); i++) {
-                var pu = preunits.get(i);
-                if (pu.creator() == conf.pid()) {
-                    log.debug("Self created: {} on: {}", pu, conf.pid());
-                    continue;
-                }
-                if (pu.creator() >= conf.nProc()) {
-                    log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.pid());
-                    errors.put(pu.hash(), Correctness.DATA_ERROR);
-                    failed.set(i, true);
-                }
-                if (alreadyInDag.get(i) != null) {
-                    Correctness check = checkCorrectness(pu);
-                    if (check != Correctness.CORRECT) {
-                        log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.pid());
-                        errors.put(pu.hash(), check);
-                        failed.set(i, true);
-                    } else {
-                        log.trace("Duplicate unit: {} on: {}", pu, conf.pid());
-                        errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
-                        failed.set(i, true);
-                    }
-                }
-            }
             mtx.lock();
             try {
+                var errors = new HashMap<Digest, Correctness>();
+                var failed = new ArrayList<Boolean>();
+                for (int i = 0; i < preunits.size(); i++) {
+                    failed.add(false);
+                }
+                var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
+
+                log.debug("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
+
+                for (int i = 0; i < preunits.size(); i++) {
+                    var pu = preunits.get(i);
+                    if (pu.creator() == conf.pid()) {
+                        log.debug("Self created: {} on: {}", pu, conf.pid());
+                        continue;
+                    }
+                    if (pu.creator() >= conf.nProc()) {
+                        log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.pid());
+                        errors.put(pu.hash(), Correctness.DATA_ERROR);
+                        failed.set(i, true);
+                    }
+                    if (alreadyInDag.get(i) != null) {
+                        Correctness check = checkCorrectness(pu);
+                        if (check != Correctness.CORRECT) {
+                            log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.pid());
+                            errors.put(pu.hash(), check);
+                            failed.set(i, true);
+                        } else {
+                            log.trace("Duplicate unit: {} on: {}", pu, conf.pid());
+                            errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
+                            failed.set(i, true);
+                        }
+                    }
+                }
                 for (int i = 0; i < preunits.size(); i++) {
                     if (!failed.get(i)) {
                         addToWaiting(preunits.get(i), source);
                     }
                 }
+                return errors;
             } finally {
                 mtx.unlock();
             }
-            return errors;
         }
 
         @Override

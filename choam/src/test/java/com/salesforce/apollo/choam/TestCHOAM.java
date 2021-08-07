@@ -35,7 +35,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int CARDINALITY = 20;
+    private static final int CARDINALITY = 101;
 
     private Map<Digest, CHOAM>  choams;
     private List<SigningMember> members;
@@ -59,7 +59,7 @@ public class TestCHOAM {
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, CARDINALITY);
         Parameters.Builder params = Parameters.newBuilder().setContext(context)
                                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
-                                              .setGossipDuration(Duration.ofMillis(10))
+                                              .setGossipDuration(Duration.ofMillis(100))
                                               .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -79,9 +79,9 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception {
+    public void regenerateGenesis() throws Exception { 
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Thread.sleep(10_000);
+        Thread.sleep(60_000);
     }
 }

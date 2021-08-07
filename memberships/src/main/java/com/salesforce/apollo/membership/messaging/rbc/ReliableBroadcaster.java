@@ -240,6 +240,7 @@ public class ReliableBroadcaster {
                                 boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), s.msg.getContent());
                                 return verify;
                             }).map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
+//                            .peek(s -> log.error("msg: {} from: {} on: {}", s.hash, s.from, params.member))
                             .map(s -> new Msg(s.from, s.msg.getContent())).toList());
             gc();
         }
@@ -313,7 +314,7 @@ public class ReliableBroadcaster {
                 } else if (previous.msg.getAge() != nextAge) {
                     previous.msg().setAge(nextAge);
                 }
-//                log.debug("duplicate event: {} on: {}", hash, params.member);
+                log.trace("duplicate event: {} on: {}", s.hash, params.member);
                 return true;
             }
             return false;
@@ -422,6 +423,7 @@ public class ReliableBroadcaster {
         if (!started.get()) {
             return;
         }
+        log.debug("publishing message on: {}", params.member);
         AgedMessage m = buffer.send(message, params.member);
         if (notifyLocal) {
             deliver(Collections.singletonList(new Msg(params.member.getId(), m.getContent())));
@@ -472,7 +474,7 @@ public class ReliableBroadcaster {
         if (newMsgs.isEmpty()) {
             return;
         }
-        log.trace("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), params.context.getId(), params.member);
+        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), params.context.getId(), params.member);
         channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(params.context.getId(), newMsgs);

@@ -110,7 +110,7 @@ public class RoundScheduler extends AtomicInteger {
         }
         int current = incrementAndGet();
         List<Timer> drained = new ArrayList<>();
-        while (!scheduled.isEmpty() && scheduled.peek().deadline <= current) {
+        while (!scheduled.isEmpty() && scheduled.peek() != null && scheduled.peek().deadline <= current) {
             drained.add(scheduled.poll());
         }
         drained.forEach(e -> {

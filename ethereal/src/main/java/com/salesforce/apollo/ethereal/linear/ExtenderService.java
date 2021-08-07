@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal.linear;
 
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -37,12 +38,13 @@ public class ExtenderService {
     private final Channel<TimingRound> timingRounds;
     private final Channel<Boolean>     trigger;
     private final Config               config;
+    private final Semaphore            exclusive = new Semaphore(1);
 
     public ExtenderService(Dag dag, RandomSource rs, Config config, Channel<List<Unit>> output) {
         ordering = new Extender(dag, rs, config);
         this.output = output;
-        trigger = new SimpleChannel<>(100);
-        timingRounds = new SimpleChannel<>(config.epochLength());
+        trigger = new SimpleChannel<>(String.format("Trigger for: %s", config.pid()), 100);
+        timingRounds = new SimpleChannel<>(String.format("Timing Rounds for: %s", config.pid()), config.epochLength());
 
         trigger.consumeEach(timingUnitDecider());
         timingRounds.consumeEach(roundSorter());
@@ -66,7 +68,7 @@ public class ExtenderService {
      */
     private Consumer<TimingRound> roundSorter() {
         return round -> {
-            var units = round.orderedUnits();
+            var units = round.orderedUnits(config.digestAlgorithm());
             log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
             output.submit(units);
         };
@@ -79,12 +81,17 @@ public class ExtenderService {
      */
     private Consumer<Boolean> timingUnitDecider() {
         return t -> {
-            var round = ordering.nextRound();
-            log.trace("Starting timing round: {} on: {}", round, config.pid());
-            while (round != null) {
-                log.trace("Producing timing round: {} on: {}", round, config.pid());
-                timingRounds.submit(round);
-                round = ordering.nextRound();
+            exclusive.acquireUninterruptibly();
+            try {
+                var round = ordering.nextRound();
+                log.trace("Starting timing round: {} on: {}", round, config.pid());
+                while (round != null) {
+                    log.debug("Producing timing round: {} on: {}", round, config.pid());
+                    timingRounds.submit(round);
+                    round = ordering.nextRound();
+                }
+            } finally {
+                exclusive.release();
             }
         };
     }

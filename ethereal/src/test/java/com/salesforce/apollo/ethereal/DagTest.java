@@ -191,7 +191,7 @@ public class DagTest {
         for (short pid = 0; pid < dag.nProc(); pid++) {
             result.put(pid, new HashMap<>());
         }
-        dag.maximalUnitsPerProcess().iterate(units -> {
+        dag.iterateMaxUnitsPerProcess(units -> {
             for (Unit u : units) {
                 if (!traversed.contains(u.hash())) {
                     traverse(u, traversed, result);

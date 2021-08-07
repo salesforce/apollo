@@ -14,7 +14,7 @@ import java.security.KeyPair;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -33,6 +33,7 @@ import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
@@ -70,6 +71,10 @@ import com.salesforce.apollo.utils.SimpleChannel;
  *
  */
 public class CHOAM {
+    @FunctionalInterface
+    public interface BlockProducer {
+        Block produce(Long height, Digest prev, Executions executions);
+    }
 
     public class Combiner implements Combine {
 
@@ -138,18 +143,21 @@ public class CHOAM {
         private final Producer             producer;
         private final HashedCertifiedBlock viewChange;
 
-        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators) {
+        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators, nextView view) {
             super(validators);
             this.viewChange = block;
-            var context = Committee.viewFor(block.hash, params.context());
+            var v = new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
+                                                             : viewChange.block.getReconfigure().getId());
+            var context = Committee.viewFor(v, params.context());
             context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
             validators.keySet().forEach(m -> context.activate(m));
-            producer = new Producer(next,
+            producer = new Producer(view,
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(context).build(),
                                                             params.communications()),
                                     comm, params, reconfigureBlock(), publisher(),
-                                    getReconfigure().getViewList().stream().map(vm -> new Digest(vm.getId())).toList());
+                                    getReconfigure().getViewList().stream().map(vm -> new Digest(vm.getId())).toList(),
+                                    constructBlock(), head);
             producer.start();
         }
 
@@ -251,7 +259,8 @@ public class CHOAM {
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(formation).build(),
                                                             params.communications()),
-                                    comm, params, genesisBlock(), publisher(), Collections.emptyList());
+                                    comm, params, genesisBlock(), publisher(), Collections.emptyList(),
+                                    constructBlock(), null);
             producer.setNextViewId(params.genesisViewId());
         }
 
@@ -355,22 +364,22 @@ public class CHOAM {
                     .setReconfigure(reconfigure).build();
     }
 
-    private HashedCertifiedBlock                            checkpoint;
-    private final ReliableBroadcaster                       combine;
-    private final CommonCommunications<Terminal, Concierge> comm;
-    private Committee                                       current;
-    private final Fsm<Combine, Combine.Transitions>         fsm;
-    private HashedCertifiedBlock                            genesis;
-    private HashedCertifiedBlock                            head;
-    private final Channel<HashedCertifiedBlock>             linear;
-    private nextView                                        next;
-    private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending = new PriorityQueue<>();
-    private RoundScheduler                                  roundScheduler;
-    private final AtomicBoolean                             started = new AtomicBoolean();
-    private final Store                                     store;
-    private final Combine.Transitions                       transitions;
-    private HashedCertifiedBlock                            view;
+    private volatile HashedCertifiedBlock                     checkpoint;
+    private final ReliableBroadcaster                         combine;
+    private final CommonCommunications<Terminal, Concierge>   comm;
+    private volatile Committee                                current;
+    private final Fsm<Combine, Combine.Transitions>           fsm;
+    private volatile HashedCertifiedBlock                     genesis;
+    private volatile HashedCertifiedBlock                     head;
+    private final Channel<List<Msg>>                          linear;
+    private volatile nextView                                 next;
+    private final Parameters                                  params;
+    private final PriorityBlockingQueue<HashedCertifiedBlock> pending = new PriorityBlockingQueue<>();
+    private final RoundScheduler                              roundScheduler;
+    private final AtomicBoolean                               started = new AtomicBoolean();
+    private final Store                                       store;
+    private final Combine.Transitions                         transitions;
+    private HashedCertifiedBlock                              view;
 
     public CHOAM(Parameters params, MVStore store) {
         this(params, new Store(params.digestAlgorithm(), store));
@@ -383,8 +392,8 @@ public class CHOAM {
         combine = new ReliableBroadcaster(params.combineParameters().setMember(params.member())
                                                 .setContext(params.context()).build(),
                                           params.communications());
-        combine.registerHandler((ctx, messages) -> combine(messages));
-        linear = new SimpleChannel<>(100);
+        linear = new SimpleChannel<>("Linear for: " + params.member(), 100);
+        combine.registerHandler((ctx, messages) -> linear.submit(messages));
         head = new NullBlock(params.digestAlgorithm());
         view = new NullBlock(params.digestAlgorithm());
         checkpoint = new NullBlock(params.digestAlgorithm());
@@ -406,7 +415,7 @@ public class CHOAM {
             return;
         }
         linear.open();
-        linear.consumeEach(b -> accept(b));
+        linear.consumeEach(msgs -> combine(msgs));
         combine.start(params.gossipDuration(), params.scheduler());
         fsm.enterStartState();
         transitions.start();
@@ -422,8 +431,9 @@ public class CHOAM {
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
-        log.info("Accepted block: {} on: {}", next.hash, params.member());
-        current.accept(next);
+        log.info("Accepted block: {} height: {} on: {}", next.hash, next.height(), params.member());
+        final Committee c = current;
+        c.accept(next);
     }
 
     private void checkpoint() {
@@ -432,20 +442,34 @@ public class CHOAM {
     }
 
     private void combine() {
+        log.trace("Attempting to combine blocks on: {}", params.member());
         var next = pending.peek();
-        while (isNext(next)) {
-            if (current.validate(next)) {
-                HashedCertifiedBlock nextBlock = pending.poll();
-                if (nextBlock == null) {
-                    return;
-                }
-                linear.submit(nextBlock);
-            } else {
-                log.debug("unable to validate block: {} on: {}", next.hash, params.member());
+        while (next != null) {
+            final HashedCertifiedBlock h = head;
+            if (h.height() >= 0 && next.height() <= h.height()) {
+                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
+                          next.height(), h.height(), params.member());
                 pending.poll();
+            } else if (isNext(next)) {
+                if (current.validate(next)) {
+                    HashedCertifiedBlock nextBlock = pending.poll();
+                    if (nextBlock == null) {
+                        return;
+                    }
+                    accept(nextBlock);
+                } else {
+                    log.info("Unable to validate block: {} height: {} on: {}", next.hash, next.height(),
+                              params.member());
+                    pending.poll();
+                }
+            } else {
+                log.trace("Premature block: {} height: {} current: {} on: {}", next.hash, next.height(), h.height(),
+                          params.member());
+                return;
             }
             next = pending.peek();
         }
+
     }
 
     private void combine(List<Msg> messages) {
@@ -462,8 +486,16 @@ public class CHOAM {
             return;
         }
         HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), block);
-        log.debug("Received block: {} from {} on: {}", hcb.hash, m.source(), params.member());
+        log.trace("Received block: {} height: {} from {} on: {}", hcb.hash, hcb.height(), m.source(), params.member());
         pending.add(hcb);
+    }
+
+    private BlockProducer constructBlock() {
+        return (height, prev, executions) -> Block.newBuilder()
+                                                  .setHeader(buildHeader(params.digestAlgorithm(), executions, prev,
+                                                                         height, checkpoint.height(), checkpoint.hash,
+                                                                         view.height(), view.hash))
+                                                  .setExecutions(executions).build();
     }
 
     private void execute(ExecutedTransaction execution) {
@@ -492,7 +524,10 @@ public class CHOAM {
     }
 
     private boolean isNext(HashedBlock next) {
-        return next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
+        boolean isNext = next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
+//        log.info("Block: {} height: {} prev: {} isNext: {} current: {} height: {} on: {}", next.hash, next.height(),
+//                  new Digest(next.block.getHeader().getPrevious()), isNext, head.hash, head.height(), params.member());
+        return isNext;
     }
 
     private ViewMember join(JoinRequest request, Digest from) {
@@ -514,19 +549,20 @@ public class CHOAM {
     }
 
     private void process() {
-        switch (head.block.getBodyCase()) {
+        final HashedBlock h = head;
+        switch (h.block.getBodyCase()) {
         case CHECKPOINT:
             checkpoint();
             break;
         case EXECUTIONS:
-            head.block.getExecutions().getExecutionsList().forEach(et -> execute(et));
+            h.block.getExecutions().getExecutionsList().forEach(et -> execute(et));
             break;
         case RECONFIGURE:
-            reconfigure(head.block.getReconfigure());
+            reconfigure(h.block.getReconfigure());
             break;
         case GENESIS:
-            reconfigure(head.block.getGenesis().getInitialView());
-            head.block.getGenesis().getInitializeList().forEach(et -> execute(et));
+            reconfigure(h.block.getGenesis().getInitialView());
+            h.block.getGenesis().getInitializeList().forEach(et -> execute(et));
             break;
         default:
             break;
@@ -538,20 +574,27 @@ public class CHOAM {
     }
 
     private void reconfigure(Reconfigure reconfigure) {
-        current.complete();
+        final Committee c = current;
+        c.complete();
         var validators = validatorsOf(reconfigure, params.context());
+        var currentView = next;
         nextView();
+        final HashedCertifiedBlock h = head;
         if (validators.containsKey(params.member())) {
-            current = new Associate(head, validators);
+            current = new Associate(h, validators, currentView);
         } else {
-            current = new Client(head, validators);
+            current = new Client(h, validators);
         }
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
     }
 
     private BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock() {
-        return (joining, nextViewId) -> CHOAM.reconfigure(nextViewId, joining, head, params.context(), view, params,
-                                                          checkpoint);
+        return (joining, nextViewId) -> {
+            final HashedCertifiedBlock h = head;
+            final HashedCertifiedBlock v = view;
+            final HashedCertifiedBlock c = checkpoint;
+            return CHOAM.reconfigure(nextViewId, joining, h, params.context(), v, params, c);
+        };
     }
 
     /** Submit a transaction from a client */
