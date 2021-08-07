@@ -416,9 +416,10 @@ public class Producer {
         linear = new SimpleChannel<>("Publisher linear for: " + params.member(), 100);
         linear.consumeEach(coordination -> coordinate(coordination));
 
+        // Use 50% byzantine
+        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
+
         // Canonical assignment of members -> pid for Ethereal
-//        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
-        Config.Builder config = params.ethereal().clone();
         Short pid = roster.get(params.member().getId());
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
@@ -585,7 +586,7 @@ public class Producer {
             pending.remove(hcb.hash);
             publisher.accept(hcb);
             log.debug("Block: {} height: {} certs: {} > {} published on: {}", hcb.hash, hcb.height(),
-                     hcb.certifiedBlock.getCertificationsCount(), params.context().toleranceLevel(), params.member());
+                      hcb.certifiedBlock.getCertificationsCount(), params.context().toleranceLevel(), params.member());
         } else if (p.builder.hasBlock()) {
             log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(p.builder.getBlock()),
                       p.builder.getCertificationsCount(), coordinator.getContext().toleranceLevel(), params.member());
