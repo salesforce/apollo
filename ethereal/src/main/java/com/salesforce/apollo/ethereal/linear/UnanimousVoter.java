@@ -16,14 +16,12 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
 
 /**
  * @author hal.hildebrand
  *
  */
 
-@SuppressWarnings("unused")
 public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoundForCommonVote,
                              int commonVoteDeterministicPrefix, Map<Digest, Vote> votingMemo) {
 

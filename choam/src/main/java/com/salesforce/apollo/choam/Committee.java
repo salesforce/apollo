@@ -135,9 +135,10 @@ public interface Committee {
                 valid++;
             }
         }
-        log.trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid,
-                  params.context().toleranceLevel(), params.member());
-        return valid > params.context().toleranceLevel();
+        final int toleranceLevel = params.context().toleranceLevel();
+        log.trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
+                  params.member());
+        return valid > toleranceLevel;
     }
 
     default boolean validateRegeneration(HashedCertifiedBlock hb) {

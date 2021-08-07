@@ -131,7 +131,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 byzantine = (int) (((double) nProc) * pByz);
             }
             if (wtk == null) {
-                wtk = new NoOpWeakThresholdKey((int) ((((double) bias - 1.0) * (double) byzantine) + 1.0));
+                wtk = new NoOpWeakThresholdKey((int) ((((double) bias - 1.0) * (double) byzantine)));
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");

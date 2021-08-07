@@ -96,11 +96,11 @@ public interface EpochProofBuilder {
             }
             var share = decodeShare(u.data());
             if (share == null) {
-                log.debug("Cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
+                log.debug("WTK cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
                 return null;
             }
             if (!conf.WTKey().verifyShare(share)) {
-                log.warn("Cannot verify share data: {} on: {}", u.data(), conf.pid());
+                log.warn("WTK cannot verify share data: {} on: {}", u.data(), conf.pid());
                 return null;
             }
             var sig = shares.add(share);
@@ -128,7 +128,7 @@ public interface EpochProofBuilder {
         public ByteString buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
             Share share = conf.WTKey().createShare(proof, conf.pid());
-            log.debug("Share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof,
+            log.debug("WTK share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof,
                       share, conf.pid());
             if (share != null) {
                 return encodeShare(share, proof);

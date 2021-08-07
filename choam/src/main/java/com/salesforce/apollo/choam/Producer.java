@@ -243,7 +243,7 @@ public class Producer {
         }
 
         private void attemptAssembly() {
-            int toleranceLevel = coordinator.getContext().toleranceLevel();
+            int toleranceLevel = params.context().toleranceLevel();
             if (joins.values().stream().filter(b -> b.getEndorsementsCount() > toleranceLevel)
                      .count() > toleranceLevel) {
                 transitions.nominated();
@@ -416,8 +416,7 @@ public class Producer {
         linear = new SimpleChannel<>("Publisher linear for: " + params.member(), 100);
         linear.consumeEach(coordination -> coordinate(coordination));
 
-        // Use 50% byzantine
-        Config.Builder config = params.ethereal().setByzantine(params.context().toleranceLevel()).setBias(2).clone();
+        Config.Builder config = params.ethereal().clone();
 
         // Canonical assignment of members -> pid for Ethereal
         Short pid = roster.get(params.member().getId());
@@ -579,17 +578,18 @@ public class Producer {
     }
 
     private void maybePublish(Digest hash, pendingCertification p) {
-        if (p.builder.hasBlock() && p.certifications.size() > params.context().toleranceLevel()) {
+        final int toleranceLevel = params.context().toleranceLevel();
+        if (p.builder.hasBlock() && p.certifications.size() > toleranceLevel) {
             p.addCertifications();
             var hcb = new HashedCertifiedBlock(params.digestAlgorithm(), p.builder.build());
             published.add(hcb.hash);
             pending.remove(hcb.hash);
             publisher.accept(hcb);
             log.debug("Block: {} height: {} certs: {} > {} published on: {}", hcb.hash, hcb.height(),
-                      hcb.certifiedBlock.getCertificationsCount(), params.context().toleranceLevel(), params.member());
+                      hcb.certifiedBlock.getCertificationsCount(), toleranceLevel, params.member());
         } else if (p.builder.hasBlock()) {
             log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(p.builder.getBlock()),
-                      p.builder.getCertificationsCount(), coordinator.getContext().toleranceLevel(), params.member());
+                      p.builder.getCertificationsCount(), toleranceLevel, params.member());
         } else {
             log.trace("Block: {} empty, pending: {} on: {}", hash, p.builder.getCertificationsCount(), params.member());
         }

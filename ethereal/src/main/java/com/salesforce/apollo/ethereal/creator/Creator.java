@@ -188,7 +188,7 @@ public class Creator {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
-                log.debug("TimingUnit, new epoch required: {} on: {}", timingUnit, conf.pid());
+                log.debug("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
