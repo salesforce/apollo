@@ -21,7 +21,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -229,11 +228,10 @@ public class Producer {
                 log.debug("Block: {} already published on: {}", hash, params.member());
                 return;
             }
-            var p = pending.computeIfAbsent(hash, h -> new pendingCertification(CertifiedBlock.newBuilder(),
-                                                                                new CopyOnWriteArrayList<>()));
-            p.certifications.add(validate.getWitness());
+            var p = pending.computeIfAbsent(hash, h -> CertifiedBlock.newBuilder());
+            p.addCertifications(validate.getWitness());
             log.trace("Validation for block: {} height: {} on: {}", hash,
-                      p.builder.hasBlock() ? height(p.builder.getBlock()) : "missing", params.member());
+                      p.hasBlock() ? height(p.getBlock()) : "missing", params.member());
             maybePublish(hash, p);
         }
 
@@ -349,14 +347,6 @@ public class Producer {
         }
     }
 
-    private record pendingCertification(CertifiedBlock.Builder builder,
-                                        CopyOnWriteArrayList<Certification> certifications) {
-
-        public void addCertifications() {
-            builder.addAllCertifications(certifications);
-        }
-    }
-
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
     private final BlockProducer                                blockProducer;
@@ -369,7 +359,7 @@ public class Producer {
     private final SimpleChannel<Coordinate>                    linear;
     private volatile Digest                                    nextViewId;
     private final Parameters                                   params;
-    private final Map<Digest, pendingCertification>            pending         = new ConcurrentHashMap<>();
+    private final Map<Digest, CertifiedBlock.Builder>          pending         = new ConcurrentHashMap<>();
     private final Set<Digest>                                  published       = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Consumer<HashedCertifiedBlock>               publisher;
     private final CertifiedBlock.Builder                       reconfiguration = CertifiedBlock.newBuilder();
@@ -505,10 +495,9 @@ public class Producer {
         lastBlock = next;
         var validation = generateValidation(next.hash, next.block);
         coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
-        var cb = pending.computeIfAbsent(next.hash, h -> new pendingCertification(CertifiedBlock.newBuilder(),
-                                                                                  new CopyOnWriteArrayList<>()));
-        cb.builder.setBlock(next.block);
-        cb.certifications.add(validation.getWitness());
+        var cb = pending.computeIfAbsent(next.hash, h -> CertifiedBlock.newBuilder());
+        cb.setBlock(next.block);
+        cb.addCertifications(validation.getWitness());
         maybePublish(next.hash, cb);
         log.debug("Block: {} height: {} created on: {}", next.hash, next.height(), params.member());
     }
@@ -577,21 +566,20 @@ public class Producer {
         return coordinator.getContext().getId();
     }
 
-    private void maybePublish(Digest hash, pendingCertification p) {
+    private void maybePublish(Digest hash, CertifiedBlock.Builder cb) {
         final int toleranceLevel = params.context().toleranceLevel();
-        if (p.builder.hasBlock() && p.certifications.size() > toleranceLevel) {
-            p.addCertifications();
-            var hcb = new HashedCertifiedBlock(params.digestAlgorithm(), p.builder.build());
+        if (cb.hasBlock() && cb.getCertificationsCount() > toleranceLevel) {
+            var hcb = new HashedCertifiedBlock(params.digestAlgorithm(), cb.build());
             published.add(hcb.hash);
             pending.remove(hcb.hash);
             publisher.accept(hcb);
             log.debug("Block: {} height: {} certs: {} > {} published on: {}", hcb.hash, hcb.height(),
                       hcb.certifiedBlock.getCertificationsCount(), toleranceLevel, params.member());
-        } else if (p.builder.hasBlock()) {
-            log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(p.builder.getBlock()),
-                      p.builder.getCertificationsCount(), toleranceLevel, params.member());
+        } else if (cb.hasBlock()) {
+            log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(cb.getBlock()),
+                      cb.getCertificationsCount(), toleranceLevel, params.member());
         } else {
-            log.trace("Block: {} empty, pending: {} on: {}", hash, p.builder.getCertificationsCount(), params.member());
+            log.trace("Block: {} empty, pending: {} on: {}", hash, cb.getCertificationsCount(), params.member());
         }
     }
 
