@@ -536,11 +536,6 @@ public class CHOAM {
                                                   .setExecutions(executions).build();
     }
 
-    private void execute(ExecutedTransaction execution) {
-        params.executor().execute(head.hash, execution, (r, t) -> {
-        });
-    }
-
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
         // TODO Auto-generated method stub
         return null;
@@ -592,15 +587,13 @@ public class CHOAM {
         case CHECKPOINT:
             checkpoint();
             break;
-        case EXECUTIONS:
-            h.block.getExecutions().getExecutionsList().forEach(et -> execute(et));
-            break;
         case RECONFIGURE:
             reconfigure(h.block.getReconfigure());
             break;
         case GENESIS:
             reconfigure(h.block.getGenesis().getInitialView());
-            h.block.getGenesis().getInitializeList().forEach(et -> execute(et));
+        case EXECUTIONS:
+            params.processor().accept(head);
             break;
         default:
             break;

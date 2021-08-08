@@ -14,12 +14,13 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
-import com.salesforce.apollo.choam.support.TransactionExecutor;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -38,7 +39,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxBatchSize, int maxBatchByteSize, int maxCheckpointSegments,
                          Duration submitTimeout, int processedBufferSize, List<ExecutedTransaction> genesisData,
-                         Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor executor,
+                         Digest genesisViewId, int maxCheckpointBlocks, Consumer<HashedBlock> processor,
                          Function<Long, File> checkpointer, int deltaCheckpointBlocks, File storeFile,
                          int checkpointBlockSize, Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
@@ -62,8 +63,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
         private Config.Builder                         ethereal              = Config.deterministic();
-        private TransactionExecutor                    executor              = (bh, et, c) -> {
-                                                                             };
         private List<ExecutedTransaction>              genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration;
@@ -75,6 +74,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
         private int                                    processedBufferSize   = 1000;
+        private Consumer<HashedBlock>                  processor             = block -> {
+                                                                             };
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
         private ScheduledExecutorService               scheduler;
@@ -85,7 +86,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         public Parameters build() {
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
-                                  processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, executor,
+                                  processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, processor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
                                   restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
                                   viewSigAlgorithm);
@@ -131,10 +132,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return ethereal;
         }
 
-        public TransactionExecutor getExecutor() {
-            return executor;
-        }
-
         public List<ExecutedTransaction> getGenesisData() {
             return genesisData;
         }
@@ -177,6 +174,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public int getProcessedBufferSize() {
             return processedBufferSize;
+        }
+
+        public Consumer<HashedBlock> getProcessor() {
+            return processor;
         }
 
         public BiConsumer<Long, CheckpointState> getRestorer() {
@@ -254,11 +255,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setExecutor(TransactionExecutor executor) {
-            this.executor = executor;
-            return this;
-        }
-
         public Builder setGenesisData(List<ExecutedTransaction> genesisData) {
             this.genesisData = genesisData;
             return this;
@@ -311,6 +307,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setProcessedBufferSize(int processedBufferSize) {
             this.processedBufferSize = processedBufferSize;
+            return this;
+        }
+
+        public Builder setProcessor(Consumer<HashedBlock> processor) {
+            this.processor = processor;
             return this;
         }
 
