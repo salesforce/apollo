@@ -160,6 +160,9 @@ public class Digest implements Comparable<Digest> {
 
     public byte[] getBytes() {
         byte[] bytes = new byte[algorithm.digestLength()];
+        if (bytes.length == 0) {
+            return bytes;
+        }
         ByteBuffer buff = ByteBuffer.wrap(bytes);
         for (int i = 0; i < hash.length; i++) {
             buff.putLong(hash[i]);
