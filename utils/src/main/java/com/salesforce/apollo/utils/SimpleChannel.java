@@ -87,7 +87,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
 //                    log.info("stopping consumer", e);
                     return; // Normal exit
                 }
-
+                Thread.yield();
             }
         }, label);
         handler.setDaemon(true);

@@ -142,6 +142,7 @@ public interface Adder {
 
         private void handleReady(waitingPreUnit wp) {
             log.debug("Handle ready: {} on: {}", wp, conf.pid());
+            mtx.lock();
             try {
                 // 1. Decode Parents
                 var decoded = dag.decodeParents(wp.pu());
@@ -185,6 +186,7 @@ public interface Adder {
                 }
             } finally {
                 remove(wp);
+                mtx.unlock();
             }
         }
 

@@ -389,13 +389,13 @@ public class ReliableBroadcaster {
 
     public ReliableBroadcaster(Parameters parameters, Router communications) {
         this.params = parameters;
+        buffer = new Buffer(parameters.context.timeToLive() + 1);
         this.comm = communications.create(params.member, params.context.getId(), new Service(),
                                           r -> new RbcServer(communications.getClientIdentityProvider(),
                                                              parameters.metrics, r),
                                           getCreate(parameters.metrics, params.executor),
                                           ReliableBroadcast.getLocalLoopback(params.member));
         gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
-        buffer = new Buffer(parameters.context.timeToLive() + 1);
     }
 
     public void clearBuffer() {

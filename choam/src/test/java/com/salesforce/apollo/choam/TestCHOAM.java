@@ -70,7 +70,6 @@ public class TestCHOAM {
                                               .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
 //        params.getCoordination().setBufferSize(1500);
 //        params.getCombineParams().setBufferSize(1500);
-        params.getCombineParams().setFalsePositiveRate(0.0125);
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();

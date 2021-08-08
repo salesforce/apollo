@@ -71,24 +71,24 @@ public class Extender {
             return null;
         }
         var level = orderStartLevel;
-        final Unit c = currentTU.get();
-        if (c != null) {
-            level = c.level() + 1;
+        final Unit previousTU = currentTU.get();
+        if (previousTU != null) {
+            level = previousTU.level() + 1;
         }
         if (dagMaxLevel < level + firstDecidedRound) {
             log.trace("No round, max dag level: {} is < ({} + {})", dagMaxLevel, level, firstDecidedRound);
             return null;
         }
 
-        var previousTU = currentTU.get();
         var decided = new AtomicBoolean();
         var randomBytesPresent = crpIterator.iterate(level, previousTU, uc -> {
             SuperMajorityDecider decider = getDecider(uc);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
                 final List<Unit> ltus = lastTUs.get();
-                lastTUs.set(ltus.isEmpty() ? ltus : new ArrayList<>(ltus.subList(1, ltus.size())));
-                lastTUs.get().add(previousTU);
+                var next = ltus.isEmpty() ? ltus : new ArrayList<>(ltus.subList(1, ltus.size()));
+                next.add(previousTU);
+                lastTUs.set(next);
                 currentTU.set(uc);
                 lastDecideResult.set(true);
                 deciders.clear();
@@ -109,8 +109,10 @@ public class Extender {
             log.trace("Nothing decided");
             return null;
         }
-        log.trace("Timing round: {} last: {}", currentTU.get(), lastTUs.get());
-        return new TimingRound(currentTU.get(), new ArrayList<>(lastTUs.get()));
+        final var ctu = currentTU.get();
+        final var ltu = lastTUs.get();
+        log.trace("Timing round: {} last: {}", ctu, ltu);
+        return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
     private SuperMajorityDecider getDecider(Unit uc) {

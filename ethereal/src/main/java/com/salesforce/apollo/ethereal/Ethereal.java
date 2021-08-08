@@ -95,17 +95,20 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param onClose       - run when the consensus has produced all units for
+     *                      epochs
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
+                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
+                                       Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -126,15 +129,17 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param onClose       - run when the consensus has produced all units for
+     *                      epochs
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller deterministic(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                    Consumer<PreUnit> synchronizer) {
+                                    Consumer<PreUnit> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, onClose);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -151,17 +156,19 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param onClose       - run when the consensus has produced all units for
+     *                      epochs
      * @param connector     - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<PreUnit> synchronizer) {
+                                 Consumer<PreUnit> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose);
         return new Controller(() -> {
             consensus.starte.run();
             try {
@@ -173,18 +180,21 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer) {
+                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer, Runnable onClose) {
         SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
         makePreblock.consumeEach(units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
                 log.debug("Emitting pre block: {} on: {}");
                 preblockSink.accept(preBlock);
-            } 
+            }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
                 makePreblock.close();
+                if (onClose != null) {
+                    Utils.wrapped(onClose, log).run();
+                }
             }
         });
 
@@ -226,7 +236,7 @@ public class Ethereal {
     private record published(short source, List<PreUnit> pus) {}
 
     private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                              Consumer<PreUnit> synchronizer) {
+                                              Consumer<PreUnit> synchronizer, Runnable onClose) {
         SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
         makePreblock.consumeEach(units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
@@ -244,6 +254,9 @@ public class Ethereal {
                 log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
                          config.pid());
                 makePreblock.close();
+                if (onClose != null) {
+                    Utils.wrapped(onClose, log).run();
+                }
             }
         });
 

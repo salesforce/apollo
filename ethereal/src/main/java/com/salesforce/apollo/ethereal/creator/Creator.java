@@ -6,7 +6,8 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import java.util.Arrays;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
@@ -42,6 +43,9 @@ import com.salesforce.apollo.utils.Channel;
  *
  */
 public class Creator {
+
+    VarHandle varHandle = MethodHandles.arrayElementVarHandle(Unit[].class);
+
     @FunctionalInterface
     public interface RandomSourceData {
         byte[] apply(int level, List<Unit> parents, int epoch);
@@ -122,7 +126,7 @@ public class Creator {
         if (conf.canSkipLevel()) {
             return new built(getParents(), level.get());
         } else {
-            var l = candidates[conf.pid()].level() + 1;
+            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
             return new built(getParentsForLevel(l), l);
         }
     }
@@ -199,7 +203,10 @@ public class Creator {
     }
 
     private Unit[] getParents() {
-        Unit[] result = Arrays.copyOf(candidates, candidates.length);
+        Unit[] result = new Unit[candidates.length];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = (Unit) varHandle.get(candidates, i);
+        }
         makeConsistent(result);
         return result;
     }
@@ -211,7 +218,7 @@ public class Creator {
     private Unit[] getParentsForLevel(int level) {
         var result = new Unit[conf.nProc()];
         for (int i = 0; i < candidates.length; i++) {
-            Unit u = candidates[i];
+            Unit u = (Unit) varHandle.get(candidates, i);
             for (; u != null && u.level() >= level; u = u.predecessor())
                 ;
             if (u != null) {
@@ -230,7 +237,7 @@ public class Creator {
         log.trace("Changing epoch to: {} on: {}", epoch, conf.pid());
         this.epoch.set(epoch);
         epochDone.set(false);
-        ;
+
         resetEpoch();
         epochProof.set(epochProofBuilder.apply(epoch));
         createUnit(new Unit[conf.nProc()], 0, data);
@@ -243,9 +250,9 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private boolean ready() {
-        boolean ready = !epochDone.get() && level.get() > candidates[conf.pid()].level();
-        log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(),
-                  candidates[conf.pid()].level(), conf.pid());
+        final int l = ((Unit) varHandle.get(candidates, conf.pid())).level();
+        boolean ready = !epochDone.get() && level.get() > l;
+        log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(), l, conf.pid());
         return ready;
     }
 
@@ -255,7 +262,9 @@ public class Creator {
      */
     private void resetEpoch() {
         log.debug("Resetting epoch on: {}", conf.pid());
-        Arrays.setAll(candidates, u -> null);
+        for (int i = 0; i < candidates.length; i++) {
+            varHandle.set(candidates, i, null);
+        }
         maxLvl.set(-1);
         onMaxLvl.set(0);
         level.set(0);
@@ -310,9 +319,9 @@ public class Creator {
         if (u.epoch() != epoch.get()) {
             return;
         }
-        var prev = candidates[u.creator()];
+        var prev = (Unit) varHandle.get(candidates, u.creator());
         if (prev == null || prev.level() < u.level()) {
-            candidates[u.creator()] = u;
+            varHandle.set(candidates, u.creator(), u);
             log.trace("Update candidate to: {} on: {}", u, conf.pid());
             if (u.level() == maxLvl.get()) {
                 onMaxLvl.incrementAndGet();

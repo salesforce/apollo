@@ -107,7 +107,7 @@ public class Producer {
         public void assemble(Joins j) {
             for (Join join : j.getJoinsList()) {
                 Digest id = new Digest(join.getView());
-                if (!nextViewId.equals(id)) {
+                if (!nextViewId.get().equals(id)) {
                     log.debug("Invalid view id: {}  on: {}", id, params.member());
                     continue;
                 }
@@ -162,11 +162,12 @@ public class Producer {
 
         @Override
         public void gatherAssembly() {
-            nextAssembly = Committee.viewMembersOf(nextViewId, params.context());
-            nextAssembly.forEach(m -> joins.put(m, Join.newBuilder().setView(nextViewId.toDigeste())));
+            final Digest nv = nextViewId.get();
+            nextAssembly = Committee.viewMembersOf(nv, params.context());
+            nextAssembly.forEach(m -> joins.put(m, Join.newBuilder().setView(nv.toDigeste())));
             coordinator.start(params.gossipDuration(), params.scheduler());
             JoinRequest request = JoinRequest.newBuilder().setContext(params.context().getId().toDigeste())
-                                             .setNextView(nextViewId.toDigeste()).build();
+                                             .setNextView(nv.toDigeste()).build();
             AtomicBoolean proceed = new AtomicBoolean(true);
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             AtomicInteger countDown = new AtomicInteger(3); // 3 rounds of attempts
@@ -333,8 +334,9 @@ public class Producer {
                 }
                 Map<Member, Join> joined = joins.entrySet().stream().filter(e -> e.getValue().hasMember())
                                                 .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().build()));
-                Block reconfigure = reconfigureBlock.apply(joined, nextViewId);
-                Validate validation = generateValidation(nextViewId, reconfigure);
+                final Digest nv = nextViewId.get();
+                Block reconfigure = reconfigureBlock.apply(joined, nv);
+                Validate validation = generateValidation(nv, reconfigure);
                 reconfiguration.setBlock(reconfigure).addCertifications(validation.getWitness());
                 coordinator.publish(Coordinate.newBuilder().setReconfigure(reconfigure).build().toByteArray());
                 coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
@@ -355,9 +357,9 @@ public class Producer {
     private final ReliableBroadcaster                          coordinator;
     private final Ethereal                                     ethereal;
     private final Fsm<Driven, Transitions>                     fsm;
-    private volatile HashedBlock                               lastBlock;
+    private final AtomicReference<HashedBlock>                 lastBlock       = new AtomicReference<>();
     private final SimpleChannel<Coordinate>                    linear;
-    private volatile Digest                                    nextViewId;
+    private final AtomicReference<Digest>                      nextViewId      = new AtomicReference<>();
     private final Parameters                                   params;
     private final Map<Digest, CertifiedBlock.Builder>          pending         = new ConcurrentHashMap<>();
     private final Set<Digest>                                  published       = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -380,7 +382,7 @@ public class Producer {
         this.reconfigureBlock = reconfigureBlock;
         this.publisher = publisher;
         this.blockProducer = blockProducer;
-        this.lastBlock = lastBlock;
+        this.lastBlock.set(lastBlock);
         signer = new SignerImpl(0, viewMember.consensusKeyPair().getPrivate());
         short i = 0;
         for (var d : order) {
@@ -419,9 +421,15 @@ public class Producer {
 
         // Our handle on consensus
         controller = ethereal.deterministic(config.build(), dataSource(), preblock -> create(preblock),
-                                            preUnit -> broadcast(preUnit));
+                                            preUnit -> broadcast(preUnit), () -> epochEnd());
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), roster, params.member());
+    }
+
+    private void epochEnd() {
+        final HashedBlock lb = lastBlock.get();
+        nextViewId.set(lb.hash);
+        log.info("Consensus complete, next view: {} on: {}", lb.hash, params.member());
     }
 
     public void complete() {
@@ -441,7 +449,7 @@ public class Producer {
 
     void setNextViewId(Digest nextViewId) {
         log.debug("Regenerating next view: {} from: {} on: {}", nextViewId, getViewId(), params.member());
-        this.nextViewId = nextViewId;
+        this.nextViewId.set(nextViewId);
     }
 
     /**
@@ -490,9 +498,10 @@ public class Producer {
                 return (Executions) null;
             }
         }).filter(e -> e != null).flatMap(e -> e.getExecutionsList().stream()).forEach(e -> builder.addExecutions(e));
+        final HashedBlock lb = lastBlock.get();
         var next = new HashedBlock(params.digestAlgorithm(),
-                                   blockProducer.produce(lastBlock.height() + 1, lastBlock.hash, builder.build()));
-        lastBlock = next;
+                                   blockProducer.produce(lb.height() + 1, lb.hash, builder.build()));
+        lastBlock.set(next);
         var validation = generateValidation(next.hash, next.block);
         coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
         var cb = pending.computeIfAbsent(next.hash, h -> CertifiedBlock.newBuilder());
