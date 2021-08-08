@@ -395,7 +395,7 @@ public class ReliableBroadcaster {
                                           getCreate(parameters.metrics, params.executor),
                                           ReliableBroadcast.getLocalLoopback(params.member));
         gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
-        buffer = new Buffer(2 * parameters.context.timeToLive() + 1);
+        buffer = new Buffer(parameters.context.timeToLive() + 1);
     }
 
     public void clearBuffer() {

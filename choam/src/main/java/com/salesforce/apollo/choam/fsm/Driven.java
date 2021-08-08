@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Joins;
+import com.salesfoce.apollo.choam.proto.Publish;
+import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
 /**
@@ -61,6 +63,10 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions publish(Publish publish) {
+            return null;
+        }
+
         default Transitions reconfigure() {
             throw fsm().invalidTransitionOn();
         }
@@ -78,6 +84,10 @@ public interface Driven {
         }
 
         default Transitions start() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions validate(Validate validate) {
             throw fsm().invalidTransitionOn();
         }
     }
@@ -99,9 +109,15 @@ public interface Driven {
 
     void initialState();
 
+    void published(Publish published);
+
     void reconfigure();
 
     void reconfigure(Block reconfigure);
 
     void startProduction();
+
+    void valdateBlock(Validate validate);
+
+    void validation(Validate validate);
 }

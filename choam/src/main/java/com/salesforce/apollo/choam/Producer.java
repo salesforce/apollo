@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.choam.support.HashedBlock.hash;
+import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +39,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Executions;
@@ -44,6 +47,7 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Join.Builder;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Joins;
+import com.salesfoce.apollo.choam.proto.Publish;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -55,6 +59,7 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 import com.salesforce.apollo.choam.fsm.Earner;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
@@ -191,6 +196,11 @@ public class Producer {
         }
 
         @Override
+        public void published(Publish published) {
+            transitions.reconfigured(); // TODO verification
+        }
+
+        @Override
         public void reconfigure() {
             reconfigure(new AtomicInteger(3 * coordinator.getContext().timeToLive()));
         }
@@ -198,9 +208,9 @@ public class Producer {
         @Override
         public void reconfigure(Block reconfigure) {
             HashedBlock hb = new HashedBlock(params.digestAlgorithm(), reconfigure);
-            Validate validation = generateValidation(hb);
+            Validate validation = generateValidation(hb.hash, hb.block);
             if (validation != null) {
-                certifier.accept(validation);
+                coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
             }
         }
 
@@ -209,6 +219,25 @@ public class Producer {
             log.debug("Starting production of: {} on: {}", getViewId(), params.member());
             coordinator.start(params.gossipDuration(), params.scheduler());
             controller.start();
+        }
+
+        @Override
+        public void valdateBlock(Validate validate) {
+            var hash = new Digest(validate.getHash());
+            if (published.contains(hash)) {
+                log.debug("Block: {} already published on: {}", hash, params.member());
+                return;
+            }
+            var p = pending.computeIfAbsent(hash, h -> CertifiedBlock.newBuilder());
+            p.addCertifications(validate.getWitness());
+            log.trace("Validation for block: {} height: {} on: {}", hash,
+                      p.hasBlock() ? height(p.getBlock()) : "missing", params.member());
+            maybePublish(hash, p);
+        }
+
+        @Override
+        public void validation(Validate validate) {
+            reconfiguration.addCertifications(validate.getWitness());
         }
 
         private void attemptAssembly() {
@@ -291,16 +320,24 @@ public class Producer {
 
         private void reconfigure(AtomicInteger countdown) {
             if (isPrincipal()) {
+                if (reconfiguration.getCertificationsCount() > params.context().toleranceLevel()) {
+                    log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+                    publisher.accept(new HashedCertifiedBlock(params.digestAlgorithm(), reconfiguration.build()));
+                    coordinator.publish(Coordinate.newBuilder()
+                                                  .setPublish(Publish.newBuilder()
+                                                                     .addAllCertifications(reconfiguration.getCertificationsList())
+                                                                     .setHeader(reconfiguration.getBlock().getHeader()))
+                                                  .build().toByteArray());
+                    transitions.reconfigured();
+                    return;
+                }
                 Map<Member, Join> joined = joins.entrySet().stream().filter(e -> e.getValue().hasMember())
                                                 .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().build()));
-                HashedBlock reconfigure = new HashedBlock(params.digestAlgorithm(), reconfigureBlock.apply(joined, nextViewId));
-                Validate validation = generateValidation(reconfigure);
-                coordinator.publish(Coordinate.newBuilder().setReconfigure(reconfigure.block).build().toByteArray());
-                publisher.accept(reconfigure.block);
-                certifier.accept(validation);
-                log.debug("Generated reconfiguration: {}  on: {}", reconfigure.hash, params.member());
-                transitions.reconfigured();
-                return;
+                Block reconfigure = reconfigureBlock.apply(joined, nextViewId);
+                Validate validation = generateValidation(nextViewId, reconfigure);
+                reconfiguration.setBlock(reconfigure).addCertifications(validation.getWitness());
+                coordinator.publish(Coordinate.newBuilder().setReconfigure(reconfigure).build().toByteArray());
+                coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
             }
             if (countdown.decrementAndGet() >= 0) {
                 roundScheduler.schedule(RECONFIGURE, () -> reconfigure(countdown), 1);
@@ -313,7 +350,6 @@ public class Producer {
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
     private final BlockProducer                                blockProducer;
-    private final Consumer<Validate>                           certifier;
     private final CommonCommunications<Terminal, ?>            comms;
     private final Controller                                   controller;
     private final ReliableBroadcaster                          coordinator;
@@ -323,18 +359,21 @@ public class Producer {
     private final SimpleChannel<Coordinate>                    linear;
     private volatile Digest                                    nextViewId;
     private final Parameters                                   params;
-    private final Consumer<Block>                              publisher;
+    private final Map<Digest, CertifiedBlock.Builder>          pending         = new ConcurrentHashMap<>();
+    private final Set<Digest>                                  published       = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Consumer<HashedCertifiedBlock>               publisher;
+    private final CertifiedBlock.Builder                       reconfiguration = CertifiedBlock.newBuilder();
     private final BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock;
-    private final Map<Digest, Short>                           roster       = new HashMap<>();
+    private final Map<Digest, Short>                           roster          = new HashMap<>();
     private final RoundScheduler                               roundScheduler;
     private final Signer                                       signer;
-    private final BlockingDeque<Transaction>                   transactions = new LinkedBlockingDeque<>();
+    private final BlockingDeque<Transaction>                   transactions    = new LinkedBlockingDeque<>();
     private final Transitions                                  transitions;
 
     public Producer(nextView viewMember, ReliableBroadcaster coordinator, CommonCommunications<Terminal, ?> comms,
                     Parameters p, BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock,
-                    Consumer<Block> publisher, List<Digest> order, BlockProducer blockProducer, HashedBlock lastBlock,
-                    Consumer<Validate> certifier) {
+                    Consumer<HashedCertifiedBlock> publisher, List<Digest> order, BlockProducer blockProducer,
+                    HashedBlock lastBlock) {
         assert comms != null && p != null;
         this.params = p;
         this.comms = comms;
@@ -342,7 +381,6 @@ public class Producer {
         this.publisher = publisher;
         this.blockProducer = blockProducer;
         this.lastBlock = lastBlock;
-        this.certifier = certifier;
         signer = new SignerImpl(0, viewMember.consensusKeyPair().getPrivate());
         short i = 0;
         for (var d : order) {
@@ -422,8 +460,14 @@ public class Producer {
      */
     private void coordinate(Coordinate coordination) {
         switch (coordination.getMsgCase()) {
+        case PUBLISH:
+            transitions.publish(coordination.getPublish());
+            break;
         case RECONFIGURE:
             transitions.reconfigure(coordination.getReconfigure());
+            break;
+        case VALIDATE:
+            transitions.validate(coordination.getValidate());
             break;
         case JOINS:
             transitions.joins(coordination.getJoins());
@@ -449,9 +493,12 @@ public class Producer {
         var next = new HashedBlock(params.digestAlgorithm(),
                                    blockProducer.produce(lastBlock.height() + 1, lastBlock.hash, builder.build()));
         lastBlock = next;
-        var validation = generateValidation(next);
-        publisher.accept(next.block);
-        certifier.accept(validation);
+        var validation = generateValidation(next.hash, next.block);
+        coordinator.publish(Coordinate.newBuilder().setValidate(validation).build().toByteArray());
+        var cb = pending.computeIfAbsent(next.hash, h -> CertifiedBlock.newBuilder());
+        cb.setBlock(next.block);
+        cb.addCertifications(validation.getWitness());
+        maybePublish(next.hash, cb);
         log.debug("Block: {} height: {} created on: {}", next.hash, next.height(), params.member());
     }
 
@@ -467,15 +514,15 @@ public class Producer {
         };
     }
 
-    private Validate generateValidation(HashedBlock hb) {
-        byte[] bytes = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
+    private Validate generateValidation(Digest hash, Block block) {
+        byte[] bytes = hash(block.getHeader(), params.digestAlgorithm()).getBytes();
 //        log.info("Signing block: {} header hash: {} on: {}", hash, Hex.hex(bytes), params.member());
         JohnHancock signature = signer.sign(bytes);
         if (signature == null) {
-            log.error("Unable to sign block: {} on: {}", hb.hash, params.member());
+            log.error("Unable to sign block: {} on: {}", hash, params.member());
             return null;
         }
-        var validation = Validate.newBuilder().setHash(hb.hash.toDigeste())
+        var validation = Validate.newBuilder().setHash(hash.toDigeste())
                                  .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
                                                           .setSignature(signature.toSig()).build())
                                  .build();
@@ -517,6 +564,23 @@ public class Producer {
 
     private Digest getViewId() {
         return coordinator.getContext().getId();
+    }
+
+    private void maybePublish(Digest hash, CertifiedBlock.Builder cb) {
+        final int toleranceLevel = params.context().toleranceLevel();
+        if (cb.hasBlock() && cb.getCertificationsCount() > toleranceLevel) {
+            var hcb = new HashedCertifiedBlock(params.digestAlgorithm(), cb.build());
+            published.add(hcb.hash);
+            pending.remove(hcb.hash);
+            publisher.accept(hcb);
+            log.debug("Block: {} height: {} certs: {} > {} published on: {}", hcb.hash, hcb.height(),
+                      hcb.certifiedBlock.getCertificationsCount(), toleranceLevel, params.member());
+        } else if (cb.hasBlock()) {
+            log.trace("Block: {} height: {} pending: {} <= {} on: {}", hash, height(cb.getBlock()),
+                      cb.getCertificationsCount(), toleranceLevel, params.member());
+        } else {
+            log.trace("Block: {} empty, pending: {} on: {}", hash, cb.getCertificationsCount(), params.member());
+        }
     }
 
     private ChoamMetrics metrics() {

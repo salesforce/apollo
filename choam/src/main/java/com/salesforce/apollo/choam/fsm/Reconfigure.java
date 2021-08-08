@@ -10,6 +10,8 @@ import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Joins;
+import com.salesfoce.apollo.choam.proto.Publish;
+import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
 /**
@@ -55,6 +57,12 @@ public enum Reconfigure implements Transitions {
             context().reconfigure(reconfigure);
             return NOMINATION;
         }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().validation(validate);
+            return NOMINATION;
+        }
     },
     NOMINATION {
         @Exit
@@ -73,6 +81,12 @@ public enum Reconfigure implements Transitions {
         }
 
         @Override
+        public Transitions publish(Publish published) {
+            context().published(published);
+            return null;
+        }
+
+        @Override
         public Transitions reconfigure(Block reconfigure) {
             context().reconfigure(reconfigure);
             return null;
@@ -82,11 +96,22 @@ public enum Reconfigure implements Transitions {
         public Transitions reconfigured() {
             return RECONFIGURED;
         }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().validation(validate);
+            return null;
+        }
     },
     RECONFIGURED {
 
         @Override
         public Transitions joins(Joins joins) {
+            return null; // ignored after reconfiguration
+        }
+
+        @Override
+        public Transitions publish(Publish publish) {
             return null; // ignored after reconfiguration
         }
 
@@ -98,6 +123,11 @@ public enum Reconfigure implements Transitions {
         @Entry
         public void shutDown() {
             context().complete();
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            return null; // ignored after reconfiguration
         }
     };
 }

@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
+import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions; 
 
 /**
@@ -24,7 +25,13 @@ public enum Earner implements Driven.Transitions {
         @Entry
         public void startProduction() {
             context().startProduction();
-        } 
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
     },
     INITIAL {
         @Override
@@ -42,7 +49,13 @@ public enum Earner implements Driven.Transitions {
         @Entry
         public void startProduction() {
             context().startProduction();
-        } 
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
     },
     PROTOCOL_FAILURE {
         @Entry

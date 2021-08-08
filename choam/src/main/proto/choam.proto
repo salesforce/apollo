@@ -119,13 +119,6 @@ message Certifications {
     repeated Certification certs = 1;
 }
 
-message Chatter {
-    oneof value {
-        Block block = 1;
-        Validate witness = 2;
-    }
-}
-
 message CertifiedBlock {
     Block block = 1;
     repeated Certification certifications = 2;
@@ -153,9 +146,17 @@ message Joins {
 message Coordinate {
     oneof msg {
         ethereal.PreUnit_s unit = 1;
-        Block reconfigure = 2;
-        Joins joins = 3;
+        Validate validate = 2;
+        Publish publish = 3;
+        Block reconfigure = 4;
+        Joins joins = 5;
     }
+}
+
+/** Or Perish */
+message Publish {
+    Header header = 1;
+    repeated Certification certifications = 2;
 }
 
 message Synchronize {
