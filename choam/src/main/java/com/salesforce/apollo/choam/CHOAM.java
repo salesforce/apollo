@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -206,16 +207,18 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = params.context().getActiveMember(from);
             if (source == null) {
-                log.debug("Request to join from non member: {} on: {}", from, params.member());
+                CHOAM.log.debug("Request to join from non member: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             if (!validators.containsKey(source)) {
-                log.debug("Request to join from non validator: {} on: {}", source, params.member());
+                CHOAM.log.debug("Request to join from non validator: {} on: {}", source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
-            if (!Committee.viewMembersOf(nextView, params.context()).contains(source)) {
-                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+            final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
+            if (!members.contains(source)) {
+                CHOAM.log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source,
+                                members, params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
@@ -292,12 +295,12 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = formation.getActiveMember(from);
             if (source == null) {
-                log.debug("Request to join from non validator: {} on: {}", from, params.member());
+                CHOAM.log.debug("Request to join from non validator: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
             if (!params.genesisViewId().equals(nextView)) {
-                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+                CHOAM.log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
@@ -317,7 +320,7 @@ public class CHOAM {
         public boolean validate(HashedCertifiedBlock hb) {
             var block = hb.block;
             if (!block.hasGenesis()) {
-                log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
+                CHOAM.log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
                 return false;
             }
             return validateRegeneration(hb);

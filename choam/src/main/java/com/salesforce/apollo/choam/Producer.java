@@ -164,6 +164,7 @@ public class Producer {
         public void gatherAssembly() {
             final Digest nv = nextViewId.get();
             nextAssembly = Committee.viewMembersOf(nv, params.context());
+            log.info("Next assembly: {} for: {} on: {}", nextAssembly, nv, params.member());
             nextAssembly.forEach(m -> joins.put(m, Join.newBuilder().setView(nv.toDigeste())));
             coordinator.start(params.gossipDuration(), params.scheduler());
             JoinRequest request = JoinRequest.newBuilder().setContext(params.context().getId().toDigeste())
@@ -171,23 +172,20 @@ public class Producer {
             AtomicBoolean proceed = new AtomicBoolean(true);
             AtomicReference<Runnable> reiterate = new AtomicReference<>();
             AtomicInteger countDown = new AtomicInteger(3); // 3 rounds of attempts
-            reiterate.set(Utils.wrapped(() -> committee.iterate((term,
-                                                                 m) -> joins.get(m).hasMember() ? null
-                                                                                                : term.join(request),
-                                                                (futureSailor, term, m) -> consider(futureSailor, term,
-                                                                                                    m, proceed),
-                                                                () -> {
-                                                                    if (completeSlice()) {
-                                                                        proceed.set(false);
-                                                                        transitions.assembled();
-                                                                    } else if (countDown.decrementAndGet() >= 0) {
-                                                                        reiterate.get().run();
-                                                                    } else {
-                                                                        transitions.assembled();
-                                                                        proceed.set(false);
-                                                                    }
-                                                                }),
-                                        log));
+            reiterate.set(Utils.wrapped(() -> committee.iterate((term, m) -> {
+                final Builder j = joins.get(m);
+                return j == null || j.hasMember() ? null : term.join(request);
+            }, (futureSailor, term, m) -> consider(futureSailor, term, m, proceed), () -> {
+                if (completeSlice()) {
+                    proceed.set(false);
+                    transitions.assembled();
+                } else if (countDown.decrementAndGet() >= 0) {
+                    reiterate.get().run();
+                } else {
+                    transitions.assembled();
+                    proceed.set(false);
+                }
+            }), log));
             reiterate.get().run();
         }
 
@@ -322,8 +320,11 @@ public class Producer {
         private void reconfigure(AtomicInteger countdown) {
             if (isPrincipal()) {
                 if (reconfiguration.getCertificationsCount() > params.context().toleranceLevel()) {
-                    log.debug("Reconfiguring to: {} from: {} on: {}", nextViewId, getViewId(), params.member());
-                    publisher.accept(new HashedCertifiedBlock(params.digestAlgorithm(), reconfiguration.build()));
+                    final HashedCertifiedBlock r = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                                            reconfiguration.build());
+                    publisher.accept(r);
+                    log.debug("Reconfiguring to: {} from: {} block: {} height: {} on: {}", nextViewId, getViewId(),
+                              r.hash, r.height(), params.member());
                     coordinator.publish(Coordinate.newBuilder()
                                                   .setPublish(Publish.newBuilder()
                                                                      .addAllCertifications(reconfiguration.getCertificationsList())
@@ -384,6 +385,7 @@ public class Producer {
         this.blockProducer = blockProducer;
         this.lastBlock.set(lastBlock);
         signer = new SignerImpl(0, viewMember.consensusKeyPair().getPrivate());
+        log.trace("Signing key: {} on: {}", viewMember.consensusKeyPair().getPublic(), params.member());
         short i = 0;
         for (var d : order) {
             roster.put(d, i++);
@@ -525,10 +527,10 @@ public class Producer {
 
     private Validate generateValidation(Digest hash, Block block) {
         byte[] bytes = hash(block.getHeader(), params.digestAlgorithm()).getBytes();
-//        log.info("Signing block: {} header hash: {} on: {}", hash, Hex.hex(bytes), params.member());
+        log.trace("Signing block: {} height: {} on: {}", hash, height(block), params.member());
         JohnHancock signature = signer.sign(bytes);
         if (signature == null) {
-            log.error("Unable to sign block: {} on: {}", hash, params.member());
+            log.error("Unable to sign block: {} height: {} on: {}", hash, height(block), params.member());
             return null;
         }
         var validation = Validate.newBuilder().setHash(hash.toDigeste())

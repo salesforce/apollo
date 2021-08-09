@@ -29,6 +29,16 @@ public enum Reconfigure implements Transitions {
         public void assembly() {
             context().gatherAssembly();
         }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().validation(validate);
+            return NOMINATION;
+        }
+        @Exit
+        public void cancelTimer() {
+            context().cancelTimer(Driven.RECONFIGURE);
+        }
     },
     NOMINATE {
         @Exit

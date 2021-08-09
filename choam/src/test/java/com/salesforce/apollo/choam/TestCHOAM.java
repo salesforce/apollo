@@ -40,7 +40,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int CARDINALITY = 21;
+    private static final int CARDINALITY = 5;
 
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
@@ -94,9 +94,9 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Utils.waitForCondition(20_000, () -> blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88)
+        Utils.waitForCondition(60_000, () -> blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88)
                                                    .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88).count(),
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s == 88).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
     }
 }

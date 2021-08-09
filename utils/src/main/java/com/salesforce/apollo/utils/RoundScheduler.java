@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -76,9 +76,9 @@ public class RoundScheduler extends AtomicInteger {
     private static final Logger log              = LoggerFactory.getLogger(RoundScheduler.class);
     private static final long   serialVersionUID = 1L;
 
-    private final int                  roundDuration;
-    private final PriorityQueue<Timer> scheduled = new PriorityQueue<>();
-    private final Map<String, Timer>   timers    = new HashMap<>();
+    private final int                          roundDuration;
+    private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
+    private final Map<String, Timer>           timers    = new HashMap<>();
 
     public RoundScheduler(int roundDuration) {
         this.roundDuration = roundDuration;

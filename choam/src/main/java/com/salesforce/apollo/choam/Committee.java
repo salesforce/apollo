@@ -31,7 +31,6 @@ import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.Hex;
 
 /**
  * @author hal.hildebrand
@@ -117,7 +116,9 @@ public interface Committee {
             return false;
         }
 
-        return verify.verify(new JohnHancock(c.getSignature()), headerHash);
+        final boolean verified = verify.verify(new JohnHancock(c.getSignature()), headerHash);
+        log.trace("Verified: {} using: {} key: {} on: {}", verified, witness, verify.getPublicKey(), params.member());
+        return verified;
     }
 
     boolean validate(HashedCertifiedBlock hb);
@@ -125,7 +126,7 @@ public interface Committee {
     default boolean validate(HashedCertifiedBlock hb, Map<Member, Verifier> validators) {
         Parameters params = params();
         byte[] headerHash = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
-        log.trace("Validating block: {} header hash: {} on: {}", hb.hash, Hex.hex(headerHash), params.member());
+        log.trace("Validating block: {} height: {} on: {}", hb.hash, hb.height(), params.member());
         int valid = 0;
         for (var w : hb.certifiedBlock.getCertificationsList()) {
             if (!validate(headerHash, w, validators)) {
