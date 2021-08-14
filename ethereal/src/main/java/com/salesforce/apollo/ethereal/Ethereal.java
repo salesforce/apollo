@@ -129,17 +129,15 @@ public class Ethereal {
      * @param ds            - the DataSource to use to build Units
      * @param prebblockSink - the channel to send assembled PreBlocks as output
      * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param onClose       - run when the consensus has produced all units for
-     *                      epochs
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller deterministic(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                    Consumer<PreUnit> synchronizer, Runnable onClose) {
+    public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+                                    Consumer<PreUnit> synchronizer) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, onClose);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -181,8 +179,7 @@ public class Ethereal {
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
                                  Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer, Runnable onClose) {
-        SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
-        makePreblock.consumeEach(units -> {
+        Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
                 log.debug("Emitting pre block: {} on: {}");
@@ -191,12 +188,11 @@ public class Ethereal {
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
-                makePreblock.close();
                 if (onClose != null) {
                     Utils.wrapped(onClose, log).run();
                 }
             }
-        });
+        };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
         BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
@@ -224,7 +220,6 @@ public class Ethereal {
             if (!Utils.waitForCondition(10, () -> started.get())) {
                 log.trace("Waited 10ms for start and unsuccessful, proceeding");
             }
-            makePreblock.close();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -235,30 +230,27 @@ public class Ethereal {
 
     private record published(short source, List<PreUnit> pus) {}
 
-    private Controller deterministicConsensus(Config config, DataSource ds, Consumer<PreBlock> blocker,
-                                              Consumer<PreUnit> synchronizer, Runnable onClose) {
-        SimpleChannel<List<Unit>> makePreblock = new SimpleChannel<>("Preblock consumer for: " + config.pid(), 100);
-        makePreblock.consumeEach(units -> {
+    private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+                                              Consumer<PreUnit> synchronizer) {
+        Consumer<List<Unit>> makePreblock = units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
+            var timingUnit = units.get(units.size() - 1);
+            var last = false;
+            if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
+                log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                         config.pid());
+                last = true;
+            }
             if (preBlock != null) {
                 log.debug("Emitting pre block: {} on: {}", units, config.pid());
                 try {
-                    blocker.accept(preBlock);
+                    blocker.accept(preBlock, last);
                 } catch (Throwable t) {
                     log.error("Error consuming pre block: {} on: {}", units, config.pid(), t);
                 }
             }
-            var timingUnit = units.get(units.size() - 1);
-            if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
-                log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
-                         config.pid());
-                makePreblock.close();
-                if (onClose != null) {
-                    Utils.wrapped(onClose, log).run();
-                }
-            }
-        });
+        };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
@@ -290,7 +282,6 @@ public class Ethereal {
                 log.trace("Waited 10ms for start and unsuccessful, proceeding on: {}", config.pid());
             }
             in.close();
-            makePreblock.close();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
@@ -309,8 +300,7 @@ public class Ethereal {
 
     private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
         var rsf = new Beacon(conf);
-        SimpleChannel<List<Unit>> extractHead = new SimpleChannel<>("", 100);
-        extractHead.consumeEach(units -> {
+        Consumer<List<Unit>> extractHead = units -> {
             var head = units.get(units.size() - 1);
             if (head.level() == conf.orderStartLevel()) {
                 try {
@@ -321,13 +311,10 @@ public class Ethereal {
             } else {
                 throw new IllegalStateException("Setup phase: wrong level");
             }
-        });
+        };
 
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
         return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> {
-            extractHead.close();
-            ord.stop();
-        }, null);
+        }), () -> ord.stop(), null);
     }
 }

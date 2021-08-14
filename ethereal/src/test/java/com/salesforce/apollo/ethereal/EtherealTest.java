@@ -93,8 +93,8 @@ public class EtherealTest {
             var out = new ChannelConsumer<>(new LinkedBlockingDeque<PreBlock>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
-            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu), null);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
+                                             pu -> synchronizer.getChannel().offer(pu));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -202,10 +202,11 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
             ReliableBroadcaster caster = casting.get(members[i]);
-            var controller = e.deterministic(builder.setPid(i).build(), ds, pb -> out.getChannel().offer(pb), pu -> {
-                caster.publish(pu.toPreUnit_s().toByteArray());
+            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
+                                             pu -> {
+                                                 caster.publish(pu.toPreUnit_s());
 //                System.out.println("Broadcasting: "+ pu + " on: " + caster.getMember());
-            }, null);
+                                             });
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);

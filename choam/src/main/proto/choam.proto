@@ -150,6 +150,8 @@ message Coordinate {
         Publish publish = 3;
         Block reconfigure = 4;
         Joins joins = 5;
+        Sync sync = 6;
+        Validate viewValidate = 7;
     }
 }
 
@@ -158,6 +160,10 @@ message Publish {
     Header header = 1;
     repeated Certification certifications = 2;
 }
+
+message Sync {
+    utils.Digeste source = 1;
+} 
 
 message Synchronize {
     utils.Digeste context = 1;

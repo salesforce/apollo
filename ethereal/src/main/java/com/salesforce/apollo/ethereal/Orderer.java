@@ -98,20 +98,20 @@ public class Orderer {
         return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
-    private final Clock                     clock;
-    private final Config                    config;
-    private volatile Creator                creator;
-    private final AtomicReference<epoch>    current  = new AtomicReference<>();
-    private final DataSource                ds;
-    private final Queue<Unit>               lastTiming;
-    private final ReadWriteLock             mx       = new ReentrantReadWriteLock();
-    private final Channel<List<Unit>>       orderedUnits;
-    private final AtomicReference<epoch>    previous = new AtomicReference<>();
-    private volatile RandomSourceFactory    rsf;
-    private final SimpleChannel<List<Unit>> toPreblock;
-    private final Channel<Unit>             unitBelt;
+    private final Clock                  clock;
+    private final Config                 config;
+    private volatile Creator             creator;
+    private final AtomicReference<epoch> current  = new AtomicReference<>();
+    private final DataSource             ds;
+    private final Queue<Unit>            lastTiming;
+    private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
+    private final Channel<List<Unit>>    orderedUnits;
+    private final AtomicReference<epoch> previous = new AtomicReference<>();
+    private volatile RandomSourceFactory rsf;
+    private final Consumer<List<Unit>>   toPreblock;
+    private final Channel<Unit>          unitBelt;
 
-    public Orderer(Config conf, DataSource ds, SimpleChannel<List<Unit>> toPreblock, Clock clock) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
@@ -334,7 +334,7 @@ public class Orderer {
                     finishEpoch(epoch);
                 }
                 if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                    toPreblock.submit(round);
+                    toPreblock.accept(round);
                     log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
                 }
                 current.set(epoch);

@@ -13,8 +13,10 @@ import com.chiralbehaviors.tron.FsmExecutor;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Publish;
+import com.salesfoce.apollo.choam.proto.Sync;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * Leaf action interface for the Producer FSM
@@ -28,14 +30,10 @@ public interface Driven {
         static Logger log = LoggerFactory.getLogger(Transitions.class);
 
         default Transitions assembled() {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
-        default Transitions assumeDelegate() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions assumePrincipal() {
+        default Transitions drain() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -67,6 +65,10 @@ public interface Driven {
             return null;
         }
 
+        default Transitions publishedBlock() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions reconfigure() {
             throw fsm().invalidTransitionOn();
         }
@@ -79,21 +81,34 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions regenerate() {
-            throw fsm().invalidTransitionOn();
-        }
-
         default Transitions start() {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions validate(Validate validate) {
+        default Transitions sync(Sync sync, Digest from) {
+            return null;
+        }
+
+        default Transitions synchd() {
+            return null;
+        }
+
+        default Transitions synchronize() {
             throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions validate(Validate validate) {
+            return null;
+        }
+
+        default Transitions validateView(Validate validate) {
+            return null;
         }
     }
 
     String RECONFIGURE = "RECONFIGURE";
     String RECONVENE   = "RECONVENE";
+    String SYNCHRONIZE = "SYNCHRONIZE";
 
     void assemble(Joins joins);
 
@@ -103,11 +118,9 @@ public interface Driven {
 
     void convene();
 
-    void establishPrincipal();
+    void epochEnd();
 
     void gatherAssembly();
-
-    void initialState();
 
     void published(Publish published);
 
@@ -116,6 +129,10 @@ public interface Driven {
     void reconfigure(Block reconfigure);
 
     void startProduction();
+
+    void sync(Sync sync, Digest from);
+
+    void synchronize();
 
     void valdateBlock(Validate validate);
 

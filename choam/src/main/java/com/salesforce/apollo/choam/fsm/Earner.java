@@ -20,7 +20,31 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Earner implements Driven.Transitions {
-    SYNCHRONIZE, DELEGATE {
+    DRAIN {
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
+
+        @Override
+        public Transitions publishedBlock() {
+            context().epochEnd();
+            return ReconOld.SYNCHRONIZE;
+        }
+    },
+    SPICE {
+
+        @Override
+        public Transitions publishedBlock() {
+            return null;
+        }
+
+        @Override
+        public Transitions drain() {
+            return DRAIN;
+        }
 
         @Entry
         public void startProduction() {
@@ -31,40 +55,18 @@ public enum Earner implements Driven.Transitions {
         public Transitions validate(Validate validate) {
             context().valdateBlock(validate);
             return null;
-        }
-
-        @Override
-        public Transitions regenerate() {
-            return Reconfigure.GATHER;
         }
     },
     INITIAL {
-        @Override
-        public Transitions regenerate() {
-            return Reconfigure.GATHER;
-        }
 
         @Override
         public Transitions start() {
-            context().initialState();
-            return null;
-        }
-    },
-    PRINCIPAL {
-        @Entry
-        public void startProduction() {
-            context().startProduction();
+            return SPICE;
         }
 
         @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
-        }
-
-        @Override
-        public Transitions regenerate() {
-            return Reconfigure.GATHER;
+        public Transitions synchronize() {
+            return ReconOld.SYNCHRONIZE;
         }
     },
     PROTOCOL_FAILURE {
@@ -75,14 +77,4 @@ public enum Earner implements Driven.Transitions {
     };
 
     private static final Logger log = LoggerFactory.getLogger(Earner.class);
-
-    @Override
-    public Transitions assumeDelegate() {
-        return DELEGATE;
-    }
-
-    @Override
-    public Transitions assumePrincipal() {
-        return PRINCIPAL;
-    }
 }

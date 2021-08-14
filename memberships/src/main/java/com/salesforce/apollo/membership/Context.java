@@ -178,6 +178,10 @@ public class Context<T extends Member> {
         }
     }
 
+    public void activate(Collection<T> activeMembers) {
+        activeMembers.forEach(m -> activate(m));
+    }
+
     /**
      * Mark a member as active in the context
      */

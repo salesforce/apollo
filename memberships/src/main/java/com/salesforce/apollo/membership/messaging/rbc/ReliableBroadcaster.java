@@ -31,8 +31,11 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.AgedMessage;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
@@ -68,20 +71,22 @@ public class ReliableBroadcaster {
     public record Msg(Digest source, ByteString content) {}
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
-                             Executor executor, SigningMember member, RouterMetrics metrics, double falsePositiveRate) {
+                             Executor executor, SigningMember member, RouterMetrics metrics, double falsePositiveRate,
+                             int deliveredCacheSize) {
         public static class Builder implements Cloneable {
-            private int             bufferSize        = 500;
+            private int             bufferSize         = 500;
             private Context<Member> context;
-            private DigestAlgorithm digestAlgorithm   = DigestAlgorithm.DEFAULT;
-            private Executor        executor          = ForkJoinPool.commonPool();
-            private double          falsePositiveRate = 0.125;
-            private int             maxMessages       = 100;
+            private int             deliveredCacheSize = 10_000;
+            private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
+            private Executor        executor           = ForkJoinPool.commonPool();
+            private double          falsePositiveRate  = 0.125;
+            private int             maxMessages        = 100;
             private SigningMember   member;
             private RouterMetrics   metrics;
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, executor, member, metrics,
-                                      falsePositiveRate);
+                                      falsePositiveRate, deliveredCacheSize);
             }
 
             @Override
@@ -99,6 +104,10 @@ public class ReliableBroadcaster {
 
             public Context<Member> getContext() {
                 return context;
+            }
+
+            public int getDeliveredCacheSize() {
+                return deliveredCacheSize;
             }
 
             public DigestAlgorithm getDigestAlgorithm() {
@@ -132,6 +141,11 @@ public class ReliableBroadcaster {
 
             public Parameters.Builder setContext(Context<Member> context) {
                 this.context = context;
+                return this;
+            }
+
+            public Builder setDeliveredCacheSize(int deliveredCacheSize) {
+                this.deliveredCacheSize = deliveredCacheSize;
                 return this;
             }
 
@@ -202,16 +216,18 @@ public class ReliableBroadcaster {
     }
 
     private class Buffer {
-        private final Semaphore          garbageCollecting = new Semaphore(1);
-        private final int                highWaterMark;
-        private final int                maxAge;
-        private final AtomicInteger      round             = new AtomicInteger();
-        private final Map<Digest, state> state             = new ConcurrentHashMap<>();
-        private final Semaphore          tickGate          = new Semaphore(1);
+        private final Cache<Digest, Boolean> delivered;
+        private final Semaphore              garbageCollecting = new Semaphore(1);
+        private final int                    highWaterMark;
+        private final int                    maxAge;
+        private final AtomicInteger          round             = new AtomicInteger();
+        private final Map<Digest, state>     state             = new ConcurrentHashMap<>();
+        private final Semaphore              tickGate          = new Semaphore(1);
 
         public Buffer(int maxAge) {
             this.maxAge = maxAge;
             highWaterMark = (params.bufferSize - (int) (params.bufferSize + ((params.bufferSize) * 0.1)));
+            delivered = CacheBuilder.newBuilder().maximumSize(params.deliveredCacheSize).build();
         }
 
         public void clear() {
@@ -260,11 +276,10 @@ public class ReliableBroadcaster {
             return round.get();
         }
 
-        public AgedMessage send(byte[] content, SigningMember member) {
+        public AgedMessage send(ByteString msg, SigningMember member) {
             AgedMessage.Builder message = AgedMessage.newBuilder().setSource(member.getId().toDigeste())
-                                                     .setSignature(member.sign(content).toSig())
-                                                     .setContent(ByteString.copyFrom(content));
-            var hash = params.digestAlgorithm.digest(content);
+                                                     .setSignature(member.sign(msg).toSig()).setContent(msg);
+            var hash = params.digestAlgorithm.digest(msg);
             state s = new state(hash, message, member.getId());
             state.put(hash, s);
             log.trace("Send message:{} on: {}", hash, params.member);
@@ -306,17 +321,11 @@ public class ReliableBroadcaster {
                           params.member);
                 return false;
             }
-            var previous = state.get(s.hash);
-            if (previous != null) {
-                int nextAge = Math.max(previous.msg().getAge(), s.msg.getAge());
-                if (nextAge > maxAge) {
-                    state.remove(s.hash);
-                } else if (previous.msg.getAge() != nextAge) {
-                    previous.msg().setAge(nextAge);
-                }
+            if (delivered.getIfPresent(s.hash) != null) {
                 log.trace("duplicate event: {} on: {}", s.hash, params.member);
                 return true;
             }
+            delivered.put(s.hash, true);
             return false;
         }
 
@@ -415,11 +424,11 @@ public class ReliableBroadcaster {
         return buffer.round();
     }
 
-    public void publish(byte[] message) {
+    public void publish(ByteString message) {
         publish(message, false);
     }
 
-    public void publish(byte[] message, boolean notifyLocal) {
+    public void publish(ByteString message, boolean notifyLocal) {
         if (!started.get()) {
             return;
         }
@@ -428,6 +437,14 @@ public class ReliableBroadcaster {
         if (notifyLocal) {
             deliver(Collections.singletonList(new Msg(params.member.getId(), m.getContent())));
         }
+    }
+
+    public void publish(Message message) {
+        publish(message, false);
+    }
+
+    public void publish(Message message, boolean notifyLocal) {
+        publish(message.toByteString(), notifyLocal);
     }
 
     public UUID register(Consumer<Integer> roundListener) {

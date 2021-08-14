@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.RouterMetrics;
@@ -177,7 +178,7 @@ public class RbcTest {
                 buf.putInt(rnd);
                 buf.put(rand);
                 buf.flip();
-                view.publish(buf.array(), true);
+                view.publish(ByteString.copyFrom(buf), true);
             });
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());

@@ -216,7 +216,7 @@ public class CHOAM {
             }
             Digest nextView = new Digest(request.getNextView());
             final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
-            if (!members.contains(source)) {
+            if (!members.contains(params.member())) {
                 CHOAM.log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source,
                                 members, params.member());
                 return ViewMember.getDefaultInstance();
@@ -450,8 +450,8 @@ public class CHOAM {
         while (next != null) {
             final HashedCertifiedBlock h = head;
             if (h.height() >= 0 && next.height() <= h.height()) {
-                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
-                          next.height(), h.height(), params.member());
+//                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
+//                          next.height(), h.height(), params.member());
                 pending.poll();
             } else if (isNext(next)) {
                 if (current.validate(next)) {
@@ -566,7 +566,7 @@ public class CHOAM {
     }
 
     private Consumer<HashedCertifiedBlock> publisher() {
-        return cb -> combine.publish(cb.certifiedBlock.toByteArray(), true);
+        return cb -> combine.publish(cb.certifiedBlock, true);
     }
 
     private void reconfigure(Reconfigure reconfigure) {
@@ -584,12 +584,27 @@ public class CHOAM {
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
     }
 
+    @FunctionalInterface
+    interface ReconfigureBlock {
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedCertifiedBlock previous);
+    }
+    private ReconfigureBlock reconBlock() {
+        return (joining, nextViewId, previous) -> {
+            final HashedCertifiedBlock h = previous;
+            final HashedCertifiedBlock v = view;
+            final HashedCertifiedBlock c = checkpoint;
+            return reconfigure(nextViewId, joining, h, params.context(), v, params, c);
+        };
+    }
+    
+    
+    
     private BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock() {
         return (joining, nextViewId) -> {
             final HashedCertifiedBlock h = head;
             final HashedCertifiedBlock v = view;
             final HashedCertifiedBlock c = checkpoint;
-            return CHOAM.reconfigure(nextViewId, joining, h, params.context(), v, params, c);
+            return reconfigure(nextViewId, joining, h, params.context(), v, params, c);
         };
     }
 

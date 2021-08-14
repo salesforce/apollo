@@ -224,6 +224,10 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
+    public Digest prefix(String prefix) { 
+        return prefix(prefix.getBytes());
+    }
+
     public ByteBuffer toByteBuffer() {
         return ByteBuffer.wrap(getBytes());
     }
