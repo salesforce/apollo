@@ -124,10 +124,14 @@ public class ViewReconTest {
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure));
         });
 
-        communications.values().forEach(r -> r.start());
-        recons.values().forEach(r -> r.start());
+        try {
+            communications.values().forEach(r -> r.start());
+            recons.values().forEach(r -> r.start());
 
-        Utils.waitForCondition(20_000, () -> published.size() == committee.activeMembers().size());
-        assertEquals(published.size(), committee.activeMembers().size());
+            Utils.waitForCondition(20_000, () -> published.size() == committee.activeMembers().size());
+            assertEquals(published.size(), committee.activeMembers().size());
+        } finally {
+            communications.values().forEach(r -> r.close());
+        }
     }
 }
