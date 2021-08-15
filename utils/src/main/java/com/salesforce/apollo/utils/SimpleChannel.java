@@ -9,8 +9,8 @@ package com.salesforce.apollo.utils;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -36,7 +36,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
     }
 
     public SimpleChannel(String label, int capacity) {
-        queue = new LinkedBlockingDeque<>();
+        queue = new ArrayBlockingQueue<>(capacity);
         this.label = label;
     }
 

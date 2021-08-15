@@ -317,6 +317,7 @@ public class ReliableBroadcaster {
 
         private boolean delivered(Digest hash) {
             if (delivered.getIfPresent(hash) != null) {
+                return false;
             }
             delivered.put(hash, true);
             return true;
@@ -326,7 +327,7 @@ public class ReliableBroadcaster {
             if (s.msg.getAge() > maxAge) {
                 log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge,
                           params.member);
-                return false;
+                return true;
             }
             var previous = state.get(s.hash);
             if (previous != null) {
@@ -339,7 +340,7 @@ public class ReliableBroadcaster {
                 log.trace("duplicate event: {} on: {}", s.hash, params.member);
                 return true;
             }
-            return false;
+            return delivered.getIfPresent(s.hash) != null;
         }
 
         private void gc() {
@@ -510,7 +511,7 @@ public class ReliableBroadcaster {
             try {
                 handler.message(params.context.getId(), newMsgs);
             } catch (Throwable e) {
-                log.error("Error in message handler on: {}", params.member, e);
+                log.debug("Error in message handler on: {}", params.member, e);
             }
         });
     }
@@ -520,8 +521,14 @@ public class ReliableBroadcaster {
             return null;
         }
         log.trace("rbc gossiping[{}] from {} with {} on {}", buffer.round(), params.member, link.getMember(), ring);
-        return link.gossip(MessageBff.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
-                                     .setDigests(buffer.forReconcilliation().toBff()).build());
+        try {
+            return link.gossip(MessageBff.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
+                                         .setDigests(buffer.forReconcilliation().toBff()).build());
+        } catch (Throwable e) {
+            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), params.member, link.getMember(),
+                      ring, e);
+            return null;
+        }
     }
 
     private void handle(Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link, int ring,

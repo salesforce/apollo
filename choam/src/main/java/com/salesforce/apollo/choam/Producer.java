@@ -46,6 +46,7 @@ import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
+import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * An "Earner"
@@ -101,6 +102,7 @@ public class Producer {
     private final Controller                          controller;
     private final ReliableBroadcaster                 coordinator;
     private final Ethereal                            ethereal;
+    private final SimpleChannel<Coordinate>           linear;
     private final Map<Digest, CertifiedBlock.Builder> pending       = new ConcurrentHashMap<>();
     private final AtomicReference<HashedBlock>        previousBlock = new AtomicReference<>();
     private final Set<Digest>                         published     = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -130,6 +132,10 @@ public class Producer {
         fsm.setName(params().member().getId().toString());
         transitions = fsm.getTransitions();
 
+        // buffer for coordination messages
+        linear = new SimpleChannel<>("Publisher linear for: " + params().member(), 100);
+        linear.consumeEach(coordination -> coordinate(coordination));
+
         Config.Builder config = params().ethereal().clone();
 
         // Canonical assignment of members -> pid for Ethereal
@@ -144,6 +150,7 @@ public class Producer {
         // Our handle on consensus
         controller = ethereal.deterministic(config.build(), dataSource(), (preblock, last) -> create(preblock, last),
                                             preUnit -> broadcast(preUnit));
+        assert controller != null : "Controller is null";
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
@@ -151,6 +158,7 @@ public class Producer {
     public void complete() {
         log.debug("Closing producer for: {} on: {}", getViewId(), params().member());
         controller.stop();
+        linear.close();
         coordinator.stop();
     }
 
@@ -319,7 +327,7 @@ public class Producer {
             }
             publish(msg.source(), source, PreUnit.from(coordination.getUnit(), params().digestAlgorithm()));
         } else {
-            coordinate(coordination);
+            linear.submit(coordination);
         }
     }
 

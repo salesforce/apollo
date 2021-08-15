@@ -160,8 +160,8 @@ public class ViewReconfiguration implements Reconfiguration {
     public void convene() {
         log.debug("Convening assembly of: {} on: {}", nextViewId, params().member());
 
-        coordinator.start(params().gossipDuration(), params().scheduler());
         controller.start();
+        coordinator.start(params().gossipDuration(), params().scheduler());
     }
 
     @Override

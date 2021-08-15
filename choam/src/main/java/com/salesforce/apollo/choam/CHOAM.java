@@ -447,7 +447,7 @@ public class CHOAM {
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
-        log.info("Accepted block: {} height: {} on: {}", next.hash, next.height(), params.member());
+        log.debug("Accepted block: {} height: {} on: {}", next.hash, next.height(), params.member());
         final Committee c = current;
         c.accept(next);
     }

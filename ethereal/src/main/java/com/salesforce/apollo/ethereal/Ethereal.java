@@ -255,32 +255,15 @@ public class Ethereal {
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
         SimpleChannel<published> in = new SimpleChannel<>("Input for: " + config.pid(), 100);
-        in.consumeEach(p -> {
-            Orderer orderer = ord.get();
-            if (orderer != null) {
-                orderer.addPreunits(p.source, p.pus);
-            } else {
-                log.warn("Received: {} before orderer created on: {} ", p.pus, config.pid());
-            }
-        });
         BiConsumer<Short, List<PreUnit>> input = (source, pus) -> in.submit(new published(source, pus));
 
-        AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
-            config.executor().execute(() -> {
-                try {
-                    var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());
-                    ord.set(orderer);
-                    orderer.start(new DsrFactory(), synchronizer);
-                } finally {
-                    started.set(true);
-                }
-            });
+            var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());
+            ord.set(orderer);
+            orderer.start(new DsrFactory(), synchronizer);
+            in.consumeEach(p -> orderer.addPreunits(p.source, p.pus));
         };
         Runnable stop = () -> {
-            if (!Utils.waitForCondition(10, () -> started.get())) {
-                log.trace("Waited 10ms for start and unsuccessful, proceeding on: {}", config.pid());
-            }
             in.close();
             Orderer orderer = ord.get();
             if (orderer != null) {
