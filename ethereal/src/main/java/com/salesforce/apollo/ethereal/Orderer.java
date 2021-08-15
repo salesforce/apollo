@@ -53,7 +53,6 @@ public class Orderer {
 
         public void close() {
             adder.close();
-            extender.close();
             more.set(false);
         }
 

@@ -17,8 +17,6 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.utils.Channel;
-import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * ExtenderService is a component working on a dag that extends a partial order
@@ -33,28 +31,20 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
-    private final Extender            ordering;
+    private final Extender             ordering;
     private final Consumer<List<Unit>> output;
-    private final Channel<Boolean>    trigger;
-    private final Config              config;
-    private final Semaphore           exclusive = new Semaphore(1);
+    private final Config               config;
+    private final Semaphore            exclusive = new Semaphore(1);
 
     public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
         ordering = new Extender(dag, rs, config);
         this.output = orderedUnits;
-        trigger = new SimpleChannel<>(String.format("Trigger for: %s", config.pid()), 100);
-
-        trigger.consumeEach(timingUnitDecider());
         this.config = config;
     }
 
     public void chooseNextTimingUnits() {
         log.trace("Signaling to see if we can produce a block on: {}", config.pid());
-        trigger.submit(true);
-    }
-
-    public void close() {
-        trigger.close();
+        timingUnitDecider();
     }
 
     /**
@@ -62,22 +52,20 @@ public class ExtenderService {
      * timingRounds channel, finds all units belonging to their timing round and
      * establishes linear order on them. Sends slices of ordered units to output.
      */
-    private Consumer<Boolean> timingUnitDecider() {
-        return t -> {
-            exclusive.acquireUninterruptibly();
-            try {
-                var round = ordering.nextRound();
-                log.trace("Starting timing round: {} on: {}", round, config.pid());
-                while (round != null) {
-                    log.debug("Producing timing round: {} on: {}", round, config.pid());
-                    var units = round.orderedUnits(config.digestAlgorithm());
-                    log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
-                    output.accept(units);
-                    round = ordering.nextRound();
-                }
-            } finally {
-                exclusive.release();
+    private void timingUnitDecider() {
+        exclusive.acquireUninterruptibly();
+        try {
+            var round = ordering.nextRound();
+            log.trace("Starting timing round: {} on: {}", round, config.pid());
+            while (round != null) {
+                log.debug("Producing timing round: {} on: {}", round, config.pid());
+                var units = round.orderedUnits(config.digestAlgorithm());
+                log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
+                output.accept(units);
+                round = ordering.nextRound();
             }
-        };
+        } finally {
+            exclusive.release();
+        }
     }
 }
