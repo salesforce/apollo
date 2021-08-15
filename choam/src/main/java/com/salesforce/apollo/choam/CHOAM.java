@@ -12,7 +12,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 
 import java.security.KeyPair;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -58,6 +57,8 @@ import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -260,18 +261,14 @@ public class CHOAM {
 
     /** The Genesis formation comittee */
     private class Formation implements Committee {
-        private final Context<Member> formation;
-        private final Producer        producer;
+        private final Context<Member>     formation;
+        private final ViewReconfiguration reconfigure;
 
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
-            producer = new Producer(next,
-                                    new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
-                                                                  .setContext(formation).build(),
-                                                            params.communications()),
-                                    comm, params, genesisBlock(), publisher(), Collections.emptyList(),
-                                    constructBlock(), null);
-            producer.setNextViewId(params.genesisViewId());
+            Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
+            ViewContext vc = new GenesisContext(formation, params, signer, publisher());
+            reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, genesisBlock());
         }
 
         @Override
@@ -284,7 +281,7 @@ public class CHOAM {
 
         @Override
         public void complete() {
-            producer.complete();
+            reconfigure.complete();
         }
 
         @Override
@@ -320,7 +317,7 @@ public class CHOAM {
 
         @Override
         public void regenerate() {
-            producer.regenerate();
+            reconfigure.start();
         }
 
         @Override
@@ -530,9 +527,9 @@ public class CHOAM {
         return null;
     }
 
-    private BiFunction<Map<Member, Join>, Digest, Block> genesisBlock() {
-        return (joining, nextViewId) -> CHOAM.genesis(nextViewId, joining, head, params.context(), view, params,
-                                                      checkpoint, params.genesisData());
+    private ReconfigureBlock genesisBlock() {
+        return (joining, nextViewId, last) -> CHOAM.genesis(nextViewId, joining, last, params.context(), view, params,
+                                                            checkpoint, params.genesisData());
     }
 
     private boolean isNext(HashedBlock next) {

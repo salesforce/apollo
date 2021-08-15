@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import static com.salesforce.apollo.choam.support.HashedBlock.hash;
 import static com.salesforce.apollo.choam.support.HashedBlock.height;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -41,14 +42,20 @@ public class ViewContext {
     private final Signer                         signer;
     private final Map<Member, Verifier>          validators;
 
-    public ViewContext(Context<Member> context, Map<Digest, Short> roster, Parameters params, Signer signer,
-                       Map<Member, Verifier> validators, Consumer<HashedCertifiedBlock> publisher) {
+    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
+                       Consumer<HashedCertifiedBlock> publisher) {
         this.context = context;
-        this.roster = roster;
+        this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
         this.publisher = publisher;
+
+        var remapped = CHOAM.rosterMap(params.context(), context.activeMembers());
+        short pid = 0;
+        for (Digest d : remapped.keySet().stream().sorted().toList()) {
+            roster.put(remapped.get(d).getId(), pid++);
+        }
     }
 
     public Context<Member> context() {

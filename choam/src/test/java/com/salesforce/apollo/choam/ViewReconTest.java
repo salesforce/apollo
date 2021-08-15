@@ -67,12 +67,6 @@ public class ViewReconTest {
         base.activate((Collection<Member>) members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        var remapped = CHOAM.rosterMap(base, committee.activeMembers());
-        Map<Digest, Short> roster = new HashMap<>();
-        short pid = 0;
-        for (Digest d : remapped.keySet().stream().sorted().toList()) {
-            roster.put(remapped.get(d).getId(), pid++);
-        }
         Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));
 
         Parameters.Builder params = Parameters.newBuilder().setGossipDuration(Duration.ofMillis(100)).setContext(base);
@@ -118,9 +112,8 @@ public class ViewReconTest {
         committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            ViewContext view = new ViewContext(committee, roster,
-                                               params.setMember(sm).setCommunications(router).build(), sm, validators,
-                                               publisher);
+            ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
+                                               validators, publisher);
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure));
         });
 

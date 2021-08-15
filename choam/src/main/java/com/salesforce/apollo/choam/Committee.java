@@ -26,12 +26,12 @@ import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.Hex;
 
 /**
  * @author hal.hildebrand
@@ -119,7 +119,7 @@ public interface Committee {
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), headerHash);
         log.trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                  Hex.hex(verify.getPublicKey().getEncoded()), params.member());
+                  DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
         return verified;
     }
 

@@ -15,20 +15,16 @@
 		</encoder>
 	</appender>  
     
-    <logger name="com.salesforce.apollo.choam" level="info"
+    <logger name="com.salesforce.apollo.choam" level="debug"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>   
     
-    <logger name="com.salesforce.apollo.choam.Committee" level="info"
+    <logger name="com.salesforce.apollo.choam.Committee" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>  
-    
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger> 
+    </logger>   
+     
     
     <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
