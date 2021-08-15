@@ -83,7 +83,7 @@ public class ViewReconfiguration implements Reconfiguration {
     private final Map<Member, Join>       joins           = new ConcurrentHashMap<>();
     private final Set<Member>             nextAssembly;
     private final Digest                  nextViewId;
-    private final HashedCertifiedBlock    previous;
+    private final HashedBlock             previous;
     private final CertifiedBlock.Builder  reconfiguration = CertifiedBlock.newBuilder();
     private volatile Digest               reconfigurationHash;
     private final ReconfigureBlock        reconfigureBlock;
@@ -91,7 +91,7 @@ public class ViewReconfiguration implements Reconfiguration {
     private final ViewContext             view;
     private volatile Validate             validation;
 
-    public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedCertifiedBlock previous,
+    public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedBlock previous,
                                CommonCommunications<Terminal, ?> comms, ReconfigureBlock reconfigureBlock) {
         view = vc;
         this.reconfigureBlock = reconfigureBlock;
@@ -198,7 +198,7 @@ public class ViewReconfiguration implements Reconfiguration {
         }
         final Digest validateHash = new Digest(validate.getHash());
         final Digest current = reconfigurationHash;
-        if (current.equals(validateHash)) {
+        if (current != null && current.equals(validateHash)) {
             reconfiguration.addCertifications(validate.getWitness());
             log.trace("Adding validation on: {}", params().member());
             maybePublish();
@@ -307,7 +307,8 @@ public class ViewReconfiguration implements Reconfiguration {
         PubKey encoded = member.getConsensusKey();
 
         if (!term.getMember().verify(signature(member.getSignature()), encoded.toByteString())) {
-            log.debug("Could not verify consensus key from: {} on: {}", term.getMember().getId(), params().member());
+            log.debug("Could not verify consensus key from join: {} on: {}", term.getMember().getId(),
+                      params().member());
             return proceed.get();
         }
         PublicKey consensusKey = publicKey(encoded);
@@ -452,7 +453,7 @@ public class ViewReconfiguration implements Reconfiguration {
             log.debug("Invalid certifier: {} on: {}", d, params().member());
             return false;
         }
-        var validated = view.validate(m, encoded, JohnHancock.from(c.getSignature()));
+        var validated = m.verify(JohnHancock.from(c.getSignature()), encoded.toByteString());
         if (!validated) {
             log.debug("Could not validate consensus key: {} using member: {} on: {}",
                       params().digestAlgorithm().digest(encoded.toByteString()), m.getId(), params().member());

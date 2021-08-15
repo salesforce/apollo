@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -152,7 +151,7 @@ public class CHOAM {
         private final Producer             producer;
         private final HashedCertifiedBlock viewChange;
 
-        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators, nextView view) {
+        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators, nextView nextView) {
             super(validators);
             this.viewChange = block;
             var v = new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
@@ -160,13 +159,14 @@ public class CHOAM {
             var context = Committee.viewFor(v, params.context());
             context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
             validators.keySet().forEach(m -> context.activate(m));
-            producer = new Producer(view,
+            Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
+            ViewContext viewContext = new ViewContext(context, params, signer, validators, publisher(),
+                                                      constructBlock());
+            producer = new Producer(viewContext,
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(context).build(),
                                                             params.communications()),
-                                    comm, params, reconfigureBlock(), publisher(),
-                                    getReconfigure().getViewList().stream().map(vm -> new Digest(vm.getId())).toList(),
-                                    constructBlock(), head);
+                                    comm, params, head, reconfigureBlock());
             producer.start();
         }
 
@@ -179,12 +179,6 @@ public class CHOAM {
         public HashedBlock getViewChange() {
             return viewChange;
         }
-
-        private Reconfigure getReconfigure() {
-            return viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView()
-                                                 : viewChange.block.getReconfigure();
-        }
-
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {}
@@ -266,9 +260,13 @@ public class CHOAM {
 
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
-            Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
-            ViewContext vc = new GenesisContext(formation, params, signer, publisher());
-            reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, genesisBlock());
+            if (formation.isActive(params.member())) {
+                Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
+                ViewContext vc = new GenesisContext(formation, params, signer, publisher());
+                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, genesisBlock());
+            } else {
+                reconfigure = null;
+            }
         }
 
         @Override
@@ -281,7 +279,9 @@ public class CHOAM {
 
         @Override
         public void complete() {
-            reconfigure.complete();
+            if (reconfigure != null) {
+                reconfigure.complete();
+            }
         }
 
         @Override
@@ -317,7 +317,9 @@ public class CHOAM {
 
         @Override
         public void regenerate() {
-            reconfigure.start();
+            if (reconfigure != null) {
+                reconfigure.start();
+            }
         }
 
         @Override
@@ -597,24 +599,14 @@ public class CHOAM {
 
     @FunctionalInterface
     interface ReconfigureBlock {
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedCertifiedBlock previous);
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
     }
 
-    private ReconfigureBlock reconBlock() {
+    private ReconfigureBlock reconfigureBlock() {
         return (joining, nextViewId, previous) -> {
-            final HashedCertifiedBlock h = previous;
             final HashedCertifiedBlock v = view;
             final HashedCertifiedBlock c = checkpoint;
-            return reconfigure(nextViewId, joining, h, params.context(), v, params, c);
-        };
-    }
-
-    private BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock() {
-        return (joining, nextViewId) -> {
-            final HashedCertifiedBlock h = head;
-            final HashedCertifiedBlock v = view;
-            final HashedCertifiedBlock c = checkpoint;
-            return reconfigure(nextViewId, joining, h, params.context(), v, params, c);
+            return reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
         };
     }
 

@@ -18,8 +18,10 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
+import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -35,6 +37,7 @@ import com.salesforce.apollo.membership.Member;
 public class ViewContext {
     private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
 
+    private final BlockProducer                  blockProducer;
     private final Context<Member>                context;
     private final Parameters                     params;
     private final Consumer<HashedCertifiedBlock> publisher;
@@ -44,6 +47,12 @@ public class ViewContext {
 
     public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
                        Consumer<HashedCertifiedBlock> publisher) {
+        this(context, params, signer, validators, publisher, (a, b, c) -> null);
+    }
+
+    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
+                       Consumer<HashedCertifiedBlock> publisher, BlockProducer blockProducer) {
+        this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
@@ -79,6 +88,10 @@ public class ViewContext {
 
     public Parameters params() {
         return params;
+    }
+
+    public Block produce(long l, Digest hash, Executions build) {
+        return blockProducer.produce(l, hash, build);
     }
 
     public void publish(HashedCertifiedBlock block) {

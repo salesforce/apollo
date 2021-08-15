@@ -11,10 +11,13 @@ import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Validate;
 
 /**
+ * Leaf action interface for the view reconfiguration FSM
+ * 
  * @author hal.hildebrand
  *
  */
 public interface Reconfiguration {
+    /** Transition events for the view reconfiguration FSM **/
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
         default Transitions assembled() {
             throw fsm().invalidTransitionOn();

@@ -84,7 +84,7 @@ public class Orderer {
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
     public static epoch newEpoch(int epoch, Config config, RandomSourceFactory rsf, Channel<Unit> unitBelt,
-                                 Channel<List<Unit>> orderedUnits, Clock clock) {
+                                 Consumer<List<Unit>> orderedUnits, Clock clock) {
         Dag dg = newDag(config, epoch);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
@@ -105,7 +105,6 @@ public class Orderer {
     private final DataSource             ds;
     private final Queue<Unit>            lastTiming;
     private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
-    private final Channel<List<Unit>>    orderedUnits;
     private final AtomicReference<epoch> previous = new AtomicReference<>();
     private volatile RandomSourceFactory rsf;
     private final Consumer<List<Unit>>   toPreblock;
@@ -115,8 +114,6 @@ public class Orderer {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
-        this.orderedUnits = new SimpleChannel<>(String.format("Ordered Units for: %s", config.pid()),
-                                                conf.epochLength());
         this.toPreblock = toPreblock;
         this.unitBelt = new SimpleChannel<>(String.format("Unit belt for: %s", config.pid()),
                                             conf.epochLength() * conf.nProc());
@@ -224,9 +221,6 @@ public class Orderer {
         // Start creator
         creator.createUnits(unitBelt, lastTiming);
 
-        // Start preblock builder
-        orderedUnits.consume(handleTimingRounds());
-
     }
 
     public void stop() {
@@ -236,7 +230,6 @@ public class Orderer {
         if (current != null) {
             current.get().close();
         }
-        orderedUnits.close();
         unitBelt.close();
         log.trace("Orderer stopped on: {}", config.pid());
     }
@@ -322,23 +315,21 @@ public class Orderer {
      * round of the epoch, the timing unit defining it is sent to the creator (to
      * produce signature shares.)
      */
-    private Consumer<List<List<Unit>>> handleTimingRounds() {
+    private Consumer<List<Unit>> handleTimingRounds() {
         AtomicInteger current = new AtomicInteger(0);
-        return ordered -> {
-            for (var round : ordered) {
-                var timingUnit = round.get(round.size() - 1);
-                var epoch = timingUnit.epoch();
+        return round -> {
+            var timingUnit = round.get(round.size() - 1);
+            var epoch = timingUnit.epoch();
 
-                if (timingUnit.level() == config.lastLevel()) {
-                    lastTiming.add(timingUnit);
-                    finishEpoch(epoch);
-                }
-                if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                    toPreblock.accept(round);
-                    log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
-                }
-                current.set(epoch);
+            if (timingUnit.level() == config.lastLevel()) {
+                lastTiming.add(timingUnit);
+                finishEpoch(epoch);
             }
+            if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
+                toPreblock.accept(round);
+                log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
+            }
+            current.set(epoch);
         };
     }
 
@@ -382,7 +373,7 @@ public class Orderer {
                     p.close();
                 }
                 previous.set(c);
-                epoch newEpoch = newEpoch(epoch, config, rsf, unitBelt, orderedUnits, clock);
+                epoch newEpoch = newEpoch(epoch, config, rsf, unitBelt, handleTimingRounds(), clock);
                 current.set(newEpoch);
                 return newEpoch;
             }

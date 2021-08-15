@@ -31,7 +31,7 @@ public enum Earner implements Driven.Transitions {
         @Override
         public Transitions publishedBlock() {
             context().epochEnd();
-            return ReconOld.SYNCHRONIZE;
+            return COMPLETE;
         }
     },
     SPICE {
@@ -58,15 +58,9 @@ public enum Earner implements Driven.Transitions {
         }
     },
     INITIAL {
-
         @Override
         public Transitions start() {
             return SPICE;
-        }
-
-        @Override
-        public Transitions synchronize() {
-            return ReconOld.SYNCHRONIZE;
         }
     },
     PROTOCOL_FAILURE {
@@ -74,7 +68,8 @@ public enum Earner implements Driven.Transitions {
         public void terminate() {
             log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
         }
-    };
+    },
+    COMPLETE;
 
     private static final Logger log = LoggerFactory.getLogger(Earner.class);
 }

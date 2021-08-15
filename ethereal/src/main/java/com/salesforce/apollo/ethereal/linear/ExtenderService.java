@@ -33,21 +33,18 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
-    private final Extender             ordering;
-    private final Channel<List<Unit>>  output;
-    private final Channel<TimingRound> timingRounds;
-    private final Channel<Boolean>     trigger;
-    private final Config               config;
-    private final Semaphore            exclusive = new Semaphore(1);
+    private final Extender            ordering;
+    private final Consumer<List<Unit>> output;
+    private final Channel<Boolean>    trigger;
+    private final Config              config;
+    private final Semaphore           exclusive = new Semaphore(1);
 
-    public ExtenderService(Dag dag, RandomSource rs, Config config, Channel<List<Unit>> output) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
         ordering = new Extender(dag, rs, config);
-        this.output = output;
+        this.output = orderedUnits;
         trigger = new SimpleChannel<>(String.format("Trigger for: %s", config.pid()), 100);
-        timingRounds = new SimpleChannel<>(String.format("Timing Rounds for: %s", config.pid()), config.epochLength());
 
         trigger.consumeEach(timingUnitDecider());
-        timingRounds.consumeEach(roundSorter());
         this.config = config;
     }
 
@@ -58,20 +55,6 @@ public class ExtenderService {
 
     public void close() {
         trigger.close();
-        timingRounds.close();
-    }
-
-    /**
-     * Picks information about newly picked timing unit from the timingRounds
-     * channel, finds all units belonging to their timing round and establishes
-     * linear order on them. Sends slices of ordered units to output.
-     */
-    private Consumer<TimingRound> roundSorter() {
-        return round -> {
-            var units = round.orderedUnits(config.digestAlgorithm());
-            log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
-            output.submit(units);
-        };
     }
 
     /**
@@ -87,7 +70,9 @@ public class ExtenderService {
                 log.trace("Starting timing round: {} on: {}", round, config.pid());
                 while (round != null) {
                     log.debug("Producing timing round: {} on: {}", round, config.pid());
-                    timingRounds.submit(round);
+                    var units = round.orderedUnits(config.digestAlgorithm());
+                    log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
+                    output.accept(units);
                     round = ordering.nextRound();
                 }
             } finally {

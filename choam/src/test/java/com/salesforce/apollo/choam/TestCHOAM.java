@@ -40,7 +40,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int CARDINALITY = 11;
+    private static final int CARDINALITY = 51;
 
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
@@ -66,7 +66,7 @@ public class TestCHOAM {
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, CARDINALITY);
         Parameters.Builder params = Parameters.newBuilder().setContext(context)
                                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
-                                              .setGossipDuration(Duration.ofMillis(100))
+                                              .setGossipDuration(Duration.ofMillis(20))
                                               .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
 //        params.getCoordination().setBufferSize(1500);
 //        params.getCombineParams().setBufferSize(1500);
@@ -84,8 +84,8 @@ public class TestCHOAM {
                                                   m -> new CHOAM(params.setMember(m)
                                                                        .setCommunications(routers.get(m.getId()))
                                                                        .setProcessor(b -> blocks.computeIfAbsent(m.getId(),
-                                                                                                                d -> new CopyOnWriteArrayList<>())
-                                                                                               .add(b))
+                                                                                                                 d -> new CopyOnWriteArrayList<>())
+                                                                                                .add(b))
                                                                        .build(),
                                                                  MVStore.open(null))));
     }
@@ -94,9 +94,10 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88+ 30)
-                                                   .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s == 88).count(),
+        Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                    .filter(s -> s >= 88 + (30 * 3)).count() == choams.size());
+        assertEquals(choams.size(),
+                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88 + (30 * 3)).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
     }
 }

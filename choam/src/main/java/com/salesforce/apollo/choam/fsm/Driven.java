@@ -10,13 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.salesfoce.apollo.choam.proto.Block;
-import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Publish;
-import com.salesfoce.apollo.choam.proto.Sync;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
-import com.salesforce.apollo.crypto.Digest;
 
 /**
  * Leaf action interface for the Producer FSM
@@ -49,15 +45,7 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions joins(Joins joins) {
-            return null;
-        }
-
         default Transitions key(HashedCertifiedBlock keyBlock) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions nominated() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -69,72 +57,20 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions reconfigure() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions reconfigure(Block reconfigure) {
-            return null;
-        }
-
-        default Transitions reconfigured() {
-            throw fsm().invalidTransitionOn();
-        }
-
         default Transitions start() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions sync(Sync sync, Digest from) {
-            return null;
-        }
-
-        default Transitions synchd() {
-            return null;
-        }
-
-        default Transitions synchronize() {
             throw fsm().invalidTransitionOn();
         }
 
         default Transitions validate(Validate validate) {
             return null;
         }
-
-        default Transitions validateView(Validate validate) {
-            return null;
-        }
     }
-
-    String RECONFIGURE = "RECONFIGURE";
-    String RECONVENE   = "RECONVENE";
-    String SYNCHRONIZE = "SYNCHRONIZE";
-
-    void assemble(Joins joins);
-
-    void cancelTimer(String label);
 
     void complete();
 
-    void convene();
-
     void epochEnd();
-
-    void gatherAssembly();
-
-    void published(Publish published);
-
-    void reconfigure();
-
-    void reconfigure(Block reconfigure);
 
     void startProduction();
 
-    void sync(Sync sync, Digest from);
-
-    void synchronize();
-
-    void valdateBlock(Validate validate);
-
-    void validation(Validate validate);
+    void valdateBlock(Validate validate); 
 }
