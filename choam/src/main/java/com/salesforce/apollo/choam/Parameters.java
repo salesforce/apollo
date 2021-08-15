@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
@@ -65,7 +66,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Config.Builder                         ethereal              = Config.deterministic();
         private List<ExecutedTransaction>              genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
-        private Duration                               gossipDuration;
+        private Duration                               gossipDuration        = Duration.ofSeconds(1);
         private int                                    lifetime              = 100;
         private int                                    maxBatchByteSize      = 4 * 1024;
         private int                                    maxBatchSize          = 10;
@@ -78,7 +79,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                                                              };
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
-        private ScheduledExecutorService               scheduler;
+        private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;

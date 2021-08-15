@@ -284,7 +284,7 @@ public enum DigestAlgorithm {
 
     public Digest digest(List<ByteBuffer> buffers) {
         return digest(BbBackedInputStream.aggregate(buffers));
-    }
+    } 
 
     public Digest digest(String key) {
         return digest(key.getBytes());

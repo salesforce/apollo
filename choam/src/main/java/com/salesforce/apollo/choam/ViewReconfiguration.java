@@ -13,6 +13,7 @@ import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -63,6 +64,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -83,9 +85,11 @@ public class ViewReconfiguration implements Reconfiguration {
     private final Digest                  nextViewId;
     private final HashedCertifiedBlock    previous;
     private final CertifiedBlock.Builder  reconfiguration = CertifiedBlock.newBuilder();
+    private volatile Digest               reconfigurationHash;
     private final ReconfigureBlock        reconfigureBlock;
     private final Transitions             transitions;
     private final ViewContext             view;
+    private volatile Validate             validation;
 
     public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedCertifiedBlock previous,
                                CommonCommunications<Terminal, ?> comms, ReconfigureBlock reconfigureBlock) {
@@ -99,10 +103,10 @@ public class ViewReconfiguration implements Reconfiguration {
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix(RECONFIGURE_PREFIX);
         Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().activeMembers().size());
-        reContext.activate(params().context().activeMembers());
+        reContext.activate(view.context().activeMembers());
 
         coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
-                                                      .setContext(params().context()).build(),
+                                                      .setContext(reContext).build(),
                                               params().communications());
         coordinator.registerHandler((id, msgs) -> msgs.forEach(msg -> process(msg)));
 
@@ -113,10 +117,9 @@ public class ViewReconfiguration implements Reconfiguration {
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
         } else {
-            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member());
             config.setPid(pid).setnProc((short) view.roster().size());
         }
-        config.setEpochLength(6).setNumberOfEpochs(1);
+        config.setEpochLength(4).setNumberOfEpochs(1);
 
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> create(preblock, last),
@@ -124,15 +127,33 @@ public class ViewReconfiguration implements Reconfiguration {
 
         final Fsm<ViewReconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, Reconfigure.GATHER,
                                                                         true);
+        fsm.setName("View Recon" + params().member().getId());
         this.transitions = fsm.getTransitions();
-        fsm.enterStartState();
+        log.info("View Reconfiguration: {} committee: {} from: {} to: {} next assembly: {} roster: {} pid: {} on: {}",
+                 reContext.getId(), reContext.activeMembers(), view.context().getId(), nextViewId, nextAssembly,
+                 view.roster(), pid, params().member());
     }
 
     @Override
     public void complete() {
         controller.stop();
         coordinator.stop();
-        log.debug("Assembly: {} completed on: {}", nextViewId, params().member());
+        log.info("Assembly: {} completed on: {}", nextViewId, params().member());
+    }
+
+    @Override
+    public void continueValidating() {
+        log.debug("Assembly: {} reconfigured, broadcasting validations on: {}", nextViewId, params().member());
+        AtomicInteger countDown = new AtomicInteger(3);
+        coordinator.register(round -> {
+            if (round % coordinator.getContext().timeToLive() == 0) {
+                if (countDown.decrementAndGet() > 0) {
+                    coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
+                } else {
+                    transitions.complete();
+                }
+            }
+        });
     }
 
     @Override
@@ -156,44 +177,74 @@ public class ViewReconfiguration implements Reconfiguration {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicReference<Runnable> reiterate = new AtomicReference<>();
         AtomicInteger countDown = new AtomicInteger(3); // 3 rounds of attempts
-        reiterate.set(Utils.wrapped(() -> committee.iterate((term, m) -> term.join(request),
-                                                            (futureSailor, term, m) -> consider(futureSailor, term, m,
-                                                                                                proceed),
+        reiterate.set(Utils.wrapped(() -> committee.iterate((term, m) -> {
+            log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member());
+            return term.join(request);
+        }, (futureSailor, term, m) -> consider(futureSailor, term, m, proceed),
                                                             () -> completeSlice(proceed, reiterate, countDown)),
                                     log));
         reiterate.get().run();
     }
 
+    public void start() {
+        transitions.fsm().enterStartState();
+    }
+
     @Override
     public void validation(Validate validate) {
-        reconfiguration.addCertifications(validate.getWitness());
-        log.trace("Validation received on: {}", params().member());
-        maybePublish();
+        if (!reconfiguration.hasBlock()) {
+            log.trace("No block for validation on: {}", params().member());
+            return;
+        }
+        final Digest validateHash = new Digest(validate.getHash());
+        final Digest current = reconfigurationHash;
+        if (current.equals(validateHash)) {
+            reconfiguration.addCertifications(validate.getWitness());
+            log.trace("Adding validation on: {}", params().member());
+            maybePublish();
+        } else {
+            log.trace("Invalid validation: {} expected: {} on: {}", validateHash, current, params().member());
+        }
     }
 
     private void assemble() {
+        log.debug("Attempting assembly of: {} assembled: {} on: {}", nextViewId, assembled.size(), params().member());
+
         final int toleranceLevel = params().context().toleranceLevel();
-        var aggregate = assembled.stream().filter(j -> !nextViewId.equals(new Digest(j.getView())))
-                                 .filter(j -> params().context().getMember(new Digest(j.getMember().getId())) != null)
-                                 .collect(Multimaps.toMultimap(j -> params().context()
-                                                                            .getMember(new Digest(j.getMember()
-                                                                                                   .getId())),
-                                                               j -> j, () -> HashMultimap.create()))
-                                 .asMap().entrySet().stream()
-                                 .collect(Collectors.toMap(e -> e.getKey(), e -> reduce(e.getKey(), e.getValue())))
-                                 .entrySet().stream()
-                                 .filter(e -> e.getValue().getEndorsementsList().size() > toleranceLevel)
-                                 .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+        final HashMultimap<Member, Join> proposed = assembled.stream()
+                                                             .filter(j -> nextViewId.equals(new Digest(j.getView())))
+                                                             .filter(j -> params().context()
+                                                                                  .getMember(new Digest(j.getMember()
+                                                                                                         .getId())) != null)
+                                                             .collect(Multimaps.toMultimap(j -> params().context()
+                                                                                                        .getMember(new Digest(j.getMember()
+                                                                                                                               .getId())),
+                                                                                           j -> j,
+                                                                                           () -> HashMultimap.create()));
+        log.debug("Aggregate of: {} proposed: {} on: {}", nextViewId, proposed.size(), params().member());
+
+        final Map<Member, Join> reduced = proposed.asMap().entrySet().stream()
+                                                  .collect(Collectors.toMap(e -> e.getKey(),
+                                                                            e -> reduce(e.getKey(), e.getValue())));
+        log.debug("Aggregate of: {} reduced: {} on: {}", nextViewId, reduced.size(), params().member());
+
+        var aggregate = reduced.entrySet().stream()
+                               .filter(e -> e.getValue().getEndorsementsList().size() > toleranceLevel)
+                               .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
+        log.debug("Aggregate of: {} joins: {} on: {}", nextViewId, aggregate.size(), params().member());
         if (aggregate.size() > toleranceLevel) {
             var reconfigure = reconfigureBlock.reconfigure(aggregate, nextViewId, previous);
             reconfiguration.setBlock(reconfigure);
-            var validation = view.generateValidation(HashedBlock.hash(reconfigure, params().digestAlgorithm()),
-                                                     reconfigure);
-            coordinator.publish(validation.toByteString());
+            reconfigurationHash = HashedBlock.hash(reconfigure, params().digestAlgorithm());
+            validation = view.generateValidation(reconfigurationHash, reconfigure);
+            coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
             reconfiguration.addCertifications(validation.getWitness());
-            maybePublish();
+            log.debug("Aggregate of: {} threshold reached: {} block: {} on: {}", nextViewId, aggregate.size(),
+                      reconfigurationHash, params().member());
             transitions.nominated();
+            maybePublish();
         } else {
+            log.debug("Aggregate of: {} threshold failed: {} on: {}", nextViewId, aggregate.size(), params().member());
             transitions.failed();
         }
     }
@@ -209,12 +260,18 @@ public class ViewReconfiguration implements Reconfiguration {
     private void completeSlice(AtomicBoolean proceed, AtomicReference<Runnable> reiterate, AtomicInteger countDown) {
         if (joins.size() == nextAssembly.size()) {
             proceed.set(false);
+            log.trace("Assembled: {} on: {}", nextViewId, params().member());
             transitions.assembled();
         } else if (countDown.decrementAndGet() >= 0) {
+            log.trace("Retrying assembly of: {} on: {}", nextViewId, params().member());
             reiterate.get().run();
-        } else {
+        } else if (joins.size() > params().context().toleranceLevel()) {
+            log.trace("Assembled: {} with: {} on: {}", nextViewId, joins.size(), params().member());
             transitions.assembled();
+        } else {
+            log.trace("Failing assembly of: {} gathered: {} on: {}", nextViewId, joins.size(), params().member());
             proceed.set(false);
+            transitions.failed();
         }
     }
 
@@ -238,6 +295,12 @@ public class ViewReconfiguration implements Reconfiguration {
         }
         if (member.equals(ViewMember.getDefaultInstance())) {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
+            return proceed.get();
+        }
+        var vm = new Digest(member.getId());
+        if (!m.getId().equals(vm)) {
+            log.debug("Invalid join response from: {} expected: {} on: {}", term.getMember().getId(), vm,
+                      params().member().getId());
             return proceed.get();
         }
 
@@ -269,10 +332,13 @@ public class ViewReconfiguration implements Reconfiguration {
 
     private void create(PreBlock preblock, boolean last) {
         preblock.data().stream().map(e -> {
+            log.debug("Creating preblock: {} last: {} on: {}",
+                      params().digestAlgorithm().digest(BbBackedInputStream.aggregate(preblock.data())), last,
+                      params().member());
             try {
                 return Joins.parseFrom(e);
             } catch (InvalidProtocolBufferException ex) {
-                log.error("Error parsing joins on: {}", params().member());
+                log.trace("Error parsing joins on: {}", params().member());
                 return (Joins) null;
             }
         }).filter(e -> e != null).forEach(e -> assembled.addAll(e.getJoinsList()));
@@ -303,8 +369,12 @@ public class ViewReconfiguration implements Reconfiguration {
     }
 
     private void maybePublish() {
-        if (reconfiguration.getCertificationsCount() > params().context().toleranceLevel()) {
-            view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), reconfiguration.build()));
+        if (reconfiguration.hasBlock()
+        && reconfiguration.getCertificationsCount() > params().context().toleranceLevel()) {
+            final HashedCertifiedBlock block = new HashedCertifiedBlock(params().digestAlgorithm(),
+                                                                        reconfiguration.build());
+            log.trace("Publishing reconfiguration: {} on: {}", block.hash, params().member());
+            view.publish(block);
             transitions.reconfigured();
         }
     }
@@ -364,10 +434,15 @@ public class ViewReconfiguration implements Reconfiguration {
                     .asMap().entrySet().stream()
                     .max((a, b) -> Integer.compare(a.getValue().size(), b.getValue().size()));
 
-        return max.isEmpty() ? null : max.get().getValue().stream().reduce((a, b) -> {
+        var proto = max.isEmpty() ? null : max.get().getValue().stream().reduce((a, b) -> {
             a.addAllEndorsements(b.getEndorsementsList());
             return a;
-        }).get().build();
+        }).get();
+        List<Certification> endorsements = new ArrayList<>(proto.getEndorsementsList());
+        proto.clearEndorsements();
+        endorsements.sort(Comparator.comparing(c -> new Digest(c.getId())));
+        proto.addAllEndorsements(endorsements);
+        return proto.build();
     }
 
     private boolean validate(Certification c, PubKey encoded) {

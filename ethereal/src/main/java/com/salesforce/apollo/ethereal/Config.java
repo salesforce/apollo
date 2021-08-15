@@ -35,7 +35,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         Builder b = new Builder();
         b.requiredByLinear();
         b.addConsensusConfig();
-        b.addLastLevel();
         return b;
     }
 
@@ -67,7 +66,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                                      epochLength     = 30;
         private Executor                                 executor        = r -> r.run();
         private int                                      firstDecidedRound;
-        private int                                      lastLevel;
+        private int                                      lastLevel       = -1;
         private short                                    nProc;
         private int                                      numberOfEpochs  = 3;
         private int                                      orderStartLevel = 6;
@@ -135,7 +134,9 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-
+            if (lastLevel <= 0) {
+                addLastLevel();
+            }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
                               canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, clock, bias);

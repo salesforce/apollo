@@ -17,7 +17,6 @@ import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.choam.CHOAM.Concierge;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;

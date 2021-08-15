@@ -11,6 +11,7 @@ import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 
 import java.security.KeyPair;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.fsm.Combine;
@@ -110,29 +112,34 @@ public class CHOAM {
 
     }
 
-    /** service trampoline */
-    public class Concierge {
+    public class Trampoline implements Concierge {
 
+        @Override
         public CheckpointSegments fetch(CheckpointReplication request, Digest from) {
             return CHOAM.this.fetch(request, from);
         }
 
+        @Override
         public Blocks fetchBlocks(BlockReplication request, Digest from) {
             return CHOAM.this.fetchBlocks(request, from);
         }
 
+        @Override
         public Blocks fetchViewChain(BlockReplication request, Digest from) {
             return CHOAM.this.fetchViewChain(request, from);
         }
 
+        @Override
         public ViewMember join(JoinRequest request, Digest from) {
             return CHOAM.this.join(request, from);
         }
 
+        @Override
         public SubmitResult submit(SubmitTransaction request, Digest from) {
             return CHOAM.this.submit(request, from);
         }
 
+        @Override
         public Initial sync(Synchronize request, Digest from) {
             return CHOAM.this.sync(request, from);
         }
@@ -341,6 +348,13 @@ public class CHOAM {
                     .build();
     }
 
+    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
+
+        // Canonical labeling of the view members for Ethereal
+        var ring0 = baseContext.ring(0);
+        return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
+    }
+
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params) {
         var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
@@ -348,8 +362,8 @@ public class CHOAM {
                                  .setNumberOfEpochs(params.ethereal().getNumberOfEpochs());
 
         // Canonical labeling of the view members for Ethereal
-        var ring0 = context.ring(0);
-        var remapped = joins.keySet().stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
+        var remapped = rosterMap(context, joins.keySet());
+
         remapped.keySet().stream().sorted().map(d -> remapped.get(d)).peek(m -> builder.addJoins(joins.get(m)))
                 .forEach(m -> builder.addView(joins.get(m).getMember()));
 
@@ -401,7 +415,7 @@ public class CHOAM {
         view = new NullBlock(params.digestAlgorithm());
         checkpoint = new NullBlock(params.digestAlgorithm());
         comm = params.communications()
-                     .create(params.member(), params.context().getId(), new Concierge(),
+                     .create(params.member(), params.context().getId(), new Trampoline(),
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
                                                      params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
@@ -588,6 +602,7 @@ public class CHOAM {
     interface ReconfigureBlock {
         Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedCertifiedBlock previous);
     }
+
     private ReconfigureBlock reconBlock() {
         return (joining, nextViewId, previous) -> {
             final HashedCertifiedBlock h = previous;
@@ -596,9 +611,7 @@ public class CHOAM {
             return reconfigure(nextViewId, joining, h, params.context(), v, params, c);
         };
     }
-    
-    
-    
+
     private BiFunction<Map<Member, Join>, Digest, Block> reconfigureBlock() {
         return (joining, nextViewId) -> {
             final HashedCertifiedBlock h = head;

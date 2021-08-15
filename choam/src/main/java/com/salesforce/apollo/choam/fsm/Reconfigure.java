@@ -15,10 +15,35 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
  *
  */
 public enum Reconfigure implements Transitions {
-    PROTOCOL_FAILURE {
+    COMPLETED {
+
         @Entry
-        public void terminate() {
-            context().failed();
+        public void completion() {
+            context().complete();
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            // Ignored, as we have already published the reconfiguration block
+            return null;
+        }
+    },
+    CONVENE {
+
+        @Entry
+        public void consolidate() {
+            context().convene();
+        }
+
+        @Override
+        public Transitions nominated() {
+            return NOMINATION;
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().validation(validate);
+            return null;
         }
     },
     GATHER {
@@ -33,36 +58,42 @@ public enum Reconfigure implements Transitions {
             context().gatherAssembly();
         }
     },
-    CONVENE {
-
-        @Entry
-        public void consolidate() {
-            context().convene();
-        }
+    NOMINATION {
 
         @Override
-        public Transitions nominated() {
-            return NOMINATION;
+        public Transitions reconfigured() {
+            return RECONFIGURED;
         }
-    },
-    NOMINATION {
 
         @Override
         public Transitions validate(Validate validate) {
             context().validation(validate);
             return null;
         }
-
-        @Override
-        public Transitions reconfigured() {
-            return RECONFIGURED;
+    },
+    PROTOCOL_FAILURE {
+        @Entry
+        public void terminate() {
+            context().failed();
         }
     },
     RECONFIGURED {
 
-        @Entry
-        public void complete() {
-            context().complete();
+        @Override
+        public Transitions complete() {
+            return COMPLETED;
         }
+
+        @Entry
+        public void validations() {
+            context().continueValidating();
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            // Ignored, as we have already published the reconfiguration block
+            return null;
+        }
+
     };
 }

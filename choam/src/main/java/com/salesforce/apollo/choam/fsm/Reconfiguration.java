@@ -20,6 +20,10 @@ public interface Reconfiguration {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions complete() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions failed() {
             return Reconfigure.PROTOCOL_FAILURE;
         }
@@ -42,6 +46,8 @@ public interface Reconfiguration {
     }
 
     void complete();
+
+    void continueValidating();
 
     void convene();
 

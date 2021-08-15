@@ -86,6 +86,11 @@ public class MemberImpl implements Member {
     }
 
     @Override
+    public PublicKey getPublicKey() {
+        return signingKey;
+    }
+
+    @Override
     public int hashCode() {
         return id.hashCode();
     }

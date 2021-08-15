@@ -68,7 +68,7 @@ public class ReliableBroadcaster {
         void message(Digest context, List<Msg> messages);
     }
 
-    public record Msg(Digest source, ByteString content) {}
+    public record Msg(Digest source, ByteString content, Digest hash) {}
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
                              Executor executor, SigningMember member, RouterMetrics metrics, double falsePositiveRate,
@@ -256,8 +256,8 @@ public class ReliableBroadcaster {
                                 boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), s.msg.getContent());
                                 return verify;
                             }).map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
-//                            .peek(s -> log.error("msg: {} from: {} on: {}", s.hash, s.from, params.member))
-                            .map(s -> new Msg(s.from, s.msg.getContent())).toList());
+                            .map(s -> new Msg(s.from, s.msg.getContent(), s.hash)).filter(m -> delivered(m.hash))
+                            .toList());
             gc();
         }
 
@@ -315,17 +315,30 @@ public class ReliableBroadcaster {
             }
         }
 
+        private boolean delivered(Digest hash) {
+            if (delivered.getIfPresent(hash) != null) {
+            }
+            delivered.put(hash, true);
+            return true;
+        }
+
         private boolean dup(state s) {
             if (s.msg.getAge() > maxAge) {
                 log.trace("Rejecting message too old: {} age: {} > {} on: {}", s.hash, s.msg.getAge(), maxAge,
                           params.member);
                 return false;
             }
-            if (delivered.getIfPresent(s.hash) != null) {
+            var previous = state.get(s.hash);
+            if (previous != null) {
+                int nextAge = Math.max(previous.msg().getAge(), s.msg.getAge());
+                if (nextAge > maxAge) {
+                    state.remove(s.hash);
+                } else if (previous.msg.getAge() != nextAge) {
+                    previous.msg().setAge(nextAge);
+                }
                 log.trace("duplicate event: {} on: {}", s.hash, params.member);
                 return true;
             }
-            delivered.put(s.hash, true);
             return false;
         }
 
@@ -435,7 +448,8 @@ public class ReliableBroadcaster {
         log.debug("publishing message on: {}", params.member);
         AgedMessage m = buffer.send(message, params.member);
         if (notifyLocal) {
-            deliver(Collections.singletonList(new Msg(params.member.getId(), m.getContent())));
+            deliver(Collections.singletonList(new Msg(params.member.getId(), m.getContent(),
+                                                      params.digestAlgorithm.digest(m.getContent()))));
         }
     }
 
