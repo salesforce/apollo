@@ -46,7 +46,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
                          Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
                          SignatureAlgorithm viewSigAlgorithm, Duration synchronizeDuration, int maxViewBlocks,
-                         int maxSyncBlocks, Duration synchronizeTimeout) {
+                         int maxSyncBlocks, Duration synchronizeTimeout, int regenerationCycles,
+                         int synchronizationCycles) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -80,11 +81,13 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    processedBufferSize   = 1000;
         private Consumer<HashedBlock>                  processor             = block -> {
                                                                              };
+        private int                                    regenerationCycles    = 20;
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
         private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
+        private int                                    synchronizationCycles = 10;
         private Duration                               synchronizeDuration   = Duration.ofMillis(500);
         private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
@@ -96,7 +99,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
                                   restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
                                   viewSigAlgorithm, synchronizeDuration, maxViewBlocks, maxSyncBlocks,
-                                  synchronizeTimeout);
+                                  synchronizeTimeout, regenerationCycles, synchronizationCycles);
         }
 
         public int getCheckpointBlockSize() {
@@ -195,6 +198,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return processor;
         }
 
+        public int getRegenerationCycles() {
+            return regenerationCycles;
+        }
+
         public BiConsumer<Long, CheckpointState> getRestorer() {
             return restorer;
         }
@@ -209,6 +216,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getSubmitTimeout() {
             return submitTimeout;
+        }
+
+        public int getSynchronizationCycles() {
+            return synchronizationCycles;
         }
 
         public Duration getSynchronizeDuration() {
@@ -348,6 +359,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
+        public Builder setRegenerationCycles(int regenerationCycles) {
+            this.regenerationCycles = regenerationCycles;
+            return this;
+        }
+
         public Builder setRestorer(BiConsumer<Long, CheckpointState> biConsumer) {
             this.restorer = biConsumer;
             return this;
@@ -365,6 +381,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setSubmitTimeout(Duration submitTimeout) {
             this.submitTimeout = submitTimeout;
+            return this;
+        }
+
+        public Builder setSynchronizationCycles(int synchronizationCycles) {
+            this.synchronizationCycles = synchronizationCycles;
             return this;
         }
 

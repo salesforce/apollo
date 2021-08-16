@@ -12,6 +12,9 @@ import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.security.KeyPair;
 import java.util.Collection;
 import java.util.Collections;
@@ -27,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +41,7 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
@@ -78,6 +83,8 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.SimpleChannel;
+import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * Combine Honnete Ober Advancer Mercantiles.
@@ -95,8 +102,21 @@ public class CHOAM {
 
         @Override
         public void awaitRegeneration() {
-            // TODO Auto-generated method stub
-
+            final HashedCertifiedBlock g = genesis;
+            if (g != null) {
+                return;
+            }
+            HashedCertifiedBlock anchor = pending.poll();
+            if (anchor != null) {
+                log.info("Recovering from anchor: {} on: {}", anchor.hash, params.member());
+                recover(anchor);
+                return;
+            }
+            log.debug("No anchor to recover from on: {}", params.member());
+            roundScheduler.schedule(AWAIT_SYNC, () -> {
+                futureSynchronization = null;
+                awaitRegeneration();
+            }, params.regenerationCycles());
         }
 
         @Override
@@ -111,7 +131,7 @@ public class CHOAM {
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization = null;
                 synchronizationFailed();
-            }, 2);
+            }, params.synchronizationCycles());
         }
 
         @Override
@@ -408,11 +428,8 @@ public class CHOAM {
     private final ReliableBroadcaster                       combine;
     private final CommonCommunications<Terminal, Concierge> comm;
     private volatile Committee                              current;
-    private final Fsm<Combine, Combine.Transitions>         fsm;
-    @SuppressWarnings("unused")
     private volatile CompletableFuture<SynchronizedState>   futureBootstrap;
     private volatile ScheduledFuture<?>                     futureSynchronization;
-    @SuppressWarnings("unused")
     private volatile HashedCertifiedBlock                   genesis;
     private volatile HashedCertifiedBlock                   head;
     private final Channel<List<Msg>>                        linear;
@@ -448,7 +465,7 @@ public class CHOAM {
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
                                                      params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
-        fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
+        var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler(params.context().getRingCount());
@@ -463,7 +480,7 @@ public class CHOAM {
         linear.open();
         linear.consumeEach(msgs -> combine(msgs));
         combine.start(params.gossipDuration(), params.scheduler());
-        fsm.enterStartState();
+        transitions.fsm().enterStartState();
         transitions.start();
     }
 
@@ -539,12 +556,48 @@ public class CHOAM {
     }
 
     private void checkpoint() {
-        // TODO Auto-generated method stub
-
+        CheckpointState checkpointState = checkpoint(head.block.getCheckpoint(), head.height());
+        if (checkpointState == null) {
+            log.error("Cannot checkpoint: {} on: {}", head.hash, params.member());
+            transitions.fail();
+            return;
+        }
+        cachedCheckpoints.put(head.height(), checkpointState);
     }
 
-    private void checkpoint(long height, CheckpointState checkpoint) {
-        cachedCheckpoints.put(height, checkpoint);
+    private CheckpointState checkpoint(Checkpoint body, long height) {
+        Digest stateHash;
+        CheckpointState checkpoint = cachedCheckpoints.get(height);
+        Digest bsh = new Digest(body.getStateHash());
+        if (checkpoint != null) {
+            if (!body.getStateHash().equals(checkpoint.checkpoint.getStateHash())) {
+                log.error("Invalid checkpoint state hash: {} does not equal recorded: {} on: {}",
+                          new Digest(checkpoint.checkpoint.getStateHash()), bsh, params.member());
+                return null;
+            }
+        } else {
+            File state = params.checkpointer().apply(height - 1);
+            if (state == null) {
+                log.error("Invalid checkpoint on: {}", params.member());
+                return null;
+            }
+            try (FileInputStream fis = new FileInputStream(state)) {
+                stateHash = params.digestAlgorithm().digest(fis);
+            } catch (IOException e) {
+                log.error("Invalid checkpoint!", e);
+                return null;
+            }
+            if (!stateHash.equals(bsh)) {
+                log.error("Cannot replicate checkpoint: {} state hash: {} does not equal recorded: {} on: {}", height,
+                          stateHash, bsh, params.member());
+                state.delete();
+                return null;
+            }
+            MVMap<Integer, byte[]> stored = store.putCheckpoint(height, state, body);
+            checkpoint = new CheckpointState(body, stored);
+            state.delete();
+        }
+        return checkpoint;
     }
 
     private void combine() {
@@ -605,18 +658,45 @@ public class CHOAM {
     }
 
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
+        Member member = params.context().getMember(from);
+        if (member == null) {
+            log.warn("Received checkpoint fetch from non member: {} on: {}", from, params.member());
+            return CheckpointSegments.getDefaultInstance();
+        }
+        CheckpointState state = cachedCheckpoints.get(request.getCheckpoint());
+        if (state == null) {
+            log.info("No cached checkpoint for {} on: {}", request.getCheckpoint(), params.member());
+            return CheckpointSegments.getDefaultInstance();
+        }
+        CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
+
+        return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
+                                                              params.maxCheckpointSegments(), Utils.bitStreamEntropy()))
+                          .build();
     }
 
-    private Blocks fetchBlocks(BlockReplication request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
+    private Blocks fetchBlocks(BlockReplication rep, Digest from) {
+        Member member = params.context().getMember(from);
+        if (member == null) {
+            log.warn("Received fetchBlocks from non member: {} on: {}", from, params.member());
+            return Blocks.getDefaultInstance();
+        }
+        BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+        Blocks.Builder blocks = Blocks.newBuilder();
+        store.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+        return blocks.build();
     }
 
-    private Blocks fetchViewChain(BlockReplication request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
+    private Blocks fetchViewChain(BlockReplication rep, Digest from) {
+        Member member = params.context().getMember(from);
+        if (member == null) {
+            log.warn("Received fetchViewChain from non member: {} on: {}", from, params.member());
+            return Blocks.getDefaultInstance();
+        }
+        BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+        Blocks.Builder blocks = Blocks.newBuilder();
+        store.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+        return blocks.build();
     }
 
     private ReconfigureBlock genesisBlock() {
@@ -625,10 +705,7 @@ public class CHOAM {
     }
 
     private boolean isNext(HashedBlock next) {
-        boolean isNext = next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
-//        log.info("Block: {} height: {} prev: {} isNext: {} current: {} height: {} on: {}", next.hash, next.height(),
-//                  new Digest(next.block.getHeader().getPrevious()), isNext, head.hash, head.height(), params.member());
-        return isNext;
+        return next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
     }
 
     private ViewMember join(JoinRequest request, Digest from) {
@@ -649,6 +726,19 @@ public class CHOAM {
                             keyPair);
     }
 
+    private void cancelSynchronization() {
+        final ScheduledFuture<?> fs = futureSynchronization;
+        if (fs != null) {
+            fs.cancel(true);
+            futureSynchronization = null;
+        }
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap;
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap = null;
+        }
+    }
+
     private void process() {
         final HashedBlock h = head;
         switch (h.block.getBodyCase()) {
@@ -659,6 +749,7 @@ public class CHOAM {
             reconfigure(h.block.getReconfigure());
             break;
         case GENESIS:
+            cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
         case EXECUTIONS:
             params.processor().accept(head);
@@ -748,7 +839,7 @@ public class CHOAM {
     }
 
     private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
-        checkpoint(block.height(), checkpoint);
+        cachedCheckpoints.put(block.height(), checkpoint);
         params.restorer().accept(block.height(), checkpoint);
         restore();
         checkpoint();
@@ -761,8 +852,47 @@ public class CHOAM {
     }
 
     private Initial sync(Synchronize request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
+        Member member = params.context().getMember(from);
+        if (member == null) {
+            log.warn("Received sync from non member: {} on: {}", from, params.member());
+            return Initial.getDefaultInstance();
+        }
+        Initial.Builder initial = Initial.newBuilder();
+        final HashedCertifiedBlock g = genesis;
+        if (g != null) {
+            initial.setGenesis(g.certifiedBlock);
+            HashedCertifiedBlock cp = checkpoint;
+            if (cp != null) {
+                long height = request.getHeight();
+
+                while (cp.height() > height) {
+                    cp = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                  store.getCertifiedBlock(cp.block.getHeader().getLastCheckpoint()));
+                }
+                final long lastReconfig = cp.block.getHeader().getLastReconfig();
+                HashedCertifiedBlock lastView = null;
+                if (lastReconfig < 0) {
+                    lastView = cp;
+                } else {
+                    var stored = store.getCertifiedBlock(lastReconfig);
+                    if (stored != null) {
+                        lastView = new HashedCertifiedBlock(params.digestAlgorithm(), stored);
+                    }
+                }
+                if (lastView == null) {
+                    lastView = g;
+                }
+                initial.setCheckpoint(cp.certifiedBlock).setCheckpointView(lastView.certifiedBlock);
+
+                log.debug("Returning sync: {} view: {} chkpt: {} to: {} on: {}", g.hash, lastView.hash, cp.hash, from,
+                          params.member());
+            } else {
+                log.debug("Returning sync: {} to: {} on: {}", g.hash, from, params.member());
+            }
+        } else {
+            log.debug("Returning null sync to: {} on: {}", from, params.member());
+        }
+        return initial.build();
     }
 
     private void synchronize(SynchronizedState state) {

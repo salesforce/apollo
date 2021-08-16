@@ -16,6 +16,11 @@ import com.salesforce.apollo.choam.fsm.Combine.Transitions;
  */
 public enum Merchantile implements Transitions {
     AWAITING_REGENERATION {
+        @Exit
+        public void cancelTimer() {
+            context().cancelTimer(Combine.AWAIT_SYNC);
+        }
+
         @Override
         public Transitions synchronizationFailed() {
             context().awaitRegeneration();
