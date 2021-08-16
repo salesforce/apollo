@@ -142,7 +142,7 @@ public class Producer {
 
         // buffer for coordination messages
         linear = new SimpleChannel<>("Publisher linear for: " + params().member(), 100);
-        linear.consumeEach(coordination -> coordinate(coordination));
+        linear.consumeEach(coordination -> transitions.validate(coordination.getValidate()));
 
         Config.Builder config = params().ethereal().clone();
 
@@ -185,22 +185,6 @@ public class Producer {
         }
         log.trace("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params().member());
         coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build());
-    }
-
-    /**
-     * Dispatch the coordination message through the FSM
-     */
-    private void coordinate(Coordinate coord) {
-        switch (coord.getMsgCase()) {
-        case PUBLISH:
-            transitions.publish(coord.getPublish());
-            break;
-        case VALIDATE:
-            transitions.validate(coord.getValidate());
-            break;
-        default:
-            break;
-        }
     }
 
     /**
@@ -251,10 +235,9 @@ public class Producer {
     private ByteString getData() {
         Executions.Builder builder = Executions.newBuilder();
         int bytesRemaining = params().maxBatchByteSize();
-        int txnsRemaining = params().maxBatchSize();
-        while (txnsRemaining > 0 && transactions.peek() != null
-        && bytesRemaining >= transactions.peek().getSerializedSize()) {
-            txnsRemaining--;
+        int batchSize = 0;
+        while (bytesRemaining >= transactions.peek().getSerializedSize()) {
+            batchSize++;
             Transaction next = transactions.poll();
             bytesRemaining -= next.getSerializedSize();
             builder.addExecutions(ExecutedTransaction.newBuilder().setTransation(next));
@@ -266,10 +249,9 @@ public class Producer {
                                                         .build();
             builder.addExecutions(et);
             bytesRemaining -= et.getSerializedSize();
-            txnsRemaining--;
+            batchSize++;
         }
         int byteSize = params().maxBatchByteSize() - bytesRemaining;
-        int batchSize = params().maxBatchSize() - txnsRemaining;
         if (metrics() != null) {
             metrics().publishedBatch(batchSize, byteSize);
         }

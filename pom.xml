@@ -9,10 +9,6 @@
 	<name>Apollo: Umbrella App</name>
 
 	<modules>
-		<!-- <module>apollo</module> <module>apollo-web</module> <module>func-testing</module> 
-			<module>model</module> <module>simple-ca</module> <module>bootstrap-service</module> 
-			<module>bootstrap-client</module> <module>slush</module> -->
-
 		<module>avalanche</module>
 		<module>fireflies</module>
 		<module>protocols</module>
@@ -41,8 +37,8 @@
 		<protobuf.version>3.15.5</protobuf.version>
 		<liquibase.version>4.3.1</liquibase.version>
 		<graalvm.version>20.3.0</graalvm.version>
+		<resilience4jVersion>1.7.1</resilience4jVersion>
 
-		<graalvm.version>20.1.0</graalvm.version>
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
 		<maven.compiler.source>16</maven.compiler.source>
@@ -126,44 +122,6 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>apollo</artifactId>
-				<version>${project.version}</version>
-				<classifier>tests</classifier>
-				<type>test-jar</type>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>simple-ca</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>bootstrap-service</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>bootstrap-client</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>apollo-web</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>apollo-web</artifactId>
-				<classifier>phat</classifier>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>test-population</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -195,11 +153,6 @@
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>utils</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>miracl</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 
@@ -294,6 +247,37 @@
 				<groupId>org.liquibase</groupId>
 				<artifactId>liquibase-core</artifactId>
 				<version>${liquibase.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-circuitbreaker</artifactId>
+				<version>${resilience4jVersion}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-ratelimiter</artifactId>
+				<version>${resilience4jVersion}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-retry</artifactId>
+				<version>${resilience4jVersion}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-bulkhead</artifactId>
+				<version>${resilience4jVersion}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-cache</artifactId>
+				<version>${resilience4jVersion}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.resilience4j</groupId>
+				<artifactId>resilience4j-timelimiter</artifactId>
+				<version>${resilience4jVersion}</version>
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->

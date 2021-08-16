@@ -38,11 +38,11 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
  */
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
                          ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
-                         Duration gossipDuration, int maxBatchSize, int maxBatchByteSize, int maxCheckpointSegments,
+                         Duration gossipDuration, int maxBatchByteSize, int maxCheckpointSegments,
                          Duration submitTimeout, int processedBufferSize, List<ExecutedTransaction> genesisData,
                          Digest genesisViewId, int maxCheckpointBlocks, Consumer<HashedBlock> processor,
-                         Function<Long, File> checkpointer, int deltaCheckpointBlocks, File storeFile,
-                         int checkpointBlockSize, Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
+                         Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
+                         Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
                          Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
                          SignatureAlgorithm viewSigAlgorithm, Duration synchronizeDuration, int maxViewBlocks,
@@ -62,7 +62,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Router                                 communications;
         private Context<Member>                        context;
         private ReliableBroadcaster.Parameters.Builder coordination          = ReliableBroadcaster.Parameters.newBuilder();
-        private int                                    deltaCheckpointBlocks = 500;
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
         private Config.Builder                         ethereal              = Config.deterministic();
@@ -71,7 +70,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
         private int                                    lifetime              = 100;
         private int                                    maxBatchByteSize      = 4 * 1024;
-        private int                                    maxBatchSize          = 10;
         private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
         private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
         private int                                    maxSyncBlocks         = 100;
@@ -94,12 +92,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters build() {
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
-                                  maxBatchSize, maxBatchByteSize, maxCheckpointSegments, submitTimeout,
-                                  processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, processor,
-                                  checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
-                                  restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
-                                  viewSigAlgorithm, synchronizeDuration, maxViewBlocks, maxSyncBlocks,
-                                  synchronizeTimeout, regenerationCycles, synchronizationCycles);
+                                  maxBatchByteSize, maxCheckpointSegments, submitTimeout, processedBufferSize,
+                                  genesisData, genesisViewId, maxCheckpointBlocks, processor, checkpointer, storeFile,
+                                  checkpointBlockSize, dispatcher, restorer, digestAlgorithm, coordination, ethereal,
+                                  lifetime, metrics, viewSigAlgorithm, synchronizeDuration, maxViewBlocks,
+                                  maxSyncBlocks, synchronizeTimeout, regenerationCycles, synchronizationCycles);
         }
 
         public int getCheckpointBlockSize() {
@@ -124,10 +121,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public ReliableBroadcaster.Parameters.Builder getCoordination() {
             return coordination;
-        }
-
-        public int getDeltaCheckpointBlocks() {
-            return deltaCheckpointBlocks;
         }
 
         public DigestAlgorithm getDigestAlgorithm() {
@@ -160,10 +153,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public int getMaxBatchByteSize() {
             return maxBatchByteSize;
-        }
-
-        public int getMaxBatchSize() {
-            return maxBatchSize;
         }
 
         public int getMaxCheckpointBlocks() {
@@ -269,11 +258,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setDeltaCheckpointBlocks(int deltaCheckpointBlocks) {
-            this.deltaCheckpointBlocks = deltaCheckpointBlocks;
-            return this;
-        }
-
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
             return this;
@@ -311,11 +295,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setMaxBatchByteSize(int maxBatchByteSize) {
             this.maxBatchByteSize = maxBatchByteSize;
-            return this;
-        }
-
-        public Builder setMaxBatchSize(int maxBatchSize) {
-            this.maxBatchSize = maxBatchSize;
             return this;
         }
 

@@ -15,10 +15,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>ethereal</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>memberships</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>memberships</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>tron</artifactId>
@@ -37,11 +37,6 @@
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.salesforce.apollo</groupId>
-			<artifactId>test-population</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

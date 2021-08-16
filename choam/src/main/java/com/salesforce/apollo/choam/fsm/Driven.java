@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.salesfoce.apollo.choam.proto.Publish;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
@@ -49,10 +48,6 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions publish(Publish publish) {
-            return null;
-        }
-
         default Transitions publishedBlock() {
             throw fsm().invalidTransitionOn();
         }
@@ -72,5 +67,5 @@ public interface Driven {
 
     void startProduction();
 
-    void valdateBlock(Validate validate); 
+    void valdateBlock(Validate validate);
 }
