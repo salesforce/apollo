@@ -19,7 +19,6 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.choam.Terminal;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;

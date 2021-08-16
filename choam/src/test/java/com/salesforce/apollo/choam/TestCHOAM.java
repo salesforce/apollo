@@ -49,13 +49,13 @@ public class TestCHOAM {
 
     @AfterEach
     public void after() {
-        if (choams != null) {
-            choams.values().forEach(e -> e.stop());
-            choams = null;
-        }
         if (routers != null) {
             routers.values().forEach(e -> e.close());
             routers = null;
+        }
+        if (choams != null) {
+            choams.values().forEach(e -> e.stop());
+            choams = null;
         }
         members = null;
     }
@@ -91,13 +91,13 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception {
+    public void regenerateGenesis() throws Exception { 
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                     .filter(s -> s >= 88 + (30 * 3)).count() == choams.size());
         assertEquals(choams.size(),
                      blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88 + (30 * 3)).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+                     "Failed: " + blocks.get(members.get(0).getId()).size()); 
     }
 }

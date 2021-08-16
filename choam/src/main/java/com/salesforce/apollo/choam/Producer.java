@@ -29,6 +29,7 @@ import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.ReconfigureBlock;
+import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 import com.salesforce.apollo.choam.fsm.Earner;

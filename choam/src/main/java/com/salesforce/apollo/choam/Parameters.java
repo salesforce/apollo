@@ -45,7 +45,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          int checkpointBlockSize, Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
                          Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
-                         SignatureAlgorithm viewSigAlgorithm) {
+                         SignatureAlgorithm viewSigAlgorithm, Duration synchronizeDuration, int maxViewBlocks,
+                         int maxSyncBlocks) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -72,6 +73,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    maxBatchSize          = 10;
         private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
         private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
+        private int                                    maxSyncBlocks         = 100;
+        private int                                    maxViewBlocks         = 100;
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
         private int                                    processedBufferSize   = 1000;
@@ -82,6 +85,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
+        private Duration                               synchronizeDuration   = Duration.ofMillis(500);
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
@@ -90,7 +94,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, processor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
                                   restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
-                                  viewSigAlgorithm);
+                                  viewSigAlgorithm, synchronizeDuration, maxViewBlocks, maxSyncBlocks);
         }
 
         public int getCheckpointBlockSize() {
@@ -165,6 +169,14 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return maxCheckpointSegments;
         }
 
+        public int getMaxSyncBlocks() {
+            return maxSyncBlocks;
+        }
+
+        public int getMaxViewBlocks() {
+            return maxViewBlocks;
+        }
+
         public SigningMember getMember() {
             return member;
         }
@@ -195,6 +207,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getSubmitTimeout() {
             return submitTimeout;
+        }
+
+        public Duration getSynchronizeDuration() {
+            return synchronizeDuration;
         }
 
         public Duration getTransactonTimeout() {
@@ -296,6 +312,16 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
+        public Builder setMaxSyncBlocks(int maxSyncBlocks) {
+            this.maxSyncBlocks = maxSyncBlocks;
+            return this;
+        }
+
+        public Builder setMaxViewBlocks(int maxViewBlocks) {
+            this.maxViewBlocks = maxViewBlocks;
+            return this;
+        }
+
         public Parameters.Builder setMember(SigningMember member) {
             this.member = member;
             return this;
@@ -336,6 +362,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
+        public Builder setSynchronizeDuration(Duration synchronizeDuration) {
+            this.synchronizeDuration = synchronizeDuration;
+            return this;
+        }
+
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
             return this;
@@ -345,7 +376,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             this.viewSigAlgorithm = viewSigAlgorithm;
             return this;
         }
-
     }
 
     public static final int DEFAULT_MAX_BLOCKS = 200;
