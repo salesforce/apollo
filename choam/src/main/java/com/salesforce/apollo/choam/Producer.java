@@ -59,7 +59,7 @@ public class Producer {
 
     /** Leaf action driver coupling for the Producer FSM */
     private class DriveIn implements Driven {
-        private ViewReconfiguration reconfigure;
+        private volatile ViewReconfiguration reconfigure;
 
         @Override
         public void complete() {
@@ -95,6 +95,14 @@ public class Producer {
             maybePublish(hash, p);
         }
 
+        private void stop() {
+            final ViewReconfiguration current = reconfigure;
+            if (current == null) {
+                return;
+            }
+            current.complete();
+        }
+
     }
 
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
@@ -128,7 +136,6 @@ public class Producer {
         this.coordinator = coordinator;
         this.coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
 
-        // FSM driving this Earner
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName(params().member().getId().toString());
         transitions = fsm.getTransitions();
@@ -161,9 +168,11 @@ public class Producer {
         controller.stop();
         linear.close();
         coordinator.stop();
+        ((DriveIn) transitions.context()).stop();
     }
 
     public void start() {
+        log.info("Starting production for: {} on: {}", getViewId(), params().member());
         transitions.start();
     }
 
