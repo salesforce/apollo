@@ -8,14 +8,21 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.choam.Committee.validatorsOf;
 import static com.salesforce.apollo.choam.support.HashedBlock.buildHeader;
+import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
+import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
 import java.security.KeyPair;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -35,6 +42,7 @@ import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Genesis;
+import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
@@ -50,6 +58,9 @@ import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.fsm.Combine;
 import com.salesforce.apollo.choam.fsm.Merchantile;
+import com.salesforce.apollo.choam.support.Bootstrapper;
+import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
+import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
@@ -90,7 +101,17 @@ public class CHOAM {
 
         @Override
         public void awaitSynchronization() {
-            roundScheduler.schedule(AWAIT_SYNC, () -> synchronizationFailed(), 2);
+            HashedCertifiedBlock anchor = pending.poll();
+            if (anchor != null) {
+                log.info("Recovering from anchor: {} on: {}", anchor.hash, params.member());
+                recover(anchor);
+                return;
+            }
+            log.debug("No anchor to recover from on: {}", params.member());
+            roundScheduler.schedule(AWAIT_SYNC, () -> {
+                futureSynchronization = null;
+                synchronizationFailed();
+            }, 2);
         }
 
         @Override
@@ -149,12 +170,10 @@ public class CHOAM {
 
     /** a member of the current committee */
     class Associate extends Administration {
-        private final Producer             producer;
-        private final HashedCertifiedBlock viewChange;
+        private final Producer producer;
 
-        Associate(HashedCertifiedBlock block, Map<Member, Verifier> validators, nextView nextView) {
+        Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
             super(validators);
-            this.viewChange = block;
             var v = new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
                                                              : viewChange.block.getReconfigure().getId());
             var context = Committee.viewFor(v, params.context());
@@ -175,14 +194,14 @@ public class CHOAM {
         public void complete() {
             producer.complete();
         }
-
-        @Override
-        public HashedBlock getViewChange() {
-            return viewChange;
-        }
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {}
+
+    @FunctionalInterface
+    interface ReconfigureBlock {
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
+    }
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
@@ -240,17 +259,10 @@ public class CHOAM {
 
     /** a client of the current committee */
     private class Client extends Administration {
-        protected final HashedBlock viewChange;
 
-        public Client(HashedBlock viewChange, Map<Member, Verifier> validators) {
+        public Client(Map<Member, Verifier> validators) {
             super(validators);
-            this.viewChange = viewChange;
 
-        }
-
-        @Override
-        public HashedBlock getViewChange() {
-            return viewChange;
         }
     }
 
@@ -283,12 +295,6 @@ public class CHOAM {
             if (reconfigure != null) {
                 reconfigure.complete();
             }
-        }
-
-        @Override
-        public HashedBlock getViewChange() {
-            assert genesis != null;
-            return genesis;
         }
 
         @Override
@@ -334,6 +340,22 @@ public class CHOAM {
         }
     }
 
+    /** a synchronizer of the current committee */
+    private class Synchronizer extends Administration {
+        public Synchronizer(Map<Member, Verifier> validators) {
+            super(validators);
+
+        }
+    }
+
+    /** a no op committee during synchronization */
+    @SuppressWarnings("unused")
+    private class Synchronizing extends Administration {
+        public Synchronizing() {
+            super(Collections.emptyMap());
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
@@ -346,13 +368,6 @@ public class CHOAM {
                                            lastViewChange.hash))
                     .setGenesis(Genesis.newBuilder().setInitialView(reconfigure).addAllInitialize(initialization))
                     .build();
-    }
-
-    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
-
-        // Canonical labeling of the view members for Ethereal
-        var ring0 = baseContext.ring(0);
-        return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
@@ -381,22 +396,36 @@ public class CHOAM {
                     .setReconfigure(reconfigure).build();
     }
 
+    public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
+
+        // Canonical labeling of the view members for Ethereal
+        var ring0 = baseContext.ring(0);
+        return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
+    }
+
+    private final Map<Long, CheckpointState>                cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile HashedCertifiedBlock                   checkpoint;
     private final ReliableBroadcaster                       combine;
     private final CommonCommunications<Terminal, Concierge> comm;
     private volatile Committee                              current;
     private final Fsm<Combine, Combine.Transitions>         fsm;
+    @SuppressWarnings("unused")
+    private volatile CompletableFuture<SynchronizedState>   futureBootstrap;
+    private volatile ScheduledFuture<?>                     futureSynchronization;
+    @SuppressWarnings("unused")
     private volatile HashedCertifiedBlock                   genesis;
     private volatile HashedCertifiedBlock                   head;
     private final Channel<List<Msg>>                        linear;
     private volatile nextView                               next;
     private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending = new PriorityQueue<>();
+    private final PriorityQueue<HashedCertifiedBlock>       pending           = new PriorityQueue<>();
     private final RoundScheduler                            roundScheduler;
-    private final AtomicBoolean                             started = new AtomicBoolean();
+    private final AtomicBoolean                             started           = new AtomicBoolean();
     private final Store                                     store;
+    private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
     private final Combine.Transitions                       transitions;
-    private HashedCertifiedBlock                            view;
+
+    private volatile HashedCertifiedBlock view;
 
     public CHOAM(Parameters params, MVStore store) {
         this(params, new Store(params.digestAlgorithm(), store));
@@ -445,6 +474,58 @@ public class CHOAM {
         linear.close();
     }
 
+    void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {
+        if (!started.get()) {
+            log.info("Not started on: {}", params.member());
+            return;
+        }
+        HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), certifiedBlock);
+        Block block = hcb.block;
+        log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
+                  params.member());
+        final HashedCertifiedBlock previousBlock = head;
+        Header header = block.getHeader();
+        if (previousBlock != null) {
+            Digest prev = digest(header.getPrevious());
+            long prevHeight = previousBlock.height();
+            if (hcb.height() <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
+                          hcb.height(), prevHeight, params.member());
+                return;
+            }
+            if (hcb.height() != prevHeight + 1) {
+                pending.add(hcb);
+                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                          params.member(), hcb.hash, previousBlock.height() + 1, header.getHeight());
+                return;
+            }
+            if (!previousBlock.hash.equals(prev)) {
+                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
+                          params.member(), previousBlock.hash, prev, prevHeight, hcb.height());
+                return;
+            }
+            if (!current.validate(hcb)) {
+                log.error("Protocol violation on {}. New block is not validated {}", params.member(), hcb.hash);
+                return;
+            }
+        } else {
+            if (!block.hasGenesis()) {
+                pending.add(hcb);
+                log.info("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                         params.member(), hcb.hash, 0, header.getHeight());
+                return;
+            }
+            if (!current.validateRegeneration(hcb)) {
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", params.member(), hcb.hash);
+                return;
+            }
+        }
+        pending.add(hcb);
+        if (combine) {
+            combine();
+        }
+    }
+
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
@@ -453,9 +534,17 @@ public class CHOAM {
         c.accept(next);
     }
 
+    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
+        return new Bootstrapper(anchor, params, store, comm);
+    }
+
     private void checkpoint() {
         // TODO Auto-generated method stub
 
+    }
+
+    private void checkpoint(long height, CheckpointState checkpoint) {
+        cachedCheckpoints.put(height, checkpoint);
     }
 
     private void combine() {
@@ -593,14 +682,9 @@ public class CHOAM {
         if (validators.containsKey(params.member())) {
             current = new Associate(h, validators, currentView);
         } else {
-            current = new Client(h, validators);
+            current = new Client(validators);
         }
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
-    }
-
-    @FunctionalInterface
-    interface ReconfigureBlock {
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
     }
 
     private ReconfigureBlock reconfigureBlock() {
@@ -609,6 +693,65 @@ public class CHOAM {
             final HashedCertifiedBlock c = checkpoint;
             return reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
         };
+    }
+
+    private void recover(HashedCertifiedBlock anchor) {
+        if (futureSynchronization != null) {
+            futureSynchronization.cancel(true);
+            futureSynchronization = null;
+        }
+        futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
+            if (t == null) {
+                try {
+                    synchronize(s);
+                } catch (Throwable e) {
+                    log.error("Cannot synchronize on: {}", params.member(), e);
+                    transitions.fail();
+                }
+            } else {
+                log.error("Synchronization failed on: {}", params.member(), t);
+                transitions.fail();
+            }
+        }).exceptionally(t -> {
+            log.error("Synchronization failed on: {}", params.member(), t);
+            transitions.fail();
+            return null;
+        }).orTimeout(params.synchronizeTimeout().toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void restore() throws IllegalStateException {
+        HashedCertifiedBlock lastBlock = store.getLastBlock();
+        if (lastBlock == null) {
+            log.info("No state to restore from on: {}", params.member().getId());
+            return;
+        }
+        genesis = new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0));
+        head = lastBlock;
+        Header header = lastBlock.block.getHeader();
+        HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                                 store.getCertifiedBlock(header.getLastReconfig()));
+        Reconfigure reconfigure = lastView.block.getReconfigure();
+        view = lastView;
+        var validators = validatorsOf(reconfigure, params.context());
+        current = new Synchronizer(validators);
+        log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
+        CertifiedBlock lastCheckpoint = store.getCertifiedBlock(header.getLastCheckpoint());
+        if (lastCheckpoint != null) {
+            checkpoint = new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint);
+        }
+
+        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}",
+                 new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0)).hash, lastView.hash,
+                 lastCheckpoint == null ? "<missing>"
+                                        : new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint).hash,
+                 lastBlock.hash, params.member().getId());
+    }
+
+    private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
+        checkpoint(block.height(), checkpoint);
+        params.restorer().accept(block.height(), checkpoint);
+        restore();
+        checkpoint();
     }
 
     /** Submit a transaction from a client */
@@ -620,5 +763,28 @@ public class CHOAM {
     private Initial sync(Synchronize request, Digest from) {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    private void synchronize(SynchronizedState state) {
+        synchronizing.set(true);
+        transitions.synchronizing();
+        CertifiedBlock current1;
+        if (state.lastCheckpoint == null) {
+            log.info("Synchronizing from genesis: {} on: {}", state.genesis.hash, params.member());
+            current1 = state.genesis.certifiedBlock;
+        } else {
+            log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint.hash, params.member());
+            restoreFrom(state.lastCheckpoint, state.checkpoint);
+            current1 = store.getCertifiedBlock(state.lastCheckpoint.height() + 1);
+        }
+        while (current1 != null) {
+            synchronizedProcess(current1, false);
+            current1 = store.getCertifiedBlock(height(current1.getBlock()) + 1);
+        }
+        synchronizing.set(false);
+        log.info("Synchronized, resuming view on: {}",
+                 state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, params.member());
+        log.info("Processing deferred blocks: {} on: {}", pending.size(), params.member());
+        combine();
     }
 }

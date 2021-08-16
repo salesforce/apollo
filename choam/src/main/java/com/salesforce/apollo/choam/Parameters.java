@@ -46,7 +46,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
                          Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
                          SignatureAlgorithm viewSigAlgorithm, Duration synchronizeDuration, int maxViewBlocks,
-                         int maxSyncBlocks) {
+                         int maxSyncBlocks, Duration synchronizeTimeout) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -86,6 +86,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
         private Duration                               synchronizeDuration   = Duration.ofMillis(500);
+        private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
@@ -94,7 +95,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   processedBufferSize, genesisData, genesisViewId, maxCheckpointBlocks, processor,
                                   checkpointer, deltaCheckpointBlocks, storeFile, checkpointBlockSize, dispatcher,
                                   restorer, digestAlgorithm, coordination, ethereal, lifetime, metrics,
-                                  viewSigAlgorithm, synchronizeDuration, maxViewBlocks, maxSyncBlocks);
+                                  viewSigAlgorithm, synchronizeDuration, maxViewBlocks, maxSyncBlocks,
+                                  synchronizeTimeout);
         }
 
         public int getCheckpointBlockSize() {
@@ -211,6 +213,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getSynchronizeDuration() {
             return synchronizeDuration;
+        }
+
+        public Duration getSynchronizeTimeout() {
+            return synchronizeTimeout;
         }
 
         public Duration getTransactonTimeout() {
@@ -364,6 +370,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setSynchronizeDuration(Duration synchronizeDuration) {
             this.synchronizeDuration = synchronizeDuration;
+            return this;
+        }
+
+        public Builder setSynchronizeTimeout(Duration synchronizeTimeout) {
+            this.synchronizeTimeout = synchronizeTimeout;
             return this;
         }
 

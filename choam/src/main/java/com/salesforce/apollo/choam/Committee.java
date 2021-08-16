@@ -23,7 +23,6 @@ import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -88,8 +87,6 @@ public interface Committee {
     void accept(HashedCertifiedBlock next);
 
     void complete();
-
-    HashedBlock getViewChange();
 
     boolean isMember();
 
