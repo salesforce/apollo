@@ -236,7 +236,7 @@ public class Producer {
         Executions.Builder builder = Executions.newBuilder();
         int bytesRemaining = params().maxBatchByteSize();
         int batchSize = 0;
-        while (bytesRemaining >= transactions.peek().getSerializedSize()) {
+        while (transactions.peek() != null && bytesRemaining >= transactions.peek().getSerializedSize()) {
             batchSize++;
             Transaction next = transactions.poll();
             bytesRemaining -= next.getSerializedSize();
@@ -300,7 +300,7 @@ public class Producer {
         } catch (InvalidProtocolBufferException e) {
             log.debug("Error deserializing from: {} on: {}", msg.source(), params().member());
             if (metrics() != null) {
-                metrics().coordDeserEx();
+                metrics().coordDeserialError();
             }
             return;
         }

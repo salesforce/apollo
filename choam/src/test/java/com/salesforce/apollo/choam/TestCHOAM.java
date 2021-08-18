@@ -91,13 +91,13 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception { 
+    public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
+        final int expected = 88 + (30 * 3);
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                    .filter(s -> s >= 88 + (30 * 3)).count() == choams.size());
-        assertEquals(choams.size(),
-                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= 88 + (30 * 3)).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size()); 
+                                                    .filter(s -> s >= expected).count() == choams.size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).size());
     }
 }

@@ -44,10 +44,9 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
                          Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
-                         Config.Builder ethereal, int lifetime, ChoamMetrics metrics,
-                         SignatureAlgorithm viewSigAlgorithm, Duration synchronizeDuration, int maxViewBlocks,
-                         int maxSyncBlocks, Duration synchronizeTimeout, int regenerationCycles,
-                         int synchronizationCycles) {
+                         Config.Builder ethereal, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
+                         int maxViewBlocks, int maxSyncBlocks, int synchronizationCycles, int maxPendingBytes,
+                         Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -68,10 +67,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private List<ExecutedTransaction>              genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
-        private int                                    lifetime              = 100;
-        private int                                    maxBatchByteSize      = 4 * 1024;
+        private int                                    maxBatchByteSize      = 256 * 1024;
         private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
         private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
+        private int                                    maxPendingBytes       = 1024 * 512;
         private int                                    maxSyncBlocks         = 100;
         private int                                    maxViewBlocks         = 100;
         private SigningMember                          member;
@@ -95,8 +94,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   maxBatchByteSize, maxCheckpointSegments, submitTimeout, processedBufferSize,
                                   genesisData, genesisViewId, maxCheckpointBlocks, processor, checkpointer, storeFile,
                                   checkpointBlockSize, dispatcher, restorer, digestAlgorithm, coordination, ethereal,
-                                  lifetime, metrics, viewSigAlgorithm, synchronizeDuration, maxViewBlocks,
-                                  maxSyncBlocks, synchronizeTimeout, regenerationCycles, synchronizationCycles);
+                                  metrics, viewSigAlgorithm, maxViewBlocks, maxSyncBlocks, synchronizationCycles,
+                                  maxPendingBytes, synchronizeDuration, regenerationCycles, synchronizeTimeout);
         }
 
         public int getCheckpointBlockSize() {
@@ -147,10 +146,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return gossipDuration;
         }
 
-        public int getLifetime() {
-            return lifetime;
-        }
-
         public int getMaxBatchByteSize() {
             return maxBatchByteSize;
         }
@@ -161,6 +156,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public int getMaxCheckpointSegments() {
             return maxCheckpointSegments;
+        }
+
+        public int getMaxPendingBytes() {
+            return maxPendingBytes;
         }
 
         public int getMaxSyncBlocks() {
@@ -288,11 +287,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setLifetime(int lifetime) {
-            this.lifetime = lifetime;
-            return this;
-        }
-
         public Builder setMaxBatchByteSize(int maxBatchByteSize) {
             this.maxBatchByteSize = maxBatchByteSize;
             return this;
@@ -305,6 +299,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setMaxCheckpointSegments(int maxCheckpointSegments) {
             this.maxCheckpointSegments = maxCheckpointSegments;
+            return this;
+        }
+
+        public Builder setMaxPendingBytes(int maxPendingBytes) {
+            this.maxPendingBytes = maxPendingBytes;
             return this;
         }
 

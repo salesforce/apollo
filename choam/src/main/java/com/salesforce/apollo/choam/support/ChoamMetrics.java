@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -29,8 +30,16 @@ public interface ChoamMetrics extends RouterMetrics {
 
     void invalidSourcePid();
 
-    void coordDeserEx();
+    void coordDeserialError();
 
     void incTotalMessages();
+
+    Timer sessionLatency();
+
+    void transactionTimeout();
+
+    void transactionComplete();
+
+    void missingCompletedTransaction();
 
 }

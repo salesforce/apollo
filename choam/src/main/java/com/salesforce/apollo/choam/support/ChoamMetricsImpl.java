@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -29,7 +30,7 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
     }
 
     @Override
-    public void coordDeserEx() {
+    public void coordDeserialError() {
         // TODO Auto-generated method stub
 
     }
@@ -59,6 +60,12 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
     }
 
     @Override
+    public void missingCompletedTransaction() {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
     public void preBlockProduced(PreBlock preblock) {
         // TODO Auto-generated method stub
 
@@ -66,6 +73,24 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
 
     @Override
     public void publishedBatch(int batchSize, int byteSize) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public Timer sessionLatency() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public void transactionComplete() {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void transactionTimeout() {
         // TODO Auto-generated method stub
 
     }

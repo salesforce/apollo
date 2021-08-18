@@ -393,7 +393,7 @@ public class ViewReconfiguration implements Reconfiguration {
         } catch (InvalidProtocolBufferException e) {
             log.debug("Error deserializing from: {} on: {}", msg.source(), params().member());
             if (params().metrics() != null) {
-                params().metrics().coordDeserEx();
+                params().metrics().coordDeserialError();
             }
             return;
         }

@@ -166,8 +166,8 @@ public class Creator {
     /**
      * produces a piece of data to be included in a unit on a given level. For
      * regular units the provided DataSource is used. For finishing units it's
-     * either nil or, if available, an encoded threshold signature share of hash and
-     * id of the last timing unit (obtained from preblockMaker on lastTiming
+     * either null or, if available, an encoded threshold signature share of hash
+     * and id of the last timing unit (obtained from preblockMaker on lastTiming
      * channel)
      **/
     private ByteString getData(int level, Queue<Unit> lastTiming) {
