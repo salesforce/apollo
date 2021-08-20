@@ -34,12 +34,10 @@ public interface ChoamMetrics extends RouterMetrics {
 
     void incTotalMessages();
 
-    Timer sessionLatency();
+    Timer transactionLatency();
 
     void transactionTimeout();
 
-    void transactionComplete();
-
-    void missingCompletedTransaction();
+    void transactionComplete(Throwable t);
 
 }

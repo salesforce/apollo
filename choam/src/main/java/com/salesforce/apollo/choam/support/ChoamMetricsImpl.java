@@ -57,13 +57,7 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
     public void invalidUnit() {
         // TODO Auto-generated method stub
 
-    }
-
-    @Override
-    public void missingCompletedTransaction() {
-        // TODO Auto-generated method stub
-
-    }
+    } 
 
     @Override
     public void preBlockProduced(PreBlock preblock) {
@@ -75,16 +69,10 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
     public void publishedBatch(int batchSize, int byteSize) {
         // TODO Auto-generated method stub
 
-    }
+    } 
 
     @Override
-    public Timer sessionLatency() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public void transactionComplete() {
+    public void transactionComplete(Throwable t) {
         // TODO Auto-generated method stub
 
     }
@@ -94,5 +82,11 @@ public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics 
         // TODO Auto-generated method stub
 
     }
+
+    @Override
+    public Timer transactionLatency() {
+        // TODO Auto-generated method stub
+        return null;
+    } 
 
 }

@@ -6,110 +6,194 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import static java.util.concurrent.CompletableFuture.supplyAsync;
+
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
+import com.google.common.base.Function;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.decorators.Decorators;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Session {
+    public static class Builder {
+        private BulkheadConfig           bulkhead        = BulkheadConfig.ofDefaults();
+        private CircuitBreakerConfig     circuitBreaker  = CircuitBreakerConfig.ofDefaults();
+        private DigestAlgorithm          digestAlgorithm = DigestAlgorithm.DEFAULT;
+        private String                   label           = "Unlabeled";
+        private ChoamMetrics             metrics;
+        private RateLimiterConfig        rateLimiter     = RateLimiterConfig.ofDefaults();
+        private RetryConfig              retry           = RetryConfig.ofDefaults();
+        private ScheduledExecutorService scheduler;
 
-    private final Logger log = LoggerFactory.getLogger(Session.class);
+        public Session build(Parameters params, Function<SubmittedTransaction, Boolean> client) {
+            return new Session(Bulkhead.of(label, bulkhead), CircuitBreaker.of(label, circuitBreaker),
+                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, client);
+        }
 
-    private final Parameters                          parameters;
-    private final BlockingDeque<SubmittedTransaction> pending           = new LinkedBlockingDeque<>();
-    private final AtomicInteger                       pendingByteSize   = new AtomicInteger();
-    private final Map<Digest, SubmittedTransaction>   submitted         = new ConcurrentHashMap<>();
-    private final AtomicInteger                       submittedByteSize = new AtomicInteger(); 
+        public BulkheadConfig getBulkhead() {
+            return bulkhead;
+        }
 
-    public Session(Parameters parameters) {
-        this.parameters = parameters;
+        public CircuitBreakerConfig getCircuitBreaker() {
+            return circuitBreaker;
+        }
+
+        public DigestAlgorithm getDigestAlgorithm() {
+            return digestAlgorithm;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public ChoamMetrics getMetrics() {
+            return metrics;
+        }
+
+        public RateLimiterConfig getRateLimiter() {
+            return rateLimiter;
+        }
+
+        public ScheduledExecutorService getScheduler() {
+            return scheduler;
+        }
+
+        public Builder setBulkhead(BulkheadConfig bulkhead) {
+            this.bulkhead = bulkhead;
+            return this;
+        }
+
+        public Builder setCircuitBreaker(CircuitBreakerConfig circuitBreaker) {
+            this.circuitBreaker = circuitBreaker;
+            return this;
+        }
+
+        public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
+            this.digestAlgorithm = digestAlgorithm;
+            return this;
+        }
+
+        public Builder setLabel(String label) {
+            this.label = label;
+            return this;
+        }
+
+        public Builder setMetrics(ChoamMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder setRateLimiter(RateLimiterConfig rateLimiter) {
+            this.rateLimiter = rateLimiter;
+            return this;
+        }
+
+        public Builder setScheduler(ScheduledExecutorService scheduler) {
+            this.scheduler = scheduler;
+            return this;
+        }
+    }
+
+    public static Builder newBuilder() {
+        return new Builder();
+    }
+
+    private final Bulkhead                                bulkhead;
+    private final CircuitBreaker                          circuitBreaker;
+    private final Function<SubmittedTransaction, Boolean> client;
+    private final Parameters                              params;
+    private final RateLimiter                             rateLimiter;
+    private final Retry                                   retry;
+
+    private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
+
+    private Session(Bulkhead bulkhead, CircuitBreaker circutBreaker, RateLimiter rateLimiter, Retry retry,
+                    Parameters params, Function<SubmittedTransaction, Boolean> server) {
+        this.bulkhead = bulkhead;
+        this.circuitBreaker = circutBreaker;
+        this.rateLimiter = rateLimiter;
+        this.params = params;
+        this.client = server;
+        this.retry = retry;
     }
 
     /**
-     * Offer a transaction to be submitted by the Session.
-     * 
-     * @param onSubmit     - accepted when the transaction is submitted
-     * @param onCompletion - accepted when the transaction is completed
-     * @param transaction  - the Transaction to submit
-     * @param timeout      - the duration of the timeout allowed, if null the
-     *                     default timeout is applied
-     * @return Digest of the submitted transaction, or null if the session cannot
-     *         accept the transaction due to rate limiting
+     * Cancel all pending transactions
      */
-    public <T> Digest offer(BiConsumer<Digest, Throwable> onSubmit, BiConsumer<T, Throwable> onCompletion,
-                            Transaction transaction, Duration timeout) {
-        return offer(onSubmit, false, onCompletion, transaction, timeout);
+    public void cancelAll() {
+        submitted.values().forEach(stx -> stx.onCompletion()
+                                             .completeExceptionally(new TransationFailed("Transaction cancelled")));
     }
 
     /**
-     * Complete the transaction indicated by the supplied hash.
+     * Submit a transaction.
      * 
-     * @return the SubmittedTransaction corresponding to the hash, null if not found
+     * @param transaction - the Transaction to submit
+     * @param timeout     - non null timeout of the transaction
+     * @return onCompletion - the future result of the submitted transaction
      */
-    public SubmittedTransaction complete(Digest hash) {
-        final SubmittedTransaction txn = submitted.remove(hash);
-        if (txn == null) {
-            return null;
+    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout) {
+        var hash = params.digestAlgorithm().digest(transaction.toByteString());
+        var result = new CompletableFuture<T>();
+        if (timeout == null) {
+            timeout = params.submitTimeout();
         }
-        if (txn.latency() != null) {
-            txn.latency().close();
-            parameters.metrics().transactionComplete();
-        }
-        return txn;
+        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+        var futureTimeout = params.scheduler()
+                                  .schedule(() -> result.completeExceptionally(new TimeoutException("Transaction timeout")),
+                                            timeout.toMillis(), TimeUnit.MILLISECONDS);
+        var stxn = new SubmittedTransaction(hash, transaction, result);
+        submit(stxn);
+        return result.whenComplete((r, t) -> {
+            futureTimeout.cancel(true);
+            complete(hash, timer, t);
+        });
     }
 
-    private Digest offer(BiConsumer<Digest, Throwable> onSubmit, boolean join, BiConsumer<?, Throwable> onCompletion,
-                         Transaction transaction, Duration timeout) {
-        final Digest hash = parameters.digestAlgorithm().digest(transaction.toByteString());
-        var duration = timeout == null ? parameters.submitTimeout() : timeout;
-        Future<?> futureTimeout = parameters.scheduler().schedule(() -> timeout(hash), duration.toMillis(),
-                                                                  TimeUnit.MILLISECONDS);
-        Timer.Context latency = parameters.metrics() == null ? null : parameters.metrics().sessionLatency().time();
-        SubmittedTransaction s = new SubmittedTransaction(hash, onCompletion, transaction, futureTimeout, latency);
-        pending.add(s);
-        pendingByteSize.addAndGet(transaction.getSerializedSize());
-        return s.hash();
+    public int submitted() {
+        return submitted.size();
     }
 
-    private void timeout(Digest hash) {
-        SubmittedTransaction txn = submitted.remove(hash);
-        if (txn == null) {
-            txn = pending.stream().filter(s -> hash.equals(s.hash())).findFirst().orElse(null);
-            if (txn == null) {
-                return;
+    private void complete(Digest hash, final Timer.Context timer, Throwable t) {
+        submitted.remove(hash);
+        if (timer != null) {
+            timer.close();
+            if (t != null) {
+                params.metrics().transactionComplete(t);
             }
-            pending.remove(txn);
-            pendingByteSize.addAndGet(-txn.submitted().getSerializedSize());
-            log.trace("Timed out pending txn: {} totalling: {} bytes  on: {}", hash,
-                      txn.submitted().getSerializedSize(), parameters.member());
-        } else {
-            submittedByteSize.addAndGet(-txn.submitted().getSerializedSize());
-            log.trace("Timed out submitted txn: {} totalling: {} bytes  on: {}", hash,
-                      txn.submitted().getSerializedSize(), parameters.member());
         }
-        txn.cancel();
-        if (txn.latency() != null) {
-            txn.latency().close();
-            parameters.metrics().transactionTimeout();
-        }
-        txn.onCompletion().accept(null, new TimeoutException("Timeout of transaction: " + hash));
+    }
+
+    private void submit(SubmittedTransaction stx) {
+        submitted.put(stx.hash(), stx);
+        Decorators.ofCompletionStage(() -> supplyAsync(() -> client.apply(stx), params.dispatcher()))
+                  .withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker).withRateLimiter(rateLimiter)
+                  .withRetry(retry, params.scheduler()).get().exceptionally(t -> {
+                      stx.onCompletion().completeExceptionally(t);
+                      return false;
+                  });
     }
 }

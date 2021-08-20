@@ -6,10 +6,8 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.util.concurrent.Future;
-import java.util.function.BiConsumer;
+import java.util.concurrent.CompletableFuture;
 
-import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -18,11 +16,5 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 
-public record SubmittedTransaction(Digest hash, BiConsumer<?, Throwable> onCompletion, Transaction submitted,
-                                   Future<?> timeout, Timer.Context latency) {
-    public void cancel() {
-        if (timeout != null) {
-            timeout.cancel(true);
-        }
-    }
-}
+@SuppressWarnings("rawtypes")
+public record SubmittedTransaction(Digest hash, Transaction transaction, CompletableFuture onCompletion) {}
