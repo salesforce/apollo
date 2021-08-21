@@ -95,6 +95,13 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  *
  */
 public class CHOAM {
+    public interface TransactionExecutor {
+        void execute(ExecutedTransaction tx, CompletableFuture<?> onComplete);
+
+        default void beginBlock(long height, Digest hash) {
+        }
+    }
+
     @FunctionalInterface
     public interface BlockProducer {
         Block produce(Long height, Digest prev, Executions executions);
@@ -632,7 +639,7 @@ public class CHOAM {
             Digest hash = params.digestAlgorithm().digest(exec.getTransation().toByteString());
             var stxn = session.complete(hash);
             try {
-                params.processor().accept(exec, stxn == null ? null : stxn.onCompletion());
+                params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.debug("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
                           head.height(), params.member());

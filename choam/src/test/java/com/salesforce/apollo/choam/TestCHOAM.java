@@ -25,7 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
-import com.salesforce.apollo.choam.support.TransactionExecutor;
+import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -91,7 +91,7 @@ public class TestCHOAM {
                 }
 
                 @Override
-                public void accept(ExecutedTransaction t, CompletableFuture<?> f) {
+                public void execute(ExecutedTransaction t, CompletableFuture<?> f) {
                     transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
                 }
             };

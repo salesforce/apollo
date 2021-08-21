@@ -18,9 +18,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
-import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
