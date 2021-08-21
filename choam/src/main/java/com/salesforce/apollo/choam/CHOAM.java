@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
+import com.google.common.base.Function;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
@@ -70,6 +71,7 @@ import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
 import com.salesforce.apollo.choam.support.Store;
+import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -206,7 +208,7 @@ public class CHOAM {
                                     new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
                                                                   .setContext(context).build(),
                                                             params.communications()),
-                                    comm, params, head, reconfigureBlock());
+                                    comm, head, reconfigureBlock());
             producer.start();
         }
 
@@ -437,6 +439,7 @@ public class CHOAM {
     private final Parameters                                params;
     private final PriorityQueue<HashedCertifiedBlock>       pending           = new PriorityQueue<>();
     private final RoundScheduler                            roundScheduler;
+    private final Session                                   session;
     private final AtomicBoolean                             started           = new AtomicBoolean();
     private final Store                                     store;
     private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
@@ -471,6 +474,11 @@ public class CHOAM {
         roundScheduler = new RoundScheduler(params.context().getRingCount());
         combine.register(i -> roundScheduler.tick(i));
         current = new Formation();
+        session = params.session().build(params, service());
+    }
+
+    public Session getSession() {
+        return session;
     }
 
     public void start() {
@@ -491,58 +499,6 @@ public class CHOAM {
         linear.close();
     }
 
-    void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {
-        if (!started.get()) {
-            log.info("Not started on: {}", params.member());
-            return;
-        }
-        HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), certifiedBlock);
-        Block block = hcb.block;
-        log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
-                  params.member());
-        final HashedCertifiedBlock previousBlock = head;
-        Header header = block.getHeader();
-        if (previousBlock != null) {
-            Digest prev = digest(header.getPrevious());
-            long prevHeight = previousBlock.height();
-            if (hcb.height() <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
-                          hcb.height(), prevHeight, params.member());
-                return;
-            }
-            if (hcb.height() != prevHeight + 1) {
-                pending.add(hcb);
-                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                          params.member(), hcb.hash, previousBlock.height() + 1, header.getHeight());
-                return;
-            }
-            if (!previousBlock.hash.equals(prev)) {
-                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
-                          params.member(), previousBlock.hash, prev, prevHeight, hcb.height());
-                return;
-            }
-            if (!current.validate(hcb)) {
-                log.error("Protocol violation on {}. New block is not validated {}", params.member(), hcb.hash);
-                return;
-            }
-        } else {
-            if (!block.hasGenesis()) {
-                pending.add(hcb);
-                log.info("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                         params.member(), hcb.hash, 0, header.getHeight());
-                return;
-            }
-            if (!current.validateRegeneration(hcb)) {
-                log.error("Protocol violation on: {}. Genesis block is not validated {}", params.member(), hcb.hash);
-                return;
-            }
-        }
-        pending.add(hcb);
-        if (combine) {
-            combine();
-        }
-    }
-
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
@@ -553,6 +509,19 @@ public class CHOAM {
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
         return new Bootstrapper(anchor, params, store, comm);
+    }
+
+    private void cancelSynchronization() {
+        final ScheduledFuture<?> fs = futureSynchronization;
+        if (fs != null) {
+            fs.cancel(true);
+            futureSynchronization = null;
+        }
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap;
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap = null;
+        }
     }
 
     private void checkpoint() {
@@ -657,6 +626,20 @@ public class CHOAM {
                                                   .setExecutions(executions).build();
     }
 
+    private void execute(List<ExecutedTransaction> executions) {
+        params.processor().beginBlock(head.height(), head.hash);
+        executions.forEach(exec -> {
+            Digest hash = params.digestAlgorithm().digest(exec.getTransation().toByteString());
+            var stxn = session.complete(hash);
+            try {
+                params.processor().accept(exec, stxn == null ? null : stxn.onCompletion());
+            } catch (Throwable t) {
+                log.debug("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
+                          head.height(), params.member());
+            }
+        });
+    }
+
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
         Member member = params.context().getMember(from);
         if (member == null) {
@@ -726,19 +709,6 @@ public class CHOAM {
                             keyPair);
     }
 
-    private void cancelSynchronization() {
-        final ScheduledFuture<?> fs = futureSynchronization;
-        if (fs != null) {
-            fs.cancel(true);
-            futureSynchronization = null;
-        }
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap;
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap = null;
-        }
-    }
-
     private void process() {
         final HashedBlock h = head;
         switch (h.block.getBodyCase()) {
@@ -751,8 +721,9 @@ public class CHOAM {
         case GENESIS:
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
+            execute(head.block.getGenesis().getInitializeList());
         case EXECUTIONS:
-            params.processor().accept(head);
+            execute(head.block.getExecutions().getExecutionsList());
             break;
         default:
             break;
@@ -845,6 +816,13 @@ public class CHOAM {
         checkpoint();
     }
 
+    private Function<SubmittedTransaction, Boolean> service() {
+        return stx -> {
+//            transitions.submitTxn();
+            return true;
+        };
+    }
+
     /** Submit a transaction from a client */
     private SubmitResult submit(SubmitTransaction request, Digest from) {
         // TODO Auto-generated method stub
@@ -916,5 +894,57 @@ public class CHOAM {
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, params.member());
         log.info("Processing deferred blocks: {} on: {}", pending.size(), params.member());
         combine();
+    }
+
+    private void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {
+        if (!started.get()) {
+            log.info("Not started on: {}", params.member());
+            return;
+        }
+        HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), certifiedBlock);
+        Block block = hcb.block;
+        log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
+                  params.member());
+        final HashedCertifiedBlock previousBlock = head;
+        Header header = block.getHeader();
+        if (previousBlock != null) {
+            Digest prev = digest(header.getPrevious());
+            long prevHeight = previousBlock.height();
+            if (hcb.height() <= prevHeight) {
+                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
+                          hcb.height(), prevHeight, params.member());
+                return;
+            }
+            if (hcb.height() != prevHeight + 1) {
+                pending.add(hcb);
+                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                          params.member(), hcb.hash, previousBlock.height() + 1, header.getHeight());
+                return;
+            }
+            if (!previousBlock.hash.equals(prev)) {
+                log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",
+                          params.member(), previousBlock.hash, prev, prevHeight, hcb.height());
+                return;
+            }
+            if (!current.validate(hcb)) {
+                log.error("Protocol violation on {}. New block is not validated {}", params.member(), hcb.hash);
+                return;
+            }
+        } else {
+            if (!block.hasGenesis()) {
+                pending.add(hcb);
+                log.info("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                         params.member(), hcb.hash, 0, header.getHeight());
+                return;
+            }
+            if (!current.validateRegeneration(hcb)) {
+                log.error("Protocol violation on: {}. Genesis block is not validated {}", params.member(), hcb.hash);
+                return;
+            }
+        }
+        pending.add(hcb);
+        if (combine) {
+            combine();
+        }
     }
 }

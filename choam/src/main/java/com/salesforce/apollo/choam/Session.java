@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.choam.support;
+package com.salesforce.apollo.choam;
 
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
@@ -19,7 +19,9 @@ import java.util.concurrent.TimeoutException;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.SubmittedTransaction;
+import com.salesforce.apollo.choam.support.TransationFailed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
@@ -48,9 +50,9 @@ public class Session {
         private RetryConfig              retry           = RetryConfig.ofDefaults();
         private ScheduledExecutorService scheduler;
 
-        public Session build(Parameters params, Function<SubmittedTransaction, Boolean> client) {
+        public Session build(Parameters params, Function<SubmittedTransaction, Boolean> service) {
             return new Session(Bulkhead.of(label, bulkhead), CircuitBreaker.of(label, circuitBreaker),
-                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, client);
+                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, service);
         }
 
         public BulkheadConfig getBulkhead() {
@@ -123,20 +125,19 @@ public class Session {
 
     private final Bulkhead                                bulkhead;
     private final CircuitBreaker                          circuitBreaker;
-    private final Function<SubmittedTransaction, Boolean> client;
     private final Parameters                              params;
     private final RateLimiter                             rateLimiter;
     private final Retry                                   retry;
-
-    private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
+    private final Function<SubmittedTransaction, Boolean> service;
+    private final Map<Digest, SubmittedTransaction>       submitted = new ConcurrentHashMap<>();
 
     private Session(Bulkhead bulkhead, CircuitBreaker circutBreaker, RateLimiter rateLimiter, Retry retry,
-                    Parameters params, Function<SubmittedTransaction, Boolean> server) {
+                    Parameters params, Function<SubmittedTransaction, Boolean> service) {
         this.bulkhead = bulkhead;
         this.circuitBreaker = circutBreaker;
         this.rateLimiter = rateLimiter;
         this.params = params;
-        this.client = server;
+        this.service = service;
         this.retry = retry;
     }
 
@@ -177,6 +178,10 @@ public class Session {
         return submitted.size();
     }
 
+    SubmittedTransaction complete(Digest hash) {
+        return submitted.remove(hash);
+    }
+
     private void complete(Digest hash, final Timer.Context timer, Throwable t) {
         submitted.remove(hash);
         if (timer != null) {
@@ -189,7 +194,7 @@ public class Session {
 
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
-        Decorators.ofCompletionStage(() -> supplyAsync(() -> client.apply(stx), params.dispatcher()))
+        Decorators.ofCompletionStage(() -> supplyAsync(() -> service.apply(stx), params.dispatcher()))
                   .withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker).withRateLimiter(rateLimiter)
                   .withRetry(retry, params.scheduler()).get().exceptionally(t -> {
                       stx.onCompletion().completeExceptionally(t);

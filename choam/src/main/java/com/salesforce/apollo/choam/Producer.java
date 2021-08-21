@@ -11,22 +11,17 @@ import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
-import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Executions;
-import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.ReconfigureBlock;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -36,6 +31,7 @@ import com.salesforce.apollo.choam.fsm.Earner;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
@@ -110,23 +106,25 @@ public class Producer {
     private final CommonCommunications<Terminal, ?>   comms;
     private final Controller                          controller;
     private final ReliableBroadcaster                 coordinator;
+    private final DataSource                          ds;
     private final Ethereal                            ethereal;
     private final SimpleChannel<Coordinate>           linear;
     private final Map<Digest, CertifiedBlock.Builder> pending       = new ConcurrentHashMap<>();
     private final AtomicReference<HashedBlock>        previousBlock = new AtomicReference<>();
     private final Set<Digest>                         published     = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final ReconfigureBlock                    reconfigureBlock;
-    private final BlockingDeque<Transaction>          transactions  = new LinkedBlockingDeque<>();
     private final Transitions                         transitions;
     private final ViewContext                         view;
 
     public Producer(ViewContext view, ReliableBroadcaster coordinator, CommonCommunications<Terminal, ?> comms,
-                    Parameters p, HashedBlock lastBlock, ReconfigureBlock reconfigureBlock) {
-        assert view != null && comms != null && p != null;
+                    HashedBlock lastBlock, ReconfigureBlock reconfigureBlock) {
+        assert view != null && comms != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.reconfigureBlock = reconfigureBlock;
         this.comms = comms;
+        ds = new TxDataSource(view.params(),
+                              view.params().maxBatchByteSize() * view.params().ethereal().getEpochLength());
 
         // Ethereal consensus
         ethereal = new Ethereal();
@@ -156,7 +154,7 @@ public class Producer {
         }
 
         // Our handle on consensus
-        controller = ethereal.deterministic(config.build(), dataSource(), (preblock, last) -> create(preblock, last),
+        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                             preUnit -> broadcast(preUnit));
         assert controller != null : "Controller is null";
 
@@ -215,49 +213,6 @@ public class Producer {
             transitions.drain();
         }
         maybePublish(next.hash, cb);
-    }
-
-    /**
-     * DataSource that feeds Ethereal consensus
-     */
-    private DataSource dataSource() {
-        return new DataSource() {
-            @Override
-            public ByteString getData() {
-                return Producer.this.getData();
-            }
-        };
-    }
-
-    /**
-     * The data to be used for a the next Unit produced by this Producer
-     */
-    private ByteString getData() {
-        Executions.Builder builder = Executions.newBuilder();
-        int bytesRemaining = params().maxBatchByteSize();
-        int batchSize = 0;
-        while (transactions.peek() != null && bytesRemaining >= transactions.peek().getSerializedSize()) {
-            batchSize++;
-            Transaction next = transactions.poll();
-            bytesRemaining -= next.getSerializedSize();
-            builder.addExecutions(ExecutedTransaction.newBuilder().setTransation(next));
-        }
-        if (builder.getExecutionsCount() == 0) {
-            ExecutedTransaction et = ExecutedTransaction.newBuilder()
-                                                        .setTransation(Transaction.newBuilder()
-                                                                                  .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me")))
-                                                        .build();
-            builder.addExecutions(et);
-            bytesRemaining -= et.getSerializedSize();
-            batchSize++;
-        }
-        int byteSize = params().maxBatchByteSize() - bytesRemaining;
-        if (metrics() != null) {
-            metrics().publishedBatch(batchSize, byteSize);
-        }
-        log.trace("Produced: {} txns totalling: {} bytes pid: {} on: {}", batchSize, byteSize,
-                  view.roster().get(params().member().getId()), params().member());
-        return builder.build().toByteString();
     }
 
     private Digest getViewId() {

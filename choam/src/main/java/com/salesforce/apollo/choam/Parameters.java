@@ -15,13 +15,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
-import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -40,13 +39,14 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxBatchByteSize, int maxCheckpointSegments,
                          Duration submitTimeout, int processedBufferSize, List<ExecutedTransaction> genesisData,
-                         Digest genesisViewId, int maxCheckpointBlocks, Consumer<HashedBlock> processor,
+                         Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor processor,
                          Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
                          Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
                          Config.Builder ethereal, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
                          int maxViewBlocks, int maxSyncBlocks, int synchronizationCycles, int maxPending,
-                         Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout) {
+                         Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
+                         Session.Builder session) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -76,12 +76,13 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
         private int                                    processedBufferSize   = 1000;
-        private Consumer<HashedBlock>                  processor             = block -> {
+        private TransactionExecutor                    processor             = (t, f) -> {
                                                                              };
         private int                                    regenerationCycles    = 20;
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
         private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
+        private Session.Builder                        session               = Session.newBuilder();
         private File                                   storeFile;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
         private int                                    synchronizationCycles = 10;
@@ -95,7 +96,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   genesisData, genesisViewId, maxCheckpointBlocks, processor, checkpointer, storeFile,
                                   checkpointBlockSize, dispatcher, restorer, digestAlgorithm, coordination, ethereal,
                                   metrics, viewSigAlgorithm, maxViewBlocks, maxSyncBlocks, synchronizationCycles,
-                                  maxPending, synchronizeDuration, regenerationCycles, synchronizeTimeout);
+                                  maxPending, synchronizeDuration, regenerationCycles, synchronizeTimeout, session);
         }
 
         public int getCheckpointBlockSize() {
@@ -182,7 +183,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return processedBufferSize;
         }
 
-        public Consumer<HashedBlock> getProcessor() {
+        public TransactionExecutor getProcessor() {
             return processor;
         }
 
@@ -196,6 +197,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public ScheduledExecutorService getScheduler() {
             return scheduler;
+        }
+
+        public Session.Builder getSession() {
+            return session;
         }
 
         public File getStoreFile() {
@@ -332,7 +337,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setProcessor(Consumer<HashedBlock> processor) {
+        public Builder setProcessor(TransactionExecutor processor) {
             this.processor = processor;
             return this;
         }
@@ -349,6 +354,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setScheduler(ScheduledExecutorService scheduler) {
             this.scheduler = scheduler;
+            return this;
+        }
+
+        public Builder setSession(Session.Builder session) {
+            this.session = session;
             return this;
         }
 

@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -23,7 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.choam.support.HashedBlock;
+import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesforce.apollo.choam.support.TransactionExecutor;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -42,10 +44,11 @@ import com.salesforce.apollo.utils.Utils;
 public class TestCHOAM {
     private static final int CARDINALITY = 51;
 
-    private Map<Digest, CHOAM>             choams;
-    private List<SigningMember>            members;
-    private Map<Digest, Router>            routers;
-    private Map<Digest, List<HashedBlock>> blocks;
+    private Map<Digest, CHOAM>                     choams;
+    private List<SigningMember>                    members;
+    private Map<Digest, Router>                    routers;
+    private Map<Digest, List<ExecutedTransaction>> transactions;
+    private Map<Digest, List<Digest>>              blocks;
 
     @AfterEach
     public void after() {
@@ -62,14 +65,14 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
+        transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, CARDINALITY);
         Parameters.Builder params = Parameters.newBuilder().setContext(context)
                                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
                                               .setGossipDuration(Duration.ofMillis(20))
                                               .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
-//        params.getCoordination().setBufferSize(1500);
-//        params.getCombineParams().setBufferSize(1500);
+
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
@@ -79,15 +82,23 @@ public class TestCHOAM {
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setMetrics(params.getMetrics()),
                                                                         ForkJoinPool.commonPool())));
-        choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(),
-                                                  m -> new CHOAM(params.setMember(m)
-                                                                       .setCommunications(routers.get(m.getId()))
-                                                                       .setProcessor(b -> blocks.computeIfAbsent(m.getId(),
-                                                                                                                 d -> new CopyOnWriteArrayList<>())
-                                                                                                .add(b))
-                                                                       .build(),
-                                                                 MVStore.open(null))));
+        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            final TransactionExecutor processor = new TransactionExecutor() {
+
+                @Override
+                public void beginBlock(long height, Digest hash) {
+                    blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
+                }
+
+                @Override
+                public void accept(ExecutedTransaction t, CompletableFuture<?> f) {
+                    transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
+                }
+            };
+            return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
+                                   .build(),
+                             MVStore.open(null));
+        }));
     }
 
     @Test

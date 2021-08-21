@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
-import com.google.protobuf.Any;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -16,12 +16,8 @@ import com.salesforce.apollo.crypto.Digest;
  * @author hal.hildebrand
  *
  */
-public interface TransactionExecutor {
+@FunctionalInterface
+public interface TransactionExecutor extends BiConsumer<ExecutedTransaction, CompletableFuture<?>> {
     default void beginBlock(long height, Digest hash) {
-    }
-
-    void execute(Digest blockHash, ExecutedTransaction txn, BiConsumer<? super Object, Throwable> completion);
-
-    default void processGenesis(Any genesisData) {
     }
 }
