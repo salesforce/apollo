@@ -24,6 +24,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
@@ -54,8 +56,10 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Concierge;
@@ -70,6 +74,7 @@ import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
+import com.salesforce.apollo.choam.support.ServiceUnavailable;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -79,6 +84,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
@@ -95,13 +101,6 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  *
  */
 public class CHOAM {
-    public interface TransactionExecutor {
-        void execute(ExecutedTransaction tx, CompletableFuture<?> onComplete);
-
-        default void beginBlock(long height, Digest hash) {
-        }
-    }
-
     @FunctionalInterface
     public interface BlockProducer {
         Block produce(Long height, Digest prev, Executions executions);
@@ -197,15 +196,23 @@ public class CHOAM {
 
     }
 
+    public interface TransactionExecutor {
+        default void beginBlock(long height, Digest hash) {
+        }
+
+        @SuppressWarnings("rawtypes")
+        void execute(ExecutedTransaction tx, CompletableFuture onComplete);
+    }
+
     /** a member of the current committee */
     class Associate extends Administration {
         private final Producer producer;
 
         Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
-            super(validators);
-            var v = new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
-                                                             : viewChange.block.getReconfigure().getId());
-            var context = Committee.viewFor(v, params.context());
+            super(validators,
+                  new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
+                                                           : viewChange.block.getReconfigure().getId()));
+            var context = Committee.viewFor(viewId, params.context());
             context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
             validators.keySet().forEach(m -> context.activate(m));
             Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
@@ -223,6 +230,12 @@ public class CHOAM {
         public void complete() {
             producer.complete();
         }
+
+        @Override
+        public SubmitResult submit(SubmitTransaction request) {
+            CHOAM.log.trace("Submit txn on: {}", params().member());
+            return producer.submit(request.getTransaction());
+        }
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {}
@@ -234,10 +247,15 @@ public class CHOAM {
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
+        private GroupIterator servers;
+        protected Digest      viewId;
+
         private final Map<Member, Verifier> validators;
 
-        public Administration(Map<Member, Verifier> validator) {
-            this.validators = validator;
+        public Administration(Map<Member, Verifier> validators, Digest viewId) {
+            this.validators = validators;
+            this.viewId = viewId;
+            servers = new GroupIterator(validators.keySet());
         }
 
         @Override
@@ -281,6 +299,58 @@ public class CHOAM {
         }
 
         @Override
+        public void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
+            Member target = servers.next();
+            ListenableFuture<SubmitResult> response;
+            try (var link = comm.apply(target, params.member())) {
+                if (link == null) {
+                    CHOAM.log.trace("No link for: {} for submitting txn on: {}", target.getId(), params.member());
+                    result.completeExceptionally(new ServiceUnavailable());
+                    return;
+                }
+                CHOAM.log.trace("Submitting txn to: {} in: {} on: {}", target.getId(), viewId, params.member());
+                response = link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
+                                                        .setTransaction(transaction).build());
+            } catch (Throwable e) {
+                CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId, params.member(),
+                                e);
+                result.completeExceptionally(e);
+                return;
+            }
+            response.addListener(() -> {
+                SubmitResult resulting;
+                try {
+                    resulting = response.get();
+                } catch (InterruptedException e) {
+                    CHOAM.log.debug("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
+                                    params.member(), e);
+                    result.completeExceptionally(e.getCause());
+                    return;
+                } catch (ExecutionException e) {
+                    CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
+                                    params.member(), e.getCause());
+                    result.completeExceptionally(e.getCause());
+                    return;
+                }
+                if (!resulting.isInitialized()) {
+                    CHOAM.log.trace("Null response submitting txn to: {} in: {} on: {}", target.getId(), viewId,
+                                    params.member());
+                    result.completeExceptionally(new ServiceUnavailable());
+                    return;
+                }
+                if (resulting.getOutcome() != Outcome.SUCCESS) {
+                    CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
+                                    params.member());
+                    result.completeExceptionally(new ServiceUnavailable());
+                } else {
+                    CHOAM.log.debug("Success submitting txn to: {} in: {} on: {}", target.getId(), viewId,
+                                    params.member());
+                    result.complete(true);
+                }
+            }, params.dispatcher());
+        }
+
+        @Override
         public boolean validate(HashedCertifiedBlock hb) {
             return validate(hb, validators);
         }
@@ -289,9 +359,8 @@ public class CHOAM {
     /** a client of the current committee */
     private class Client extends Administration {
 
-        public Client(Map<Member, Verifier> validators) {
-            super(validators);
-
+        public Client(Map<Member, Verifier> validators, Digest viewId) {
+            super(validators, viewId);
         }
     }
 
@@ -372,7 +441,7 @@ public class CHOAM {
     /** a synchronizer of the current committee */
     private class Synchronizer extends Administration {
         public Synchronizer(Map<Member, Verifier> validators) {
-            super(validators);
+            super(validators, null);
 
         }
     }
@@ -381,7 +450,7 @@ public class CHOAM {
     @SuppressWarnings("unused")
     private class Synchronizing extends Administration {
         public Synchronizing() {
-            super(Collections.emptyMap());
+            super(Collections.emptyMap(), null);
         }
     }
 
@@ -486,6 +555,15 @@ public class CHOAM {
 
     public Session getSession() {
         return session;
+    }
+
+    public Digest getViewId() {
+        final var viewChange = view;
+        if (viewChange == null) {
+            return null;
+        }
+        return new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
+                                                        : viewChange.block.getReconfigure().getId());
     }
 
     public void start() {
@@ -593,8 +671,8 @@ public class CHOAM {
                     }
                     accept(nextBlock);
                 } else {
-                    log.info("Unable to validate block: {} height: {} on: {}", next.hash, next.height(),
-                             params.member());
+                    log.debug("Unable to validate block: {} height: {} on: {}", next.hash, next.height(),
+                              params.member());
                     pending.poll();
                 }
             } else {
@@ -634,14 +712,17 @@ public class CHOAM {
     }
 
     private void execute(List<ExecutedTransaction> executions) {
+        log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(), params.member());
         params.processor().beginBlock(head.height(), head.hash);
         executions.forEach(exec -> {
             Digest hash = params.digestAlgorithm().digest(exec.getTransation().toByteString());
             var stxn = session.complete(hash);
+            log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash, head.height(),
+                      stxn == null ? "null" : "present", params.member());
             try {
                 params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
-                log.debug("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
+                log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
                           head.height(), params.member());
             }
         });
@@ -748,10 +829,11 @@ public class CHOAM {
         var currentView = next;
         nextView();
         final HashedCertifiedBlock h = head;
+        view = h;
         if (validators.containsKey(params.member())) {
             current = new Associate(h, validators, currentView);
         } else {
-            current = new Client(validators);
+            current = new Client(validators, getViewId());
         }
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
     }
@@ -825,15 +907,34 @@ public class CHOAM {
 
     private Function<SubmittedTransaction, Boolean> service() {
         return stx -> {
-//            transitions.submitTxn();
-            return true;
+            log.trace("Submitting transaction: {} on: {}", stx.hash(), params.member());
+            final var c = current;
+            if (c == null) {
+                throw new ServiceUnavailable();
+            }
+            CompletableFuture<Boolean> result = new CompletableFuture<>();
+            c.submitTxn(stx.transaction(), result);
+            try {
+                return result.get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new ServiceUnavailable(e);
+            }
         };
     }
 
     /** Submit a transaction from a client */
     private SubmitResult submit(SubmitTransaction request, Digest from) {
-        // TODO Auto-generated method stub
-        return null;
+        if (params.context().getMember(from) == null) {
+            log.debug("Invalid transaction submission from non member: {} on: {}", from, params.member());
+            return SubmitResult.newBuilder().setOutcome(Outcome.NOT_A_MEMBER).build();
+        }
+        final var c = current;
+        if (c == null) {
+            log.debug("No committee to submit txn from: {} on: {}", from, params.member());
+            return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
+        }
+        log.trace("Submiting txn from: {} on: {}", from, params.member());
+        return c.submit(request);
     }
 
     private Initial sync(Synchronize request, Digest from) {

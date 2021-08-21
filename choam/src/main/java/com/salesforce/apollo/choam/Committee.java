@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -22,8 +23,13 @@ import com.google.common.collect.Sets;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
+import com.salesfoce.apollo.choam.proto.SubmitTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
+import com.salesforce.apollo.choam.support.ServiceUnavailable;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -96,6 +102,15 @@ public interface Committee {
 
     default void regenerate() {
         throw new IllegalStateException("Should not be called on this implementation");
+    }
+
+    default SubmitResult submit(SubmitTransaction request) {
+        log.info("Cannot submit txn inactive committee on: {}", params().member());
+        return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
+    }
+
+    default void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
+        result.completeExceptionally(new ServiceUnavailable());
     }
 
     default boolean validate(byte[] headerHash, Certification c, Map<Member, Verifier> validators) {

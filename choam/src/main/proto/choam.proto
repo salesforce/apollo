@@ -36,6 +36,15 @@ message SubmitTransaction {
 }
 
 message SubmitResult {
+    enum Outcome {
+        INVALID_ENUM = 0;
+        NOT_A_MEMBER = 1;
+        SUCCESS = 2;
+        FAILURE = 3; 
+        INACTIVE_COMMITTEE = 4;
+    }
+    
+    Outcome outcome = 1;
 }
 
 message Block {

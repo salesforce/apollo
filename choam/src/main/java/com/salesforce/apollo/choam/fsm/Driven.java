@@ -6,10 +6,15 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.FsmExecutor;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
@@ -56,6 +61,12 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
+            log.trace("Failure to submit txn, inactive committee member");
+            result.complete(SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build());
+            return null;
+        }
+
         default Transitions validate(Validate validate) {
             return null;
         }
@@ -66,6 +77,8 @@ public interface Driven {
     void epochEnd();
 
     void startProduction();
+
+    void submit(Transaction transaction, CompletableFuture<SubmitResult> result);
 
     void valdateBlock(Validate validate);
 }

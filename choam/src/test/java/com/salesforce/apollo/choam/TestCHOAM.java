@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Duration;
 import java.util.List;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -90,9 +93,13 @@ public class TestCHOAM {
                     blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
                 }
 
+                @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(ExecutedTransaction t, CompletableFuture<?> f) {
+                public void execute(ExecutedTransaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
+                    if (f != null) {
+                        f.complete(new Object());
+                    }
                 }
             };
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
@@ -110,5 +117,40 @@ public class TestCHOAM {
                                                     .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
+    }
+
+    @Test
+    public void submitTxn() throws Exception {
+        routers.values().forEach(r -> r.start());
+        choams.values().forEach(ch -> ch.start());
+        final int expected = 88;
+        var session = choams.get(members.get(0).getId()).getSession();
+        Transaction tx = Transaction.newBuilder()
+                                    .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                    .build();
+
+        Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                    .filter(s -> s >= expected).count() == choams.size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        CompletableFuture<?> result = session.submit(tx, null);
+        while (true) {
+            final var r = result;
+            Utils.waitForCondition(1_000, () -> r.isDone());
+            if (result.isDone()) {
+                if (result.isCompletedExceptionally()) {
+                    result.exceptionally(t -> {
+                        System.out.println("Failed with: " + t.toString());
+                        return null;
+                    });
+                    result = session.submit(tx, null);
+                } else {
+                    System.out.println("Success!!!!");
+                    var completion = result.get();
+                    assertNotNull(completion);
+                    break;
+                }
+            }
+        }
     }
 }

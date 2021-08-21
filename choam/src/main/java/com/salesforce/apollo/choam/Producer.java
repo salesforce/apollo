@@ -11,7 +11,9 @@ import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -22,6 +24,9 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Executions;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.ReconfigureBlock;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -35,7 +40,6 @@ import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -99,6 +103,16 @@ public class Producer {
             current.complete();
         }
 
+        @Override
+        public void submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
+            if (ds.offer(transaction)) {
+                log.trace("Submitted txn on: {}", params().member());
+                result.complete(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
+            } else {
+                log.trace("Failure, cannot submit txn on: {}", params().member());
+                result.complete(SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build());
+            }
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
@@ -106,7 +120,7 @@ public class Producer {
     private final CommonCommunications<Terminal, ?>   comms;
     private final Controller                          controller;
     private final ReliableBroadcaster                 coordinator;
-    private final DataSource                          ds;
+    private final TxDataSource                        ds;
     private final Ethereal                            ethereal;
     private final SimpleChannel<Coordinate>           linear;
     private final Map<Digest, CertifiedBlock.Builder> pending       = new ConcurrentHashMap<>();
@@ -292,5 +306,19 @@ public class Producer {
         }
         log.trace("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params().member());
         controller.input().accept(source, Collections.singletonList(pu));
+    }
+
+    public SubmitResult submit(Transaction transaction) {
+        CompletableFuture<SubmitResult> result = new CompletableFuture<SubmitResult>();
+        transitions.submit(transaction, result);
+        try {
+            return result.get();
+        } catch (InterruptedException e) {
+            log.trace("Failure to submit txn on: {}", params().member(), e);
+            return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
+        } catch (ExecutionException e) {
+            log.debug("Failure to submit txn on: {}", params().member(), e.getCause());
+            return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
+        }
     }
 }

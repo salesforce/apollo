@@ -6,10 +6,14 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
@@ -35,6 +39,12 @@ public enum Earner implements Driven.Transitions {
         }
     },
     SPICE {
+
+        @Override
+        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
+            context().submit(transaction, result);
+            return null;
+        }
 
         @Override
         public Transitions publishedBlock() {

@@ -58,7 +58,7 @@ public class LocalRouter extends Router {
 
                 @Override
                 public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                           CallOptions callOptions, Channel next) {
+                                                                           CallOptions callOptions, Channel next) {  
                     ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
                     return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                         @Override
