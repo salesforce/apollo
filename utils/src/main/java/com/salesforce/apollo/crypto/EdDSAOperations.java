@@ -93,26 +93,6 @@ public class EdDSAOperations {
         return encodedPoint;
     }
 
-    public Signature forSigning(PrivateKey privateKey) {
-        try {
-            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
-            sig.initSign(privateKey);
-            return sig;
-        } catch (GeneralSecurityException e) {
-            throw new IllegalArgumentException("Unable to create signature for signing", e);
-        }
-    }
-
-    public Signature forVerification(PublicKey publicKey) {
-        try {
-            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
-            sig.initVerify(publicKey);
-            return sig;
-        } catch (GeneralSecurityException e) {
-            throw new IllegalArgumentException("Unable to create signature for verification", e);
-        }
-    }
-
     public KeyPair generateKeyPair() {
         return keyPairGenerator.generateKeyPair();
     }
@@ -154,7 +134,7 @@ public class EdDSAOperations {
 
     public JohnHancock sign(PrivateKey privateKey, InputStream is) {
         try {
-            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            var sig = SIGNATURE_CACHE.get();
             sig.initSign(privateKey);
             byte[] buf = new byte[1024];
             try {
@@ -176,7 +156,7 @@ public class EdDSAOperations {
 
     public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
         try {
-            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            var sig = SIGNATURE_CACHE.get();
             sig.initVerify(publicKey);
             sig.update(message);
             return sig.verify(signature.bytes);
@@ -185,9 +165,21 @@ public class EdDSAOperations {
         }
     }
 
+    private static final ThreadLocal<Signature> SIGNATURE_CACHE = new ThreadLocal<>() {
+
+        @Override
+        protected Signature initialValue() {
+            try {
+                return Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("Unable to retrieve sig algo: " + EDDSA_ALGORITHM_NAME, e);
+            }
+        }
+    };
+
     public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream is) {
         try {
-            var sig = Signature.getInstance(EDDSA_ALGORITHM_NAME, ProviderUtils.getProviderBC());
+            var sig = SIGNATURE_CACHE.get();
             sig.initVerify(publicKey);
             byte[] buf = new byte[1024];
             try {

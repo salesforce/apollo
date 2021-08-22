@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
-import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -47,6 +46,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class TestCHOAM {
     private static final int CARDINALITY = 51;
+    private static int       count       = 0;
 
     private Map<Digest, CHOAM>                     choams;
     private List<SigningMember>                    members;
@@ -55,7 +55,7 @@ public class TestCHOAM {
     private Map<Digest, List<Digest>>              blocks;
 
     @AfterEach
-    public void after() {
+    public void after() throws Exception {
         if (routers != null) {
             routers.values().forEach(e -> e.close());
             routers = null;
@@ -65,13 +65,14 @@ public class TestCHOAM {
             choams = null;
         }
         members = null;
+        Thread.sleep(1000);
     }
 
     @BeforeEach
     public void before() {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, CARDINALITY);
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(count++), 0.33, CARDINALITY);
         Parameters.Builder params = Parameters.newBuilder().setContext(context)
                                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
                                               .setGossipDuration(Duration.ofMillis(20))
