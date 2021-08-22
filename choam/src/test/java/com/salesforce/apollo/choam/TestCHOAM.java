@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -125,14 +126,14 @@ public class TestCHOAM {
         choams.values().forEach(ch -> ch.start());
         final int expected = 88;
         var session = choams.get(members.get(0).getId()).getSession();
-        Transaction tx = Transaction.newBuilder()
-                                    .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                    .build();
 
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                     .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
+        final ByteMessage tx = ByteMessage.newBuilder()
+                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                          .build();
         CompletableFuture<?> result = session.submit(tx, null);
         while (true) {
             final var r = result;

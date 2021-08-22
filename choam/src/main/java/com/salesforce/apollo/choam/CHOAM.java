@@ -79,6 +79,7 @@ import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -247,8 +248,8 @@ public class CHOAM {
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        private GroupIterator servers;
         protected Digest      viewId;
+        private GroupIterator servers;
 
         private final Map<Member, Verifier> validators;
 
@@ -468,6 +469,10 @@ public class CHOAM {
                     .build();
     }
 
+    public static Digest hashOf(Transaction transaction, DigestAlgorithm digestAlgorithm) {
+        return JohnHancock.from(transaction.getSignature()).toDigest(digestAlgorithm);
+    }
+
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params) {
         var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
@@ -519,7 +524,8 @@ public class CHOAM {
     private final AtomicBoolean                             started           = new AtomicBoolean();
     private final Store                                     store;
     private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
-    private final Combine.Transitions                       transitions;
+
+    private final Combine.Transitions transitions;
 
     private volatile HashedCertifiedBlock view;
 
@@ -715,7 +721,7 @@ public class CHOAM {
         log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(), params.member());
         params.processor().beginBlock(head.height(), head.hash);
         executions.forEach(exec -> {
-            Digest hash = params.digestAlgorithm().digest(exec.getTransation().toByteString());
+            Digest hash = hashOf(exec.getTransation(), params.digestAlgorithm());
             var stxn = session.complete(hash);
             log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash, head.height(),
                       stxn == null ? "null" : "present", params.member());

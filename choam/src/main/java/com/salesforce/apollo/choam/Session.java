@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -18,12 +19,15 @@ import java.util.concurrent.TimeoutException;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.choam.support.TransationFailed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.Utils;
 
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
@@ -152,12 +156,40 @@ public class Session {
     /**
      * Submit a transaction.
      * 
+     * @param transaction - the Message to submit as a transaction
+     * @param timeout     - non null timeout of the transaction
+     * @return onCompletion - the future result of the submitted transaction
+     * @throws InvalidTransaction - if the submitted transaction is invalid in any
+     *                            way
+     */
+    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout) throws InvalidTransaction {
+        long[] longs = new long[params.digestAlgorithm().longLength()];
+        final SecureRandom entropy = Utils.secureEntropy();
+        for (int i = 0; i < longs.length; i++) {
+            longs[i] = entropy.nextLong();
+        }
+        var nonce = new Digest(params.digestAlgorithm().digestCode(), longs);
+        var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
+                                             transaction.toByteString().asReadOnlyByteBuffer());
+        return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
+                                 .setNonce(nonce.toDigeste()).setContent(transaction.toByteString())
+                                 .setSignature(signature.toSig()).build(),
+                      timeout);
+    }
+
+    /**
+     * Submit a transaction.
+     * 
      * @param transaction - the Transaction to submit
      * @param timeout     - non null timeout of the transaction
      * @return onCompletion - the future result of the submitted transaction
+     * @throws InvalidTransaction - if the transaction is invalid in any way
      */
-    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout) {
-        var hash = params.digestAlgorithm().digest(transaction.toByteString());
+    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout) throws InvalidTransaction {
+        if (!transaction.hasNonce() || !transaction.hasSource() || !transaction.hasSignature()) {
+            throw new InvalidTransaction();
+        }
+        var hash = CHOAM.hashOf(transaction, params.digestAlgorithm());
         var result = new CompletableFuture<T>();
         if (timeout == null) {
             timeout = params.submitTimeout();

@@ -42,6 +42,8 @@ message SubmitResult {
         SUCCESS = 2;
         FAILURE = 3; 
         INACTIVE_COMMITTEE = 4;
+        BUFFER_FULL = 5;
+        NOT_A_VALIDATOR = 6;
     }
     
     Outcome outcome = 1;
@@ -99,8 +101,9 @@ message ExecutedTransaction {
 
 message Transaction { 
     utils.Digeste source = 1;
-    bytes content = 2; 
-    utils.Sig signature = 3; 
+    bytes content = 2;
+    utils.Digeste nonce = 3;
+    utils.Sig signature = 4; 
 }
 
 message Join {
