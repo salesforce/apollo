@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Map;
@@ -43,6 +44,7 @@ import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.inprocess.InternalInProcessChannelBuilder;
+import io.grpc.internal.ManagedChannelImplBuilder;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -72,8 +74,20 @@ public class LocalRouter extends Router {
             };
             final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
                                                                            .intercept(clientInterceptor);
+            disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
+        }
+
+        private void disableTrash(final InProcessChannelBuilder builder) {
+            try {
+                final Method method = InProcessChannelBuilder.class.getDeclaredMethod("delegate");
+                method.setAccessible(true);
+                ManagedChannelImplBuilder delegate = (ManagedChannelImplBuilder) method.invoke(builder);
+                delegate.setTracingEnabled(false);
+            } catch (Throwable e) {
+                log.error("Can't disable trash", e);
+            }
         }
     }
 

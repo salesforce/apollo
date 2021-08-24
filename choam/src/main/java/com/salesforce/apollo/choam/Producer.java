@@ -106,7 +106,7 @@ public class Producer {
         @Override
         public void submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
             if (ds.offer(transaction)) {
-                log.info("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                log.debug("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                          params().member());
                 result.complete(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
             } else {
