@@ -246,12 +246,17 @@ public class Session {
                 return true;
             }
             final @Nullable Boolean success = service.apply(stx);
-            log.debug("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
+            log.trace("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
             return success;
-        }, params.dispatcher())).withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker).withRateLimiter(rateLimiter)
-                  .withRetry(retry, params.scheduler()).get().exceptionally(t -> {
-                      stx.onCompletion().completeExceptionally(t);
-                      return false;
+        }, params.submitDispatcher())).withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker)
+                  .withRateLimiter(rateLimiter).withRetry(retry, params.scheduler()).get().whenComplete((r, t) -> {
+                      log.trace("Completion of txn: {} submit: {} exceptionally: {}", stx.hash(), r, t);
+                      if (t != null) {
+                          stx.onCompletion().completeExceptionally(t);
+                      } else if (!r) {
+                          stx.onCompletion()
+                             .completeExceptionally(new TransationFailed("failed to complete transaction"));
+                      }
                   });
     }
 }

@@ -46,7 +46,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          Config.Builder ethereal, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
                          int maxViewBlocks, int maxSyncBlocks, int synchronizationCycles, int maxPending,
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
-                         Session.Builder session) {
+                         Session.Builder session, Executor submitDispatcher) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -84,6 +84,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
         private Session.Builder                        session               = Session.newBuilder();
         private File                                   storeFile;
+        private Executor                               submitDispatcher      = ForkJoinPool.commonPool();
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
         private int                                    synchronizationCycles = 10;
         private Duration                               synchronizeDuration   = Duration.ofMillis(500);
@@ -96,7 +97,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   genesisData, genesisViewId, maxCheckpointBlocks, processor, checkpointer, storeFile,
                                   checkpointBlockSize, dispatcher, restorer, digestAlgorithm, coordination, ethereal,
                                   metrics, viewSigAlgorithm, maxViewBlocks, maxSyncBlocks, synchronizationCycles,
-                                  maxPending, synchronizeDuration, regenerationCycles, synchronizeTimeout, session);
+                                  maxPending, synchronizeDuration, regenerationCycles, synchronizeTimeout, session,
+                                  submitDispatcher);
         }
 
         public int getCheckpointBlockSize() {
@@ -205,6 +207,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public File getStoreFile() {
             return storeFile;
+        }
+
+        public Executor getSubmitDispatcher() {
+            return submitDispatcher;
         }
 
         public Duration getSubmitTimeout() {
@@ -364,6 +370,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setStoreFile(File storeFile) {
             this.storeFile = storeFile;
+            return this;
+        }
+
+        public Builder setSubmitDispatcher(Executor submitDispatcher) {
+            this.submitDispatcher = submitDispatcher;
             return this;
         }
 

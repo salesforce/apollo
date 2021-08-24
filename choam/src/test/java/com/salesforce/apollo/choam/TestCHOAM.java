@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -18,10 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -30,6 +30,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
@@ -41,7 +44,6 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -51,6 +53,68 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
+    private static class Transactioneer {
+        private final AtomicBoolean proceed;
+        private final AtomicInteger completed = new AtomicInteger();
+        private final AtomicInteger failed    = new AtomicInteger();
+        private final Timer         latency;
+        private final Session       session;
+        private final Duration      timeout;
+        private final ByteMessage   tx        = ByteMessage.newBuilder()
+                                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                           .build();
+        private final AtomicInteger lineTotal;
+
+        Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed,
+                       AtomicInteger lineTotal) {
+            this.latency = latency;
+            this.proceed = proceed;
+            this.session = session;
+            this.timeout = timeout;
+            this.lineTotal = lineTotal;
+        }
+
+        void start() {
+            Timer.Context time = latency.time();
+            try {
+                decorate(session.submit(tx, timeout), time);
+            } catch (InvalidTransaction e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        void decorate(CompletableFuture<?> fs, Timer.Context time) {
+            fs.whenComplete((o, t) -> {
+                time.close();
+                if (!proceed.get()) {
+                    return;
+                }
+                final int tot = lineTotal.incrementAndGet();
+                if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                    System.out.println(".");
+                } else if (tot % 100 == 0) {
+                    System.out.print(".");
+                }
+                var tc = latency.time();
+                if (t != null) {
+                    failed.incrementAndGet();
+                    try {
+                        decorate(session.submit(tx, timeout), tc);
+                    } catch (InvalidTransaction e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    completed.incrementAndGet();
+                    try {
+                        decorate(session.submit(tx, timeout), tc);
+                    } catch (InvalidTransaction e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        }
+    }
+
     private static final int CARDINALITY = 51;
     private static int       count       = 0;
 
@@ -77,11 +141,14 @@ public class TestCHOAM {
     public void before() {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(count++), 0.33, CARDINALITY);
-        Parameters.Builder params = Parameters.newBuilder().setContext(context)
-                                              .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
-                                              .setGossipDuration(Duration.ofMillis(20))
-                                              .setScheduler(Executors.newScheduledThreadPool(CARDINALITY));
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(count++), 0.33, CARDINALITY);
+        var dispatcher = Executors.newCachedThreadPool();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
+        var params = Parameters.newBuilder().setContext(context)
+                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
+                               .setGossipDuration(Duration.ofMillis(20)).setSubmitDispatcher(dispatcher)
+                               .setDispatcher(dispatcher).setScheduler(scheduler);
+        params.getCoordination().setExecutor(dispatcher);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -131,56 +198,38 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         final int expected = 23;
-        var session = choams.get(members.get(0).getId()).getSession();
 
-        Utils.waitForCondition(60_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                    .filter(s -> s >= expected).count() == choams.size());
+        Utils.waitForCondition(60_000, () -> blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected)
+                                                   .count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
-        final ByteMessage tx = ByteMessage.newBuilder()
-                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                          .build();
-        AtomicInteger completed = new AtomicInteger();
-        AtomicInteger failed = new AtomicInteger();
-        long now = System.currentTimeMillis();
 
         final Duration timeout = Duration.ofSeconds(5);
-        CompletableFuture<?> result = session.submit(tx, timeout);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
+        MetricRegistry reg = new MetricRegistry();
+        Timer latency = reg.timer("Transaction latency");
+        AtomicInteger lineTotal = new AtomicInteger();
+        var transactioneers = new ArrayList<Transactioneer>();
+        final int clientCount = 5;
+        for (int i = 0; i < clientCount; i++) {
+            choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal))
+                  .forEach(e -> transactioneers.add(e));
+        }
 
-        AtomicReference<Consumer<CompletableFuture<?>>> decorate = new AtomicReference<>();
-        decorate.set(f -> f.whenComplete((o, t) -> {
-            if (!proceed.get()) {
-                return;
-            }
-            if (t != null) {
-                System.out.println("Failure!!!");
-                failed.incrementAndGet();
-                try {
-                    decorate.get().accept(session.submit(tx, timeout));
-                } catch (InvalidTransaction e) {
-                    e.printStackTrace();
-                }
-            } else {
-                System.out.println("Success!!!");
-                completed.incrementAndGet();
-                try {
-                    decorate.get().accept(session.submit(tx, timeout));
-                } catch (InvalidTransaction e) {
-                    e.printStackTrace();
-                }
-            }
-        }));
-        decorate.get().accept(result);
+        transactioneers.parallelStream().forEach(e -> e.start());
 
         try {
-            assertTrue(Utils.waitForCondition(120_000, () -> completed.get() > 20),
-                       "Only completed: " + completed.get());
-            System.out.println("TPS: " + (100.0 / ((double) (System.currentTimeMillis() - now))) * 1000.0);
+            assertTrue(Utils.waitForCondition(120_000,
+                                              () -> transactioneers.stream().filter(e -> e.completed.get() > 20)
+                                                                   .count() == transactioneers.size()),
+                       "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() > 20).count());
         } finally {
             proceed.set(false);
         }
+
+        ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build().report();
     }
 
     @Test

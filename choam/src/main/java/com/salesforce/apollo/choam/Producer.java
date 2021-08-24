@@ -142,7 +142,7 @@ public class Producer {
         this.comms = comms;
         final Parameters params = view.params();
         final Builder ep = params.ethereal();
-        ds = new TxDataSource(params, params.maxBatchByteSize() * (ep.getEpochLength() * ep.getNumberOfEpochs() - 3));
+        ds = new TxDataSource(params, params.maxBatchByteSize() * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3));
 
         // Ethereal consensus
         ethereal = new Ethereal();
