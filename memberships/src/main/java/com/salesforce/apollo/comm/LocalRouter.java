@@ -42,6 +42,7 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.inprocess.InternalInProcessChannelBuilder;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -58,7 +59,7 @@ public class LocalRouter extends Router {
 
                 @Override
                 public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-                                                                           CallOptions callOptions, Channel next) {  
+                                                                           CallOptions callOptions, Channel next) {
                     ClientCall<ReqT, RespT> newCall = next.newCall(method, callOptions);
                     return new SimpleForwardingClientCall<ReqT, RespT>(newCall) {
                         @Override
@@ -69,10 +70,10 @@ public class LocalRouter extends Router {
                     };
                 }
             };
-            return InProcessChannelBuilder.forName(qb64(to.getId()))
-                                          .directExecutor()
-                                          .intercept(clientInterceptor)
-                                          .build();
+            final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
+                                                                           .intercept(clientInterceptor);
+            InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
+            return builder.build();
         }
     }
 
@@ -115,13 +116,12 @@ public class LocalRouter extends Router {
     }
 
     public LocalRouter(Member member, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
-            Executor executor) {
+                       Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
         this.member = member;
         serverMembers.put(member.getId(), member);
 
-        server = InProcessServerBuilder.forName(qb64(member.getId()))
-                                       .executor(executor)
+        server = InProcessServerBuilder.forName(qb64(member.getId())).executor(executor)
                                        .intercept(new ServerInterceptor() {
 
                                            @Override
@@ -135,10 +135,9 @@ public class LocalRouter extends Router {
                                                }
                                                Member member = serverMembers.get(digest(id));
                                                if (member == null) {
-                                                   call.close(Status.INTERNAL.withCause(new NullPointerException(
-                                                           "Member is null"))
+                                                   call.close(Status.INTERNAL.withCause(new NullPointerException("Member is null"))
                                                                              .withDescription("Member is null for id: "
-                                                                                     + id),
+                                                                             + id),
                                                               null);
                                                    return new ServerCall.Listener<ReqT>() {
                                                    };
@@ -147,9 +146,7 @@ public class LocalRouter extends Router {
                                                return Contexts.interceptCall(ctx, call, requestHeaders, next);
                                            }
 
-                                       })
-                                       .fallbackHandlerRegistry(registry)
-                                       .build();
+                                       }).fallbackHandlerRegistry(registry).build();
     }
 
     @Override
@@ -159,7 +156,7 @@ public class LocalRouter extends Router {
             server.awaitTermination();
         } catch (InterruptedException e) {
             throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                    e);
+                                            e);
         }
         super.close();
         serverMembers.remove(member.getId());

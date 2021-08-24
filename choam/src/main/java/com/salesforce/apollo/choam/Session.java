@@ -17,6 +17,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.protobuf.Message;
@@ -123,6 +127,8 @@ public class Session {
         }
     }
 
+    private final static Logger log = LoggerFactory.getLogger(Session.class);
+
     public static Builder newBuilder() {
         return new Builder();
     }
@@ -133,7 +139,8 @@ public class Session {
     private final RateLimiter                             rateLimiter;
     private final Retry                                   retry;
     private final Function<SubmittedTransaction, Boolean> service;
-    private final Map<Digest, SubmittedTransaction>       submitted = new ConcurrentHashMap<>();
+
+    private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
 
     private Session(Bulkhead bulkhead, CircuitBreaker circutBreaker, RateLimiter rateLimiter, Retry retry,
                     Parameters params, Function<SubmittedTransaction, Boolean> service) {
@@ -211,10 +218,17 @@ public class Session {
     }
 
     SubmittedTransaction complete(Digest hash) {
-        return submitted.remove(hash);
+        final SubmittedTransaction stxn = submitted.remove(hash);
+        if (stxn == null) {
+            log.trace("Completed, but not present: {} on: {}", hash, params.member());
+        } else {
+            log.debug("Completed, present: {} on: {}", hash, params.member());
+        }
+        return stxn;
     }
 
     private void complete(Digest hash, final Timer.Context timer, Throwable t) {
+        log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
         submitted.remove(hash);
         if (timer != null) {
             timer.close();
@@ -226,8 +240,15 @@ public class Session {
 
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
-        Decorators.ofCompletionStage(() -> supplyAsync(() -> service.apply(stx), params.dispatcher()))
-                  .withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker).withRateLimiter(rateLimiter)
+        Decorators.ofCompletionStage(() -> supplyAsync(() -> {
+            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
+            if (stx.onCompletion().isDone()) {
+                return true;
+            }
+            final @Nullable Boolean success = service.apply(stx);
+            log.debug("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
+            return success;
+        }, params.dispatcher())).withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker).withRateLimiter(rateLimiter)
                   .withRetry(retry, params.scheduler()).get().exceptionally(t -> {
                       stx.onCompletion().completeExceptionally(t);
                       return false;

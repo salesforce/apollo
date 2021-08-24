@@ -106,10 +106,12 @@ public class Producer {
         @Override
         public void submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
             if (ds.offer(transaction)) {
-                log.trace("Submitted txn on: {}", params().member());
+                log.info("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                         params().member());
                 result.complete(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
             } else {
-                log.trace("Failure, cannot submit txn on: {}", params().member());
+                log.warn("Failure, cannot submit received txn: {} on: {}",
+                         CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
                 result.complete(SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build());
             }
         }
@@ -309,15 +311,19 @@ public class Producer {
     }
 
     public SubmitResult submit(Transaction transaction) {
+        log.trace("Submit received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                  params().member());
         CompletableFuture<SubmitResult> result = new CompletableFuture<SubmitResult>();
         transitions.submit(transaction, result);
         try {
             return result.get();
         } catch (InterruptedException e) {
-            log.trace("Failure to submit txn on: {}", params().member(), e);
+            log.warn("Failure to submit received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                     params().member(), e);
             return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
         } catch (ExecutionException e) {
-            log.debug("Failure to submit txn on: {}", params().member(), e.getCause());
+            log.debug("Failure to submit received txn:{} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                      params().member(), e.getCause());
             return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
         }
     }

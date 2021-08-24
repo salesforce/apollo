@@ -105,11 +105,12 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log.info("Cannot submit txn inactive committee on: {}", params().member());
+        log.debug("Cannot submit txn inactive committee on: {}", params().member());
         return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
     }
 
     default void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
+        log.debug("Cannot submit txn inactive committee on: {}", params().member());
         result.completeExceptionally(new ServiceUnavailable());
     }
 

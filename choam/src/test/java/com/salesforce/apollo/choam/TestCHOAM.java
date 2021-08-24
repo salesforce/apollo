@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
@@ -17,6 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -29,6 +34,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -48,11 +54,11 @@ public class TestCHOAM {
     private static final int CARDINALITY = 51;
     private static int       count       = 0;
 
+    private Map<Digest, List<Digest>>              blocks;
     private Map<Digest, CHOAM>                     choams;
     private List<SigningMember>                    members;
     private Map<Digest, Router>                    routers;
     private Map<Digest, List<ExecutedTransaction>> transactions;
-    private Map<Digest, List<Digest>>              blocks;
 
     @AfterEach
     public void after() throws Exception {
@@ -65,7 +71,6 @@ public class TestCHOAM {
             choams = null;
         }
         members = null;
-        Thread.sleep(1000);
     }
 
     @BeforeEach
@@ -122,10 +127,67 @@ public class TestCHOAM {
     }
 
     @Test
+    public void submitMultiplTxn() throws Exception {
+        routers.values().forEach(r -> r.start());
+        choams.values().forEach(ch -> ch.start());
+        final int expected = 23;
+        var session = choams.get(members.get(0).getId()).getSession();
+
+        Utils.waitForCondition(60_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                    .filter(s -> s >= expected).count() == choams.size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        final ByteMessage tx = ByteMessage.newBuilder()
+                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                          .build();
+        AtomicInteger completed = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+        long now = System.currentTimeMillis();
+
+        final Duration timeout = Duration.ofSeconds(5);
+        CompletableFuture<?> result = session.submit(tx, timeout);
+
+        AtomicBoolean proceed = new AtomicBoolean(true);
+
+        AtomicReference<Consumer<CompletableFuture<?>>> decorate = new AtomicReference<>();
+        decorate.set(f -> f.whenComplete((o, t) -> {
+            if (!proceed.get()) {
+                return;
+            }
+            if (t != null) {
+                System.out.println("Failure!!!");
+                failed.incrementAndGet();
+                try {
+                    decorate.get().accept(session.submit(tx, timeout));
+                } catch (InvalidTransaction e) {
+                    e.printStackTrace();
+                }
+            } else {
+                System.out.println("Success!!!");
+                completed.incrementAndGet();
+                try {
+                    decorate.get().accept(session.submit(tx, timeout));
+                } catch (InvalidTransaction e) {
+                    e.printStackTrace();
+                }
+            }
+        }));
+        decorate.get().accept(result);
+
+        try {
+            assertTrue(Utils.waitForCondition(120_000, () -> completed.get() > 20),
+                       "Only completed: " + completed.get());
+            System.out.println("TPS: " + (100.0 / ((double) (System.currentTimeMillis() - now))) * 1000.0);
+        } finally {
+            proceed.set(false);
+        }
+    }
+
+    @Test
     public void submitTxn() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 88;
+        final int expected = 23;
         var session = choams.get(members.get(0).getId()).getSession();
 
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())

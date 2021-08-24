@@ -234,7 +234,8 @@ public class CHOAM {
 
         @Override
         public SubmitResult submit(SubmitTransaction request) {
-            CHOAM.log.trace("Submit txn on: {}", params().member());
+            CHOAM.log.trace("Submit txn: {} to producer on: {}",
+                           hashOf(request.getTransaction(), params.digestAlgorithm()), params().member());
             return producer.submit(request.getTransaction());
         }
     }
@@ -305,16 +306,18 @@ public class CHOAM {
             ListenableFuture<SubmitResult> response;
             try (var link = comm.apply(target, params.member())) {
                 if (link == null) {
-                    CHOAM.log.trace("No link for: {} for submitting txn on: {}", target.getId(), params.member());
+                    CHOAM.log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
                     result.completeExceptionally(new ServiceUnavailable());
                     return;
                 }
-                CHOAM.log.trace("Submitting txn to: {} in: {} on: {}", target.getId(), viewId, params.member());
+                CHOAM.log.debug("Submitting received txn: {} to: {} in: {} on: {}",
+                               hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                 response = link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
                                                         .setTransaction(transaction).build());
             } catch (Throwable e) {
-                CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId, params.member(),
-                                e);
+                CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                               hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(),
+                               e);
                 result.completeExceptionally(e);
                 return;
             }
@@ -323,29 +326,34 @@ public class CHOAM {
                 try {
                     resulting = response.get();
                 } catch (InterruptedException e) {
-                    CHOAM.log.debug("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
-                                    params.member(), e);
+                    CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                                   hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
+                                   params.member(), e);
                     result.completeExceptionally(e.getCause());
                     return;
                 } catch (ExecutionException e) {
-                    CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
-                                    params.member(), e.getCause());
+                    CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                                   hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
+                                   params.member(), e.getCause());
                     result.completeExceptionally(e.getCause());
                     return;
                 }
                 if (!resulting.isInitialized()) {
-                    CHOAM.log.trace("Null response submitting txn to: {} in: {} on: {}", target.getId(), viewId,
-                                    params.member());
+                    CHOAM.log.debug("Null response submitting txn: {} to: {} in: {} on: {}",
+                                   hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
+                                   params.member());
                     result.completeExceptionally(new ServiceUnavailable());
                     return;
                 }
                 if (resulting.getOutcome() != Outcome.SUCCESS) {
-                    CHOAM.log.trace("Failed submitting txn to: {} in: {} on: {}", target.getId(), viewId,
-                                    params.member());
+                    CHOAM.log.debug("Failed submitting txn: {} outcome: {} to: {} in: {} on: {}",
+                                   hashOf(transaction, params.digestAlgorithm()), resulting.getOutcome(),
+                                   target.getId(), viewId, params.member());
                     result.completeExceptionally(new ServiceUnavailable());
                 } else {
-                    CHOAM.log.debug("Success submitting txn to: {} in: {} on: {}", target.getId(), viewId,
-                                    params.member());
+                    CHOAM.log.debug("Success submitting txn: {} to: {} in: {} on: {}",
+                                   hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
+                                   params.member());
                     result.complete(true);
                 }
             }, params.dispatcher());
@@ -587,6 +595,7 @@ public class CHOAM {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        session.cancelAll();
         linear.close();
     }
 
@@ -913,7 +922,7 @@ public class CHOAM {
 
     private Function<SubmittedTransaction, Boolean> service() {
         return stx -> {
-            log.trace("Submitting transaction: {} on: {}", stx.hash(), params.member());
+            log.debug("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
             final var c = current;
             if (c == null) {
                 throw new ServiceUnavailable();
@@ -922,8 +931,10 @@ public class CHOAM {
             c.submitTxn(stx.transaction(), result);
             try {
                 return result.get();
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (InterruptedException e) {
                 throw new ServiceUnavailable(e);
+            } catch (ExecutionException e) {
+                throw new ServiceUnavailable(e.getCause());
             }
         };
     }
@@ -931,15 +942,16 @@ public class CHOAM {
     /** Submit a transaction from a client */
     private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
-            log.debug("Invalid transaction submission from non member: {} on: {}", from, params.member());
+            log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setOutcome(Outcome.NOT_A_MEMBER).build();
         }
         final var c = current;
         if (c == null) {
-            log.debug("No committee to submit txn from: {} on: {}", from, params.member());
+            log.warn("No committee to submit txn from: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
         }
-        log.trace("Submiting txn from: {} on: {}", from, params.member());
+        log.debug("Submiting received txn: {} from: {} on: {}",
+                 hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
         return c.submit(request);
     }
 
