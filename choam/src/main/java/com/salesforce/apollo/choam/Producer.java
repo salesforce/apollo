@@ -40,6 +40,7 @@ import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
@@ -107,7 +108,7 @@ public class Producer {
         public void submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
             if (ds.offer(transaction)) {
                 log.debug("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
-                         params().member());
+                          params().member());
                 result.complete(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
             } else {
                 log.warn("Failure, cannot submit received txn: {} on: {}",
@@ -139,8 +140,9 @@ public class Producer {
         this.previousBlock.set(lastBlock);
         this.reconfigureBlock = reconfigureBlock;
         this.comms = comms;
-        ds = new TxDataSource(view.params(),
-                              view.params().maxBatchByteSize() * view.params().ethereal().getEpochLength());
+        final Parameters params = view.params();
+        final Builder ep = params.ethereal();
+        ds = new TxDataSource(params, params.maxBatchByteSize() * (ep.getEpochLength() * ep.getNumberOfEpochs() - 3));
 
         // Ethereal consensus
         ethereal = new Ethereal();
