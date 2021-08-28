@@ -220,7 +220,7 @@ public class ServerConnectionCache {
     private final int                                    target;
 
     public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
-            ServerConnectionCacheMetrics metrics) {
+                                 ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
         this.target = target;
         this.minIdle = minIdle;
@@ -344,7 +344,7 @@ public class ServerConnectionCache {
     private boolean close(ManagedServerConnection connection) {
         if (connection.isCloseable()) {
             try {
-                connection.channel.shutdownNow();
+                connection.channel.shutdown();
             } catch (Throwable t) {
                 log.debug("Error closing {}", connection.id);
             }
