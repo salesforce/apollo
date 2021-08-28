@@ -149,7 +149,7 @@ public class TestCHOAM {
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(20)).setSubmitDispatcher(dispatcher)
                                .setDispatcher(dispatcher).setScheduler(scheduler);
-        params.getCoordination().setExecutor(dispatcher);
+        params.getCoordination().setFalsePositiveRate(0.0001).setExecutor(dispatcher);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -158,6 +158,7 @@ public class TestCHOAM {
                          .collect(Collectors.toMap(m -> m.getId(),
                                                    m -> new LocalRouter(m,
                                                                         ServerConnectionCache.newBuilder()
+                                                                                             .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),
                                                                         ForkJoinPool.commonPool())));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -187,7 +188,7 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 88 + (30 * 9);
+        final int expected = 88 + (30 * 3);
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                     .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
@@ -212,7 +213,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 10;
+        final int clientCount = 5;
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal))
                   .forEach(e -> transactioneers.add(e));

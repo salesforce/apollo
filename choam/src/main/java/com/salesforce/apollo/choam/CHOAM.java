@@ -319,7 +319,8 @@ public class CHOAM {
         @Override
         public void assemble(Digest nextViewId) {
             if (!Committee.viewMembersOf(nextViewId, params.context()).contains(params.member())) {
-                log.trace("No assembly, not delegate for: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+                log.trace("No assembly, not delegate for: {} from: {} on: {}", nextViewId, getViewId(),
+                          params.member());
                 return;
             }
             log.debug("Assembling: {} from: {} on: {}", nextViewId, getViewId(), params.member());
@@ -454,7 +455,7 @@ public class CHOAM {
             Verifier v = validators.get(m);
             if (v == null) {
                 log.debug("Cannot verify join response of: {} from non validator: {} on: {}", nextViewId, m,
-                         params.member());
+                          params.member());
                 return started.get();
             }
             if (!v.verify(JohnHancock.of(c.getSignature()), join.getMember().getConsensusKey().toByteString())) {
@@ -633,8 +634,7 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
-
+    private final Map<Long, CheckpointState>                cachedCheckpoints = new ConcurrentHashMap<>();
     private volatile HashedCertifiedBlock                   checkpoint;
     private final ReliableBroadcaster                       combine;
     private final CommonCommunications<Terminal, Concierge> comm;
@@ -646,15 +646,14 @@ public class CHOAM {
     private final Channel<List<Msg>>                        linear;
     private volatile nextView                               next;
     private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending       = new PriorityQueue<>();
+    private final PriorityQueue<HashedCertifiedBlock>       pending           = new PriorityQueue<>();
     private final RoundScheduler                            roundScheduler;
     private final Session                                   session;
-    private final AtomicBoolean                             started       = new AtomicBoolean();
+    private final AtomicBoolean                             started           = new AtomicBoolean();
     private final Store                                     store;
-    private final AtomicBoolean                             synchronizing = new AtomicBoolean(false);
+    private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
     private final Combine.Transitions                       transitions;
-
-    private volatile HashedCertifiedBlock view;
+    private volatile HashedCertifiedBlock                   view;
 
     public CHOAM(Parameters params, MVStore store) {
         this(params, new Store(params.digestAlgorithm(), store));
