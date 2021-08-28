@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.bouncycastle.crypto.digests.Blake3Digest;
+
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
@@ -74,14 +76,17 @@ public enum DigestAlgorithm {
 
         @Override
         public byte[] hashOf(byte[] bytes, int len) {
-            var digester = Blake3.newInstance();
-            digester.update(bytes);
-            return digester.digest(digestLength());
+            Blake3Digest digester = new Blake3Digest(32);
+            digester.update(bytes, 0, len);
+            byte[] digest = new byte[32];
+            digester.doFinal(digest, 0);
+            return digest;
         }
 
         @Override
         public byte[] hashOf(InputStream is) {
-            var digester = Blake3.newInstance();
+            Blake3Digest digester = new Blake3Digest(32);
+            byte[] digest = new byte[32];
             byte[] buf = new byte[digestLength()];
             try {
                 for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
@@ -90,7 +95,8 @@ public enum DigestAlgorithm {
             } catch (IOException e) {
                 throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
             }
-            return digester.digest(digestLength());
+            digester.doFinal(digest, 0);
+            return digest;
         }
     },
     BLAKE3_512 {
@@ -106,14 +112,16 @@ public enum DigestAlgorithm {
 
         @Override
         public byte[] hashOf(byte[] bytes, int len) {
-            var digester = Blake3.newInstance();
-            digester.update(bytes);
-            return digester.digest(digestLength());
+            Blake3Digest digester = new Blake3Digest(64);
+            digester.update(bytes, 0, len);
+            var digest = new byte[64];
+            digester.doFinal(digest, 0);
+            return digest;
         }
 
         @Override
         public byte[] hashOf(InputStream is) {
-            var digester = Blake3.newInstance();
+            Blake3Digest digester = new Blake3Digest(64);
             byte[] buf = new byte[digestLength()];
             try {
                 for (int read = is.read(buf); read >= 0; read = is.read(buf)) {
@@ -122,7 +130,9 @@ public enum DigestAlgorithm {
             } catch (IOException e) {
                 throw new IllegalStateException("Error reading from buffers, cannot generate hash", e);
             }
-            return digester.digest(digestLength());
+            var digest = new byte[64];
+            digester.doFinal(digest, 0);
+            return digest;
         }
     },
     NONE {
@@ -215,9 +225,8 @@ public enum DigestAlgorithm {
         }
     }
 
-    public static final DigestAlgorithm DEFAULT = BLAKE3_256;
-
-    public static final long MAX_UNSIGNED_LONG = -1L;
+    public static final DigestAlgorithm DEFAULT           = BLAKE3_256;
+    public static final long            MAX_UNSIGNED_LONG = -1L;
 
     private static final byte[]                   EMPTY          = new byte[0];
     private static final ThreadLocal<DigestCache> MESSAGE_DIGEST = ThreadLocal.withInitial(() -> new DigestCache());
@@ -284,7 +293,7 @@ public enum DigestAlgorithm {
 
     public Digest digest(List<ByteBuffer> buffers) {
         return digest(BbBackedInputStream.aggregate(buffers));
-    } 
+    }
 
     public Digest digest(String key) {
         return digest(key.getBytes());
@@ -351,8 +360,8 @@ public enum DigestAlgorithm {
         try {
             return MessageDigest.getInstance(algorithmName(), ProviderUtils.getProviderBC());
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(
-                    "Unable to retrieve " + algorithmName() + " Message DigestAlgorithm instance", e);
+            throw new IllegalStateException("Unable to retrieve " + algorithmName()
+            + " Message DigestAlgorithm instance", e);
         }
     }
 

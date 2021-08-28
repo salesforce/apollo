@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.specification;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -102,7 +101,7 @@ public class StereotomyTests {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("01e28d0ca3bab3be802a204bab5210128a6d4f716ace78b646519442823c22f8",
+        assertEquals("c3a07fab1b912519d2164ad7cd4e55e29b14f93b1f4af5c2eb0510e34b964f4b",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -126,8 +125,7 @@ public class StereotomyTests {
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest()
-                                                                         .get()
+                                                               identifier.getNextKeyConfigurationDigest().get()
                                                                          .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
@@ -161,14 +159,14 @@ public class StereotomyTests {
         var controller = new Stereotomy(ks, kel, secureRandom);
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
-                new URL("http://foo.com/bar/baz/bozo").toURI());
+                                                          new URL("http://foo.com/bar/baz/bozo").toURI());
         ControllableIdentifier identifier = controller.newIdentifier(aid);
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE3_256, sap.getDigest().getAlgorithm());
-        assertEquals("7136f1524a1640f495179856f04446e1ea62cdd5342c55974a6880b1d36575c9",
+        assertEquals("601a04d48c1aa283378eab8c4d7ceb55533f2ac5864d6bf25aa35b1c03792dcd",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -192,8 +190,7 @@ public class StereotomyTests {
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest()
-                                                                         .get()
+                                                               identifier.getNextKeyConfigurationDigest().get()
                                                                          .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 

@@ -13,7 +13,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,17 +59,16 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ViewReconTest {
 
-    @SuppressWarnings("unchecked")
     @Test
     public void func() throws Exception {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
 
-        List<? extends SigningMember> members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
-                                                         .map(cpk -> new SigningMemberImpl(cpk)).toList();
+        List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
+                                        .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (Member) e).toList();
         Context<Member> base = new Context<>(viewId, 0.33, members.size());
-        base.activate((Collection<Member>) members);
+        base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));

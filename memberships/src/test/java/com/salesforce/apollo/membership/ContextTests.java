@@ -38,9 +38,8 @@ public class ContextTests {
         assertEquals(expected, predecessors.get(0));
 
 
-        List<Member> successors = context.successors(members.get(1));
-        expected = members.get(4);
-        assertEquals(expected, successors.get(0));
-        assertEquals(expected, context.ring(0).successor(members.get(0)));
+        List<Member> successors = context.successors(members.get(1)); 
+        assertEquals(members.get(4), successors.get(0));
+        assertEquals(members.get(5), context.ring(1).successor(members.get(0)));
     }
 }
