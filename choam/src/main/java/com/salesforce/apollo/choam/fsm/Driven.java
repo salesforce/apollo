@@ -33,7 +33,7 @@ public interface Driven {
             return null;
         }
 
-        default Transitions drain() {
+        default Transitions assemblyFailed() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -53,7 +53,7 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions publishedBlock() {
+        default Transitions lastBlock() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -72,9 +72,11 @@ public interface Driven {
         }
     }
 
-    void complete();
+    void prepareAssembly();
 
-    void epochEnd();
+    void preSpice();
+
+    void reconfigure();
 
     void startProduction();
 

@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam.comm;
 
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
+import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -78,6 +79,19 @@ public class TerminalServer extends TerminalImplBase {
                 return;
             }
             responseObserver.onNext(s.join(request, from));
+            responseObserver.onCompleted();
+        });
+    }
+
+    @Override
+    public void join2(JoinRequest request, StreamObserver<Certification> responseObserver) {
+        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
+            }
+            responseObserver.onNext(s.join2(request, from));
             responseObserver.onCompleted();
         });
     }

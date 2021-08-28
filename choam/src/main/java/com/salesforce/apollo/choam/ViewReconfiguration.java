@@ -44,7 +44,7 @@ import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.choam.CHOAM.ReconfigureBlock;
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfigure;
@@ -81,23 +81,26 @@ public class ViewReconfiguration implements Reconfiguration {
     private final SliceIterator<Terminal> committee;
     private final Controller              controller;
     private final ReliableBroadcaster     coordinator;
+    private final boolean                 forGenesis;
     private final Map<Member, Join>       joins           = new ConcurrentHashMap<>();
     private final Set<Member>             nextAssembly;
     private final Digest                  nextViewId;
     private final HashedBlock             previous;
     private final CertifiedBlock.Builder  reconfiguration = CertifiedBlock.newBuilder();
     private volatile Digest               reconfigurationHash;
-    private final ReconfigureBlock        reconfigureBlock;
+    private final BlockProducer           reconfigureBlock;
     private final Transitions             transitions;
-    private final ViewContext             view;
     private volatile Validate             validation;
+    private final ViewContext             view;
 
     public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedBlock previous,
-                               CommonCommunications<Terminal, ?> comms, ReconfigureBlock reconfigureBlock) {
+                               CommonCommunications<Terminal, ?> comms, BlockProducer reconfigureBlock,
+                               boolean forGenesis) {
         view = vc;
         this.reconfigureBlock = reconfigureBlock;
         this.nextViewId = nextViewId;
         this.previous = previous;
+        this.forGenesis = forGenesis;
         nextAssembly = Committee.viewMembersOf(nextViewId, params().context());
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
                                                 new ArrayList<>(nextAssembly), comms, params().dispatcher());
@@ -234,10 +237,12 @@ public class ViewReconfiguration implements Reconfiguration {
                                .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
         log.debug("Aggregate of: {} joins: {} on: {}", nextViewId, aggregate.size(), params().member());
         if (aggregate.size() > toleranceLevel) {
-            var reconfigure = reconfigureBlock.reconfigure(aggregate, nextViewId, previous);
+            var reconfigure = forGenesis ? reconfigureBlock.genesis(reduced, nextViewId, previous)
+                                         : reconfigureBlock.reconfigure(aggregate, nextViewId, previous);
             reconfiguration.setBlock(reconfigure);
-            reconfigurationHash = HashedBlock.hash(reconfigure, params().digestAlgorithm());
-            validation = view.generateValidation(reconfigurationHash, reconfigure);
+            var rhb = new HashedBlock(params().digestAlgorithm(), reconfigure);
+            reconfigurationHash = rhb.hash;
+            validation = view.generateValidation(rhb);
             coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
             reconfiguration.addCertifications(validation.getWitness());
             log.debug("Aggregate of: {} threshold reached: {} block: {} on: {}", nextViewId, aggregate.size(),

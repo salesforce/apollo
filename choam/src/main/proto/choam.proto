@@ -17,6 +17,7 @@ service Terminal {
     
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
+    rpc join2 (JoinRequest) returns (Certification) {}
     
     /* bootstrapping */
     rpc sync(Synchronize) returns (Initial) {}
@@ -28,6 +29,7 @@ service Terminal {
 message JoinRequest {
     utils.Digeste context = 1;
     utils.Digeste nextView = 2;
+    ViewMember member = 3;
 }
 
 message SubmitTransaction {
@@ -56,6 +58,7 @@ message Block {
         Reconfigure reconfigure = 3;
         Checkpoint checkpoint = 4;
         Executions executions = 5;
+        Assemble assemble = 6;
     }
 }
 
@@ -71,7 +74,7 @@ message Header {
 
 message Genesis { 
     Reconfigure initialView = 1;
-    repeated ExecutedTransaction initialize = 2;
+    repeated Transaction initialize = 2;
 }
 
 message Reconfigure {
@@ -91,19 +94,22 @@ message Checkpoint {
 }
 
 message Executions {
-    repeated ExecutedTransaction executions = 1;
+    repeated Transaction executions = 1;
 }
 
-message ExecutedTransaction {
-    Transaction transation = 1;
-    bytes result = 2;
+message Assemble {
+    utils.Digeste nextView = 1;
 }
 
 message Transaction { 
     utils.Digeste source = 1;
-    bytes content = 2;
-    utils.Digeste nonce = 3;
-    utils.Sig signature = 4; 
+    utils.Digeste nonce = 2;
+    oneof content {
+        bytes user = 3;
+        Join join = 4;
+        Endorsements endorsements = 5;
+    }
+    utils.Sig signature = 6; 
 }
 
 message Join {
@@ -112,8 +118,13 @@ message Join {
     repeated Certification endorsements = 3;
 }
 
-message Leave {
-    ViewMember member = 1;
+message Endorsements {
+    utils.Digeste member = 1;
+    repeated Endorsement endorsements = 2;
+}
+message Endorsement { 
+    utils.Digeste viewMember = 1;
+    utils.Sig signature = 2;
 }
 
 message ViewMember {

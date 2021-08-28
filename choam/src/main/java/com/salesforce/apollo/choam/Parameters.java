@@ -17,7 +17,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -38,7 +38,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
                          ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxBatchByteSize, int maxCheckpointSegments,
-                         Duration submitTimeout, int processedBufferSize, List<ExecutedTransaction> genesisData,
+                         Duration submitTimeout, int processedBufferSize, List<Transaction> genesisData,
                          Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor processor,
                          Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
                          Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
@@ -64,7 +64,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
         private Config.Builder                         ethereal              = Config.deterministic();
-        private List<ExecutedTransaction>              genesisData           = new ArrayList<>();
+        private List<Transaction>                      genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
         private int                                    maxBatchByteSize      = 256 * 1024;
@@ -137,7 +137,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return ethereal;
         }
 
-        public List<ExecutedTransaction> getGenesisData() {
+        public List<Transaction> getGenesisData() {
             return genesisData;
         }
 
@@ -283,7 +283,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setGenesisData(List<ExecutedTransaction> genesisData) {
+        public Builder setGenesisData(List<Transaction> genesisData) {
             this.genesisData = genesisData;
             return this;
         }

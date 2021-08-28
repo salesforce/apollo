@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -160,6 +161,20 @@ public class Session {
                                              .completeExceptionally(new TransationFailed("Transaction cancelled")));
     }
 
+    public <T> CompletableFuture<T> submit(Join join, Duration timeout) throws InvalidTransaction {
+        long[] longs = new long[params.digestAlgorithm().longLength()];
+        final SecureRandom entropy = Utils.secureEntropy();
+        for (int i = 0; i < longs.length; i++) {
+            longs[i] = entropy.nextLong();
+        }
+        var nonce = new Digest(params.digestAlgorithm().digestCode(), longs);
+        var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
+                                             join.toByteString().asReadOnlyByteBuffer());
+        return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
+                                 .setNonce(nonce.toDigeste()).setJoin(join).setSignature(signature.toSig()).build(),
+                      timeout);
+    }
+
     /**
      * Submit a transaction.
      * 
@@ -179,7 +194,7 @@ public class Session {
         var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
                                              transaction.toByteString().asReadOnlyByteBuffer());
         return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
-                                 .setNonce(nonce.toDigeste()).setContent(transaction.toByteString())
+                                 .setNonce(nonce.toDigeste()).setUser(transaction.toByteString())
                                  .setSignature(signature.toSig()).build(),
                       timeout);
     }

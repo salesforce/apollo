@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -34,7 +35,7 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -116,13 +117,12 @@ public class TestCHOAM {
     }
 
     private static final int CARDINALITY = 51;
-    private static int       count       = 0;
 
-    private Map<Digest, List<Digest>>              blocks;
-    private Map<Digest, CHOAM>                     choams;
-    private List<SigningMember>                    members;
-    private Map<Digest, Router>                    routers;
-    private Map<Digest, List<ExecutedTransaction>> transactions;
+    private Map<Digest, List<Digest>>      blocks;
+    private Map<Digest, CHOAM>             choams;
+    private List<SigningMember>            members;
+    private Map<Digest, Router>            routers;
+    private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
     public void after() throws Exception {
@@ -141,11 +141,12 @@ public class TestCHOAM {
     public void before() {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(count++), 0.33, CARDINALITY);
+        Random entropy = new Random();
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
         var dispatcher = Executors.newCachedThreadPool();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         var params = Parameters.newBuilder().setContext(context)
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(0x1638))
+                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(20)).setSubmitDispatcher(dispatcher)
                                .setDispatcher(dispatcher).setScheduler(scheduler);
         params.getCoordination().setExecutor(dispatcher);
@@ -169,7 +170,7 @@ public class TestCHOAM {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(ExecutedTransaction t, CompletableFuture f) {
+                public void execute(Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());
@@ -186,7 +187,7 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 88 + (30 * 3);
+        final int expected = 88 + (30 * 9);
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                     .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
@@ -211,7 +212,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 5;
+        final int clientCount = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal))
                   .forEach(e -> transactioneers.add(e));

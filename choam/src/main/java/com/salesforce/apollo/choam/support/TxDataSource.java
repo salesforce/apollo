@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.Parameters;
@@ -39,6 +38,7 @@ public class TxDataSource implements DataSource {
     private final AtomicInteger              buffered   = new AtomicInteger();
     private final Parameters                 parameters;
     private final BlockingDeque<Transaction> processing = new LinkedBlockingDeque<>();
+    private final BlockingDeque<Transaction> joins      = new LinkedBlockingDeque<>();
     private final AtomicInteger              remaining  = new AtomicInteger();
 
     public TxDataSource(Parameters parameters, int maxBufferSize) {
@@ -55,11 +55,17 @@ public class TxDataSource implements DataSource {
         Executions.Builder builder = Executions.newBuilder();
         int batchSize = 0;
         int bytesRemaining = parameters.maxBatchByteSize();
+        while (joins.peek() != null) {
+            Transaction next = joins.poll();
+            bytesRemaining -= next.getSerializedSize();
+            batchSize++;
+            builder.addExecutions(next);
+        }
         while (processing.peek() != null && bytesRemaining >= processing.peek().getSerializedSize()) {
             Transaction next = processing.poll();
             bytesRemaining -= next.getSerializedSize();
             batchSize++;
-            builder.addExecutions(ExecutedTransaction.newBuilder().setTransation(next));
+            builder.addExecutions(next);
         }
         int byteSize = parameters.maxBatchByteSize() - bytesRemaining;
         buffered.addAndGet(-byteSize);
@@ -84,7 +90,11 @@ public class TxDataSource implements DataSource {
     public boolean offer(Transaction txn) {
         if (remaining.addAndGet(-txn.getSerializedSize()) > 0) {
             buffered.addAndGet(txn.getSerializedSize());
-            processing.add(txn);
+            if (txn.hasJoin()) {
+                joins.add(txn);
+            } else {
+                processing.add(txn);
+            }
             return true;
         } else {
             remaining.addAndGet(txn.getSerializedSize());

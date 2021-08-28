@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.choam.support.HashedBlock.hash;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.util.ArrayList;
@@ -17,10 +16,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 import com.salesfoce.apollo.choam.proto.Certification;
+import com.salesfoce.apollo.choam.proto.Endorsements;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
@@ -43,7 +43,6 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public interface Committee {
-    static final Logger log = LoggerFactory.getLogger(Committee.class);
 
     static Map<Member, Verifier> validators(Map<Member, ViewMember> validators) {
         return validators.entrySet().stream()
@@ -92,11 +91,31 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
+    default void assemble(Digest nextViewId) {
+        throw new IllegalStateException("Should not be assembling for next view: " + nextViewId + " on: "
+        + params().member());
+    }
+
     void complete();
+
+    default void endorsements(Endorsements endorsements) {
+        log().trace("Not processing endorsement, not a committee member on: {}", params().member());
+    }
+
+    Logger log();
 
     boolean isMember();
 
+    default void join(Join join) {
+        log().trace("Not processing join, not a committee member on: {}", params().member());
+    }
+
     ViewMember join(JoinRequest request, Digest from);
+
+    default Certification join2(JoinRequest request, Digest from) {
+        log().debug("Cannot process join request from: {}, not a committee member on: {}", from, params().member());
+        return Certification.getDefaultInstance();
+    }
 
     Parameters params();
 
@@ -105,57 +124,57 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log.debug("Cannot submit txn inactive committee on: {}", params().member());
+        log().debug("Cannot submit txn inactive committee on: {}", params().member());
         return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
     }
 
     default void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
-        log.debug("Cannot submit txn inactive committee on: {}", params().member());
+        log().debug("Cannot submit txn inactive committee on: {}", params().member());
         result.completeExceptionally(new ServiceUnavailable());
-    }
-
-    default boolean validate(byte[] headerHash, Certification c, Map<Member, Verifier> validators) {
-        Parameters params = params();
-        Digest wid = new Digest(c.getId());
-        var witness = params.context().getMember(wid);
-        if (witness == null) {
-            log.trace("Witness does not exist: {} in: {} validating: {} on: {}", wid, params.context().getId(),
-                      headerHash, params.member());
-            return false;
-        }
-        var verify = validators.get(witness);
-        if (verify == null) {
-            log.trace("Witness: {} is not a validator for: {} validating: {} on: {}", wid, params.context().getId(),
-                      headerHash, params.member());
-            return false;
-        }
-
-        final boolean verified = verify.verify(new JohnHancock(c.getSignature()), headerHash);
-        log.trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                  DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
-        return verified;
     }
 
     boolean validate(HashedCertifiedBlock hb);
 
+    default boolean validate(HashedCertifiedBlock hb, Certification c, Map<Member, Verifier> validators) {
+        Parameters params = params();
+        Digest wid = new Digest(c.getId());
+        var witness = params.context().getMember(wid);
+        if (witness == null) {
+            log().trace("Witness does not exist: {} in: {} validating: {} on: {}", wid, params.context().getId(), hb,
+                        params.member());
+            return false;
+        }
+        var verify = validators.get(witness);
+        if (verify == null) {
+            log().trace("Witness: {} is not a validator for: {} validating: {} on: {}", wid, params.context().getId(),
+                        hb, params.member());
+            return false;
+        }
+
+        final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
+        log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
+                    DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+        return verified;
+    }
+
     default boolean validate(HashedCertifiedBlock hb, Map<Member, Verifier> validators) {
         Parameters params = params();
-        byte[] headerHash = hash(hb.block.getHeader(), params.digestAlgorithm()).getBytes();
-        log.trace("Validating block: {} height: {} certs: {} on: {}", hb.hash, hb.height(),
-                  hb.certifiedBlock.getCertificationsList().stream().map(c -> new Digest(c.getId())).toList(),
-                  params.member());
+
+        log().trace("Validating block: {} height: {} certs: {} on: {}", hb.hash, hb.height(),
+                    hb.certifiedBlock.getCertificationsList().stream().map(c -> new Digest(c.getId())).toList(),
+                    params.member());
         int valid = 0;
         for (var w : hb.certifiedBlock.getCertificationsList()) {
-            if (!validate(headerHash, w, validators)) {
-                log.error("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
-                          new Digest(w.getId()), params.member());
+            if (!validate(hb, w, validators)) {
+                log().error("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
+                            new Digest(w.getId()), params.member());
             } else {
                 valid++;
             }
         }
         final int toleranceLevel = params.context().toleranceLevel();
-        log.trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
-                  params.member());
+        log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
+                    params.member());
         return valid > toleranceLevel;
     }
 

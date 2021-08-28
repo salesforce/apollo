@@ -277,9 +277,10 @@ public class ReliableBroadcaster {
         }
 
         public AgedMessage send(ByteString msg, SigningMember member) {
+            final JohnHancock signature = member.sign(msg);
             AgedMessage.Builder message = AgedMessage.newBuilder().setSource(member.getId().toDigeste())
-                                                     .setSignature(member.sign(msg).toSig()).setContent(msg);
-            var hash = params.digestAlgorithm.digest(msg);
+                                                     .setSignature(signature.toSig()).setContent(msg);
+            var hash = signature.toDigest(params.digestAlgorithm);
             state s = new state(hash, message, member.getId());
             state.put(hash, s);
             log.trace("Send message:{} on: {}", hash, params.member);
@@ -373,7 +374,8 @@ public class ReliableBroadcaster {
         }
 
         private Digest hashOf(AgedMessage am) {
-            return params.digestAlgorithm.digest(am.getContent());
+            JohnHancock signature = JohnHancock.of(am.getSignature());
+            return signature.toDigest(params.digestAlgorithm);
         }
 
         private void purgeTheAged() {

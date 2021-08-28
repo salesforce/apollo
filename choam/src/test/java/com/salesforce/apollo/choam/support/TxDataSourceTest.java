@@ -27,7 +27,7 @@ public class TxDataSourceTest {
         var parameters = Parameters.newBuilder().setMaxBatchByteSize(1024).build();
         TxDataSource ds = new TxDataSource(parameters, 1024 * 5);
         Transaction tx = Transaction.newBuilder()
-                                    .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                    .setUser(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();
         int count = 0;
         while (ds.offer(tx)) {
@@ -40,7 +40,7 @@ public class TxDataSourceTest {
 
         var data = ds.getData();
         assertNotNull(data);
-        assertEquals(1104, data.size());
+        assertEquals(1056, data.size());
         assertEquals(-986, ds.getRemaining());
         assertEquals(4074, ds.getBuffered());
 
@@ -48,31 +48,31 @@ public class TxDataSourceTest {
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1104, data.size());
+        assertEquals(1056, data.size());
         assertEquals(-2010, ds.getRemaining());
         assertEquals(3066, ds.getBuffered());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1104, data.size());
+        assertEquals(1056, data.size());
         assertEquals(-3034, ds.getRemaining());
         assertEquals(2058, ds.getBuffered());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1104, data.size());
+        assertEquals(1056, data.size());
         assertEquals(-4058, ds.getRemaining());
         assertEquals(1050, ds.getBuffered());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1104, data.size());
+        assertEquals(1056, data.size());
         assertEquals(-5082, ds.getRemaining());
         assertEquals(42, ds.getBuffered());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(46, data.size());
+        assertEquals(44, data.size());
         assertEquals(-6106, ds.getRemaining());
         assertEquals(0, ds.getBuffered());
 

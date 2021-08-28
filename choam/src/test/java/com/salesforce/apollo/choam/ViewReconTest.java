@@ -27,15 +27,20 @@ import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import com.salesfoce.apollo.choam.proto.Assemble;
+import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.Executions;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.choam.CHOAM.ReconfigureBlock;
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -58,7 +63,7 @@ public class ViewReconTest {
     @SuppressWarnings("unchecked")
     @Test
     public void func() throws Exception {
-        Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(1);
+        Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
 
@@ -78,8 +83,31 @@ public class ViewReconTest {
 
         HashedCertifiedBlock previous = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
                                                                  CertifiedBlock.getDefaultInstance());
-        ReconfigureBlock reconfigure = (joins, d, hcb) -> CHOAM.reconfigure(nextViewId, joins, previous, committee, hcb,
-                                                                            params.build(), previous);
+        BlockProducer reconfigure = new BlockProducer() {
+
+            @Override
+            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                return CHOAM.reconfigure(nextViewId, joining, previous, committee, previous, params.build(), previous);
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Executions executions) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Assemble assemble) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+
+            @Override
+            public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                // TODO Auto-generated method stub
+                return null;
+            }
+        };
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
@@ -114,8 +142,8 @@ public class ViewReconTest {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
-                                               validators, publisher);
-            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure));
+                                               validators, publisher, reconfigure);
+            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));
         });
 
         try {

@@ -24,21 +24,17 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Earner implements Driven.Transitions {
-    DRAIN {
+    ASSEMBLE {
 
         @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
+        public Transitions lastBlock() {
+            return PRE_SPICE;
         }
 
-        @Override
-        public Transitions publishedBlock() {
-            context().epochEnd();
-            return COMPLETE;
+        @Entry
+        public void prepareAssembly() {
+            context().prepareAssembly();
         }
-    },
-    SPICE {
 
         @Override
         public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
@@ -47,18 +43,16 @@ public enum Earner implements Driven.Transitions {
         }
 
         @Override
-        public Transitions publishedBlock() {
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
             return null;
         }
-
-        @Override
-        public Transitions drain() {
-            return DRAIN;
-        }
+    },
+    COMPLETE {
 
         @Entry
-        public void startProduction() {
-            context().startProduction();
+        public void reconfigure() {
+            context().reconfigure();
         }
 
         @Override
@@ -73,13 +67,60 @@ public enum Earner implements Driven.Transitions {
             return SPICE;
         }
     },
+    PRE_SPICE {
+
+        @Override
+        public Transitions lastBlock() {
+            return COMPLETE;
+        }
+
+        @Entry
+        public void resumeProduction() {
+            context().preSpice();
+        }
+
+        @Override
+        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
+            context().submit(transaction, result);
+            return null;
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
+    },
     PROTOCOL_FAILURE {
         @Entry
         public void terminate() {
             log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
         }
     },
-    COMPLETE;
+    SPICE {
+
+        @Override
+        public Transitions lastBlock() {
+            return ASSEMBLE;
+        }
+
+        @Entry
+        public void startProduction() {
+            context().startProduction();
+        }
+
+        @Override
+        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
+            context().submit(transaction, result);
+            return null;
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
+    };
 
     private static final Logger log = LoggerFactory.getLogger(Earner.class);
 }

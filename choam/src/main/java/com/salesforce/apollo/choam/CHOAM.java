@@ -16,15 +16,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,14 +43,16 @@ import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
+import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
-import com.salesfoce.apollo.choam.proto.ExecutedTransaction;
+import com.salesfoce.apollo.choam.proto.Endorsements;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Header;
@@ -74,10 +79,12 @@ import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
+import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.ServiceUnavailable;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
+import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -102,9 +109,14 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  *
  */
 public class CHOAM {
-    @FunctionalInterface
     public interface BlockProducer {
+        Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
+
+        Block produce(Long height, Digest prev, Assemble assemble);
+
         Block produce(Long height, Digest prev, Executions executions);
+
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
     }
 
     public class Combiner implements Combine {
@@ -186,6 +198,11 @@ public class CHOAM {
         }
 
         @Override
+        public Certification join2(JoinRequest request, Digest from) {
+            return CHOAM.this.join2(request, from);
+        }
+
+        @Override
         public SubmitResult submit(SubmitTransaction request, Digest from) {
             return CHOAM.this.submit(request, from);
         }
@@ -202,12 +219,13 @@ public class CHOAM {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(ExecutedTransaction tx, CompletableFuture onComplete);
+        void execute(Transaction tx, CompletableFuture onComplete);
     }
 
     /** a member of the current committee */
     class Associate extends Administration {
-        private final Producer producer;
+        private final Producer    producer;
+        private final ViewContext viewContext;
 
         Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
             super(validators,
@@ -216,14 +234,12 @@ public class CHOAM {
             var context = Committee.viewFor(viewId, params.context());
             context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
             validators.keySet().forEach(m -> context.activate(m));
+            log.trace("Using consensus key: {} on: {}",
+                      params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
+                      params.member());
             Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
-            ViewContext viewContext = new ViewContext(context, params, signer, validators, publisher(),
-                                                      constructBlock());
-            producer = new Producer(viewContext,
-                                    new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
-                                                                  .setContext(context).build(),
-                                                            params.communications()),
-                                    comm, head, reconfigureBlock());
+            viewContext = new ViewContext(context, params, signer, validators, publisher(), constructBlock());
+            producer = new Producer(viewContext, head, constructBlock());
             producer.start();
         }
 
@@ -233,25 +249,60 @@ public class CHOAM {
         }
 
         @Override
+        public void endorsements(Endorsements endorsements) {
+            producer.endorsement(endorsements);
+        }
+
+        @Override
+        public void join(Join join) {
+            producer.join(join);
+        }
+
+        @Override
+        public Certification join2(JoinRequest request, Digest from) {
+            Member source = params.context().getActiveMember(from);
+            if (source == null) {
+                log.debug("Request to join from non member: {} on: {}", from, params.member());
+                return Certification.getDefaultInstance();
+            }
+            Digest vid = new Digest(request.getNextView());
+            Digest nextViewId = producer.getNextViewId();
+            if (nextViewId == null) {
+                log.debug("Next view currently unknown, rejecting join of view: {} from: {} on: {}", vid, source,
+                          params.member());
+                return Certification.getDefaultInstance();
+            }
+            if (!nextViewId.equals(vid)) {
+                log.debug("Request to join invalid view: {} from non member: {} on: {}", vid, source, params.member());
+                return Certification.getDefaultInstance();
+            }
+            var committee = Committee.viewMembersOf(vid, params.context());
+            if (!committee.contains(source)) {
+                log.debug("Request to join: {} from non member: {} expected on of: {} on: {}", vid, source, committee,
+                          params.member());
+                return Certification.getDefaultInstance();
+            }
+            // looks okay to me
+            JohnHancock sig = viewContext.getSigner().sign(request.getMember().getConsensusKey().toByteString());
+            return Certification.newBuilder().setId(params.member().getId().toDigeste()).setSignature(sig.toSig())
+                                .build();
+        }
+
+        @Override
         public SubmitResult submit(SubmitTransaction request) {
-            CHOAM.log.trace("Submit txn: {} to producer on: {}",
-                            hashOf(request.getTransaction(), params.digestAlgorithm()), params().member());
+            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
+                      params().member());
             return producer.submit(request.getTransaction());
         }
     }
 
     record nextView(ViewMember member, KeyPair consensusKeyPair) {}
 
-    @FunctionalInterface
-    interface ReconfigureBlock {
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
-    }
-
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        protected Digest      viewId;
-        private GroupIterator servers;
-
+        protected Digest                    viewId;
+        private SliceIterator<Terminal>     assembler;
+        private GroupIterator               servers;
         private final Map<Member, Verifier> validators;
 
         public Administration(Map<Member, Verifier> validators, Digest viewId) {
@@ -263,6 +314,22 @@ public class CHOAM {
         @Override
         public void accept(HashedCertifiedBlock hb) {
             process();
+        }
+
+        @Override
+        public void assemble(Digest nextViewId) {
+            if (!Committee.viewMembersOf(nextViewId, params.context()).contains(params.member())) {
+                log.trace("No assembly, not delegate for: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+                return;
+            }
+            log.debug("Assembling: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+            assembler = new SliceIterator<Terminal>("Assembler for: " + params.member(), params.member(),
+                                                    new ArrayList<>(validators.keySet()), comm,
+                                                    Executors.newSingleThreadExecutor());
+            Join.Builder join = Join.newBuilder().setView(nextViewId.toDigeste()).setMember(next.member);
+            JoinRequest req = JoinRequest.newBuilder().setContext(params.context().getId().toDigeste())
+                                         .setNextView(nextViewId.toDigeste()).setMember(join.getMember()).build();
+            assembler.iterate((t, m) -> t.join2(req), (fs, t, m) -> assemble(fs, nextViewId, join, m));
         }
 
         @Override
@@ -278,21 +345,26 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = params.context().getActiveMember(from);
             if (source == null) {
-                CHOAM.log.debug("Request to join from non member: {} on: {}", from, params.member());
+                log.debug("Request to join from non member: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             if (!validators.containsKey(source)) {
-                CHOAM.log.debug("Request to join from non validator: {} on: {}", source, params.member());
+                log.debug("Request to join from non validator: {} on: {}", source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
             final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
             if (!members.contains(params.member())) {
-                CHOAM.log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source,
-                                members, params.member());
+                log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
+                          params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
+        }
+
+        @Override
+        public Logger log() {
+            return log;
         }
 
         @Override
@@ -306,18 +378,17 @@ public class CHOAM {
             ListenableFuture<SubmitResult> response;
             try (var link = comm.apply(target, params.member())) {
                 if (link == null) {
-                    CHOAM.log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
+                    log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
                     result.completeExceptionally(new ServiceUnavailable());
                     return;
                 }
-                CHOAM.log.debug("Submitting received txn: {} to: {} in: {} on: {}",
-                                hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
+                log.debug("Submitting received txn: {} to: {} in: {} on: {}",
+                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                 response = link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
                                                         .setTransaction(transaction).build());
             } catch (Throwable e) {
-                CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
-                                hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(),
-                                e);
+                log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(), e);
                 result.completeExceptionally(e);
                 return;
             }
@@ -326,35 +397,33 @@ public class CHOAM {
                 try {
                     resulting = response.get();
                 } catch (InterruptedException e) {
-                    CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
-                                    hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
-                                    params.member(), e);
+                    log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(),
+                              e);
                     result.completeExceptionally(e);
                     return;
                 } catch (ExecutionException e) {
-                    CHOAM.log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
-                                    hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
-                                    params.member(), e.getCause());
+                    log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(),
+                              e.getCause());
                     result.completeExceptionally(e.getCause());
                     return;
                 }
                 if (!resulting.isInitialized()) {
-                    CHOAM.log.debug("Null response submitting txn: {} to: {} in: {} on: {}",
-                                    hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
-                                    params.member());
+                    log.debug("Null response submitting txn: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                     result.completeExceptionally(new ServiceUnavailable("Empty response from: " + target));
                     return;
                 }
                 if (resulting.getOutcome() != Outcome.SUCCESS) {
-                    CHOAM.log.debug("Failed submitting txn: {} outcome: {} to: {} in: {} on: {}",
-                                    hashOf(transaction, params.digestAlgorithm()), resulting.getOutcome(),
-                                    target.getId(), viewId, params.member());
+                    log.debug("Failed submitting txn: {} outcome: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), resulting.getOutcome(), target.getId(),
+                              viewId, params.member());
                     result.completeExceptionally(new ServiceUnavailable("Unable to submit txn to: " + target
                     + " outcome: " + resulting.getOutcome()));
                 } else {
-                    CHOAM.log.debug("Success submitting txn: {} to: {} in: {} on: {}",
-                                    hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId,
-                                    params.member());
+                    log.debug("Success submitting txn: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                     result.complete(true);
                 }
             }, params.submitDispatcher());
@@ -363,6 +432,47 @@ public class CHOAM {
         @Override
         public boolean validate(HashedCertifiedBlock hb) {
             return validate(hb, validators);
+        }
+
+        private boolean assemble(Optional<ListenableFuture<Certification>> fs, Digest nextViewId, Join.Builder join,
+                                 Member m) {
+            if (fs.isEmpty()) {
+                return true;
+            }
+            Certification c;
+            try {
+                c = fs.get().get();
+            } catch (InterruptedException | ExecutionException e) {
+                log.warn("error attempting join of: {} from: {} on: {}", nextViewId, m, params.member(), e);
+                return started.get();
+            }
+            if (!c.hasSignature()) {
+                log.debug("Empty response to join of: {} from: {} on: {}", nextViewId, m, params.member());
+                return started.get();
+            }
+
+            Verifier v = validators.get(m);
+            if (v == null) {
+                log.debug("Cannot verify join response of: {} from non validator: {} on: {}", nextViewId, m,
+                         params.member());
+                return started.get();
+            }
+            if (!v.verify(JohnHancock.of(c.getSignature()), join.getMember().getConsensusKey().toByteString())) {
+                log.warn("Cannot verify join response of: {} from: {} on: {}", nextViewId, m, params.member());
+                return started.get();
+            }
+            join.addEndorsements(c);
+            if (join.getEndorsementsCount() > params.context().toleranceLevel()) {
+                try {
+                    @SuppressWarnings("unused")
+                    final CompletableFuture<Object> futureSailor = session.submit(join.build(), null);
+                    log.debug("Submitted join txn: {} on: {}", nextViewId, m, params.member());
+                } catch (InvalidTransaction e) {
+                    log.error("Invalid join txn on: {}", params.member(), e);
+                }
+                return false;
+            }
+            return started.get();
         }
     }
 
@@ -382,9 +492,12 @@ public class CHOAM {
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
             if (formation.isActive(params.member())) {
+                log.trace("Using consensus key: {} on: {}",
+                          params.digestAlgorithm().digest(next.consensusKeyPair.getPublic().getEncoded()),
+                          params.member());
                 Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
-                ViewContext vc = new GenesisContext(formation, params, signer, publisher());
-                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, genesisBlock());
+                ViewContext vc = new GenesisContext(formation, params, signer, publisher(), constructBlock());
+                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, constructBlock(), true);
             } else {
                 reconfigure = null;
             }
@@ -414,15 +527,20 @@ public class CHOAM {
         public ViewMember join(JoinRequest request, Digest from) {
             Member source = formation.getActiveMember(from);
             if (source == null) {
-                CHOAM.log.debug("Request to join from non validator: {} on: {}", from, params.member());
+                log.debug("Request to join from non validator: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
             if (!params.genesisViewId().equals(nextView)) {
-                CHOAM.log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
                 return ViewMember.getDefaultInstance();
             }
             return next.member;
+        }
+
+        @Override
+        public Logger log() {
+            return log;
         }
 
         @Override
@@ -441,7 +559,7 @@ public class CHOAM {
         public boolean validate(HashedCertifiedBlock hb) {
             var block = hb.block;
             if (!block.hasGenesis()) {
-                CHOAM.log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
+                log.debug("Invalid genesis block: {} on: {}", hb.hash, params.member());
                 return false;
             }
             return validateRegeneration(hb);
@@ -468,7 +586,7 @@ public class CHOAM {
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                 HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
-                                Iterable<? extends ExecutedTransaction> initialization) {
+                                Iterable<Transaction> initialization) {
         var reconfigure = reconfigure(id, joins, context, params);
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
@@ -515,7 +633,8 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    private final Map<Long, CheckpointState>                cachedCheckpoints = new ConcurrentHashMap<>();
+    private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
+
     private volatile HashedCertifiedBlock                   checkpoint;
     private final ReliableBroadcaster                       combine;
     private final CommonCommunications<Terminal, Concierge> comm;
@@ -527,14 +646,13 @@ public class CHOAM {
     private final Channel<List<Msg>>                        linear;
     private volatile nextView                               next;
     private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending           = new PriorityQueue<>();
+    private final PriorityQueue<HashedCertifiedBlock>       pending       = new PriorityQueue<>();
     private final RoundScheduler                            roundScheduler;
     private final Session                                   session;
-    private final AtomicBoolean                             started           = new AtomicBoolean();
+    private final AtomicBoolean                             started       = new AtomicBoolean();
     private final Store                                     store;
-    private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
-
-    private final Combine.Transitions transitions;
+    private final AtomicBoolean                             synchronizing = new AtomicBoolean(false);
+    private final Combine.Transitions                       transitions;
 
     private volatile HashedCertifiedBlock view;
 
@@ -603,9 +721,18 @@ public class CHOAM {
     private void accept(HashedCertifiedBlock next) {
         head = next;
         store.put(next);
-        log.debug("Accepted block: {} height: {} on: {}", next.hash, next.height(), params.member());
+        log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
+                  params.member());
         final Committee c = current;
         c.accept(next);
+    }
+
+    private void assemble() {
+        final HashedBlock h = head;
+        Digest nextViewId = new Digest(h.block.getAssemble().getNextView());
+        log.trace("Assembling Join for new view: {} on: {}", nextViewId, params.member());
+        final var c = current;
+        c.assemble(nextViewId);
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
@@ -720,26 +847,75 @@ public class CHOAM {
     }
 
     private BlockProducer constructBlock() {
-        return (height, prev, executions) -> Block.newBuilder()
-                                                  .setHeader(buildHeader(params.digestAlgorithm(), executions, prev,
-                                                                         height, checkpoint.height(), checkpoint.hash,
-                                                                         view.height(), view.hash))
-                                                  .setExecutions(executions).build();
+        return new BlockProducer() {
+
+            @Override
+            public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                final HashedCertifiedBlock cp = checkpoint;
+                final HashedCertifiedBlock v = view;
+                return CHOAM.genesis(nextViewId, joining, previous, params.context(), v, params, cp,
+                                     params.genesisData());
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Assemble assemble) {
+                final HashedCertifiedBlock v = view;
+                final HashedBlock c = checkpoint;
+                return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height,
+                                                                c.height(), c.hash, v.height(), v.hash))
+                            .setAssemble(assemble).build();
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Executions executions) {
+                final HashedCertifiedBlock c = checkpoint;
+                final HashedCertifiedBlock v = view;
+                return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height,
+                                                                c.height(), c.hash, v.height(), v.hash))
+                            .setExecutions(executions).build();
+            }
+
+            @Override
+            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                final HashedCertifiedBlock v = view;
+                final HashedCertifiedBlock c = checkpoint;
+                return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
+            }
+        };
     }
 
-    private void execute(List<ExecutedTransaction> executions) {
+    private void endorsement(Endorsements endorsements) {
+        Committee c = current;
+        if (c == null) {
+            log.trace("No committee to process endorsement on: {}", params.member());
+            return;
+        }
+        c.endorsements(endorsements);
+    }
+
+    private void execute(List<Transaction> executions) {
         log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(), params.member());
         params.processor().beginBlock(head.height(), head.hash);
         executions.forEach(exec -> {
-            Digest hash = hashOf(exec.getTransation(), params.digestAlgorithm());
+            Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
-            log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash, head.height(),
-                      stxn == null ? "null" : "present", params.member());
-            try {
-                params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
-            } catch (Throwable t) {
-                log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
-                          head.height(), params.member());
+            if (exec.hasJoin()) {
+                log.trace("Executing join transaction: {} block: {} height: {} on: {}", hash, head.hash, head.height(),
+                          params.member());
+                join(exec.getJoin());
+            } else if (exec.hasEndorsements()) {
+                log.trace("Executing endorsements: {} block: {} height: {} on: {}", hash, head.hash, head.height(),
+                          params.member());
+                endorsement(exec.getEndorsements());
+            } else {
+                log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash,
+                          head.height(), stxn == null ? "null" : "present", params.member());
+                try {
+                    params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
+                } catch (Throwable t) {
+                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
+                              head.height(), params.member());
+                }
             }
         });
     }
@@ -786,17 +962,34 @@ public class CHOAM {
         return blocks.build();
     }
 
-    private ReconfigureBlock genesisBlock() {
-        return (joining, nextViewId, last) -> CHOAM.genesis(nextViewId, joining, last, params.context(), view, params,
-                                                            checkpoint, params.genesisData());
+    private boolean isNext(HashedBlock next) {
+        if (next != null && next.height() == head.height() + 1) {
+            return true;
+        }
+        final Digest prev = next.getPrevious();
+        if (head.hash.equals(prev)) {
+            return true;
+        }
+        log.trace("Failed isNext: {} expected height: {} actual: {} expected previous: {} actual: {} on: {}", next.hash,
+                  next.height(), head.height() + 1, prev, head.hash, params.member());
+        return false;
     }
 
-    private boolean isNext(HashedBlock next) {
-        return next != null && next.height() == head.height() + 1 && head.hash.equals(next.getPrevious());
+    private void join(Join join) {
+        Committee c = current;
+        if (c == null) {
+            log.trace("No committee to process join on: {}", params.member());
+            return;
+        }
+        c.join(join);
     }
 
     private ViewMember join(JoinRequest request, Digest from) {
         return current.join(request, from);
+    }
+
+    private Certification join2(JoinRequest request, Digest from) {
+        return current.join2(request, from);
     }
 
     private void nextView() {
@@ -829,6 +1022,8 @@ public class CHOAM {
         case EXECUTIONS:
             execute(head.block.getExecutions().getExecutionsList());
             break;
+        case ASSEMBLE:
+            assemble();
         default:
             break;
         }
@@ -852,14 +1047,6 @@ public class CHOAM {
             current = new Client(validators, getViewId());
         }
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
-    }
-
-    private ReconfigureBlock reconfigureBlock() {
-        return (joining, nextViewId, previous) -> {
-            final HashedCertifiedBlock v = view;
-            final HashedCertifiedBlock c = checkpoint;
-            return reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
-        };
     }
 
     private void recover(HashedCertifiedBlock anchor) {

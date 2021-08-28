@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.salesforce.apollo.choam.support.HashedBlock.hash;
-import static com.salesforce.apollo.choam.support.HashedBlock.height;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -16,12 +13,14 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -46,11 +45,6 @@ public class ViewContext {
     private final Map<Member, Verifier>          validators;
 
     public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
-                       Consumer<HashedCertifiedBlock> publisher) {
-        this(context, params, signer, validators, publisher, (a, b, c) -> null);
-    }
-
-    public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
                        Consumer<HashedCertifiedBlock> publisher, BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
@@ -71,27 +65,34 @@ public class ViewContext {
         return context;
     }
 
-    public Validate generateValidation(Digest hash, Block block) {
-        byte[] bytes = hash(block.getHeader(), params.digestAlgorithm()).getBytes();
-        log.trace("Signing block: {} height: {} on: {}", hash, height(block), params.member());
-        JohnHancock signature = signer.sign(bytes);
+    public Validate generateValidation(HashedBlock block) {
+        log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member());
+        JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
-            log.error("Unable to sign block: {} height: {} on: {}", hash, height(block), params.member());
+            log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(), params.member());
             return null;
         }
-        var validation = Validate.newBuilder().setHash(hash.toDigeste())
+        var validation = Validate.newBuilder().setHash(block.hash.toDigeste())
                                  .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
                                                           .setSignature(signature.toSig()).build())
                                  .build();
         return validation;
     }
 
+    public Signer getSigner() {
+        return signer;
+    }
+
     public Parameters params() {
         return params;
     }
 
-    public Block produce(long l, Digest hash, Executions build) {
-        return blockProducer.produce(l, hash, build);
+    public Block produce(long l, Digest hash, Assemble assemble) {
+        return blockProducer.produce(l, hash, assemble);
+    }
+
+    public Block produce(long l, Digest hash, Executions executions) {
+        return blockProducer.produce(l, hash, executions);
     }
 
     public void publish(HashedCertifiedBlock block) {

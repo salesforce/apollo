@@ -165,7 +165,7 @@ public class LocalRouter extends Router {
 
     @Override
     public void close() {
-        server.shutdownNow();
+        server.shutdown();
         try {
             server.awaitTermination();
         } catch (InterruptedException e) {

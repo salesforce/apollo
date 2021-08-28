@@ -11,6 +11,7 @@ import java.io.IOException;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
+import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -58,17 +59,22 @@ public interface Terminal extends Link {
             }
 
             @Override
+            public ListenableFuture<ViewMember> join(JoinRequest join) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+                return null;
+            }
+
+            @Override
             public ListenableFuture<Initial> sync(Synchronize sync) {
                 return null;
             }
 
             @Override
-            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) { 
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<ViewMember> join(JoinRequest join) { 
+            public ListenableFuture<Certification> join2(JoinRequest join) {
                 return null;
             }
         };
@@ -80,9 +86,11 @@ public interface Terminal extends Link {
 
     ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
 
-    ListenableFuture<Initial> sync(Synchronize sync);
+    ListenableFuture<ViewMember> join(JoinRequest join);
+
+    ListenableFuture<Certification> join2(JoinRequest join);
 
     ListenableFuture<SubmitResult> submit(SubmitTransaction request);
 
-    ListenableFuture<ViewMember> join(JoinRequest join);
+    ListenableFuture<Initial> sync(Synchronize sync);
 }

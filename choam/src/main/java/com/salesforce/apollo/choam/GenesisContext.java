@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.function.Consumer;
 
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
@@ -23,8 +24,8 @@ import com.salesforce.apollo.membership.Member;
 public class GenesisContext extends ViewContext {
 
     public GenesisContext(Context<Member> context, Parameters params, Signer signer,
-                          Consumer<HashedCertifiedBlock> publisher) {
-        super(context, params, signer, Collections.emptyMap(), publisher);
+                          Consumer<HashedCertifiedBlock> publisher, BlockProducer blockProducer) {
+        super(context, params, signer, Collections.emptyMap(), publisher, blockProducer);
     }
 
     @Override

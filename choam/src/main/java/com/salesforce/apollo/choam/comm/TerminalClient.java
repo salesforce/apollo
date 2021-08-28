@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam.comm;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
+import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -76,6 +77,11 @@ public class TerminalClient implements Terminal {
     @Override
     public ListenableFuture<ViewMember> join(JoinRequest join) {
         return client.join(join);
+    }
+
+    @Override
+    public ListenableFuture<Certification> join2(JoinRequest join) {
+        return client.join2(join);
     }
 
     public void release() {
