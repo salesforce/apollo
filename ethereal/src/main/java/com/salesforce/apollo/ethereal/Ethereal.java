@@ -141,8 +141,7 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(() -> config.executor().execute(consensus.starte),
-                              () -> config.executor().execute(consensus.stope), consensus.input);
+        return new Controller(consensus.starte, consensus.stope, consensus.input);
     }
 
     /**

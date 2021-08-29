@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
@@ -110,6 +111,8 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  */
 public class CHOAM {
     public interface BlockProducer {
+        Block checkpoint();
+
         Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
 
         Block produce(Long height, Digest prev, Assemble assemble);
@@ -158,6 +161,11 @@ public class CHOAM {
         @Override
         public void cancelTimer(String timer) {
             roundScheduler.cancel(timer);
+        }
+
+        @Override
+        public void combine() {
+            CHOAM.this.combine();
         }
 
         @Override
@@ -585,10 +593,39 @@ public class CHOAM {
 
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
+        Digest stateHash = algo.getOrigin();
+        long length = 0;
+        if (state != null) {
+            try (FileInputStream fis = new FileInputStream(state)) {
+                stateHash = algo.digest(fis);
+            } catch (IOException e) {
+                log.error("Invalid checkpoint!", e);
+                return null;
+            }
+            length = state.length();
+        }
+        Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(blockSize)
+                                               .setStateHash(stateHash.toDigeste());
+        if (state != null) {
+            byte[] buff = new byte[blockSize];
+            try (FileInputStream fis = new FileInputStream(state)) {
+                for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
+                    ByteString segment = ByteString.copyFrom(buff, 0, read);
+                    builder.addSegments(algo.digest(segment).toDigeste());
+                }
+            } catch (IOException e) {
+                log.error("Invalid checkpoint!", e);
+                return null;
+            }
+        }
+        return builder.build();
+    }
+
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                 HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
                                 Iterable<Transaction> initialization) {
-        var reconfigure = reconfigure(id, joins, context, params);
+        var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockSize());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -602,8 +639,8 @@ public class CHOAM {
     }
 
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
-                                          Parameters params) {
-        var builder = Reconfigure.newBuilder().setCheckpointBlocks(params.checkpointBlockSize()).setId(id.toDigeste())
+                                          Parameters params, int checkpointTarget) {
+        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(id.toDigeste())
                                  .setEpochLength(params.ethereal().getEpochLength())
                                  .setNumberOfEpochs(params.ethereal().getNumberOfEpochs());
 
@@ -619,7 +656,11 @@ public class CHOAM {
 
     public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                     HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint) {
-        var reconfigure = reconfigure(id, joins, context, params);
+        final Block lvc = lastViewChange.block;
+        int lastTarget = lvc.hasGenesis() ? lvc.getGenesis().getInitialView().getCheckpointTarget()
+                                          : lvc.getReconfigure().getCheckpointTarget();
+        int checkpointTarget = lastTarget == 0 ? params.checkpointBlockSize() : lastTarget - 1;
+        var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -751,14 +792,32 @@ public class CHOAM {
         }
     }
 
-    private void checkpoint() {
+    private Block checkpoint() {
         CheckpointState checkpointState = checkpoint(head.block.getCheckpoint(), head.height());
         if (checkpointState == null) {
             log.error("Cannot checkpoint: {} on: {}", head.hash, params.member());
             transitions.fail();
-            return;
+            return null;
         }
         cachedCheckpoints.put(head.height(), checkpointState);
+        final long currentHeight = head.height();
+        File state = params.checkpointer().apply(currentHeight);
+        if (state == null) {
+            log.error("Cannot create checkpoint");
+            transitions.fail();
+            return null;
+        }
+        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointBlockSize());
+        if (cp == null) {
+            transitions.fail();
+        }
+
+        HashedBlock lb = head;
+        final HashedCertifiedBlock v = view;
+        final HashedBlock c = checkpoint;
+        return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
+                                                        c.height(), c.hash, v.height(), v.hash))
+                    .setCheckpoint(cp).build();
     }
 
     private CheckpointState checkpoint(Checkpoint body, long height) {
@@ -829,7 +888,7 @@ public class CHOAM {
 
     private void combine(List<Msg> messages) {
         messages.forEach(m -> combine(m));
-        combine();
+        transitions.combine();
     }
 
     private void combine(Msg m) {
@@ -847,6 +906,11 @@ public class CHOAM {
 
     private BlockProducer constructBlock() {
         return new BlockProducer() {
+
+            @Override
+            public Block checkpoint() {
+                return CHOAM.this.checkpoint();
+            }
 
             @Override
             public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
@@ -1009,7 +1073,7 @@ public class CHOAM {
         final HashedBlock h = head;
         switch (h.block.getBodyCase()) {
         case CHECKPOINT:
-            checkpoint();
+//            checkpoint();
             break;
         case RECONFIGURE:
             reconfigure(h.block.getReconfigure());

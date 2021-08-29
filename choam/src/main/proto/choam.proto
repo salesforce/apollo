@@ -79,7 +79,7 @@ message Genesis {
 
 message Reconfigure {
     utils.Digeste id = 1;
-    int32 checkpointBlocks = 2;
+    int32 checkpointTarget = 2;
     int32 numberOfEpochs = 3;
     int32 epochLength = 4;
     repeated ViewMember view = 5;

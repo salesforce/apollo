@@ -37,6 +37,10 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions checkpoint() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions establish() {
             throw fsm().invalidTransitionOn();
         }
@@ -71,6 +75,8 @@ public interface Driven {
             return null;
         }
     }
+
+    void checkpoint();
 
     void prepareAssembly();
 

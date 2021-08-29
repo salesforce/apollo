@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Assemble;
+import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Coordinate;
@@ -74,6 +75,16 @@ public class Producer {
     private class DriveIn implements Driven {
 
         @Override
+        public void checkpoint() {
+            Block block = blockProducer.checkpoint();
+            if (block == null) {
+                log.error("Cannot generate checkpoint block on: {}", params().member());
+                transitions.failed();
+                return;
+            }
+        }
+
+        @Override
         public void prepareAssembly() {
             controller.stop();
             final Digest next = nextViewId;
@@ -94,6 +105,23 @@ public class Producer {
                     }
                 }
             }));
+        }
+
+        @Override
+        public void preSpice() {
+            log.debug("Pre Spice phase started for: {} from: {} on: {}", nextViewId, getViewId(), params().member());
+            coordinator.stop();
+            Digest preSpiceId = view.context().getId().prefix("-PreSpice".getBytes());
+            final Context<Member> preSpiceContext = new Context<>(preSpiceId, view.context().getRingCount());
+            view.context().allMembers().forEach(e -> preSpiceContext.activate(e));
+            coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
+                                                          .setContext(preSpiceContext).build(),
+                                                  params().communications());
+            coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
+            coordinator.start(params().gossipDuration(), params().scheduler());
+            initializeConsensus();
+            controller.start();
+            produceAssemble();
         }
 
         @Override
@@ -169,23 +197,6 @@ public class Producer {
                 log.trace("Invalid witness: {} on: {}", id, id, params().member());
             }
             return false;
-        }
-
-        @Override
-        public void preSpice() {
-            log.debug("Pre Spice phase started for: {} from: {} on: {}", nextViewId, getViewId(), params().member());
-            coordinator.stop();
-            Digest preSpiceId = view.context().getId().prefix("-PreSpice".getBytes());
-            final Context<Member> preSpiceContext = new Context<>(preSpiceId, view.context().getRingCount());
-            view.context().allMembers().forEach(e -> preSpiceContext.activate(e));
-            coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
-                                                          .setContext(preSpiceContext).build(),
-                                                  params().communications());
-            coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
-            coordinator.start(params().gossipDuration(), params().scheduler());
-            initializeConsensus();
-            controller.start();
-            produceAssemble();
         }
     }
 

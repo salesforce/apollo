@@ -15,6 +15,10 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Combine {
 
     interface Transitions extends FsmExecutor<Combine, Combine.Transitions> {
+        default Transitions combine() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions fail() {
             return Merchantile.PROTOCOL_FAILURE;
         }
@@ -46,7 +50,9 @@ public interface Combine {
 
     void awaitSynchronization();
 
-    void regenerate();
-    
     void cancelTimer(String timer);
+
+    void combine();
+
+    void regenerate();
 }

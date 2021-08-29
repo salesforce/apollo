@@ -48,6 +48,24 @@ public enum Earner implements Driven.Transitions {
             return null;
         }
     },
+    CHECKPOINTING {
+        
+        @Entry
+        public void check() {
+            context().checkpoint();
+        }
+
+        @Override
+        public Transitions lastBlock() {
+            return SPICE;
+        }
+
+        @Override
+        public Transitions validate(Validate validate) {
+            context().valdateBlock(validate);
+            return null;
+        }
+    },
     COMPLETE {
 
         @Entry
@@ -62,6 +80,11 @@ public enum Earner implements Driven.Transitions {
         }
     },
     INITIAL {
+        @Override
+        public Transitions checkpoint() {
+            return CHECKPOINTING;
+        }
+
         @Override
         public Transitions start() {
             return SPICE;

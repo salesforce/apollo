@@ -19,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,6 +63,7 @@ public class TestCHOAM {
         private final ByteMessage   tx        = ByteMessage.newBuilder()
                                                            .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                            .build();
+        @SuppressWarnings("unused")
         private final AtomicInteger lineTotal;
 
         Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed,
@@ -86,16 +86,18 @@ public class TestCHOAM {
 
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
             fs.whenComplete((o, t) -> {
-                time.close();
                 if (!proceed.get()) {
                     return;
                 }
-                final int tot = lineTotal.incrementAndGet();
-                if (tot % 100 == 0 && tot % (100 * 100) == 0) {
-                    System.out.println(".");
-                } else if (tot % 100 == 0) {
-                    System.out.print(".");
-                }
+//                ForkJoinPool.commonPool().execute(() -> {
+//                    final int tot = lineTotal.incrementAndGet();
+//                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+//                        System.out.println(".");
+//                    } else if (tot % 100 == 0) {
+//                        System.out.print(".");
+//                    }
+//                });
+
                 var tc = latency.time();
                 if (t != null) {
                     failed.incrementAndGet();
@@ -105,6 +107,7 @@ public class TestCHOAM {
                         e.printStackTrace();
                     }
                 } else {
+                    time.close();
                     completed.incrementAndGet();
                     try {
                         decorate(session.submit(tx, timeout), tc);
@@ -116,7 +119,7 @@ public class TestCHOAM {
         }
     }
 
-    private static final int CARDINALITY = 51;
+    private static final int CARDINALITY = 5;
 
     private Map<Digest, List<Digest>>      blocks;
     private Map<Digest, CHOAM>             choams;
@@ -143,13 +146,12 @@ public class TestCHOAM {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
-        var dispatcher = Executors.newCachedThreadPool();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         var params = Parameters.newBuilder().setContext(context)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(20)).setSubmitDispatcher(dispatcher)
-                               .setDispatcher(dispatcher).setScheduler(scheduler);
-        params.getCoordination().setFalsePositiveRate(0.0001).setExecutor(dispatcher);
+                               .setGossipDuration(Duration.ofMillis(20)).setScheduler(scheduler);
+        params.getCombineParams().setFalsePositiveRate(0.0001).setBufferSize(2000);
+        params.getCoordination().setFalsePositiveRate(0.0001).setBufferSize(2000);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -160,7 +162,7 @@ public class TestCHOAM {
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),
-                                                                        ForkJoinPool.commonPool())));
+                                                                        Executors.newCachedThreadPool())));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             final TransactionExecutor processor = new TransactionExecutor() {
 
@@ -213,7 +215,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 5;
+        final int clientCount = 1;
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal))
                   .forEach(e -> transactioneers.add(e));
