@@ -76,6 +76,8 @@ public interface Driven {
         }
     }
 
+    public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
+
     void checkpoint();
 
     void prepareAssembly();

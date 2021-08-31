@@ -6,9 +6,8 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import java.io.IOException;
-
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.Certification;
@@ -22,6 +21,7 @@ import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * Terminal RPC endpoint for CHOAM
@@ -30,28 +30,18 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public interface Terminal extends Link {
-
     static Terminal getLocalLoopback(Member member) {
         return new Terminal() {
 
             @Override
-            public void close() throws IOException {
+            public Member getMember() {
+                return member;
             }
+        };
+    }
 
-            @Override
-            public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
-                return null;
-            }
+    static Terminal getLocalLoopback(SigningMember member, Concierge service) {
+        return new Terminal() {
 
             @Override
             public Member getMember() {
@@ -60,37 +50,55 @@ public interface Terminal extends Link {
 
             @Override
             public ListenableFuture<ViewMember> join(JoinRequest join) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
-                return null;
-            }
-
-            @Override
-            public ListenableFuture<Initial> sync(Synchronize sync) {
-                return null;
+                SettableFuture<ViewMember> f = SettableFuture.create();
+                f.set(service.join(join, member.getId()));
+                return f;
             }
 
             @Override
             public ListenableFuture<Certification> join2(JoinRequest join) {
-                return null;
+                SettableFuture<Certification> f = SettableFuture.create();
+                f.set(service.join2(join, member.getId()));
+                return f;
+            }
+
+            @Override
+            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+                SettableFuture<SubmitResult> f = SettableFuture.create();
+                f.set(service.submit(request, member.getId()));
+                return f;
             }
         };
     }
 
-    ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
+    default void close() {
+    }
 
-    ListenableFuture<Blocks> fetchBlocks(BlockReplication replication);
+    default ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
+        return null;
+    }
 
-    ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
+    default ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
+        return null;
+    }
 
-    ListenableFuture<ViewMember> join(JoinRequest join);
+    default ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
+        return null;
+    }
 
-    ListenableFuture<Certification> join2(JoinRequest join);
+    default ListenableFuture<ViewMember> join(JoinRequest join) {
+        return null;
+    }
 
-    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
+    default ListenableFuture<Certification> join2(JoinRequest join) {
+        return null;
+    }
 
-    ListenableFuture<Initial> sync(Synchronize sync);
+    default ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+        return null;
+    }
+
+    default ListenableFuture<Initial> sync(Synchronize sync) {
+        return null;
+    }
 }

@@ -39,13 +39,38 @@ public enum Merchantile implements Transitions {
             context().awaitRegeneration();
         }
     },
-    BOOTSTRAPPING, INITIAL {
+    BOOTSTRAPPING {
+        @Override
+        public Transitions combine() {
+            return null; // Just queue up any blocks
+        }
+    },
+    CHECKPOINTING {
+
+        @Override
+        public Transitions combine() {
+            return null; // Just queue up any blocks
+        }
+
+        @Override
+        public Transitions finishCheckpoint() {
+            fsm().pop().combine();
+            return null;
+        }
+    },
+    INITIAL {
         @Override
         public Transitions start() {
             return RECOVERING;
         }
     },
     OPERATIONAL {
+
+        @Override
+        public Transitions beginCheckpoint() {
+            fsm().push(CHECKPOINTING);
+            return null;
+        }
 
         @Override
         public Transitions combine() {
@@ -93,7 +118,12 @@ public enum Merchantile implements Transitions {
             context().regenerate();
         }
     },
-    SYNCHRONIZING;
+    SYNCHRONIZING {
+        @Override
+        public Transitions combine() {
+            return null; // Just queue up any blocks
+        }
+    };
 
     @Override
     public Transitions regenerated() {

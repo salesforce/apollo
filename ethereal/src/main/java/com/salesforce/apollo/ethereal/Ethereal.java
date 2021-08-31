@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Exchanger;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -22,7 +23,6 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
-import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -227,8 +227,6 @@ public class Ethereal {
         return new Controller(start, stop, input);
     }
 
-    private record published(short source, List<PreUnit> pus) {}
-
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
                                               Consumer<PreUnit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
@@ -253,17 +251,25 @@ public class Ethereal {
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
-        SimpleChannel<published> in = new SimpleChannel<>("Input for: " + config.pid(), 100);
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> in.submit(new published(source, pus));
+        var in = Executors.newSingleThreadExecutor(r -> {
+            var t = new Thread(r, "Input for: " + config.pid());
+            t.setDaemon(true);
+            return t;
+        });
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> in.execute(() -> {
+            Orderer orderer = ord.get();
+            if (orderer != null) {
+                orderer.addPreunits(source, pus);
+            }
+        });
 
         Runnable start = () -> {
             var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());
             ord.set(orderer);
             orderer.start(new DsrFactory(), synchronizer);
-            in.consumeEach(p -> orderer.addPreunits(p.source, p.pus));
         };
         Runnable stop = () -> {
-            in.close();
+            in.shutdown();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();

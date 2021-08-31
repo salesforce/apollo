@@ -60,6 +60,7 @@ public class TxDataSource implements DataSource {
             bytesRemaining -= next.getSerializedSize();
             batchSize++;
             builder.addExecutions(next);
+            log.debug("Added join to data on: {}", parameters.member());
         }
         while (processing.peek() != null && bytesRemaining >= processing.peek().getSerializedSize()) {
             Transaction next = processing.poll();
@@ -88,13 +89,14 @@ public class TxDataSource implements DataSource {
     }
 
     public boolean offer(Transaction txn) {
+        if (txn.hasJoin()) {
+            joins.add(txn);
+            log.debug("Added join on: {}", parameters.member());
+            return true;
+        }
         if (remaining.addAndGet(-txn.getSerializedSize()) > 0) {
-            buffered.addAndGet(txn.getSerializedSize());
-            if (txn.hasJoin()) {
-                joins.add(txn);
-            } else {
+            buffered.addAndGet(txn.getSerializedSize()); 
                 processing.add(txn);
-            }
             return true;
         } else {
             remaining.addAndGet(txn.getSerializedSize());

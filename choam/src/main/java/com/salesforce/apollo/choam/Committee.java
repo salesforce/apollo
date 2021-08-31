@@ -113,7 +113,7 @@ public interface Committee {
     ViewMember join(JoinRequest request, Digest from);
 
     default Certification join2(JoinRequest request, Digest from) {
-        log().debug("Cannot process join request from: {}, not a committee member on: {}", from, params().member());
+        log().info("Cannot process join request from: {}, not a committee member on: {}", from, params().member());
         return Certification.getDefaultInstance();
     }
 
@@ -124,12 +124,12 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log().debug("Cannot submit txn inactive committee on: {}", params().member());
+        log().info("Cannot submit txn inactive committee on: {}", params().member());
         return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
     }
 
     default void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
-        log().debug("Cannot submit txn inactive committee on: {}", params().member());
+        log().info("Cannot submit txn inactive committee on: {}", params().member());
         result.completeExceptionally(new ServiceUnavailable());
     }
 

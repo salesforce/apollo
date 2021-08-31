@@ -67,27 +67,26 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
         }
         handler = new Thread(() -> {
             while (!closed.getAcquire()) {
+                List<T> available = new ArrayList<T>();
+                T polled;
                 try {
-                    List<T> available = new ArrayList<T>();
-                    var polled = queue.poll(1, TimeUnit.SECONDS);
-                    if (closed.get()) {
-                        return;
-                    }
-                    if (polled != null) {
-                        available.add(polled);
-                        int count = queue.size();
-                        queue.drainTo(available, count);
-                        try {
-                            consumer.accept(available);
-                        } catch (Throwable e) {
-                            log.error("Error in consumer", e);
-                        }
-                    }
+                    polled = queue.poll(2, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
-//                    log.info("stopping consumer", e);
-                    return; // Normal exit
+                    return;
                 }
-                Thread.yield();
+                if (closed.get()) {
+                    return;
+                }
+                if (polled != null) {
+                    available.add(polled);
+                    int count = queue.size();
+                    queue.drainTo(available, count);
+                    try {
+                        consumer.accept(available);
+                    } catch (Throwable e) {
+                        log.error("Error in consumer", e);
+                    }
+                }
             }
         }, label);
         handler.setDaemon(true);

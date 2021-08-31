@@ -18,7 +18,9 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -63,16 +65,17 @@ public class TestCHOAM {
         private final ByteMessage   tx        = ByteMessage.newBuilder()
                                                            .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                            .build();
-        @SuppressWarnings("unused")
         private final AtomicInteger lineTotal;
+        private final int           max;
 
-        Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed,
-                       AtomicInteger lineTotal) {
+        Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed, AtomicInteger lineTotal,
+                       int max) {
             this.latency = latency;
             this.proceed = proceed;
             this.session = session;
             this.timeout = timeout;
             this.lineTotal = lineTotal;
+            this.max = max;
         }
 
         void start() {
@@ -89,14 +92,12 @@ public class TestCHOAM {
                 if (!proceed.get()) {
                     return;
                 }
-//                ForkJoinPool.commonPool().execute(() -> {
-//                    final int tot = lineTotal.incrementAndGet();
-//                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
-//                        System.out.println(".");
-//                    } else if (tot % 100 == 0) {
-//                        System.out.print(".");
-//                    }
-//                });
+                final int tot = lineTotal.incrementAndGet();
+                if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                    System.out.println(".");
+                } else if (tot % 100 == 0) {
+                    System.out.print(".");
+                }
 
                 var tc = latency.time();
                 if (t != null) {
@@ -108,11 +109,12 @@ public class TestCHOAM {
                     }
                 } else {
                     time.close();
-                    completed.incrementAndGet();
-                    try {
-                        decorate(session.submit(tx, timeout), tc);
-                    } catch (InvalidTransaction e) {
-                        e.printStackTrace();
+                    if (completed.incrementAndGet() < max) {
+                        try {
+                            decorate(session.submit(tx, timeout), tc);
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
             });
@@ -147,9 +149,15 @@ public class TestCHOAM {
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
+        var fjPool = Router.createFjPool();
+        Executor submitDispatcher = fjPool;
+        Executor dispatcher = fjPool;
+        Executor routerExec = fjPool;
+
         var params = Parameters.newBuilder().setContext(context)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(20)).setScheduler(scheduler);
+                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
+                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher);
         params.getCombineParams().setFalsePositiveRate(0.0001).setBufferSize(2000);
         params.getCoordination().setFalsePositiveRate(0.0001).setBufferSize(2000);
 
@@ -162,7 +170,8 @@ public class TestCHOAM {
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),
-                                                                        Executors.newCachedThreadPool())));
+                                                                        routerExec)));
+        Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             final TransactionExecutor processor = new TransactionExecutor() {
 
@@ -176,7 +185,7 @@ public class TestCHOAM {
                 public void execute(Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
                     if (f != null) {
-                        f.complete(new Object());
+                        f.completeAsync(() -> new Object(), clients);
                     }
                 }
             };
@@ -215,19 +224,21 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1;
+        final int clientCount = 100;
+        final int max = 20;
         for (int i = 0; i < clientCount; i++) {
-            choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal))
+            choams.values().stream()
+                  .map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal, max))
                   .forEach(e -> transactioneers.add(e));
         }
 
-        transactioneers.parallelStream().forEach(e -> e.start());
+        transactioneers.stream().forEach(e -> e.start());
 
         try {
-            assertTrue(Utils.waitForCondition(120_000,
-                                              () -> transactioneers.stream().filter(e -> e.completed.get() > 20)
+            assertTrue(Utils.waitForCondition(300_000,
+                                              () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
                                                                    .count() == transactioneers.size()),
-                       "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() > 20).count());
+                       "Only completed: " + transactioneers.stream().map(e -> e.completed.get()).sorted().toList());
         } finally {
             proceed.set(false);
         }

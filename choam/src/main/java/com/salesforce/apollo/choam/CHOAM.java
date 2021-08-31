@@ -28,9 +28,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -270,24 +272,24 @@ public class CHOAM {
         public Certification join2(JoinRequest request, Digest from) {
             Member source = params.context().getActiveMember(from);
             if (source == null) {
-                log.debug("Request to join from non member: {} on: {}", from, params.member());
+                log.info("Request to join from non member: {} on: {}", from, params.member());
                 return Certification.getDefaultInstance();
             }
             Digest vid = new Digest(request.getNextView());
             Digest nextViewId = producer.getNextViewId();
             if (nextViewId == null) {
-                log.debug("Next view currently unknown, rejecting join of view: {} from: {} on: {}", vid, source,
-                          params.member());
+                log.info("Next view currently unknown, rejecting join of view: {} from: {} on: {}", vid, source,
+                         params.member());
                 return Certification.getDefaultInstance();
             }
             if (!nextViewId.equals(vid)) {
-                log.debug("Request to join invalid view: {} from non member: {} on: {}", vid, source, params.member());
+                log.info("Request to join invalid view: {} from non member: {} on: {}", vid, source, params.member());
                 return Certification.getDefaultInstance();
             }
             var committee = Committee.viewMembersOf(vid, params.context());
             if (!committee.contains(source)) {
-                log.debug("Request to join: {} from non member: {} expected on of: {} on: {}", vid, source, committee,
-                          params.member());
+                log.info("Request to join: {} from non member: {} expected on of: {} on: {}", vid, source, committee,
+                         params.member());
                 return Certification.getDefaultInstance();
             }
             // looks okay to me
@@ -335,10 +337,28 @@ public class CHOAM {
             assembler = new SliceIterator<Terminal>("Assembler for: " + params.member(), params.member(),
                                                     new ArrayList<>(validators.keySet()), comm,
                                                     Executors.newSingleThreadExecutor());
+            Set<Member> received = Collections.newSetFromMap(new ConcurrentHashMap<>());
             Join.Builder join = Join.newBuilder().setView(nextViewId.toDigeste()).setMember(next.member);
             JoinRequest req = JoinRequest.newBuilder().setContext(params.context().getId().toDigeste())
                                          .setNextView(nextViewId.toDigeste()).setMember(join.getMember()).build();
-            assembler.iterate((t, m) -> t.join2(req), (fs, t, m) -> assemble(fs, nextViewId, join, m));
+            AtomicReference<Runnable> reiterate = new AtomicReference<>();
+            reiterate.set(() -> assembler.iterate((t, m) -> {
+                if (received.contains(m)) {
+                    return null;
+                }
+                log.info("Attempting join of: {} to: {} on: {}", nextViewId, m, params.member());
+                return t.join2(req);
+            }, (fs, t, m) -> assemble(fs, nextViewId, join, m, received), () -> {
+                if (join.getEndorsementsCount() <= params.context().toleranceLevel()) {
+                    log.info("Reiteration of assembly join of: {} current: {} needed: {} from: {} on: {}", nextViewId,
+                             join.getEndorsementsCount(), params.context().toleranceLevel() + 1, getViewId(),
+                             params.member());
+                    reiterate.get().run();
+                } else {
+                    log.info("Assembled join of: {} from: {} on: {}", nextViewId, getViewId(), params.member());
+                }
+            }));
+            reiterate.get().run();
         }
 
         @Override
@@ -401,7 +421,9 @@ public class CHOAM {
                 result.completeExceptionally(e);
                 return;
             }
+            Future<?> fs = params.scheduler().schedule(() -> response.cancel(true), 500, TimeUnit.MILLISECONDS);
             response.addListener(() -> {
+                fs.cancel(true);
                 SubmitResult resulting;
                 try {
                     resulting = response.get();
@@ -444,10 +466,11 @@ public class CHOAM {
         }
 
         private boolean assemble(Optional<ListenableFuture<Certification>> fs, Digest nextViewId, Join.Builder join,
-                                 Member m) {
-            if (fs.isEmpty()) {
+                                 Member m, Set<Member> received) {
+            if (fs == null || fs.isEmpty()) {
                 return true;
             }
+            log.warn("Received join response of: {} from: {} on: {}", nextViewId, m, params.member());
             Certification c;
             try {
                 c = fs.get().get();
@@ -456,26 +479,28 @@ public class CHOAM {
                 return started.get();
             }
             if (!c.hasSignature()) {
-                log.debug("Empty response to join of: {} from: {} on: {}", nextViewId, m, params.member());
+                log.info("Empty response to join of: {} from: {} on: {}", nextViewId, m, params.member());
                 return started.get();
             }
 
             Verifier v = validators.get(m);
             if (v == null) {
-                log.debug("Cannot verify join response of: {} from non validator: {} on: {}", nextViewId, m,
-                          params.member());
+                log.info("Cannot verify join response of: {} from non validator: {} on: {}", nextViewId, m,
+                         params.member());
                 return started.get();
             }
             if (!v.verify(JohnHancock.of(c.getSignature()), join.getMember().getConsensusKey().toByteString())) {
                 log.warn("Cannot verify join response of: {} from: {} on: {}", nextViewId, m, params.member());
                 return started.get();
             }
+            log.info("Join endorsement of: {} from: {} on: {}", nextViewId, m, params.member());
+            received.add(m);
             join.addEndorsements(c);
             if (join.getEndorsementsCount() > params.context().toleranceLevel()) {
                 try {
                     @SuppressWarnings("unused")
                     final CompletableFuture<Object> futureSailor = session.submit(join.build(), null);
-                    log.debug("Submitted join txn: {} on: {}", nextViewId, m, params.member());
+                    log.info("Submitted join txn: {} on: {}", nextViewId, m, params.member());
                 } catch (InvalidTransaction e) {
                     log.error("Invalid join txn on: {}", params.member(), e);
                 }
@@ -712,11 +737,13 @@ public class CHOAM {
         head = new NullBlock(params.digestAlgorithm());
         view = new NullBlock(params.digestAlgorithm());
         checkpoint = new NullBlock(params.digestAlgorithm());
+        final Trampoline service = new Trampoline();
         comm = params.communications()
-                     .create(params.member(), params.context().getId(), new Trampoline(),
+                     .create(params.member(), params.context().getId(), service,
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
                                                      params.metrics(), r),
-                             TerminalClient.getCreate(params.metrics()), Terminal.getLocalLoopback(params.member()));
+                             TerminalClient.getCreate(params.metrics()),
+                             Terminal.getLocalLoopback(params.member(), service));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
@@ -793,6 +820,7 @@ public class CHOAM {
     }
 
     private Block checkpoint() {
+        transitions.beginCheckpoint();
         CheckpointState checkpointState = checkpoint(head.block.getCheckpoint(), head.height());
         if (checkpointState == null) {
             log.error("Cannot checkpoint: {} on: {}", head.hash, params.member());
@@ -815,9 +843,12 @@ public class CHOAM {
         HashedBlock lb = head;
         final HashedCertifiedBlock v = view;
         final HashedBlock c = checkpoint;
-        return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
+        final Block block = Block.newBuilder()
+                                 .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
                                                         c.height(), c.hash, v.height(), v.hash))
-                    .setCheckpoint(cp).build();
+                                 .setCheckpoint(cp).build();
+        transitions.finishCheckpoint();
+        return block;
     }
 
     private CheckpointState checkpoint(Checkpoint body, long height) {
@@ -888,7 +919,7 @@ public class CHOAM {
 
     private void combine(List<Msg> messages) {
         messages.forEach(m -> combine(m));
-        transitions.combine();
+        combine();
     }
 
     private void combine(Msg m) {
@@ -1041,7 +1072,7 @@ public class CHOAM {
     private void join(Join join) {
         Committee c = current;
         if (c == null) {
-            log.trace("No committee to process join on: {}", params.member());
+            log.info("No committee to process join on: {}", params.member());
             return;
         }
         c.join(join);
@@ -1082,6 +1113,7 @@ public class CHOAM {
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
             execute(head.block.getGenesis().getInitializeList());
+            transitions.regenerated();
         case EXECUTIONS:
             execute(head.block.getExecutions().getExecutionsList());
             break;

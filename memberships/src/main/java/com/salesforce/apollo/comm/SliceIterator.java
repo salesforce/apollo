@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -35,9 +36,9 @@ public class SliceIterator<Comm extends Link> {
 
     private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
     private final CommonCommunications<Comm, ?> comm;
-    private volatile int                        current = -1;
+    private AtomicInteger                       current = new AtomicInteger(0);
     private final Executor                      executor;
-    private String                              label;
+    private final String                        label;
     private final SigningMember                 member;
     private final List<? extends Member>        slice;
 
@@ -66,27 +67,27 @@ public class SliceIterator<Comm extends Link> {
                                      SlicePredicateHandler<T, Comm> handler, Runnable onComplete) {
         Runnable proceed = () -> internalIterate(round, handler, onComplete);
 
-        boolean finalIteration = current % slice.size() >= slice.size() - 1;
+        boolean finalIteration = current.get() % slice.size() >= slice.size() - 1;
 
         Consumer<Boolean> allowed = allow -> proceed(allow, proceed, finalIteration, onComplete);
         try (Comm link = next()) {
             if (link == null) {
-                log.trace("No link found on: {} member: {}  on: {}", label, slice.get(current), member);
-                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current));
+                log.trace("No link found on: {} member: {}  on: {}", label, slice.get(current.get()), member);
+                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current.get()));
                 allowed.accept(allow);
                 return;
             }
-            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current, link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, slice.get(current));
+            log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.get(), link.getMember(), member);
+            ListenableFuture<T> futureSailor = round.apply(link, slice.get(current.get()));
             if (futureSailor == null) {
-                log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current, link.getMember(),
-                          member);
-                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current));
+                log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.get(),
+                          link.getMember(), member);
+                final boolean allow = handler.handle(Optional.empty(), link, slice.get(current.get()));
                 allowed.accept(allow);
                 return;
             }
             futureSailor.addListener(Utils.wrapped(() -> {
-                allowed.accept(handler.handle(Optional.of(futureSailor), link, slice.get(current)));
+                allowed.accept(handler.handle(Optional.of(futureSailor), link, slice.get(current.get())));
             }, log), executor);
         } catch (IOException e) {
             log.debug("Error closing", e);
@@ -105,8 +106,7 @@ public class SliceIterator<Comm extends Link> {
 
     private Comm next() {
         Comm link = null;
-        final int last = current;
-        int c = (last + 1) % slice.size();
+        int c = (current.get() + 1) % slice.size();
         for (int i = 0; i < slice.size(); i++) {
             if (c == 0) {
                 Collections.shuffle(slice);
@@ -115,9 +115,9 @@ public class SliceIterator<Comm extends Link> {
             if (link != null) {
                 break;
             }
-            current = (c + 1) % slice.size();
+            current.set((c + 1) % slice.size());
         }
-        current = c;
+        current.set(c);
         return link;
     }
 

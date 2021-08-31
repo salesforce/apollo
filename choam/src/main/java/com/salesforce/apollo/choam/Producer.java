@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
+import static com.salesforce.apollo.choam.fsm.Driven.PERIODIC_VALIDATIONS;
 import static com.salesforce.apollo.choam.support.HashedBlock.height;
 
 import java.util.ArrayList;
@@ -18,7 +19,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -61,6 +61,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -76,12 +77,22 @@ public class Producer {
 
         @Override
         public void checkpoint() {
-            Block block = blockProducer.checkpoint();
-            if (block == null) {
+            Block ckpt = blockProducer.checkpoint();
+            if (ckpt == null) {
                 log.error("Cannot generate checkpoint block on: {}", params().member());
                 transitions.failed();
                 return;
             }
+            var next = new HashedBlock(params().digestAlgorithm(), ckpt);
+            previousBlock.set(next);
+            var validation = view.generateValidation(next);
+            coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
+            var cb = pending.computeIfAbsent(next.hash, h -> CertifiedBlock.newBuilder());
+            cb.setBlock(next.block);
+            cb.addCertifications(validation.getWitness());
+            maybePublish(next.hash, cb);
+            periodicValidations(() -> transitions.lastBlock());
+            log.info("Produced checkpoint: {} for: {} on: {}", next.hash, getViewId(), params().member());
         }
 
         @Override
@@ -89,39 +100,21 @@ public class Producer {
             controller.stop();
             final Digest next = nextViewId;
             log.debug("Preparing Assembly of next view: {} from: {} on: {}", next, getViewId(), params().member());
-            AtomicInteger countDown = new AtomicInteger(3);
-            AtomicReference<UUID> registration = new AtomicReference<>();
-            registration.set(coordinator.register(round -> {
-                if (round % coordinator.getContext().timeToLive() == 0) {
-                    if (!pending.isEmpty() && countDown.decrementAndGet() > 0) {
-                        pending.values().forEach(b -> {
-                            var validation = view.generateValidation(new HashedBlock(params().digestAlgorithm(),
-                                                                                     b.getBlock()));
-                            coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
-                        });
-                    } else {
-                        coordinator.removeRoundListener(registration.get());
-                        transitions.lastBlock();
-                    }
-                }
-            }));
+            periodicValidations(() -> transitions.lastBlock());
         }
 
         @Override
         public void preSpice() {
-            log.debug("Pre Spice phase started for: {} from: {} on: {}", nextViewId, getViewId(), params().member());
             coordinator.stop();
             Digest preSpiceId = view.context().getId().prefix("-PreSpice".getBytes());
             final Context<Member> preSpiceContext = new Context<>(preSpiceId, view.context().getRingCount());
             view.context().allMembers().forEach(e -> preSpiceContext.activate(e));
-            coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
-                                                          .setContext(preSpiceContext).build(),
-                                                  params().communications());
-            coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
+            initializeCoordinator(preSpiceContext);
             coordinator.start(params().gossipDuration(), params().scheduler());
             initializeConsensus();
             controller.start();
             produceAssemble();
+            log.info("Pre Spice phase started for: {} on: {}", nextViewId, params().member());
         }
 
         @Override
@@ -141,7 +134,7 @@ public class Producer {
             final HashedBlock lb = previousBlock.get();
             var reconfigure = new HashedBlock(params().digestAlgorithm(),
                                               blockProducer.reconfigure(assembly, lb.hash, lb));
-            log.debug("Consensus complete, next view: {} from: {} on: {}", lb.hash, getViewId(), params().member());
+            log.info("Consensus complete, next view: {} from: {} on: {}", lb.hash, getViewId(), params().member());
 
             previousBlock.set(reconfigure);
             var validation = view.generateValidation(reconfigure);
@@ -220,6 +213,7 @@ public class Producer {
     private final Map<Digest, CertifiedBlock.Builder> pending       = new ConcurrentHashMap<>();
     private final AtomicReference<HashedBlock>        previousBlock = new AtomicReference<>();
     private final Set<Digest>                         published     = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private volatile RoundScheduler                   scheduler;
     private final Transitions                         transitions;
     private final ViewContext                         view;
 
@@ -234,12 +228,7 @@ public class Producer {
         ds = new TxDataSource(params,
                               (params.maxBatchByteSize() * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3)) * 2);
 
-        // Reliable broadcast of both Unit and Coordination messages between valid
-        // members of this committee
-        coordinator = new ReliableBroadcaster(params.coordination().clone().setMember(params.member())
-                                                    .setContext(view.context()).build(),
-                                              params.communications());
-        coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
+        initializeCoordinator(view.context());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName(params().member().getId().toString());
@@ -409,6 +398,19 @@ public class Producer {
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
+    /**
+     * Reliable broadcast of both Unit and Coordination messages between valid
+     * members of this committee
+     */
+    private void initializeCoordinator(final Context<Member> context) {
+        coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
+                                                      .setContext(context).build(),
+                                              params().communications());
+        coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
+        scheduler = new RoundScheduler(context.getRingCount());
+        coordinator.register(i -> scheduler.tick(i));
+    }
+
     private void maybePublish(Digest hash, CertifiedBlock.Builder cb) {
         final int toleranceLevel = params().context().toleranceLevel();
         if (cb.hasBlock() && cb.getCertificationsCount() > toleranceLevel) {
@@ -432,6 +434,22 @@ public class Producer {
 
     private Parameters params() {
         return view.params();
+    }
+
+    private void periodicValidations(Runnable onEmptyAction) {
+        AtomicReference<Runnable> action = new AtomicReference<>();
+        action.set(() -> {
+            if (pending.isEmpty() && onEmptyAction != null) {
+                onEmptyAction.run();
+                return;
+            }
+            pending.values().forEach(b -> {
+                var validation = view.generateValidation(new HashedBlock(params().digestAlgorithm(), b.getBlock()));
+                coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
+            });
+            scheduler.schedule(PERIODIC_VALIDATIONS, action.get(), 1);
+        });
+        scheduler.schedule(PERIODIC_VALIDATIONS, action.get(), 1);
     }
 
     /**

@@ -84,26 +84,28 @@ public class ViewReconTest {
         BlockProducer reconfigure = new BlockProducer() {
 
             @Override
-            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return CHOAM.reconfigure(nextViewId, joining, previous, committee, previous, params.build(), previous);
-            }
-
-            @Override
-            public Block produce(Long height, Digest prev, Executions executions) {
-                // TODO Auto-generated method stub
-                return null;
-            }
-
-            @Override
-            public Block produce(Long height, Digest prev, Assemble assemble) {
-                // TODO Auto-generated method stub
+            public Block checkpoint() {
                 return null;
             }
 
             @Override
             public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                // TODO Auto-generated method stub
                 return null;
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Assemble assemble) {
+                return null;
+            }
+
+            @Override
+            public Block produce(Long height, Digest prev, Executions executions) {
+                return null;
+            }
+
+            @Override
+            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                return CHOAM.reconfigure(nextViewId, joining, previous, committee, previous, params.build(), previous);
             }
         };
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));

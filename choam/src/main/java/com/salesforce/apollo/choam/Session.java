@@ -172,7 +172,7 @@ public class Session {
                                              join.toByteString().asReadOnlyByteBuffer());
         return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
                                  .setNonce(nonce.toDigeste()).setJoin(join).setSignature(signature.toSig()).build(),
-                      timeout);
+                      timeout, true);
     }
 
     /**
@@ -193,10 +193,10 @@ public class Session {
         var nonce = new Digest(params.digestAlgorithm().digestCode(), longs);
         var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
                                              transaction.toByteString().asReadOnlyByteBuffer());
-        return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
-                                 .setNonce(nonce.toDigeste()).setUser(transaction.toByteString())
-                                 .setSignature(signature.toSig()).build(),
-                      timeout);
+        final Transaction txn = Transaction.newBuilder().setSource(params.member().getId().toDigeste())
+                                           .setNonce(nonce.toDigeste()).setUser(transaction.toByteString())
+                                           .setSignature(signature.toSig()).build();
+        return submit(txn, timeout, false);
     }
 
     /**
@@ -207,7 +207,8 @@ public class Session {
      * @return onCompletion - the future result of the submitted transaction
      * @throws InvalidTransaction - if the transaction is invalid in any way
      */
-    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout) throws InvalidTransaction {
+    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout,
+                                           boolean join) throws InvalidTransaction {
         if (!transaction.hasNonce() || !transaction.hasSource() || !transaction.hasSignature()) {
             throw new InvalidTransaction();
         }
@@ -221,7 +222,11 @@ public class Session {
                                   .schedule(() -> result.completeExceptionally(new TimeoutException("Transaction timeout")),
                                             timeout.toMillis(), TimeUnit.MILLISECONDS);
         var stxn = new SubmittedTransaction(hash, transaction, result);
-        submit(stxn);
+        if (join) {
+            submitJoin(stxn);
+        } else {
+            submit(stxn);
+        }
         return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
@@ -253,6 +258,29 @@ public class Session {
         }
     }
 
+    private void submitJoin(SubmittedTransaction stx) {
+        submitted.put(stx.hash(), stx);
+        Decorators.ofCompletionStage(() -> supplyAsync(() -> {
+            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
+            if (stx.onCompletion().isDone()) {
+                return true;
+            }
+            final @Nullable Boolean success = service.apply(stx);
+            log.trace("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
+            return success;
+        }, params.submitDispatcher())).withRetry(retry, params.scheduler()).get()
+                  .whenComplete((r, t) -> {
+                      log.trace("Completion of join txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t,
+                                params.member());
+                      if (t != null) {
+                          stx.onCompletion().completeExceptionally(t);
+                      } else if (!r) {
+                          stx.onCompletion()
+                             .completeExceptionally(new TransationFailed("failed to complete transaction"));
+                      }
+                  });
+    }
+
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
         Decorators.ofCompletionStage(() -> supplyAsync(() -> {
@@ -263,15 +291,13 @@ public class Session {
             final @Nullable Boolean success = service.apply(stx);
             log.trace("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
             return success;
-        }, params.submitDispatcher())).withBulkhead(bulkhead).withCircuitBreaker(circuitBreaker)
-                  .withRateLimiter(rateLimiter).withRetry(retry, params.scheduler()).get().whenComplete((r, t) -> {
-                      log.trace("Completion of txn: {} submit: {} exceptionally: {}", stx.hash(), r, t);
-                      if (t != null) {
-                          stx.onCompletion().completeExceptionally(t);
-                      } else if (!r) {
-                          stx.onCompletion()
-                             .completeExceptionally(new TransationFailed("failed to complete transaction"));
-                      }
-                  });
+        }, params.submitDispatcher())).withRetry(retry, params.scheduler()).get().whenComplete((r, t) -> {
+            log.trace("Completion of txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t, params.member());
+            if (t != null) {
+                stx.onCompletion().completeExceptionally(t);
+            } else if (!r) {
+                stx.onCompletion().completeExceptionally(new TransationFailed("failed to complete transaction"));
+            }
+        });
     }
 }

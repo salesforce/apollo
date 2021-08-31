@@ -15,12 +15,20 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Combine {
 
     interface Transitions extends FsmExecutor<Combine, Combine.Transitions> {
+        default Transitions beginCheckpoint() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions combine() {
             throw fsm().invalidTransitionOn();
         }
 
         default Transitions fail() {
             return Merchantile.PROTOCOL_FAILURE;
+        }
+
+        default Transitions finishCheckpoint() {
+            throw fsm().invalidTransitionOn();
         }
 
         default Transitions regenerate() {
