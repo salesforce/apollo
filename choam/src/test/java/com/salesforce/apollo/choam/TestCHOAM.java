@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,6 +39,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -55,18 +56,20 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static class Transactioneer {
-        private final AtomicBoolean proceed;
+    private class Transactioneer {
+        private final static Random entropy = new Random();
+
         private final AtomicInteger completed = new AtomicInteger();
         private final AtomicInteger failed    = new AtomicInteger();
         private final Timer         latency;
+        private final AtomicInteger lineTotal;
+        private final int           max;
+        private final AtomicBoolean proceed;
         private final Session       session;
         private final Duration      timeout;
         private final ByteMessage   tx        = ByteMessage.newBuilder()
                                                            .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                            .build();
-        private final AtomicInteger lineTotal;
-        private final int           max;
 
         Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed, AtomicInteger lineTotal,
                        int max) {
@@ -78,17 +81,8 @@ public class TestCHOAM {
             this.max = max;
         }
 
-        void start() {
-            Timer.Context time = latency.time();
-            try {
-                decorate(session.submit(tx, timeout), time);
-            } catch (InvalidTransaction e) {
-                throw new IllegalStateException(e);
-            }
-        }
-
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
-            fs.whenComplete((o, t) -> {
+            fs.whenCompleteAsync((o, t) -> {
                 if (!proceed.get()) {
                     return;
                 }
@@ -99,34 +93,50 @@ public class TestCHOAM {
                     System.out.print(".");
                 }
 
-                var tc = latency.time();
                 if (t != null) {
+                    var tc = latency.time();
                     failed.incrementAndGet();
-                    try {
-                        decorate(session.submit(tx, timeout), tc);
-                    } catch (InvalidTransaction e) {
-                        e.printStackTrace();
-                    }
-                } else {
-                    time.close();
-                    if (completed.incrementAndGet() < max) {
+                    scheduler.schedule(() -> {
                         try {
                             decorate(session.submit(tx, timeout), tc);
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
+                    }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+                } else {
+                    time.close();
+                    var tc = latency.time();
+                    if (completed.incrementAndGet() < max) {
+                        scheduler.schedule(() -> {
+                            try {
+                                decorate(session.submit(tx, timeout), tc);
+                            } catch (InvalidTransaction e) {
+                                e.printStackTrace();
+                            }
+                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     }
                 }
             });
+        }
+
+        void start() {
+            Timer.Context time = latency.time();
+            try {
+                decorate(session.submit(tx, timeout), time);
+            } catch (InvalidTransaction e) {
+                throw new IllegalStateException(e);
+            }
         }
     }
 
     private static final int CARDINALITY = 5;
 
-    private Map<Digest, List<Digest>>      blocks;
-    private Map<Digest, CHOAM>             choams;
-    private List<SigningMember>            members;
-    private Map<Digest, Router>            routers;
+    private Map<Digest, List<Digest>> blocks;
+    private Map<Digest, CHOAM>        choams;
+    private List<SigningMember>       members;
+    private Map<Digest, Router>       routers;
+    private ScheduledExecutorService  scheduler;
+
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -148,18 +158,20 @@ public class TestCHOAM {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        var fjPool = Router.createFjPool();
-        Executor submitDispatcher = fjPool;
-        Executor dispatcher = fjPool;
-        Executor routerExec = fjPool;
+        scheduler = Executors.newScheduledThreadPool(CARDINALITY);
+//        final ForkJoinPool exec = Router.createFjPool();
+        Executor submitDispatcher = Router.createFjPool();
+        Executor dispatcher = Router.createFjPool();
+        Executor routerExec = Executors.newCachedThreadPool();
 
-        var params = Parameters.newBuilder().setContext(context)
+        var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(1_000)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher);
-        params.getCombineParams().setFalsePositiveRate(0.0001).setBufferSize(2000);
-        params.getCoordination().setFalsePositiveRate(0.0001).setBufferSize(2000);
+//        params.getEthereal().setEpochLength(120);
+        var pb = ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(100));
+        pb.getCoordination();
+        params.setProducer(pb.build());
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -212,8 +224,8 @@ public class TestCHOAM {
         choams.values().forEach(ch -> ch.start());
         final int expected = 23;
 
-        Utils.waitForCondition(60_000, () -> blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected)
-                                                   .count() == choams.size());
+        Utils.waitForCondition(300_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                    .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
@@ -224,8 +236,8 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 100;
-        final int max = 20;
+        final int clientCount = 1000;
+        final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream()
                   .map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal, max))
@@ -233,18 +245,20 @@ public class TestCHOAM {
         }
 
         transactioneers.stream().forEach(e -> e.start());
-
+        final boolean success;
         try {
-            assertTrue(Utils.waitForCondition(300_000,
-                                              () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
-                                                                   .count() == transactioneers.size()),
-                       "Only completed: " + transactioneers.stream().map(e -> e.completed.get()).sorted().toList());
+            success = Utils.waitForCondition(300_000,
+                                             () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
+                                                                  .count() == transactioneers.size());
         } finally {
             proceed.set(false);
         }
 
         ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build().report();
+
+        assertTrue(success,
+                   "Only completed: " + transactioneers.stream().map(e -> e.completed.get()).sorted().toList());
     }
 
     @Test

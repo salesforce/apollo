@@ -109,12 +109,12 @@ public class ViewReconfiguration implements Reconfiguration {
         Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().activeMembers().size());
         reContext.activate(view.context().activeMembers());
 
-        coordinator = new ReliableBroadcaster(params().coordination().clone().setMember(params().member())
+        coordinator = new ReliableBroadcaster(params().producer().coordination().clone().setMember(params().member())
                                                       .setContext(reContext).build(),
                                               params().communications());
         coordinator.registerHandler((id, msgs) -> msgs.forEach(msg -> process(msg)));
 
-        Config.Builder config = params().ethereal().clone();
+        Config.Builder config = params().producer().ethereal().clone();
 
         // Canonical assignment of members -> pid for Ethereal
         Short pid = view.roster().get(params().member().getId());
@@ -165,7 +165,7 @@ public class ViewReconfiguration implements Reconfiguration {
         log.debug("Convening assembly of: {} on: {}", nextViewId, params().member());
 
         controller.start();
-        coordinator.start(params().gossipDuration(), params().scheduler());
+        coordinator.start(params().producer().gossipDuration(), params().scheduler());
     }
 
     @Override
@@ -175,7 +175,7 @@ public class ViewReconfiguration implements Reconfiguration {
     }
 
     public void gatherAssembly() {
-        coordinator.start(params().gossipDuration(), params().scheduler());
+        coordinator.start(params().producer().gossipDuration(), params().scheduler());
         JoinRequest request = JoinRequest.newBuilder().setContext(params().context().getId().toDigeste())
                                          .setNextView(nextViewId.toDigeste()).build();
         AtomicBoolean proceed = new AtomicBoolean(true);
@@ -214,7 +214,7 @@ public class ViewReconfiguration implements Reconfiguration {
     private void assemble() {
         log.debug("Attempting assembly of: {} assembled: {} on: {}", nextViewId, assembled.size(), params().member());
 
-        final int toleranceLevel = params().context().toleranceLevel();
+        final int toleranceLevel = params().toleranceLevel();
         final HashMultimap<Member, Join> proposed = assembled.stream()
                                                              .filter(j -> nextViewId.equals(new Digest(j.getView())))
                                                              .filter(j -> params().context()
@@ -271,7 +271,7 @@ public class ViewReconfiguration implements Reconfiguration {
         } else if (countDown.decrementAndGet() >= 0) {
             log.trace("Retrying assembly of: {} on: {}", nextViewId, params().member());
             reiterate.get().run();
-        } else if (joins.size() > params().context().toleranceLevel()) {
+        } else if (joins.size() > params().toleranceLevel()) {
             log.trace("Assembled: {} with: {} on: {}", nextViewId, joins.size(), params().member());
             transitions.assembled();
         } else {
@@ -376,8 +376,7 @@ public class ViewReconfiguration implements Reconfiguration {
     }
 
     private void maybePublish() {
-        if (reconfiguration.hasBlock()
-        && reconfiguration.getCertificationsCount() > params().context().toleranceLevel()) {
+        if (reconfiguration.hasBlock() && reconfiguration.getCertificationsCount() > params().toleranceLevel()) {
             final HashedCertifiedBlock block = new HashedCertifiedBlock(params().digestAlgorithm(),
                                                                         reconfiguration.build());
             log.trace("Publishing reconfiguration: {} on: {}", block.hash, params().member());

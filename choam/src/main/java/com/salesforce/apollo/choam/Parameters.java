@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
@@ -36,23 +35,119 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
  *
  */
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
-                         ReliableBroadcaster.Parameters.Builder combineParameters, ScheduledExecutorService scheduler,
-                         Duration gossipDuration, int maxBatchByteSize, int maxCheckpointSegments,
-                         Duration submitTimeout, int processedBufferSize, List<Transaction> genesisData,
-                         Digest genesisViewId, int maxCheckpointBlocks, TransactionExecutor processor,
+                         ReliableBroadcaster.Parameters.Builder combine, ScheduledExecutorService scheduler,
+                         Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
+                         List<Transaction> genesisData, Digest genesisViewId, TransactionExecutor processor,
                          Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
                          Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
-                         DigestAlgorithm digestAlgorithm, ReliableBroadcaster.Parameters.Builder coordination,
-                         Config.Builder ethereal, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
-                         int maxViewBlocks, int maxSyncBlocks, int synchronizationCycles, int maxPending,
-                         Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
-                         Session.Builder session, Executor submitDispatcher) {
+                         DigestAlgorithm digestAlgorithm, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
+                         int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
+                         Duration synchronizeTimeout, Session.Builder session, Executor submitDispatcher,
+                         int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer) {
+
+    public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+        public static class Builder {
+            private Duration gossipDuration = Duration.ofSeconds(1);
+            private int      maxSyncBlocks  = 100;
+            private int      maxViewBlocks  = 100;
+
+            public BootstrapParameters build() {
+                return new BootstrapParameters(gossipDuration, maxViewBlocks, maxSyncBlocks);
+            }
+
+            public Duration getGossipDuration() {
+                return gossipDuration;
+            }
+
+            public int getMaxSyncBlocks() {
+                return maxSyncBlocks;
+            }
+
+            public int getMaxViewBlocks() {
+                return maxViewBlocks;
+            }
+
+            public Builder setGossipDuration(Duration gossipDuration) {
+                this.gossipDuration = gossipDuration;
+                return this;
+            }
+
+            public Builder setMaxSyncBlocks(int maxSyncBlocks) {
+                this.maxSyncBlocks = maxSyncBlocks;
+                return this;
+            }
+
+            public Builder setMaxViewBlocks(int maxViewBlocks) {
+                this.maxViewBlocks = maxViewBlocks;
+                return this;
+            }
+        }
+    }
+
+    public record ProducerParameters(Config.Builder ethereal, Duration gossipDuration,
+                                     ReliableBroadcaster.Parameters.Builder coordination, int maxBatchByteSize) {
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+        public static class Builder {
+            private ReliableBroadcaster.Parameters.Builder coordination     = ReliableBroadcaster.Parameters.newBuilder();
+            private Config.Builder                         ethereal         = Config.deterministic();
+            private Duration                               gossipDuration   = Duration.ofSeconds(1);
+            private int                                    maxBatchByteSize = 256 * 1024;;
+
+            public ProducerParameters build() {
+                return new ProducerParameters(ethereal, gossipDuration, coordination, maxBatchByteSize);
+            }
+
+            public ReliableBroadcaster.Parameters.Builder getCoordination() {
+                return coordination;
+            }
+
+            public Config.Builder getEthereal() {
+                return ethereal;
+            }
+
+            public Duration getGossipDuration() {
+                return gossipDuration;
+            }
+
+            public int getMaxBatchByteSize() {
+                return maxBatchByteSize;
+            }
+
+            public Builder setCoordination(ReliableBroadcaster.Parameters.Builder coordination) {
+                this.coordination = coordination;
+                return this;
+            }
+
+            public Builder setEthereal(Config.Builder ethereal) {
+                this.ethereal = ethereal;
+                return this;
+            }
+
+            public Builder setGossipDuration(Duration gossipDuration) {
+                this.gossipDuration = gossipDuration;
+                return this;
+            }
+
+            public Builder setMaxBatchByteSize(int maxBatchByteSize) {
+                this.maxBatchByteSize = maxBatchByteSize;
+                return this;
+            }
+        }
+    }
 
     public static Builder newBuilder() {
         return new Builder();
     }
 
     public static class Builder {
+        private BootstrapParameters                    bootstrap             = BootstrapParameters.newBuilder().build();
         private int                                    checkpointBlockSize   = 8192;
         private Function<Long, File>                   checkpointer          = c -> {
                                                                                  throw new IllegalStateException("No checkpointer defined");
@@ -60,28 +155,21 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private Router                                 communications;
         private Context<Member>                        context;
-        private ReliableBroadcaster.Parameters.Builder coordination          = ReliableBroadcaster.Parameters.newBuilder();
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               dispatcher            = ForkJoinPool.commonPool();
-        private Config.Builder                         ethereal              = Config.deterministic();
         private List<Transaction>                      genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
-        private int                                    maxBatchByteSize      = 256 * 1024;
-        private int                                    maxCheckpointBlocks   = DEFAULT_MAX_BLOCKS;
         private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
-        private int                                    maxPending            = 400;
-        private int                                    maxSyncBlocks         = 100;
-        private int                                    maxViewBlocks         = 100;
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
-        private int                                    processedBufferSize   = 1000;
         private TransactionExecutor                    processor             = (t, f) -> {
                                                                              };
+        private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
         private int                                    regenerationCycles    = 20;
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
-        private ScheduledExecutorService               scheduler             = Executors.newScheduledThreadPool(1);
+        private ScheduledExecutorService               scheduler;
         private Session.Builder                        session               = Session.newBuilder();
         private File                                   storeFile;
         private Executor                               submitDispatcher      = ForkJoinPool.commonPool();
@@ -92,13 +180,18 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
+            final double n = context.getRingCount();
+            var toleranceLevel = (int) Math.floor(n - (n / 3.0));
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
-                                  maxBatchByteSize, maxCheckpointSegments, submitTimeout, processedBufferSize,
-                                  genesisData, genesisViewId, maxCheckpointBlocks, processor, checkpointer, storeFile,
-                                  checkpointBlockSize, dispatcher, restorer, digestAlgorithm, coordination, ethereal,
-                                  metrics, viewSigAlgorithm, maxViewBlocks, maxSyncBlocks, synchronizationCycles,
-                                  maxPending, synchronizeDuration, regenerationCycles, synchronizeTimeout, session,
-                                  submitDispatcher);
+                                  maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
+                                  checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,
+                                  metrics, viewSigAlgorithm, synchronizationCycles, synchronizeDuration,
+                                  regenerationCycles, synchronizeTimeout, session, submitDispatcher, toleranceLevel,
+                                  bootstrap, producer);
+        }
+
+        public BootstrapParameters getBootstrap() {
+            return bootstrap;
         }
 
         public int getCheckpointBlockSize() {
@@ -121,20 +214,12 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return context;
         }
 
-        public ReliableBroadcaster.Parameters.Builder getCoordination() {
-            return coordination;
-        }
-
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
         }
 
         public Executor getDispatcher() {
             return dispatcher;
-        }
-
-        public Config.Builder getEthereal() {
-            return ethereal;
         }
 
         public List<Transaction> getGenesisData() {
@@ -149,28 +234,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return gossipDuration;
         }
 
-        public int getMaxBatchByteSize() {
-            return maxBatchByteSize;
-        }
-
-        public int getMaxCheckpointBlocks() {
-            return maxCheckpointBlocks;
-        }
-
         public int getMaxCheckpointSegments() {
             return maxCheckpointSegments;
-        }
-
-        public int getMaxPending() {
-            return maxPending;
-        }
-
-        public int getMaxSyncBlocks() {
-            return maxSyncBlocks;
-        }
-
-        public int getMaxViewBlocks() {
-            return maxViewBlocks;
         }
 
         public SigningMember getMember() {
@@ -181,12 +246,12 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return metrics;
         }
 
-        public int getProcessedBufferSize() {
-            return processedBufferSize;
-        }
-
         public TransactionExecutor getProcessor() {
             return processor;
+        }
+
+        public ProducerParameters getProducer() {
+            return producer;
         }
 
         public int getRegenerationCycles() {
@@ -237,6 +302,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return viewSigAlgorithm;
         }
 
+        public Builder setBootstrap(BootstrapParameters bootstrap) {
+            this.bootstrap = bootstrap;
+            return this;
+        }
+
         public Builder setCheckpointBlockSize(int checkpointBlockSize) {
             this.checkpointBlockSize = checkpointBlockSize;
             return this;
@@ -263,11 +333,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setCoordination(ReliableBroadcaster.Parameters.Builder coordination) {
-            this.coordination = coordination;
-            return this;
-        }
-
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
             return this;
@@ -275,11 +340,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setDispatcher(Executor dispatcher) {
             this.dispatcher = dispatcher;
-            return this;
-        }
-
-        public Builder setEthereal(Config.Builder ethereal) {
-            this.ethereal = ethereal;
             return this;
         }
 
@@ -298,33 +358,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setMaxBatchByteSize(int maxBatchByteSize) {
-            this.maxBatchByteSize = maxBatchByteSize;
-            return this;
-        }
-
-        public Builder setMaxCheckpointBlocks(int maxCheckpointBlocks) {
-            this.maxCheckpointBlocks = maxCheckpointBlocks;
-            return this;
-        }
-
         public Builder setMaxCheckpointSegments(int maxCheckpointSegments) {
             this.maxCheckpointSegments = maxCheckpointSegments;
-            return this;
-        }
-
-        public Builder setMaxPending(int maxPending) {
-            this.maxPending = maxPending;
-            return this;
-        }
-
-        public Builder setMaxSyncBlocks(int maxSyncBlocks) {
-            this.maxSyncBlocks = maxSyncBlocks;
-            return this;
-        }
-
-        public Builder setMaxViewBlocks(int maxViewBlocks) {
-            this.maxViewBlocks = maxViewBlocks;
             return this;
         }
 
@@ -338,13 +373,13 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setProcessedBufferSize(int processedBufferSize) {
-            this.processedBufferSize = processedBufferSize;
+        public Builder setProcessor(TransactionExecutor processor) {
+            this.processor = processor;
             return this;
         }
 
-        public Builder setProcessor(TransactionExecutor processor) {
-            this.processor = processor;
+        public Builder setProducer(ProducerParameters producer) {
+            this.producer = producer;
             return this;
         }
 

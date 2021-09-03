@@ -91,6 +91,10 @@ public class RoundScheduler extends AtomicInteger {
         }
     }
 
+    public void cancelAll() {
+        new ArrayList<>(timers.values()).forEach(e -> e.cancel());
+    }
+
     public Timer schedule(String label, Runnable action, int delayRounds) {
         Timer timer = new Timer(label, get() + delayRounds, action);
         if (delayRounds == 0) {

@@ -122,11 +122,11 @@ public class Bootstrapper {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member().getId());
         long seed = Utils.bitStreamEntropy().nextLong();
-        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.maxViewBlocks(),
-                                                                      params.coordination().getFalsePositiveRate());
+        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+                                                                      params.combine().getFalsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
-        store.blocksFrom(start.get(), end, params.maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
+        store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder().setContext(params.context().getId().toDigeste())
                                                        .setBlocksBff(blocksBff.toBff()).setFrom(start.get()).setTo(end)
                                                        .build();
@@ -203,8 +203,8 @@ public class Bootstrapper {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member().getId());
         long seed = Utils.bitStreamEntropy().nextLong();
-        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.maxViewBlocks(),
-                                                                      params.coordination().getFalsePositiveRate());
+        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+                                                                      params.combine().getFalsePositiveRate());
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder().setContext(params.context().getId().toDigeste())

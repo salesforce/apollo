@@ -6,15 +6,11 @@
  */
 package com.salesforce.apollo.choam.fsm;
 
-import java.util.concurrent.CompletableFuture;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.choam.proto.Validate;
+import com.chiralbehaviors.tron.Exit;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
 /**
@@ -24,32 +20,8 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Earner implements Driven.Transitions {
-    ASSEMBLE {
-
-        @Override
-        public Transitions lastBlock() {
-            return PRE_SPICE;
-        }
-
-        @Entry
-        public void prepareAssembly() {
-            context().prepareAssembly();
-        }
-
-        @Override
-        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
-            context().submit(transaction, result);
-            return null;
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
-        }
-    },
     CHECKPOINTING {
-        
+
         @Entry
         public void check() {
             context().checkpoint();
@@ -59,24 +31,22 @@ public enum Earner implements Driven.Transitions {
         public Transitions lastBlock() {
             return SPICE;
         }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
-        }
     },
     COMPLETE {
+        @Exit
+        public void bail() {
+            context().cancelTimers();
+        }
+
+        @Override
+        public Transitions lastBlock() {
+            context().complete();
+            return null;
+        }
 
         @Entry
         public void reconfigure() {
             context().reconfigure();
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
         }
     },
     INITIAL {
@@ -90,7 +60,44 @@ public enum Earner implements Driven.Transitions {
             return SPICE;
         }
     },
-    PRE_SPICE {
+    PROTOCOL_FAILURE {
+        @Override
+        public Transitions assembled() {
+            return null;
+        }
+
+        @Override
+        public Transitions checkpoint() {
+            return null;
+        }
+
+        @Override
+        public Transitions establish() {
+            return null;
+        }
+
+        @Override
+        public Transitions failed() {
+            return null;
+        }
+
+        @Override
+        public Transitions lastBlock() {
+            return null;
+        }
+
+        @Override
+        public Transitions start() {
+            return null;
+        }
+
+        @Entry
+        public void terminate() {
+            log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
+            context().complete();
+        }
+    },
+    SPICE {
 
         @Override
         public Transitions lastBlock() {
@@ -98,50 +105,8 @@ public enum Earner implements Driven.Transitions {
         }
 
         @Entry
-        public void resumeProduction() {
-            context().preSpice();
-        }
-
-        @Override
-        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
-            context().submit(transaction, result);
-            return null;
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
-        }
-    },
-    PROTOCOL_FAILURE {
-        @Entry
-        public void terminate() {
-            log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
-        }
-    },
-    SPICE {
-
-        @Override
-        public Transitions lastBlock() {
-            return ASSEMBLE;
-        }
-
-        @Entry
         public void startProduction() {
             context().startProduction();
-        }
-
-        @Override
-        public Transitions submit(Transaction transaction, CompletableFuture<SubmitResult> result) {
-            context().submit(transaction, result);
-            return null;
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().valdateBlock(validate);
-            return null;
         }
     };
 

@@ -10,16 +10,16 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.Endorsements;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
@@ -29,7 +29,6 @@ import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
-import com.salesforce.apollo.choam.support.ServiceUnavailable;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -91,31 +90,17 @@ public interface Committee {
 
     void accept(HashedCertifiedBlock next);
 
-    default void assemble(Digest nextViewId) {
-        throw new IllegalStateException("Should not be assembling for next view: " + nextViewId + " on: "
-        + params().member());
-    }
-
     void complete();
-
-    default void endorsements(Endorsements endorsements) {
-        log().trace("Not processing endorsement, not a committee member on: {}", params().member());
-    }
-
-    Logger log();
 
     boolean isMember();
 
-    default void join(Join join) {
-        log().trace("Not processing join, not a committee member on: {}", params().member());
-    }
-
     ViewMember join(JoinRequest request, Digest from);
 
-    default Certification join2(JoinRequest request, Digest from) {
-        log().info("Cannot process join request from: {}, not a committee member on: {}", from, params().member());
-        return Certification.getDefaultInstance();
+    default void joins(List<Join> joinsList) {
+//      log().trace("Not processing join, not a committee member on: {}", params().member());
     }
+
+    Logger log();
 
     Parameters params();
 
@@ -124,13 +109,13 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log().info("Cannot submit txn inactive committee on: {}", params().member());
+        log().trace("Cannot submit txn inactive committee on: {}", params().member());
         return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
     }
 
-    default void submitTxn(Transaction transaction, CompletableFuture<Boolean> result) {
-        log().info("Cannot submit txn inactive committee on: {}", params().member());
-        result.completeExceptionally(new ServiceUnavailable());
+    default ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
+        log().trace("Cannot submit txn inactive committee on: {}", params().member());
+        return null;
     }
 
     boolean validate(HashedCertifiedBlock hb);
@@ -172,7 +157,7 @@ public interface Committee {
                 valid++;
             }
         }
-        final int toleranceLevel = params.context().toleranceLevel();
+        final int toleranceLevel = params.toleranceLevel();
         log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
                     params.member());
         return valid > toleranceLevel;

@@ -344,7 +344,7 @@ public class ServerConnectionCache {
     private boolean close(ManagedServerConnection connection) {
         if (connection.isCloseable()) {
             try {
-                connection.channel.shutdown();
+                connection.channel.shutdownNow();
             } catch (Throwable t) {
                 log.debug("Error closing {}", connection.id);
             }

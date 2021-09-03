@@ -8,16 +8,25 @@ package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
 import com.google.common.base.Function;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
@@ -28,20 +37,26 @@ import com.salesforce.apollo.utils.Utils;
 public class SessionTest {
     @Test
     public void func() throws Exception {
-        Parameters params = Parameters.newBuilder().setMember(new SigningMemberImpl(Utils.getMember(0))).build();
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Parameters params = Parameters.newBuilder()
+                                      .setScheduler(exec)
+                                      .setContext(context).setMember(new SigningMemberImpl(Utils.getMember(0))).build();
         @SuppressWarnings("unchecked")
-        Function<SubmittedTransaction, Boolean> client = stx -> {
+        Function<SubmittedTransaction, ListenableFuture<SubmitResult>> client = stx -> {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
             }
             try {
                 stx.onCompletion()
-                   .complete(ByteMessage.parseFrom(stx.transaction().getUser()).getContents().toStringUtf8());
+                   .complete(ByteMessage.parseFrom(stx.transaction().getContent()).getContents().toStringUtf8());
             } catch (InvalidProtocolBufferException e) {
                 throw new IllegalStateException(e);
             }
-            return true;
+            SettableFuture<SubmitResult> f = SettableFuture.create();
+            f.set(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
+            return f;
         };
         Session session = Session.newBuilder().build(params, client);
         final String content = "Give me food or give me slack or kill me";

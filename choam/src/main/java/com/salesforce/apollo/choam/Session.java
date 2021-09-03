@@ -8,23 +8,26 @@ package com.salesforce.apollo.choam;
 
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 
-import java.security.SecureRandom;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.Join;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -32,7 +35,6 @@ import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.choam.support.TransationFailed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.Utils;
 
 import io.github.resilience4j.bulkhead.Bulkhead;
 import io.github.resilience4j.bulkhead.BulkheadConfig;
@@ -48,6 +50,7 @@ import io.github.resilience4j.retry.RetryConfig;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Session {
     public static class Builder {
         private BulkheadConfig           bulkhead        = BulkheadConfig.ofDefaults();
@@ -59,9 +62,10 @@ public class Session {
         private RetryConfig              retry           = RetryConfig.ofDefaults();
         private ScheduledExecutorService scheduler;
 
-        public Session build(Parameters params, Function<SubmittedTransaction, Boolean> service) {
+        public Session build(Parameters params,
+                             Function<SubmittedTransaction, ListenableFuture<SubmitResult>> function) {
             return new Session(Bulkhead.of(label, bulkhead), CircuitBreaker.of(label, circuitBreaker),
-                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, service);
+                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, function);
         }
 
         public BulkheadConfig getBulkhead() {
@@ -134,22 +138,23 @@ public class Session {
         return new Builder();
     }
 
-    private final Bulkhead                                bulkhead;
-    private final CircuitBreaker                          circuitBreaker;
-    private final Parameters                              params;
-    private final RateLimiter                             rateLimiter;
-    private final Retry                                   retry;
-    private final Function<SubmittedTransaction, Boolean> service;
+    private final Bulkhead                                                       bulkhead;
+    private final CircuitBreaker                                                 circuitBreaker;
+    private final Parameters                                                     params;
+    private final RateLimiter                                                    rateLimiter;
+    private final Retry                                                          retry;
+    private final Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service;
+    private AtomicInteger                                                        nonce = new AtomicInteger();
 
     private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
 
     private Session(Bulkhead bulkhead, CircuitBreaker circutBreaker, RateLimiter rateLimiter, Retry retry,
-                    Parameters params, Function<SubmittedTransaction, Boolean> service) {
+                    Parameters params, Function<SubmittedTransaction, ListenableFuture<SubmitResult>> function) {
         this.bulkhead = bulkhead;
         this.circuitBreaker = circutBreaker;
         this.rateLimiter = rateLimiter;
         this.params = params;
-        this.service = service;
+        this.service = function;
         this.retry = retry;
     }
 
@@ -159,20 +164,6 @@ public class Session {
     public void cancelAll() {
         submitted.values().forEach(stx -> stx.onCompletion()
                                              .completeExceptionally(new TransationFailed("Transaction cancelled")));
-    }
-
-    public <T> CompletableFuture<T> submit(Join join, Duration timeout) throws InvalidTransaction {
-        long[] longs = new long[params.digestAlgorithm().longLength()];
-        final SecureRandom entropy = Utils.secureEntropy();
-        for (int i = 0; i < longs.length; i++) {
-            longs[i] = entropy.nextLong();
-        }
-        var nonce = new Digest(params.digestAlgorithm().digestCode(), longs);
-        var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
-                                             join.toByteString().asReadOnlyByteBuffer());
-        return submit(Transaction.newBuilder().setSource(params.member().getId().toDigeste())
-                                 .setNonce(nonce.toDigeste()).setJoin(join).setSignature(signature.toSig()).build(),
-                      timeout, true);
     }
 
     /**
@@ -185,17 +176,15 @@ public class Session {
      *                            way
      */
     public <T> CompletableFuture<T> submit(Message transaction, Duration timeout) throws InvalidTransaction {
-        long[] longs = new long[params.digestAlgorithm().longLength()];
-        final SecureRandom entropy = Utils.secureEntropy();
-        for (int i = 0; i < longs.length; i++) {
-            longs[i] = entropy.nextLong();
-        }
-        var nonce = new Digest(params.digestAlgorithm().digestCode(), longs);
-        var signature = params.member().sign(params.member().getId().toByteBuffer(), nonce.toByteBuffer(),
+        final int n = nonce.getAndIncrement();
+        var buff = ByteBuffer.allocate(4);
+        buff.putInt(n);
+        buff.flip();
+        var signature = params.member().sign(params.member().getId().toByteBuffer(), buff,
                                              transaction.toByteString().asReadOnlyByteBuffer());
-        final Transaction txn = Transaction.newBuilder().setSource(params.member().getId().toDigeste())
-                                           .setNonce(nonce.toDigeste()).setUser(transaction.toByteString())
-                                           .setSignature(signature.toSig()).build();
+        final Transaction txn = Transaction.newBuilder().setSource(params.member().getId().toDigeste()).setNonce(n)
+                                           .setContent(transaction.toByteString()).setSignature(signature.toSig())
+                                           .build();
         return submit(txn, timeout, false);
     }
 
@@ -209,7 +198,7 @@ public class Session {
      */
     public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout,
                                            boolean join) throws InvalidTransaction {
-        if (!transaction.hasNonce() || !transaction.hasSource() || !transaction.hasSignature()) {
+        if (!transaction.hasSource() || !transaction.hasSignature()) {
             throw new InvalidTransaction();
         }
         var hash = CHOAM.hashOf(transaction, params.digestAlgorithm());
@@ -222,11 +211,7 @@ public class Session {
                                   .schedule(() -> result.completeExceptionally(new TimeoutException("Transaction timeout")),
                                             timeout.toMillis(), TimeUnit.MILLISECONDS);
         var stxn = new SubmittedTransaction(hash, transaction, result);
-        if (join) {
-            submitJoin(stxn);
-        } else {
-            submit(stxn);
-        }
+        submit(stxn);
         return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
@@ -258,29 +243,6 @@ public class Session {
         }
     }
 
-    private void submitJoin(SubmittedTransaction stx) {
-        submitted.put(stx.hash(), stx);
-        Decorators.ofCompletionStage(() -> supplyAsync(() -> {
-            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
-            if (stx.onCompletion().isDone()) {
-                return true;
-            }
-            final @Nullable Boolean success = service.apply(stx);
-            log.trace("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
-            return success;
-        }, params.submitDispatcher())).withRetry(retry, params.scheduler()).get()
-                  .whenComplete((r, t) -> {
-                      log.trace("Completion of join txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t,
-                                params.member());
-                      if (t != null) {
-                          stx.onCompletion().completeExceptionally(t);
-                      } else if (!r) {
-                          stx.onCompletion()
-                             .completeExceptionally(new TransationFailed("failed to complete transaction"));
-                      }
-                  });
-    }
-
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
         Decorators.ofCompletionStage(() -> supplyAsync(() -> {
@@ -288,10 +250,23 @@ public class Session {
             if (stx.onCompletion().isDone()) {
                 return true;
             }
-            final @Nullable Boolean success = service.apply(stx);
-            log.trace("Submission of: {} success: {} on: {}", stx.hash(), success, params.member());
-            return success;
-        }, params.submitDispatcher())).withRetry(retry, params.scheduler()).get().whenComplete((r, t) -> {
+            SubmitResult submitResult;
+            try {
+                submitResult = service.apply(stx).get();
+            } catch (InterruptedException e) {
+                log.trace("Submission of: {} success: INTERRUPTED on: {}", stx.hash(), params.member());
+                return false;
+            } catch (ExecutionException e) {
+                log.trace("Submission of: {} success: FAILED on: {}", stx.hash(), params.member(), e.getCause());
+                return false;
+            }
+            if (submitResult == null) {
+                log.trace("Submission of: {} success: FAILED on: {}", stx.hash(), params.member());
+                return false;
+            }
+            log.trace("Submission of: {} success: {} on: {}", stx.hash(), submitResult.getOutcome(), params.member());
+            return submitResult.getOutcome() == Outcome.SUCCESS;
+        }, params.submitDispatcher())).get().whenComplete((r, t) -> {
             log.trace("Completion of txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t, params.member());
             if (t != null) {
                 stx.onCompletion().completeExceptionally(t);

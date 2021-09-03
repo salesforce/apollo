@@ -8,6 +8,7 @@ package com.salesforce.apollo.membership.messaging.rbc;
 
 import static com.salesforce.apollo.membership.messaging.comms.RbcClient.getCreate;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Comparator;
@@ -220,6 +221,7 @@ public class ReliableBroadcaster {
         private final Semaphore              garbageCollecting = new Semaphore(1);
         private final int                    highWaterMark;
         private final int                    maxAge;
+        private final AtomicInteger          nonce             = new AtomicInteger(0);
         private final AtomicInteger          round             = new AtomicInteger();
         private final Map<Digest, state>     state             = new ConcurrentHashMap<>();
         private final Semaphore              tickGate          = new Semaphore(1);
@@ -253,7 +255,11 @@ public class ReliableBroadcaster {
                                 if (from == null) {
                                     return false;
                                 }
-                                boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), s.msg.getContent());
+                                var buff = ByteBuffer.allocate(4);
+                                buff.putInt(s.msg.getNonce());
+                                buff.flip();
+                                boolean verify = from.verify(new JohnHancock(s.msg.getSignature()), buff,
+                                                             s.msg.getContent().asReadOnlyByteBuffer());
                                 return verify;
                             }).map(s -> state.merge(s.hash, s, (a, b) -> a.msg.getAge() >= b.msg.getAge() ? a : b))
                             .map(s -> new Msg(s.from, s.msg.getContent(), s.hash)).filter(m -> delivered(m.hash))
@@ -277,8 +283,12 @@ public class ReliableBroadcaster {
         }
 
         public AgedMessage send(ByteString msg, SigningMember member) {
-            final JohnHancock signature = member.sign(msg);
-            AgedMessage.Builder message = AgedMessage.newBuilder().setSource(member.getId().toDigeste())
+            ByteBuffer buff = ByteBuffer.allocate(4);
+            final int n = nonce.getAndIncrement();
+            buff.putInt(n);
+            buff.flip();
+            final JohnHancock signature = member.sign(buff, msg.asReadOnlyByteBuffer());
+            AgedMessage.Builder message = AgedMessage.newBuilder().setNonce(n).setSource(member.getId().toDigeste())
                                                      .setSignature(signature.toSig()).setContent(msg);
             var hash = signature.toDigest(params.digestAlgorithm);
             state s = new state(hash, message, member.getId());

@@ -94,7 +94,8 @@ message Checkpoint {
 }
 
 message Executions {
-    repeated Transaction executions = 1;
+    repeated Join joins = 1;
+    repeated Transaction executions = 2;
 }
 
 message Assemble {
@@ -103,28 +104,15 @@ message Assemble {
 
 message Transaction { 
     utils.Digeste source = 1;
-    utils.Digeste nonce = 2;
-    oneof content {
-        bytes user = 3;
-        Join join = 4;
-        Endorsements endorsements = 5;
-    }
-    utils.Sig signature = 6; 
+    int32 nonce = 2;
+    bytes content = 3;
+    utils.Sig signature = 4; 
 }
 
 message Join {
     utils.Digeste view = 1;
     ViewMember member = 2;
     repeated Certification endorsements = 3;
-}
-
-message Endorsements {
-    utils.Digeste member = 1;
-    repeated Endorsement endorsements = 2;
-}
-message Endorsement { 
-    utils.Digeste viewMember = 1;
-    utils.Sig signature = 2;
 }
 
 message ViewMember {

@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Executions;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -36,9 +37,9 @@ public class TxDataSource implements DataSource {
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
     private final AtomicInteger              buffered   = new AtomicInteger();
+    private final BlockingDeque<Join>        joins      = new LinkedBlockingDeque<>();
     private final Parameters                 parameters;
     private final BlockingDeque<Transaction> processing = new LinkedBlockingDeque<>();
-    private final BlockingDeque<Transaction> joins      = new LinkedBlockingDeque<>();
     private final AtomicInteger              remaining  = new AtomicInteger();
 
     public TxDataSource(Parameters parameters, int maxBufferSize) {
@@ -54,12 +55,12 @@ public class TxDataSource implements DataSource {
     public ByteString getData() {
         Executions.Builder builder = Executions.newBuilder();
         int batchSize = 0;
-        int bytesRemaining = parameters.maxBatchByteSize();
+        int bytesRemaining = parameters.producer().maxBatchByteSize();
         while (joins.peek() != null) {
-            Transaction next = joins.poll();
+            Join next = joins.poll();
             bytesRemaining -= next.getSerializedSize();
             batchSize++;
-            builder.addExecutions(next);
+            builder.addJoins(next);
             log.debug("Added join to data on: {}", parameters.member());
         }
         while (processing.peek() != null && bytesRemaining >= processing.peek().getSerializedSize()) {
@@ -68,13 +69,13 @@ public class TxDataSource implements DataSource {
             batchSize++;
             builder.addExecutions(next);
         }
-        int byteSize = parameters.maxBatchByteSize() - bytesRemaining;
+        int byteSize = parameters.producer().maxBatchByteSize() - bytesRemaining;
         buffered.addAndGet(-byteSize);
         if (parameters.metrics() != null) {
             parameters.metrics().publishedBatch(batchSize, byteSize);
         }
         if (batchSize > 0) {
-            remaining.addAndGet(-parameters.maxBatchByteSize());
+            remaining.addAndGet(-parameters.producer().maxBatchByteSize());
         }
         log.trace("Processed: {} txns totalling: {} bytes  on: {}", batchSize, byteSize, parameters.member());
         return builder.build().toByteString();
@@ -89,18 +90,18 @@ public class TxDataSource implements DataSource {
     }
 
     public boolean offer(Transaction txn) {
-        if (txn.hasJoin()) {
-            joins.add(txn);
-            log.debug("Added join on: {}", parameters.member());
-            return true;
-        }
         if (remaining.addAndGet(-txn.getSerializedSize()) > 0) {
-            buffered.addAndGet(txn.getSerializedSize()); 
-                processing.add(txn);
+            buffered.addAndGet(txn.getSerializedSize());
+            processing.add(txn);
             return true;
         } else {
             remaining.addAndGet(txn.getSerializedSize());
             return false;
         }
+    }
+
+    public void submitJoin(Join join) {
+        joins.add(join);
+        log.debug("Added join on: {}", parameters.member());
     }
 }

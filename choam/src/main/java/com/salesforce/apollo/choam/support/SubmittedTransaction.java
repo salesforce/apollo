@@ -15,6 +15,5 @@ import com.salesforce.apollo.crypto.Digest;
  * @author hal.hildebrand
  *
  */
-
 @SuppressWarnings("rawtypes")
 public record SubmittedTransaction(Digest hash, Transaction transaction, CompletableFuture onCompletion) {}

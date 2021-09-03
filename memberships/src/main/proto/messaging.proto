@@ -86,7 +86,8 @@ message Reconcile {
 }
 message AgedMessage {
     int32 age = 1;
-    bytes content = 2;
-    utils.Digeste source = 3;
-    utils.Sig signature = 4;
+    int32 nonce = 2;
+    bytes content = 3;
+    utils.Digeste source = 4;
+    utils.Sig signature = 5;
 }
