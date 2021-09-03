@@ -47,7 +47,6 @@ import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
@@ -197,11 +196,6 @@ public class CHOAM {
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
             return CHOAM.this.join(request, from);
-        }
-
-        @Override
-        public Certification join2(JoinRequest request, Digest from) {
-            throw new UnsupportedOperationException();
         }
 
         @Override

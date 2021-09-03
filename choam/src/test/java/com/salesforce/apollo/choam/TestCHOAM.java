@@ -167,11 +167,10 @@ public class TestCHOAM {
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(1_000)).setScheduler(scheduler)
-                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher);
-//        params.getEthereal().setEpochLength(120);
-        var pb = ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(100));
-        pb.getCoordination();
-        params.setProducer(pb.build());
+                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(100))
+                                                              .build());
+//        params.getEthereal().setEpochLength(120); 
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)

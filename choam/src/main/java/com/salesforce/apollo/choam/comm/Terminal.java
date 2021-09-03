@@ -10,7 +10,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -56,13 +55,6 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public ListenableFuture<Certification> join2(JoinRequest join) {
-                SettableFuture<Certification> f = SettableFuture.create();
-                f.set(service.join2(join, member.getId()));
-                return f;
-            }
-
-            @Override
             public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
                 SettableFuture<SubmitResult> f = SettableFuture.create();
                 f.set(service.submit(request, member.getId()));
@@ -87,10 +79,6 @@ public interface Terminal extends Link {
     }
 
     default ListenableFuture<ViewMember> join(JoinRequest join) {
-        return null;
-    }
-
-    default ListenableFuture<Certification> join2(JoinRequest join) {
         return null;
     }
 

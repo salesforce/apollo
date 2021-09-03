@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam.comm;
 
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
-import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
@@ -32,8 +31,6 @@ public interface Concierge {
     Blocks fetchViewChain(BlockReplication request, Digest from);
 
     ViewMember join(JoinRequest request, Digest from);
-
-    Certification join2(JoinRequest request, Digest from);
 
     SubmitResult submit(SubmitTransaction request, Digest from);
 

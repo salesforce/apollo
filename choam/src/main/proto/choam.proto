@@ -17,7 +17,6 @@ service Terminal {
     
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
-    rpc join2 (JoinRequest) returns (Certification) {}
     
     /* bootstrapping */
     rpc sync(Synchronize) returns (Initial) {}
