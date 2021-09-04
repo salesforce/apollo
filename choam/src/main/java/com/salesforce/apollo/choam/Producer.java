@@ -308,20 +308,12 @@ public class Producer {
 
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
-    public static Join cannonical(Join.Builder proto) {
-        List<Certification> endorsements = new ArrayList<>(proto.getEndorsementsList());
-        proto.clearEndorsements();
-        endorsements.sort(Comparator.comparing(c -> new Digest(c.getId())));
-        proto.addAllEndorsements(endorsements);
-        return proto.build();
-    }
-
     private final List<Join>                          assembled     = new CopyOnWriteArrayList<>();
     private final BlockProducer                       blockProducer;
     private final AtomicBoolean                       closed        = new AtomicBoolean(false);
     private final CommonCommunications<Terminal, ?>   comms;
-    private volatile Controller                       controller;
-    private volatile ReliableBroadcaster              coordinator;
+    private final Controller                          controller;
+    private final ReliableBroadcaster                 coordinator;
     private final TxDataSource                        ds;
     private final Map<Member, Join.Builder>           joins         = new ConcurrentHashMap<>();
     private final ExecutorService                     linear;
@@ -331,7 +323,7 @@ public class Producer {
     private final Set<Digest>                         published     = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private volatile Recon                            recon;
     private final AtomicInteger                       reconfigureCountdown;
-    private volatile RoundScheduler                   scheduler;
+    private final RoundScheduler                      scheduler;
     private final Transitions                         transitions;
     private final ViewContext                         view;
 
@@ -346,8 +338,9 @@ public class Producer {
 
         final Parameters params = view.params();
         final Builder ep = params.producer().ethereal();
-        ds = new TxDataSource(params, (params.producer().maxBatchByteSize()
-        * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3)) * 2);
+        final int maxBufferSize = (params.producer().maxBatchByteSize()
+        * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3)) * 2;
+        ds = new TxDataSource(params, maxBufferSize);
         final Context<Member> context = view.context();
 
         coordinator = new ReliableBroadcaster(params().producer().coordination().clone().setMember(params().member())
@@ -368,7 +361,25 @@ public class Producer {
             return thread;
         });
 
-        initializeConsensus();
+        Config.Builder config = params().producer().ethereal().clone();
+
+        // Canonical assignment of members -> pid for Ethereal
+        Short pid = view.roster().get(params().member().getId());
+        if (pid == null) {
+            config.setPid((short) 0).setnProc((short) 1);
+        } else {
+            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member());
+            config.setPid(pid).setnProc((short) view.roster().size());
+        }
+
+        // Ethereal consensus
+        var ethereal = new Ethereal();
+        // Our handle on consensus
+        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
+                                            preUnit -> broadcast(preUnit));
+        assert controller != null : "Controller is null";
+
+        log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
     public void complete() {
@@ -451,7 +462,6 @@ public class Producer {
                      CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
             return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
         }
-
     }
 
     /**
@@ -505,28 +515,6 @@ public class Producer {
 
     private Digest getViewId() {
         return coordinator.getContext().getId();
-    }
-
-    private void initializeConsensus() {
-        Config.Builder config = params().producer().ethereal().clone();
-
-        // Canonical assignment of members -> pid for Ethereal
-        Short pid = view.roster().get(params().member().getId());
-        if (pid == null) {
-            config.setPid((short) 0).setnProc((short) 1);
-        } else {
-            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member());
-            config.setPid(pid).setnProc((short) view.roster().size());
-        }
-
-        // Ethereal consensus
-        var ethereal = new Ethereal();
-        // Our handle on consensus
-        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
-                                            preUnit -> broadcast(preUnit));
-        assert controller != null : "Controller is null";
-
-        log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
     private void maybePublish(Digest hash, CertifiedBlock.Builder cb) {
