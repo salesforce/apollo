@@ -362,7 +362,11 @@ public class Producer {
         transitions = fsm.getTransitions();
 
         // buffer for coordination messages
-        linear = Executors.newSingleThreadExecutor();
+        linear = Executors.newSingleThreadExecutor(r -> {
+            Thread thread = new Thread(r, "Linear Producer " + params.member().getId());
+            thread.setDaemon(true);
+            return thread;
+        });
 
         initializeConsensus();
     }

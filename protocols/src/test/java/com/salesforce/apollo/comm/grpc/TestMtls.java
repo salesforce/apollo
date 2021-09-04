@@ -50,14 +50,19 @@ public class TestMtls {
         InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
 
         MtlsServer server = server(serverAddress);
-        server.start();
-        server.bind(avaServer());
-        MtlsClient client = client(serverAddress);
+        try {
+            server.start();
+            server.bind(avaServer());
+            Thread.sleep(1_000);
+            MtlsClient client = client(serverAddress);
 
-        for (int i = 0; i < 100; i++) {
-            Any tst = TestItGrpc.newBlockingStub(client.getChannel()).ping(Any.getDefaultInstance());
+            for (int i = 0; i < 100; i++) {
+                Any tst = TestItGrpc.newBlockingStub(client.getChannel()).ping(Any.getDefaultInstance());
 
-            assertNotNull(tst);
+                assertNotNull(tst);
+            }
+        } finally {
+            server.stop();
         }
     }
 
@@ -76,7 +81,7 @@ public class TestMtls {
         CertificateWithPrivateKey clientCert = clientIdentity();
 
         MtlsClient client = new MtlsClient(serverAddress, ClientAuth.REQUIRE, "foo", clientCert.getX509Certificate(),
-                clientCert.getPrivateKey(), validator());
+                                           clientCert.getPrivateKey(), validator());
         return client;
     }
 

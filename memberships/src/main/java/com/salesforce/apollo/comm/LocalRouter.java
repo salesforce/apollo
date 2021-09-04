@@ -20,6 +20,14 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
+import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
+import com.netflix.concurrency.limits.grpc.client.GrpcClientRequestContext;
+import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
+import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
+import com.netflix.concurrency.limits.limit.Gradient2Limit;
+import com.netflix.concurrency.limits.limit.WindowedLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -72,8 +80,10 @@ public class LocalRouter extends Router {
                     };
                 }
             };
+            Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
             final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
-                                                                           .intercept(clientInterceptor);
+                                                                           .intercept(clientInterceptor,
+                                                                                      new ConcurrencyLimitClientInterceptor(limiter));
             disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
@@ -135,6 +145,11 @@ public class LocalRouter extends Router {
         this.member = member;
         serverMembers.put(member.getId(), member);
 
+        ConcurrencyLimitServerInterceptor limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(WindowedLimit.newBuilder()
+                                                                                                                                                   .build(Gradient2Limit.newBuilder()
+                                                                                                                                                                        .build()))
+                                                                                                                               .build())
+                                                                                     .build();
         server = InProcessServerBuilder.forName(qb64(member.getId())).executor(executor)
                                        .intercept(new ServerInterceptor() {
 
@@ -160,7 +175,7 @@ public class LocalRouter extends Router {
                                                return Contexts.interceptCall(ctx, call, requestHeaders, next);
                                            }
 
-                                       }).fallbackHandlerRegistry(registry).build();
+                                       }).intercept(limiter).fallbackHandlerRegistry(registry).build();
     }
 
     @Override

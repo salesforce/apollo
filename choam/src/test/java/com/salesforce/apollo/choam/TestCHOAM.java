@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -120,12 +119,14 @@ public class TestCHOAM {
         }
 
         void start() {
-            Timer.Context time = latency.time();
-            try {
-                decorate(session.submit(tx, timeout), time);
-            } catch (InvalidTransaction e) {
-                throw new IllegalStateException(e);
-            }
+            scheduler.schedule(() -> {
+                Timer.Context time = latency.time();
+                try {
+                    decorate(session.submit(tx, timeout), time);
+                } catch (InvalidTransaction e) {
+                    throw new IllegalStateException(e);
+                }
+            }, entropy.nextInt(200), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -166,7 +167,7 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(1_000)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(500)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(100))
                                                               .build());
@@ -234,11 +235,11 @@ public class TestCHOAM {
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1000;
+        var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
+        final int clientCount = 100;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
-            choams.values().stream()
+            choams.values().parallelStream()
                   .map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal, max))
                   .forEach(e -> transactioneers.add(e));
         }

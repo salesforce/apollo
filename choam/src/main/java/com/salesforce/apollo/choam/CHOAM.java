@@ -560,12 +560,20 @@ public class CHOAM {
     public CHOAM(Parameters params, Store store) {
         this.store = store;
         this.params = params;
-        executions = Executors.newSingleThreadExecutor();
+        executions = Executors.newSingleThreadExecutor(r -> {
+            Thread thread = new Thread(r, "Executions " + params.member().getId());
+            thread.setDaemon(true);
+            return thread;
+        });
         nextView();
         combine = new ReliableBroadcaster(params.combine().setMember(params.member()).setContext(params.context())
                                                 .build(),
                                           params.communications());
-        linear = Executors.newSingleThreadExecutor();
+        linear = Executors.newSingleThreadExecutor(r -> {
+            Thread thread = new Thread(r, "Linear " + params.member().getId());
+            thread.setDaemon(true);
+            return thread;
+        });
         combine.registerHandler((ctx, messages) -> linear.execute(() -> combine(messages)));
         head = new NullBlock(params.digestAlgorithm());
         view = new NullBlock(params.digestAlgorithm());
