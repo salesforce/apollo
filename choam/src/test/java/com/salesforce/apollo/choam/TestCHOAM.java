@@ -160,16 +160,31 @@ public class TestCHOAM {
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-//        final ForkJoinPool exec = Router.createFjPool();
-        Executor submitDispatcher = Router.createFjPool();
-        Executor dispatcher = Router.createFjPool();
-        Executor routerExec = Executors.newCachedThreadPool();
+
+        AtomicInteger sd = new AtomicInteger();
+        Executor submitDispatcher = Executors.newFixedThreadPool(CARDINALITY, r -> {
+            Thread thread = new Thread(r, "Submit Dispatcher [" + sd.getAndIncrement() + "]");
+            thread.setDaemon(true);
+            return thread;
+        });
+        AtomicInteger d = new AtomicInteger();
+        Executor dispatcher = Executors.newFixedThreadPool(CARDINALITY, r -> {
+            Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
+            thread.setDaemon(true);
+            return thread;
+        });
+        AtomicInteger exec = new AtomicInteger();
+        Executor routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
+            Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
+            thread.setDaemon(true);
+            return thread;
+        });
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(500)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(250)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(100))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
                                                               .build());
 //        params.getEthereal().setEpochLength(120); 
 
@@ -236,7 +251,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
-        final int clientCount = 100;
+        final int clientCount = 5_000;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().parallelStream()
