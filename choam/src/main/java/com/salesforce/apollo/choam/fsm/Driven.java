@@ -48,6 +48,7 @@ public interface Driven {
     }
 
     public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
+    public static String SYNC                 = "SYNC";
 
     void cancelTimers();
 

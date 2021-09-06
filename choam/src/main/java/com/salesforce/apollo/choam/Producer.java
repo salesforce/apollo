@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.choam.fsm.Driven.PERIODIC_VALIDATIONS;
+import static com.salesforce.apollo.choam.fsm.Driven.SYNC;
 import static com.salesforce.apollo.choam.support.HashedBlock.height;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
@@ -91,6 +92,11 @@ public class Producer {
     private class DriveIn implements Driven {
 
         @Override
+        public void cancelTimers() {
+            scheduler.cancelAll();
+        }
+
+        @Override
         public void checkpoint() {
             Block ckpt = blockProducer.checkpoint();
             if (ckpt == null) {
@@ -168,6 +174,12 @@ public class Producer {
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
             final Controller current = controller;
             current.start();
+            AtomicReference<Runnable> resync = new AtomicReference<>();
+            resync.set(() -> scheduler.schedule(SYNC, () -> {
+                current.sync();
+                resync.get().run();
+            }, 1));
+            resync.get().run();
         }
 
         private Join reduce(Member member, Collection<Join> js) {
@@ -196,11 +208,6 @@ public class Producer {
                 log.trace("Invalid witness: {} on: {}", id, id, params().member());
             }
             return false;
-        }
-
-        @Override
-        public void cancelTimers() {
-            scheduler.cancelAll();
         }
     }
 
@@ -481,6 +488,7 @@ public class Producer {
      * @param last
      */
     private void create(PreBlock preblock, boolean last) {
+        scheduler.cancel(SYNC);
         var builder = Executions.newBuilder();
         var aggregate = preblock.data().stream().map(e -> {
             try {

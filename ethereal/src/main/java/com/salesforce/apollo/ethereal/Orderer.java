@@ -71,6 +71,10 @@ public class Orderer {
         public void noMoreUnits() {
             more.set(false);
         }
+
+        public void sync(Consumer<PreUnit> send) {
+            dag.sync(send);
+        }
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
@@ -231,6 +235,20 @@ public class Orderer {
         }
         unitBelt.close();
         log.trace("Orderer stopped on: {}", config.pid());
+    }
+
+    /**
+     * Publish this process' state
+     */
+    public void sync(Consumer<PreUnit> send) {
+        var p = previous.get();
+        if (p != null) {
+            p.sync(send);
+        }
+        var c = current.get();
+        if (c != null) {
+            c.sync(send);
+        }
     }
 
     /**

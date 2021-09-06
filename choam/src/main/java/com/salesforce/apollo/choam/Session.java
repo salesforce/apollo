@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,133 +28,27 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.choam.support.TransationFailed;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-
-import io.github.resilience4j.bulkhead.Bulkhead;
-import io.github.resilience4j.bulkhead.BulkheadConfig;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.decorators.Decorators;
-import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterConfig;
-import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
 
 /**
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public class Session {
-    public static class Builder {
-        private BulkheadConfig           bulkhead        = BulkheadConfig.ofDefaults();
-        private CircuitBreakerConfig     circuitBreaker  = CircuitBreakerConfig.ofDefaults();
-        private DigestAlgorithm          digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private String                   label           = "Unlabeled";
-        private ChoamMetrics             metrics;
-        private RateLimiterConfig        rateLimiter     = RateLimiterConfig.ofDefaults();
-        private RetryConfig              retry           = RetryConfig.ofDefaults();
-        private ScheduledExecutorService scheduler;
-
-        public Session build(Parameters params,
-                             Function<SubmittedTransaction, ListenableFuture<SubmitResult>> function) {
-            return new Session(Bulkhead.of(label, bulkhead), CircuitBreaker.of(label, circuitBreaker),
-                               RateLimiter.of(label, rateLimiter), Retry.of(label, retry), params, function);
-        }
-
-        public BulkheadConfig getBulkhead() {
-            return bulkhead;
-        }
-
-        public CircuitBreakerConfig getCircuitBreaker() {
-            return circuitBreaker;
-        }
-
-        public DigestAlgorithm getDigestAlgorithm() {
-            return digestAlgorithm;
-        }
-
-        public String getLabel() {
-            return label;
-        }
-
-        public ChoamMetrics getMetrics() {
-            return metrics;
-        }
-
-        public RateLimiterConfig getRateLimiter() {
-            return rateLimiter;
-        }
-
-        public ScheduledExecutorService getScheduler() {
-            return scheduler;
-        }
-
-        public Builder setBulkhead(BulkheadConfig bulkhead) {
-            this.bulkhead = bulkhead;
-            return this;
-        }
-
-        public Builder setCircuitBreaker(CircuitBreakerConfig circuitBreaker) {
-            this.circuitBreaker = circuitBreaker;
-            return this;
-        }
-
-        public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
-            this.digestAlgorithm = digestAlgorithm;
-            return this;
-        }
-
-        public Builder setLabel(String label) {
-            this.label = label;
-            return this;
-        }
-
-        public Builder setMetrics(ChoamMetrics metrics) {
-            this.metrics = metrics;
-            return this;
-        }
-
-        public Builder setRateLimiter(RateLimiterConfig rateLimiter) {
-            this.rateLimiter = rateLimiter;
-            return this;
-        }
-
-        public Builder setScheduler(ScheduledExecutorService scheduler) {
-            this.scheduler = scheduler;
-            return this;
-        }
-    }
-
     private final static Logger log = LoggerFactory.getLogger(Session.class);
 
-    public static Builder newBuilder() {
-        return new Builder();
-    }
-
-    private final Bulkhead                                                       bulkhead;
-    private final CircuitBreaker                                                 circuitBreaker;
     private final Parameters                                                     params;
-    private final RateLimiter                                                    rateLimiter;
-    private final Retry                                                          retry;
     private final Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service;
     private AtomicInteger                                                        nonce = new AtomicInteger();
 
     private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
 
-    private Session(Bulkhead bulkhead, CircuitBreaker circutBreaker, RateLimiter rateLimiter, Retry retry,
-                    Parameters params, Function<SubmittedTransaction, ListenableFuture<SubmitResult>> function) {
-        this.bulkhead = bulkhead;
-        this.circuitBreaker = circutBreaker;
-        this.rateLimiter = rateLimiter;
+    public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service) {
         this.params = params;
-        this.service = function;
-        this.retry = retry;
+        this.service = service;
     }
 
     /**
@@ -245,7 +138,7 @@ public class Session {
 
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
-        Decorators.ofCompletionStage(() -> supplyAsync(() -> {
+        supplyAsync(() -> {
             log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
             if (stx.onCompletion().isDone()) {
                 return true;
@@ -266,7 +159,7 @@ public class Session {
             }
             log.trace("Submission of: {} success: {} on: {}", stx.hash(), submitResult.getOutcome(), params.member());
             return submitResult.getOutcome() == Outcome.SUCCESS;
-        }, params.submitDispatcher())).get().whenComplete((r, t) -> {
+        }, params.submitDispatcher()).whenComplete((r, t) -> {
             log.trace("Completion of txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t, params.member());
             if (t != null) {
                 stx.onCompletion().completeExceptionally(t);

@@ -42,9 +42,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          Executor dispatcher, BiConsumer<Long, CheckpointState> restorer,
                          DigestAlgorithm digestAlgorithm, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
                          int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
-                         Duration synchronizeTimeout, Session.Builder session, Executor submitDispatcher,
-                         int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer,
-                         int txnPermits) {
+                         Duration synchronizeTimeout, Executor submitDispatcher, int toleranceLevel,
+                         BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -171,7 +170,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
                                                                              };
         private ScheduledExecutorService               scheduler;
-        private Session.Builder                        session               = Session.newBuilder();
         private File                                   storeFile;
         private Executor                               submitDispatcher      = ForkJoinPool.commonPool();
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
@@ -188,8 +186,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
                                   checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,
                                   metrics, viewSigAlgorithm, synchronizationCycles, synchronizeDuration,
-                                  regenerationCycles, synchronizeTimeout, session, submitDispatcher, toleranceLevel,
-                                  bootstrap, producer, txnPermits);
+                                  regenerationCycles, synchronizeTimeout, submitDispatcher, toleranceLevel, bootstrap,
+                                  producer, txnPermits);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -266,10 +264,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public ScheduledExecutorService getScheduler() {
             return scheduler;
-        }
-
-        public Session.Builder getSession() {
-            return session;
         }
 
         public File getStoreFile() {
@@ -401,11 +395,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setScheduler(ScheduledExecutorService scheduler) {
             this.scheduler = scheduler;
-            return this;
-        }
-
-        public Builder setSession(Session.Builder session) {
-            this.session = session;
             return this;
         }
 

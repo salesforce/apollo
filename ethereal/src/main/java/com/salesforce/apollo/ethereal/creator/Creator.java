@@ -44,8 +44,6 @@ import com.salesforce.apollo.utils.Channel;
  */
 public class Creator {
 
-    VarHandle varHandle = MethodHandles.arrayElementVarHandle(Unit[].class);
-
     @FunctionalInterface
     public interface RandomSourceData {
         byte[] apply(int level, List<Unit> parents, int epoch);
@@ -82,6 +80,8 @@ public class Creator {
         }
     }
 
+    VarHandle varHandle = MethodHandles.arrayElementVarHandle(Unit[].class);
+
     private final Unit[]                               candidates;
     private final Config                               conf;
     private final DataSource                           ds;
@@ -96,8 +96,7 @@ public class Creator {
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
     private final RsData                               rsData;
-
-    private final Consumer<Unit> send;
+    private final Consumer<Unit>                       send;
 
     public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {

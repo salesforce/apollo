@@ -39,9 +39,8 @@ public class SessionTest {
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
-        Parameters params = Parameters.newBuilder()
-                                      .setScheduler(exec)
-                                      .setContext(context).setMember(new SigningMemberImpl(Utils.getMember(0))).build();
+        Parameters params = Parameters.newBuilder().setScheduler(exec).setContext(context)
+                                      .setMember(new SigningMemberImpl(Utils.getMember(0))).build();
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, ListenableFuture<SubmitResult>> client = stx -> {
             try {
@@ -58,7 +57,7 @@ public class SessionTest {
             f.set(SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build());
             return f;
         };
-        Session session = Session.newBuilder().build(params, client);
+        Session session = new Session(params, client);
         final String content = "Give me food or give me slack or kill me";
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
         var result = session.submit(tx, null);

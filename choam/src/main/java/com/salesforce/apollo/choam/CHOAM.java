@@ -591,7 +591,7 @@ public class CHOAM {
         roundScheduler = new RoundScheduler(params.context().getRingCount());
         combine.register(i -> roundScheduler.tick(i));
         current = new Formation();
-        session = params.session().build(params, service());
+        session = new Session(params, service());
     }
 
     public Session getSession() {

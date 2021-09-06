@@ -47,13 +47,17 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input) {
+    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input, Runnable sync) {
         public void start() {
             starte.run();
         }
 
         public void stop() {
             stope.run();
+        }
+
+        public void synchronize() {
+            sync.run();
         }
     }
 
@@ -118,7 +122,7 @@ public class Ethereal {
         }, () -> {
             setup.stope.run();
             consensus.stope.run();
-        }, consensus.input);
+        }, consensus.input, consensus.sync);
     }
 
     /**
@@ -141,7 +145,7 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(consensus.starte, consensus.stope, consensus.input);
+        return new Controller(consensus.starte, consensus.stope, consensus.input, consensus.sync);
     }
 
     /**
@@ -173,7 +177,7 @@ public class Ethereal {
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.starte, consensus.input);
+        }, consensus.starte, consensus.input, consensus.sync);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
@@ -224,7 +228,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input);
+        return new Controller(start, stop, input, () -> ord.get().sync(synchronizer));
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
@@ -275,7 +279,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input);
+        return new Controller(start, stop, input, () -> ord.get().sync(synchronizer));
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -303,6 +307,6 @@ public class Ethereal {
 
         var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
         return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> ord.stop(), null);
+        }), () -> ord.stop(), null, null);
     }
 }

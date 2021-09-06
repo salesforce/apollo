@@ -224,7 +224,7 @@ public interface Dag {
         }
 
         @Override
-        public void sync(Consumer<Unit> send) {
+        public void sync(Consumer<PreUnit> send) {
             read(() -> _sync(send));
         }
 
@@ -254,8 +254,9 @@ public interface Dag {
             });
         }
 
-        private void _sync(Consumer<Unit> send) {
-            // TODO Auto-generated method stub
+        private void _sync(Consumer<PreUnit> send) {
+            units.values().stream().filter(u -> u.creator() == config.pid()).map(u -> u.toPreUnit())
+                 .forEach(pu -> send.accept(pu));
         }
 
         private <T> T read(Callable<T> call) {
@@ -550,7 +551,7 @@ public interface Dag {
 
     short nProc();
 
-    void sync(Consumer<Unit> send);
+    void sync(Consumer<PreUnit> send);
 
     List<Unit> unitsAbove(int[] heights);
 
