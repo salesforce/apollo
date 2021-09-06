@@ -173,6 +173,11 @@ public interface Dag {
         }
 
         @Override
+        public void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work) {
+            read(() -> unitsOnLevel(level).iterate(work));
+        }
+
+        @Override
         public SlottedUnits maximalUnitsPerProcess() {
             return maxUnits;
         }
@@ -218,6 +223,11 @@ public interface Dag {
             return config.nProc();
         }
 
+        @Override
+        public void sync(Consumer<Unit> send) {
+            read(() -> _sync(send));
+        }
+
         /**
          * return all units present in dag that are above (in height sense) given
          * heights. When called with null argument, returns all units in the dag. Units
@@ -242,6 +252,10 @@ public interface Dag {
                 var res = levelUnits.getFiber(level);
                 return res != null ? res : newSlottedUnits(config.nProc());
             });
+        }
+
+        private void _sync(Consumer<Unit> send) {
+            // TODO Auto-generated method stub
         }
 
         private <T> T read(Callable<T> call) {
@@ -292,10 +306,7 @@ public interface Dag {
             }
             var su = heightUnits.getFiber(height);
 
-            var oldUnitsOnHeightByCreator = su.get(creator);
-            var unitsOnHeightByCreator = new ArrayList<>(oldUnitsOnHeightByCreator);
-            unitsOnHeightByCreator.add(u);
-            su.set(creator, unitsOnHeightByCreator);
+            su.get(creator).add(u);
         }
 
         private void updateUnitsOnLevel(Unit u) {
@@ -303,10 +314,7 @@ public interface Dag {
                 levelUnits.extendBy(10);
             }
             var su = levelUnits.getFiber(u.level());
-            var creator = u.creator();
-            var primesByCreator = new ArrayList<Unit>(su.get(creator));
-            primesByCreator.add(u);
-            su.set(creator, primesByCreator);
+            su.get(u.creator()).add(u);
 
         }
 
@@ -321,11 +329,6 @@ public interface Dag {
             } finally {
                 lock.unlock();
             }
-        }
-
-        @Override
-        public void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work) {
-            read(() -> unitsOnLevel(level).iterate(work));
         }
     }
 
@@ -536,6 +539,8 @@ public interface Dag {
 
     void iterateMaxUnitsPerProcess(Function<List<Unit>, Boolean> work);
 
+    void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work);
+
     SlottedUnits maximalUnitsPerProcess();
 
     /** returns the maximal level of a unit in the dag. */
@@ -545,9 +550,9 @@ public interface Dag {
 
     short nProc();
 
-    List<Unit> unitsAbove(int[] heights);
+    void sync(Consumer<Unit> send);
 
-    void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work);
+    List<Unit> unitsAbove(int[] heights);
 
     SlottedUnits unitsOnLevel(int level);
 }
