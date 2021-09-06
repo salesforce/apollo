@@ -141,7 +141,7 @@ public class ViewReconTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r),
+                                                                                                        null, r, 3_000),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));

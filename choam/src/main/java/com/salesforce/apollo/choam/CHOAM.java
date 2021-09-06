@@ -582,7 +582,7 @@ public class CHOAM {
         comm = params.communications()
                      .create(params.member(), params.context().getId(), service,
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
-                                                     params.metrics(), r),
+                                                     params.metrics(), r, params.txnPermits()),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
@@ -751,7 +751,7 @@ public class CHOAM {
 
     private void combine(List<Msg> messages) {
         messages.forEach(m -> combine(m));
-        combine();
+        transitions.combine();
     }
 
     private void combine(Msg m) {

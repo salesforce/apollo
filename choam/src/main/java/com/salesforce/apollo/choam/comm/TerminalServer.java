@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam.comm;
 
+import com.google.common.util.concurrent.RateLimiter;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
@@ -22,6 +23,7 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -33,11 +35,14 @@ public class TerminalServer extends TerminalImplBase {
     @SuppressWarnings("unused")
     private final ChoamMetrics               metrics;
     private final RoutableService<Concierge> router;
+    private final RateLimiter                submitRateLimiter;
 
-    public TerminalServer(ClientIdentity identity, ChoamMetrics metrics, RoutableService<Concierge> router) {
+    public TerminalServer(ClientIdentity identity, ChoamMetrics metrics, RoutableService<Concierge> router,
+                          int txnPermits) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;
+        submitRateLimiter = RateLimiter.create(txnPermits);
     }
 
     @Override
@@ -85,6 +90,10 @@ public class TerminalServer extends TerminalImplBase {
     @Override
     public void submit(SubmitTransaction request, StreamObserver<SubmitResult> responseObserver) {
         router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
+            if (!submitRateLimiter.tryAcquire()) {
+                responseObserver.onError(Status.UNAVAILABLE.withDescription("Rate exceeded").asRuntimeException());
+                return;
+            }
             Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));

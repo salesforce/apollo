@@ -126,7 +126,7 @@ public class TestCHOAM {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(200), TimeUnit.MILLISECONDS);
+            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
         }
     }
 

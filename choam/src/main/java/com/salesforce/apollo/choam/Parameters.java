@@ -43,7 +43,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          DigestAlgorithm digestAlgorithm, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
                          int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
                          Duration synchronizeTimeout, Session.Builder session, Executor submitDispatcher,
-                         int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer) {
+                         int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer,
+                         int txnPermits) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -177,6 +178,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    synchronizationCycles = 10;
         private Duration                               synchronizeDuration   = Duration.ofMillis(500);
         private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
+        private int                                    txnPermits            = 3_000;
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
@@ -187,7 +189,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,
                                   metrics, viewSigAlgorithm, synchronizationCycles, synchronizeDuration,
                                   regenerationCycles, synchronizeTimeout, session, submitDispatcher, toleranceLevel,
-                                  bootstrap, producer);
+                                  bootstrap, producer, txnPermits);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -296,6 +298,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getTransactonTimeout() {
             return submitTimeout;
+        }
+
+        public int getTxnPermits() {
+            return txnPermits;
         }
 
         public SignatureAlgorithm getViewSigAlgorithm() {
@@ -435,6 +441,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
+            return this;
+        }
+
+        public Builder setTxnPermits(int txnPermits) {
+            this.txnPermits = txnPermits;
             return this;
         }
 
