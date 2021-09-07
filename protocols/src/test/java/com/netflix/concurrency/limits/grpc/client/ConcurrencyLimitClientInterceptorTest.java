@@ -30,7 +30,7 @@ public class ConcurrencyLimitClientInterceptorTest {
                                                                                               .setResponseMarshaller(StringMarshaller.INSTANCE)
                                                                                               .build();
 
-    @Test
+//    @Test
     public void simulation() throws IOException {
         Semaphore sem = new Semaphore(20, true);
         Server server = NettyServerBuilder.forPort(0)

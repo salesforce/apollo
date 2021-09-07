@@ -226,7 +226,7 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 88 + (30 * 3);
+        final int expected = 88 + (30 * 2);
         Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                     .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
@@ -239,8 +239,8 @@ public class TestCHOAM {
         choams.values().forEach(ch -> ch.start());
         final int expected = 23;
 
-        Utils.waitForCondition(300_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                    .filter(s -> s >= expected).count() == choams.size());
+        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                           .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
@@ -251,7 +251,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
-        final int clientCount = 5_000;
+        final int clientCount = 10;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().parallelStream()
@@ -262,7 +262,7 @@ public class TestCHOAM {
         transactioneers.stream().forEach(e -> e.start());
         final boolean success;
         try {
-            success = Utils.waitForCondition(300_000,
+            success = Utils.waitForCondition(300_000, 1_000,
                                              () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
                                                                   .count() == transactioneers.size());
         } finally {
