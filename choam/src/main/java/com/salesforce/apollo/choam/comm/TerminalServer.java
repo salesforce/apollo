@@ -14,6 +14,7 @@ import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
@@ -99,7 +100,12 @@ public class TerminalServer extends TerminalImplBase {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
-            responseObserver.onNext(s.submit(request, from));
+            final SubmitResult result = s.submit(request, from);
+            if (result.getOutcome() != Outcome.SUCCESS) { 
+                responseObserver.onError(Status.UNAVAILABLE.withDescription("Failed").asRuntimeException());
+                return;
+            }
+            responseObserver.onNext(result);
             responseObserver.onCompleted();
         });
     }

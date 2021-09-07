@@ -30,7 +30,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.h2.mvstore.MVMap;
@@ -113,6 +112,8 @@ public class CHOAM {
         Block produce(Long height, Digest prev, Executions executions);
 
         Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
+
+        void publish(CertifiedBlock cb);
     }
 
     public class Combiner implements Combine {
@@ -234,8 +235,8 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.member());
             Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
-            viewContext = new ViewContext(context, params, signer, validators, publisher(), constructBlock());
-            producer = new Producer(viewContext, head, constructBlock(), comm);
+            viewContext = new ViewContext(context, params, signer, validators, constructBlock());
+            producer = new Producer(viewContext, head, comm);
             producer.start();
         }
 
@@ -361,7 +362,7 @@ public class CHOAM {
                           params.digestAlgorithm().digest(next.consensusKeyPair.getPublic().getEncoded()),
                           params.member());
                 Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
-                ViewContext vc = new GenesisContext(formation, params, signer, publisher(), constructBlock());
+                ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
                 reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, constructBlock(), true);
             } else {
                 reconfigure = null;
@@ -653,15 +654,8 @@ public class CHOAM {
 
     private Block checkpoint() {
         transitions.beginCheckpoint();
-        CheckpointState checkpointState = checkpoint(head.block.getCheckpoint(), head.height());
-        if (checkpointState == null) {
-            log.error("Cannot checkpoint: {} on: {}", head.hash, params.member());
-            transitions.fail();
-            return null;
-        }
-        cachedCheckpoints.put(head.height(), checkpointState);
-        final long currentHeight = head.height();
-        File state = params.checkpointer().apply(currentHeight);
+        HashedBlock lb = head;
+        File state = params.checkpointer().apply(head.height());
         if (state == null) {
             log.error("Cannot create checkpoint");
             transitions.fail();
@@ -672,50 +666,18 @@ public class CHOAM {
             transitions.fail();
         }
 
-        HashedBlock lb = head;
         final HashedCertifiedBlock v = view;
         final HashedBlock c = checkpoint;
         final Block block = Block.newBuilder()
                                  .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
                                                         c.height(), c.hash, v.height(), v.hash))
                                  .setCheckpoint(cp).build();
+
+        MVMap<Integer, byte[]> stored = store.putCheckpoint(height(block), state, cp);
+        state.delete();
+        cachedCheckpoints.put(head.height(), new CheckpointState(cp, stored));
         transitions.finishCheckpoint();
         return block;
-    }
-
-    private CheckpointState checkpoint(Checkpoint body, long height) {
-        Digest stateHash;
-        CheckpointState checkpoint = cachedCheckpoints.get(height);
-        Digest bsh = new Digest(body.getStateHash());
-        if (checkpoint != null) {
-            if (!body.getStateHash().equals(checkpoint.checkpoint.getStateHash())) {
-                log.error("Invalid checkpoint state hash: {} does not equal recorded: {} on: {}",
-                          new Digest(checkpoint.checkpoint.getStateHash()), bsh, params.member());
-                return null;
-            }
-        } else {
-            File state = params.checkpointer().apply(height - 1);
-            if (state == null) {
-                log.error("Invalid checkpoint on: {}", params.member());
-                return null;
-            }
-            try (FileInputStream fis = new FileInputStream(state)) {
-                stateHash = params.digestAlgorithm().digest(fis);
-            } catch (IOException e) {
-                log.error("Invalid checkpoint!", e);
-                return null;
-            }
-            if (!stateHash.equals(bsh)) {
-                log.error("Cannot replicate checkpoint: {} state hash: {} does not equal recorded: {} on: {}", height,
-                          stateHash, bsh, params.member());
-                state.delete();
-                return null;
-            }
-            MVMap<Integer, byte[]> stored = store.putCheckpoint(height, state, body);
-            checkpoint = new CheckpointState(body, stored);
-            state.delete();
-        }
-        return checkpoint;
     }
 
     private void combine() {
@@ -807,27 +769,30 @@ public class CHOAM {
                 final HashedCertifiedBlock c = checkpoint;
                 return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
             }
+
+            @Override
+            public void publish(CertifiedBlock cb) {
+                combine.publish(cb, true);
+            }
         };
     }
 
     private void execute(List<Transaction> execs) {
         try {
-            executions.execute(() -> {
-                log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(),
-                          params.member());
-                params.processor().beginBlock(head.height(), head.hash);
-                execs.forEach(exec -> {
-                    Digest hash = hashOf(exec, params.digestAlgorithm());
-                    var stxn = session.complete(hash);
-                    log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash,
-                              head.height(), stxn == null ? "null" : "present", params.member());
-                    try {
-                        params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
-                    } catch (Throwable t) {
-                        log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
-                                  head.height(), params.member());
-                    }
-                });
+            log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(),
+                      params.member());
+            params.processor().beginBlock(head.height(), head.hash);
+            execs.forEach(exec -> {
+                Digest hash = hashOf(exec, params.digestAlgorithm());
+                var stxn = session.complete(hash);
+                log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash,
+                          head.height(), stxn == null ? "null" : "present", params.member());
+                try {
+                    params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
+                } catch (Throwable t) {
+                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
+                              head.height(), params.member());
+                }
             });
         } catch (RejectedExecutionException e) {
             log.trace("Rejected transaction executions for block: {} height: {}  on: {}", head.hash, head.height(),
@@ -930,10 +895,6 @@ public class CHOAM {
         default:
             break;
         }
-    }
-
-    private Consumer<HashedCertifiedBlock> publisher() {
-        return cb -> combine.publish(cb.certifiedBlock, true);
     }
 
     private void reconfigure(Reconfigure reconfigure) {

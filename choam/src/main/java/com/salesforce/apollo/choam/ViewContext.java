@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +16,7 @@ import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Executions;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
@@ -36,29 +36,31 @@ import com.salesforce.apollo.membership.Member;
 public class ViewContext {
     private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
 
-    private final BlockProducer                  blockProducer;
-    private final Context<Member>                context;
-    private final Parameters                     params;
-    private final Consumer<HashedCertifiedBlock> publisher;
-    private final Map<Digest, Short>             roster;
-    private final Signer                         signer;
-    private final Map<Member, Verifier>          validators;
+    private final BlockProducer         blockProducer;
+    private final Context<Member>       context;
+    private final Parameters            params;
+    private final Map<Digest, Short>    roster;
+    private final Signer                signer;
+    private final Map<Member, Verifier> validators;
 
     public ViewContext(Context<Member> context, Parameters params, Signer signer, Map<Member, Verifier> validators,
-                       Consumer<HashedCertifiedBlock> publisher, BlockProducer blockProducer) {
+                       BlockProducer blockProducer) {
         this.blockProducer = blockProducer;
         this.context = context;
         this.roster = new HashMap<>();
         this.params = params;
         this.signer = signer;
         this.validators = validators;
-        this.publisher = publisher;
 
         var remapped = CHOAM.rosterMap(params.context(), context.activeMembers());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
         }
+    }
+
+    public Block checkpoint() {
+        return blockProducer.checkpoint();
     }
 
     public Context<Member> context() {
@@ -96,7 +98,11 @@ public class ViewContext {
     }
 
     public void publish(HashedCertifiedBlock block) {
-        publisher.accept(block);
+        blockProducer.publish(block.certifiedBlock);
+    }
+
+    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock hashedBlock) {
+        return blockProducer.reconfigure(aggregate, nextViewId, hashedBlock);
     }
 
     public Map<Digest, Short> roster() {

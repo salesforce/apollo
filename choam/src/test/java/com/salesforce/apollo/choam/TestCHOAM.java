@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -180,13 +184,28 @@ public class TestCHOAM {
             return thread;
         });
 
+        Function<Long, File> checkpointer = h -> {
+            File cp;
+            try {
+                cp = File.createTempFile("cp-" + h, ".chk");
+                cp.deleteOnExit();
+                try (var os = new FileOutputStream(cp)) {
+                    os.write("Give me food or give me slack or kill me".getBytes());
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+            return cp;
+        };
+
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(250)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
-                                                              .build());
-//        params.getEthereal().setEpochLength(120); 
+                                                              .build())
+                               .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
+//        params.getEthereal().setEpochLength(120);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -227,8 +246,8 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         final int expected = 88 + (30 * 2);
-        Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                    .filter(s -> s >= expected).count() == choams.size());
+        Utils.waitForCondition(120_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                           .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
     }
@@ -251,7 +270,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
-        final int clientCount = 10;
+        final int clientCount = 5_000;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().parallelStream()
@@ -283,8 +302,8 @@ public class TestCHOAM {
         final int expected = 23;
         var session = choams.get(members.get(0).getId()).getSession();
 
-        Utils.waitForCondition(120_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                    .filter(s -> s >= expected).count() == choams.size());
+        Utils.waitForCondition(120_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                           .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
         final ByteMessage tx = ByteMessage.newBuilder()

@@ -53,7 +53,6 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
@@ -98,12 +97,13 @@ public class Producer {
 
         @Override
         public void checkpoint() {
-            Block ckpt = blockProducer.checkpoint();
+            Block ckpt = view.checkpoint();
             if (ckpt == null) {
                 log.error("Cannot generate checkpoint block on: {}", params().member());
                 transitions.failed();
                 return;
             }
+            coordinator.start(params().producer().gossipDuration(), params().scheduler());
             var next = new HashedBlock(params().digestAlgorithm(), ckpt);
             previousBlock.set(next);
             var validation = view.generateValidation(next);
@@ -112,7 +112,9 @@ public class Producer {
             cb.setBlock(next.block);
             cb.addCertifications(validation.getWitness());
             maybePublish(next.hash, cb);
-            log.info("Produced checkpoint: {} for: {} on: {}", next.hash, getViewId(), params().member());
+            log.info("Produced checkpoint: {} height: {} for: {} on: {}", next.hash, next.height(), getViewId(),
+                     params().member());
+            transitions.lastBlock();
         }
 
         @Override
@@ -148,7 +150,7 @@ public class Producer {
                                    .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
             log.debug("Aggregate of: {} joins: {} on: {}", nextViewId, aggregate.size(), params().member());
             if (aggregate.size() > toleranceLevel) {
-                var reconfigure = blockProducer.reconfigure(aggregate, nextViewId, previousBlock.get());
+                var reconfigure = view.reconfigure(aggregate, nextViewId, previousBlock.get());
                 var rhb = new HashedBlock(params().digestAlgorithm(), reconfigure);
                 var validation = view.generateValidation(rhb);
                 coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
@@ -170,7 +172,7 @@ public class Producer {
 
         @Override
         public void startProduction() {
-            log.info("Starting production of: {} on: {}", getViewId(), params().member());
+            log.info("Starting production for: {} on: {}", getViewId(), params().member());
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
             final Controller current = controller;
             current.start();
@@ -316,7 +318,6 @@ public class Producer {
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
     private final List<Join>                          assembled     = new CopyOnWriteArrayList<>();
-    private final BlockProducer                       blockProducer;
     private final AtomicBoolean                       closed        = new AtomicBoolean(false);
     private final CommonCommunications<Terminal, ?>   comms;
     private final Controller                          controller;
@@ -334,19 +335,17 @@ public class Producer {
     private final Transitions                         transitions;
     private final ViewContext                         view;
 
-    public Producer(ViewContext view, HashedBlock lastBlock, BlockProducer blockProducer,
-                    CommonCommunications<Terminal, ?> comms) {
+    public Producer(ViewContext view, HashedBlock lastBlock, CommonCommunications<Terminal, ?> comms) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
-        this.blockProducer = blockProducer;
         this.comms = comms;
-        this.reconfigureCountdown = new AtomicInteger(30); // TODO params
+        this.reconfigureCountdown = new AtomicInteger(2); // TODO params
 
         final Parameters params = view.params();
         final Builder ep = params.producer().ethereal();
         final int maxBufferSize = (params.producer().maxBatchByteSize()
-        * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3)) * 2;
+        * ((ep.getEpochLength() * ep.getNumberOfEpochs()) - 3));
         ds = new TxDataSource(params, maxBufferSize);
         final Context<Member> context = view.context();
 
@@ -354,7 +353,7 @@ public class Producer {
                                                       .setContext(context).build(),
                                               params().communications());
         coordinator.registerHandler((ctx, msgs) -> msgs.forEach(msg -> process(msg)));
-        scheduler = new RoundScheduler(context.timeToLive());
+        scheduler = new RoundScheduler(context.getRingCount());
         coordinator.register(i -> scheduler.tick(i));
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
@@ -447,8 +446,14 @@ public class Producer {
     }
 
     public void start() {
-        log.info("Starting production for: {} on: {}", getViewId(), params().member());
-        transitions.start();
+        final Block prev = previousBlock.get().block;
+        if (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0) { // genesis block won't ever be
+                                                                                         // 0
+            transitions.checkpoint();
+        } else {
+            transitions.start();
+        }
+        periodicValidations(null);
     }
 
     public SubmitResult submit(Transaction transaction) {
@@ -465,8 +470,8 @@ public class Producer {
                       params().member());
             return SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build();
         } else {
-            log.info("Failure, cannot submit received txn: {} on: {}",
-                     CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
+            log.debug("Failure, cannot submit received txn: {} on: {}",
+                      CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
             return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
         }
     }
@@ -558,11 +563,15 @@ public class Producer {
                 return;
             }
             pending.values().forEach(b -> {
-                var validation = view.generateValidation(new HashedBlock(params().digestAlgorithm(), b.getBlock()));
+                final HashedBlock hb = new HashedBlock(params().digestAlgorithm(), b.getBlock());
+                var validation = view.generateValidation(hb);
                 coordinator.publish(Coordinate.newBuilder().setValidate(validation).build());
+                log.trace("Published periodic validation of: {} height: {} on: {}", hb.hash, hb.height(),
+                          params().member());
             });
             scheduler.schedule(PERIODIC_VALIDATIONS, action.get(), 1);
         });
+        log.trace("Scheduling periodic validations on: {}", params().member());
         scheduler.schedule(PERIODIC_VALIDATIONS, action.get(), 1);
     }
 

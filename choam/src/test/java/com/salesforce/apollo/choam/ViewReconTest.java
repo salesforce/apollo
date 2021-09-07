@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -81,7 +80,6 @@ public class ViewReconTest {
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(100)).setContext(base);
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
-        Consumer<HashedCertifiedBlock> publisher = hcb -> published.add(hcb);
 
         Map<Member, ViewReconfiguration> recons = new HashMap<>();
 
@@ -107,6 +105,11 @@ public class ViewReconTest {
             @Override
             public Block produce(Long height, Digest prev, Executions executions) {
                 return null;
+            }
+
+            @Override
+            public void publish(CertifiedBlock cb) {
+                published.add(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, cb));
             }
 
             @Override
@@ -149,7 +152,7 @@ public class ViewReconTest {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
-                                               validators, publisher, reconfigure);
+                                               validators, reconfigure);
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));
         });
 
