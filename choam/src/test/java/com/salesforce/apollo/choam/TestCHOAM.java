@@ -205,7 +205,7 @@ public class TestCHOAM {
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
                                                               .build())
                                .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
-//        params.getEthereal().setEpochLength(120);
+        params.getProducer().coordination().setBufferSize(1500);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -270,7 +270,7 @@ public class TestCHOAM {
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
-        final int clientCount = 5_000;
+        final int clientCount = 1_000;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().parallelStream()
