@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -260,12 +261,18 @@ public class Ethereal {
             t.setDaemon(true);
             return t;
         });
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> in.execute(() -> {
-            Orderer orderer = ord.get();
-            if (orderer != null) {
-                orderer.addPreunits(source, pus);
+        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> {
+            try {
+                in.execute(() -> {
+                    Orderer orderer = ord.get();
+                    if (orderer != null) {
+                        orderer.addPreunits(source, pus);
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                // ignored
             }
-        });
+        };
 
         Runnable start = () -> {
             var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());

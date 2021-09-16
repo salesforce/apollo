@@ -33,6 +33,19 @@ message Crown_s {
     utils.Digeste controlHash = 2;
 }
 
+message ChRbcMessage {
+    oneof t {
+        PreUnit_s propose = 1;
+        UnitReference prevote = 2;
+        UnitReference commit = 3;
+    }
+}
+
+message UnitReference {
+    int64 uid = 1;
+    utils.Digeste hash = 2;
+}
+
 message ByteMessage {
     bytes contents = 1;
 }

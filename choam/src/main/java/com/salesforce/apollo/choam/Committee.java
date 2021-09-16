@@ -10,7 +10,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -20,7 +19,6 @@ import org.slf4j.Logger;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
-import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
@@ -95,10 +93,6 @@ public interface Committee {
     boolean isMember();
 
     ViewMember join(JoinRequest request, Digest from);
-
-    default void joins(List<Join> joinsList) {
-//      log().trace("Not processing join, not a committee member on: {}", params().member());
-    }
 
     Logger log();
 

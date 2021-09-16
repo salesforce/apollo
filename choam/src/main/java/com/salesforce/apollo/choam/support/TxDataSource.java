@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Executions;
-import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -37,7 +36,6 @@ public class TxDataSource implements DataSource {
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
     private final AtomicInteger              buffered   = new AtomicInteger();
-    private final BlockingDeque<Join>        joins      = new LinkedBlockingDeque<>();
     private final Parameters                 parameters;
     private final BlockingDeque<Transaction> processing = new LinkedBlockingDeque<>();
     private final AtomicInteger              remaining  = new AtomicInteger();
@@ -56,13 +54,6 @@ public class TxDataSource implements DataSource {
         Executions.Builder builder = Executions.newBuilder();
         int batchSize = 0;
         int bytesRemaining = parameters.producer().maxBatchByteSize();
-        while (joins.peek() != null) {
-            Join next = joins.poll();
-            bytesRemaining -= next.getSerializedSize();
-            batchSize++;
-            builder.addJoins(next);
-            log.debug("Added join to data on: {}", parameters.member());
-        }
         while (processing.peek() != null && bytesRemaining >= processing.peek().getSerializedSize()) {
             Transaction next = processing.poll();
             bytesRemaining -= next.getSerializedSize();
@@ -98,10 +89,5 @@ public class TxDataSource implements DataSource {
             remaining.addAndGet(txn.getSerializedSize());
             return false;
         }
-    }
-
-    public void submitJoin(Join join) {
-        joins.add(join);
-        log.debug("Added join on: {}", parameters.member());
     }
 }

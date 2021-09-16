@@ -101,7 +101,7 @@ public class TerminalServer extends TerminalImplBase {
                 return;
             }
             final SubmitResult result = s.submit(request, from);
-            if (result.getOutcome() != Outcome.SUCCESS) { 
+            if (result.getOutcome() != Outcome.SUCCESS) {
                 responseObserver.onError(Status.UNAVAILABLE.withDescription("Failed").asRuntimeException());
                 return;
             }

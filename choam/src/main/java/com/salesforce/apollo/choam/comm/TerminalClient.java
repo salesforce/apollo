@@ -36,10 +36,11 @@ public class TerminalClient implements Terminal {
     }
 
     private final ManagedServerConnection channel;
-    private final TerminalFutureStub      client;
-    private final Member                  member;
+
+    private final TerminalFutureStub client;
+    private final Member             member;
     @SuppressWarnings("unused")
-    private final ChoamMetrics            metrics;
+    private final ChoamMetrics       metrics;
 
     public TerminalClient(ManagedServerConnection channel, Member member, ChoamMetrics metrics) {
         this.member = member;

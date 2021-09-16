@@ -93,7 +93,7 @@ public class Extender {
                 lastDecideResult.set(true);
                 deciders.clear();
                 decided.set(true);
-                log.trace("Round, decided");
+                log.trace("Round decided");
                 return false;
             }
             if (decision.decision() == Vote.UNDECIDED) {

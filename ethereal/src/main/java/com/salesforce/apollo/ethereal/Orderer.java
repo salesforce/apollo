@@ -182,6 +182,10 @@ public class Orderer {
         }
     }
 
+    public Config getConfig() {
+        return config;
+    }
+
     /** GetInfo returns DagInfo of the dag from the most recent epoch. */
     public DagInfo[] getInfo() {
         final Lock lock = mx.readLock();

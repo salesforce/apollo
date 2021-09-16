@@ -38,7 +38,9 @@ public class RoundScheduler extends AtomicInteger {
         public boolean cancel() {
             cancelled = true;
             boolean remove = scheduled.remove(this);
-            timers.remove(label);
+            if (label != null) {
+                timers.remove(label);
+            }
             return remove;
         }
 
@@ -95,14 +97,20 @@ public class RoundScheduler extends AtomicInteger {
         new ArrayList<>(timers.values()).forEach(e -> e.cancel());
     }
 
+    public Timer schedule(Runnable action, int delayRounds) {
+        return schedule(null, action, delayRounds);
+    }
+
     public Timer schedule(String label, Runnable action, int delayRounds) {
         Timer timer = new Timer(label, get() + delayRounds, action);
         if (delayRounds == 0) {
             return timer;
         }
-        Timer prev = timers.put(label, timer);
-        if (prev != null) {
-            prev.cancel();
+        if (label != null) {
+            Timer prev = timers.put(label, timer);
+            if (prev != null) {
+                prev.cancel();
+            }
         }
         scheduled.add(timer);
         return timer;

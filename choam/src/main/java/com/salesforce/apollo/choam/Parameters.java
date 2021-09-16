@@ -181,7 +181,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters build() {
             final double n = context.getRingCount();
-            var toleranceLevel = (int) Math.floor(n - (n / 3.0));
+            var toleranceLevel = (int) ((n - 1.0) / 3.0 + 1.0);
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
                                   checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,

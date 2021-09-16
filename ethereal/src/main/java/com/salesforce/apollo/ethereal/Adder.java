@@ -43,9 +43,9 @@ public interface Adder {
         private final Dag                         dag;
         private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
+        private final Channel<waitingPreUnit>     ready;
         private final Map<Digest, waitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, waitingPreUnit>   waitingById = new ConcurrentHashMap<>();
-        private final Channel<waitingPreUnit>     ready;
 
         public AdderImpl(Dag dag, Config conf) {
             this.dag = dag;
@@ -53,30 +53,6 @@ public interface Adder {
             ready = new SimpleChannel<>(String.format("Ready units for: %s", conf.pid()),
                                         conf.epochLength() * conf.nProc() * 10);
             ready.consume(readyHandler());
-        }
-
-        private Consumer<List<waitingPreUnit>> readyHandler() {
-            @SuppressWarnings("unchecked")
-            Deque<waitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
-            for (int i = 0; i < ready.length; i++) {
-                ready[i] = new ArrayDeque<>();
-            }
-            return wpus -> {
-                wpus.forEach(wpu -> {
-                    ready[wpu.pu.creator()].add(wpu);
-                });
-                boolean handled = true;
-                while (handled) {
-                    handled = false;
-                    for (int i = 0; i < ready.length; i++) {
-                        final Deque<waitingPreUnit> q = ready[i];
-                        if (!q.isEmpty()) {
-                            handleReady(q.removeFirst());
-                            handled = true;
-                        }
-                    }
-                }
-            };
         }
 
         /**
@@ -138,56 +114,6 @@ public interface Adder {
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
             ready.close();
-        }
-
-        private void handleReady(waitingPreUnit wp) {
-            log.debug("Handle ready: {} on: {}", wp, conf.pid());
-            mtx.lock();
-            try {
-                // 1. Decode Parents
-                var decoded = dag.decodeParents(wp.pu());
-                var parents = decoded.parents();
-                if (decoded.inError()) {
-                    if (decoded instanceof AmbiguousParents ap) {
-                        parents = new Unit[parents.length];
-                        int i = 0;
-                        for (var possibleParents : ap.units()) {
-                            if (possibleParents.isEmpty()) {
-                                break;
-                            }
-                            if (possibleParents.size() == 1) {
-                                parents[i++] = possibleParents.get(0);
-                            }
-                        }
-                    }
-                    wp.failed().set(true);
-                    return;
-                }
-                var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
-                                    .toList();
-                Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
-                if (!calculated.equals(wp.pu().view().controlHash())) {
-                    wp.failed().set(true);
-                    handleInvalidControlHash(wp.source(), wp.pu(), parents);
-                    return;
-                }
-
-                // 2. Build Unit
-                var freeUnit = dag.build(wp.pu(), parents);
-
-                // 3. Check
-                var err = dag.check(freeUnit);
-                if (err != null) {
-                    log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.pid());
-                } else {
-                    // 4. Insert
-                    dag.insert(freeUnit);
-                    log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
-                }
-            } finally {
-                remove(wp);
-                mtx.unlock();
-            }
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -284,6 +210,80 @@ public interface Adder {
             }
         }
 
+        private void handleReady(waitingPreUnit wp) {
+            log.debug("Handle ready: {} on: {}", wp, conf.pid());
+            mtx.lock();
+            try {
+                // 1. Decode Parents
+                var decoded = dag.decodeParents(wp.pu());
+                var parents = decoded.parents();
+                if (decoded.inError()) {
+                    if (decoded instanceof AmbiguousParents ap) {
+                        parents = new Unit[parents.length];
+                        int i = 0;
+                        for (var possibleParents : ap.units()) {
+                            if (possibleParents.isEmpty()) {
+                                break;
+                            }
+                            if (possibleParents.size() == 1) {
+                                parents[i++] = possibleParents.get(0);
+                            }
+                        }
+                    }
+                    wp.failed().set(true);
+                    return;
+                }
+                var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
+                                    .toList();
+                Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
+                if (!calculated.equals(wp.pu().view().controlHash())) {
+                    wp.failed().set(true);
+                    handleInvalidControlHash(wp.source(), wp.pu(), parents);
+                    return;
+                }
+
+                // 2. Build Unit
+                var freeUnit = dag.build(wp.pu(), parents);
+
+                // 3. Check
+                var err = dag.check(freeUnit);
+                if (err != null) {
+                    log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.pid());
+                } else {
+                    // 4. Insert
+                    dag.insert(freeUnit);
+                    log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
+                }
+            } finally {
+                remove(wp);
+                mtx.unlock();
+            }
+        }
+
+        private Consumer<List<waitingPreUnit>> readyHandler() {
+            @SuppressWarnings("unchecked")
+            Deque<waitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
+            for (int i = 0; i < ready.length; i++) {
+                ready[i] = new ArrayDeque<>();
+            }
+            return wpus -> {
+                wpus.forEach(wpu -> {
+                    ready[wpu.pu.creator()].add(wpu);
+                });
+                boolean handled = true;
+                while (handled) {
+                    handled = false;
+                    for (int i = 0; i < ready.length; i++) {
+                        final Deque<waitingPreUnit> q = ready[i];
+                        if (!q.isEmpty()) {
+                            handleReady(q.removeFirst());
+                            handled = true;
+                        }
+                    }
+                }
+            };
+        }
+
         /**
          * registerMissing registers the fact that the given waitingPreUnit needs an
          * unknown unit with the given id.
@@ -340,11 +340,11 @@ public interface Adder {
     }
 
     enum Correctness {
-        ABIGUOUS_PARENTS, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS, COMPLIANCE_ERROR;
+        ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
-    record waitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents, AtomicInteger waitingParents,
-                          List<waitingPreUnit> children, AtomicBoolean failed) {
+    public record waitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents,
+                                 AtomicInteger waitingParents, List<waitingPreUnit> children, AtomicBoolean failed) {
         public String toString() {
             return "wpu[" + pu.shortString() + "]";
         }

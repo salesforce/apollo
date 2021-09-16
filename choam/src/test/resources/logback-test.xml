@@ -13,9 +13,14 @@
   %msg%n
 			</Pattern>
 		</encoder>
-	</appender>  
+	</appender>
     
     <logger name="com.salesforce.apollo.choam" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -36,7 +41,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
     
-    <logger name="com.salesforce.apollo.ethereal" level="warn"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

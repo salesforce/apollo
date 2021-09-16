@@ -111,9 +111,9 @@ public class CHOAM {
 
         Block produce(Long height, Digest prev, Executions executions);
 
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
-
         void publish(CertifiedBlock cb);
+
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
     }
 
     public class Combiner implements Combine {
@@ -208,7 +208,6 @@ public class CHOAM {
         public Initial sync(Synchronize request, Digest from) {
             return CHOAM.this.sync(request, from);
         }
-
     }
 
     public interface TransactionExecutor {
@@ -221,6 +220,7 @@ public class CHOAM {
 
     /** a member of the current committee */
     class Associate extends Administration {
+
         private final Producer    producer;
         private final ViewContext viewContext;
 
@@ -243,11 +243,6 @@ public class CHOAM {
         @Override
         public void complete() {
             producer.complete();
-        }
-
-        @Override
-        public void joins(List<Join> joins) {
-            producer.joins(joins);
         }
 
         @Override
@@ -532,11 +527,13 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    private final Map<Long, CheckpointState>                cachedCheckpoints = new ConcurrentHashMap<>();
+    private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
+
     private volatile HashedCertifiedBlock                   checkpoint;
     private final ReliableBroadcaster                       combine;
     private final CommonCommunications<Terminal, Concierge> comm;
     private volatile Committee                              current;
+    private final ExecutorService                           executions;
     private volatile CompletableFuture<SynchronizedState>   futureBootstrap;
     private volatile ScheduledFuture<?>                     futureSynchronization;
     private volatile HashedCertifiedBlock                   genesis;
@@ -544,15 +541,14 @@ public class CHOAM {
     private final ExecutorService                           linear;
     private volatile nextView                               next;
     private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending           = new PriorityQueue<>();
+    private final PriorityQueue<HashedCertifiedBlock>       pending       = new PriorityQueue<>();
     private final RoundScheduler                            roundScheduler;
     private final Session                                   session;
-    private final AtomicBoolean                             started           = new AtomicBoolean();
+    private final AtomicBoolean                             started       = new AtomicBoolean();
     private final Store                                     store;
-    private final AtomicBoolean                             synchronizing     = new AtomicBoolean(false);
+    private final AtomicBoolean                             synchronizing = new AtomicBoolean(false);
     private final Combine.Transitions                       transitions;
     private volatile HashedCertifiedBlock                   view;
-    private final ExecutorService                           executions;
 
     public CHOAM(Parameters params, MVStore store) {
         this(params, new Store(params.digestAlgorithm(), store));
@@ -612,6 +608,7 @@ public class CHOAM {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        log.info("CHOAM startup tolerance level: {} on: {}", params.context().toleranceLevel(), params.member());
         combine.start(params.producer().gossipDuration(), params.scheduler());
         transitions.fsm().enterStartState();
         transitions.start();
@@ -764,15 +761,15 @@ public class CHOAM {
             }
 
             @Override
+            public void publish(CertifiedBlock cb) {
+                combine.publish(cb, true);
+            }
+
+            @Override
             public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
                 final HashedCertifiedBlock v = view;
                 final HashedCertifiedBlock c = checkpoint;
                 return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
-            }
-
-            @Override
-            public void publish(CertifiedBlock cb) {
-                combine.publish(cb, true);
             }
         };
     }
@@ -888,8 +885,6 @@ public class CHOAM {
             execute(head.block.getGenesis().getInitializeList());
             transitions.regenerated();
         case EXECUTIONS:
-            final var c = current;
-            c.joins(head.block.getExecutions().getJoinsList());
             execute(head.block.getExecutions().getExecutionsList());
             break;
         default:
