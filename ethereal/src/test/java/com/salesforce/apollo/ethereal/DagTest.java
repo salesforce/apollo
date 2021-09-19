@@ -31,20 +31,36 @@ import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
  */
 public class DagTest {
 
-    @Test
-    public void testIt() {
-        System.out.println("65000549695646603732796438742359905742570406053903786389881062969044166799969".length());
+    // collectUnits runs dfs from maximal units in the given dag and returns a map
+    // creator => (height => slice of units by this creator on this height)
+    public static HashMap<Short, Map<Integer, List<Unit>>> collectUnits(Dag dag) {
+        var traversed = new HashSet<Digest>();
+        var result = new HashMap<Short, Map<Integer, List<Unit>>>();
+        for (short pid = 0; pid < dag.nProc(); pid++) {
+            result.put(pid, new HashMap<>());
+        }
+        dag.iterateMaxUnitsPerProcess(units -> {
+            for (Unit u : units) {
+                if (!traversed.contains(u.hash())) {
+                    traverse(u, traversed, result);
+                }
+            }
+            return true;
+        });
+        return result;
     }
 
-    @Test
-    public void testEnDecodingId() {
-
-        var id = PreUnit.id(100, (short) 1, 2);
-
-        var decoded = PreUnit.decode(id);
-        assertEquals(1, decoded.creator());
-        assertEquals(100, decoded.height());
-        assertEquals(2, decoded.epoch());
+    public static void traverse(Unit u, HashSet<Digest> traversed, HashMap<Short, Map<Integer, List<Unit>>> result) {
+        traversed.add(u.hash());
+        result.get(u.creator()).computeIfAbsent(u.height(), k -> new ArrayList<>()).add(u);
+        for (Unit uParent : u.parents()) {
+            if (uParent == null) {
+                continue;
+            }
+            if (!traversed.contains(uParent.hash())) {
+                traverse(uParent, traversed, result);
+            }
+        }
     }
 
     // @Test // TODO, resolution of forking (with alerts or RBAC)
@@ -161,6 +177,22 @@ public class DagTest {
     }
 
     @Test
+    public void testEnDecodingId() {
+
+        var id = PreUnit.id(100, (short) 1, 2);
+
+        var decoded = PreUnit.decode(id);
+        assertEquals(1, decoded.creator());
+        assertEquals(100, decoded.height());
+        assertEquals(2, decoded.epoch());
+    }
+
+    @Test
+    public void testIt() {
+        System.out.println("65000549695646603732796438742359905742570406053903786389881062969044166799969".length());
+    }
+
+    @Test
     public void transitivityOfAbove() throws Exception {
         DagAdder d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/six_units.txt"))) {
@@ -181,37 +213,5 @@ public class DagTest {
         assertTrue(u02.above(u0));
         assertTrue(u21.above(u01));
         assertTrue(u21.above(u0));
-    }
-
-    // collectUnits runs dfs from maximal units in the given dag and returns a map
-    // creator => (height => slice of units by this creator on this height)
-    private HashMap<Short, Map<Integer, List<Unit>>> collectUnits(Dag dag) {
-        var traversed = new HashSet<Digest>();
-        var result = new HashMap<Short, Map<Integer, List<Unit>>>();
-        for (short pid = 0; pid < dag.nProc(); pid++) {
-            result.put(pid, new HashMap<>());
-        }
-        dag.iterateMaxUnitsPerProcess(units -> {
-            for (Unit u : units) {
-                if (!traversed.contains(u.hash())) {
-                    traverse(u, traversed, result);
-                }
-            }
-            return true;
-        });
-        return result;
-    }
-
-    private void traverse(Unit u, HashSet<Digest> traversed, HashMap<Short, Map<Integer, List<Unit>>> result) {
-        traversed.add(u.hash());
-        result.get(u.creator()).computeIfAbsent(u.height(), k -> new ArrayList<>()).add(u);
-        for (Unit uParent : u.parents()) {
-            if (uParent == null) {
-                continue;
-            }
-            if (!traversed.contains(uParent.hash())) {
-                traverse(uParent, traversed, result);
-            }
-        }
     }
 }

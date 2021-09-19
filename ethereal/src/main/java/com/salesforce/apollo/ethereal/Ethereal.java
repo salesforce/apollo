@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Exchanger;
@@ -211,8 +210,7 @@ public class Ethereal {
                         throw new IllegalStateException("Unable to exchange wtk", e);
                     }
                     logWTK(wtkey);
-                    var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              Clock.systemUTC());
+                    var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock);
                     ord.set(orderer);
                     orderer.start(Coin.newFactory(config.pid(), wtkey), synchronizer);
                 } finally {
@@ -275,7 +273,7 @@ public class Ethereal {
         };
 
         Runnable start = () -> {
-            var orderer = new Orderer(config, ds, makePreblock, Clock.systemUTC());
+            var orderer = new Orderer(config, ds, makePreblock);
             ord.set(orderer);
             orderer.start(new DsrFactory(), synchronizer);
         };
@@ -312,7 +310,7 @@ public class Ethereal {
             }
         };
 
-        var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
+        var ord = new Orderer(conf, null, extractHead);
         return new Controller(() -> ord.start(rsf, p -> {
         }), () -> ord.stop(), null, null);
     }

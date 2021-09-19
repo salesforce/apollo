@@ -58,8 +58,6 @@ public class CreatorTest {
         }
     }
 
-    private double bias = 3.0;
-
     record testEpochProofBuilder(Function<Unit, Boolean> verify) implements EpochProofBuilder {
 
         @Override
@@ -80,11 +78,11 @@ public class CreatorTest {
 
     private final static Random entropy = new Random(0x1638);
 
-    static Creator newCreator(Config cnf, Consumer<Unit> send) {
+    public static Creator newCreator(Config cnf, Consumer<Unit> send) {
         return newCreator(cnf, send, true);
     }
 
-    static Creator newCreator(Config cnf, Consumer<Unit> send, boolean proofResult) {
+    public static Creator newCreator(Config cnf, Consumer<Unit> send, boolean proofResult) {
         var dataSource = new RandomDataSource(10);
         RsData rsData = (i, p, e) -> {
             return null;
@@ -95,7 +93,7 @@ public class CreatorTest {
         return new Creator(cnf, dataSource, send, rsData, epochProofBuilder);
     }
 
-    static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
+    public static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
         var t = PreUnit.decode(id);
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
@@ -103,6 +101,8 @@ public class CreatorTest {
         return new preUnit(t.creator(), t.epoch(), t.height(), PreUnit.computeHash(algo, id, crown, data, rsData),
                            crown, data, rsData);
     }
+
+    private double bias = 3.0;
 
     @Test
     public void invalidFromFutureShouldNotProduceItButKeepProducing() throws Exception {

@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.Dag.newDag;
 
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -86,22 +85,6 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
-    public static epoch newEpoch(int epoch, Config config, RandomSourceFactory rsf, Channel<Unit> unitBelt,
-                                 Consumer<List<Unit>> orderedUnits, Clock clock) {
-        Dag dg = newDag(config, epoch);
-        RandomSource rs = rsf.newRandomSource(dg);
-        ExtenderService ext = new ExtenderService(dg, rs, config, orderedUnits);
-        dg.afterInsert(u -> ext.chooseNextTimingUnits());
-        dg.afterInsert(u -> {
-            // don't put our own units on the unit belt, creator already knows about them.
-            if (u.creator() != config.pid()) {
-                unitBelt.submit(u);
-            }
-        });
-        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
-    }
-
-    private final Clock                  clock;
     private final Config                 config;
     private volatile Creator             creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
@@ -113,14 +96,13 @@ public class Orderer {
     private final Consumer<List<Unit>>   toPreblock;
     private final Channel<Unit>          unitBelt;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Clock clock) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.unitBelt = new SimpleChannel<>(String.format("Unit belt for: %s", config.pid()),
-                                            conf.epochLength() * conf.nProc());
-        this.clock = clock;
+                                            conf.epochLength() * conf.nProc()); 
     }
 
     /**
@@ -306,6 +288,20 @@ public class Orderer {
         }
     }
 
+    private epoch createEpoch(int epoch) {
+        Dag dg = newDag(config, epoch);
+        RandomSource rs = rsf.newRandomSource(dg);
+        ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
+        dg.afterInsert(u -> ext.chooseNextTimingUnits());
+        dg.afterInsert(u -> {
+            // don't put our own units on the unit belt, creator already knows about them.
+            if (u.creator() != config.pid()) {
+                unitBelt.submit(u);
+            }
+        });
+        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
+    }
+
     private void finishEpoch(int epoch) {
         var ep = getEpoch(epoch);
         if (ep != null) {
@@ -394,7 +390,7 @@ public class Orderer {
                     p.close();
                 }
                 previous.set(c);
-                epoch newEpoch = newEpoch(epoch, config, rsf, unitBelt, handleTimingRounds(), clock);
+                epoch newEpoch = createEpoch(epoch);
                 current.set(newEpoch);
                 return newEpoch;
             }
