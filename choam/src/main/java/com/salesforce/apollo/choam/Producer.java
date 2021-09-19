@@ -36,6 +36,7 @@ import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
@@ -135,12 +136,6 @@ public class Producer {
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
             final Controller current = controller;
             current.start();
-            AtomicReference<Runnable> resync = new AtomicReference<>();
-            resync.set(() -> scheduler.schedule(SYNC, () -> {
-                current.sync();
-                resync.get().run();
-            }, 1));
-            resync.get().run();
         }
 
         @SuppressWarnings("unused")
@@ -275,7 +270,8 @@ public class Producer {
     /**
      * Reliably broadcast this preUnit to all valid members of this committee
      */
-    private void broadcast(PreUnit preUnit) {
+    private void broadcast(ChRbcMessage msg) {
+        var preUnit = PreUnit.from(msg.getPropose(), params().digestAlgorithm());
         if (metrics() != null) {
             metrics().broadcast(preUnit);
         }

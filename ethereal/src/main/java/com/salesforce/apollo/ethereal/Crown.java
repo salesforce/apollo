@@ -52,10 +52,6 @@ public record Crown(int[] heights, Digest controlHash) {
         return new Crown(heights, combine(algo, hashes));
     }
 
-    public static Crown newCrown(int[] heights, Digest hash) {
-        return new Crown(heights, hash);
-    }
-
     public static Crown emptyCrown(short nProc, DigestAlgorithm digestAlgorithm) {
         return new Crown(IntStream.range(0, nProc).map(e -> -1).toArray(), combine(digestAlgorithm, new Digest[nProc]));
     }

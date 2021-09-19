@@ -42,6 +42,7 @@ import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
@@ -224,7 +225,8 @@ abstract public class ViewAssembly implements Reconfiguration {
         assembled(aggregate);
     }
 
-    private void broadcast(PreUnit preUnit) {
+    private void broadcast(ChRbcMessage msg) {
+        var preUnit = PreUnit.from(msg.getPropose(), params().digestAlgorithm());
         if (params().metrics() != null) {
             params().metrics().broadcast(preUnit);
         }

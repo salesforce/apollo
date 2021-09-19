@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.ethereal.Adder.waitingPreUnit;
+import com.salesforce.apollo.ethereal.Adder.WaitingPreUnit;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
@@ -52,7 +52,7 @@ public class ChRbcTest {
         Orderer orderer = mock(Orderer.class);
         when(orderer.getConfig()).thenReturn(cnf);
         @SuppressWarnings("unchecked")
-        Channel<waitingPreUnit> ready = mock(Channel.class);
+        Channel<WaitingPreUnit> ready = mock(Channel.class);
         ChRbc chrbc = new ChRbc(scheduler, bc, orderer, ready);
         final short pid = (short) 0;
         var theseUnits = units.get(pid);

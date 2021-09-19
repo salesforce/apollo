@@ -45,9 +45,9 @@ public interface Adder {
         private final Dag                         dag;
         private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
-        private final Channel<waitingPreUnit>     ready;
-        private final Map<Digest, waitingPreUnit> waiting     = new ConcurrentHashMap<>();
-        private final Map<Long, waitingPreUnit>   waitingById = new ConcurrentHashMap<>();
+        private final Channel<WaitingPreUnit>     ready;
+        private final Map<Digest, WaitingPreUnit> waiting     = new ConcurrentHashMap<>();
+        private final Map<Long, WaitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
         public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> chRBC) {
             this.dag = dag;
@@ -134,7 +134,7 @@ public interface Adder {
             if (waitingById.get(id) != null) {
                 throw new IllegalStateException("Fork in the road"); // fork! TODO
             }
-            var wp = new waitingPreUnit(pu, id, source, new AtomicInteger(), new AtomicInteger(), new ArrayList<>(),
+            var wp = new WaitingPreUnit(pu, id, source, new AtomicInteger(), new AtomicInteger(), new ArrayList<>(),
                                         new AtomicBoolean());
             waiting.put(pu.hash(), wp);
             waitingById.put(id, wp);
@@ -165,7 +165,7 @@ public interface Adder {
          * checkIfMissing sets the children() attribute of a newly created
          * waitingPreunit, depending on if it was missing
          */
-        private void checkIfMissing(waitingPreUnit wp) {
+        private void checkIfMissing(WaitingPreUnit wp) {
             log.trace("Checking if missing: {} on: {}", wp, conf.pid());
             var mp = missing.get(wp.id());
             if (mp != null) {
@@ -183,11 +183,11 @@ public interface Adder {
         }
 
         /**
-         * finds out which parents of a newly created waitingPreUnit are in the dag,
+         * finds out which parents of a newly created WaitingPreUnit are in the dag,
          * which are waiting, and which are missing. Sets values of waitingParents() and
          * missingParents() accordingly. Additionally, returns maximal heights of dag.
          */
-        private int[] checkParents(waitingPreUnit wp) {
+        private int[] checkParents(WaitingPreUnit wp) {
             var epoch = wp.pu().epoch();
             var maxHeights = dag.maxView().heights();
             var heights = wp.pu().view().heights();
@@ -218,7 +218,7 @@ public interface Adder {
             }
         }
 
-        private void handleReady(waitingPreUnit wp) {
+        private void handleReady(WaitingPreUnit wp) {
             log.debug("Handle ready: {} on: {}", wp, conf.pid());
             mtx.lock();
             try {
@@ -268,9 +268,9 @@ public interface Adder {
             }
         }
 
-        private Consumer<List<waitingPreUnit>> readyHandler() {
+        private Consumer<List<WaitingPreUnit>> readyHandler() {
             @SuppressWarnings("unchecked")
-            Deque<waitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
+            Deque<WaitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
             for (int i = 0; i < ready.length; i++) {
                 ready[i] = new ArrayDeque<>();
             }
@@ -282,7 +282,7 @@ public interface Adder {
                 while (handled) {
                     handled = false;
                     for (int i = 0; i < ready.length; i++) {
-                        final Deque<waitingPreUnit> q = ready[i];
+                        final Deque<WaitingPreUnit> q = ready[i];
                         if (!q.isEmpty()) {
                             handleReady(q.removeFirst());
                             handled = true;
@@ -293,17 +293,17 @@ public interface Adder {
         }
 
         /**
-         * registerMissing registers the fact that the given waitingPreUnit needs an
+         * registerMissing registers the fact that the given WaitingPreUnit needs an
          * unknown unit with the given id.
          */
-        private void registerMissing(long id, waitingPreUnit wp) {
+        private void registerMissing(long id, WaitingPreUnit wp) {
             missing.putIfAbsent(id, new missingPreUnit(new ArrayList<>(), conf.clock().instant()));
             missing.get(id).neededBy().add(wp);
             log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.pid());
         }
 
         /** remove waitingPreunit from the buffer zone and notify its children. */
-        private void remove(waitingPreUnit wp) {
+        private void remove(WaitingPreUnit wp) {
             mtx.lock();
             try {
                 if (wp.failed().get()) {
@@ -325,7 +325,7 @@ public interface Adder {
          * removeFailed removes from the buffer zone a ready preunit which we failed to
          * add, together with all its descendants.
          */
-        private void removeFailed(waitingPreUnit wp) {
+        private void removeFailed(WaitingPreUnit wp) {
             waiting.remove(wp.pu().hash());
             waitingById.remove(wp.id());
             for (var ch : wp.children()) {
@@ -338,7 +338,7 @@ public interface Adder {
          * parents). If yes, the preunit is sent to the channel corresponding to its
          * dedicated worker.
          */
-        private void sendIfReady(waitingPreUnit wp) {
+        private void sendIfReady(WaitingPreUnit wp) {
             if (wp.waitingParents().get() == 0 && wp.missingParents().get() == 0) {
                 log.trace("Sending unit for processing: {} on: {}", wp, conf.pid());
                 ready.submit(wp);
@@ -351,14 +351,14 @@ public interface Adder {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
-    public record waitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents,
-                                 AtomicInteger waitingParents, List<waitingPreUnit> children, AtomicBoolean failed) {
+    public record WaitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents,
+                                 AtomicInteger waitingParents, List<WaitingPreUnit> children, AtomicBoolean failed) {
         public String toString() {
             return "wpu[" + pu.shortString() + "]";
         }
     }
 
-    record missingPreUnit(List<waitingPreUnit> neededBy, java.time.Instant requested) {}
+    record missingPreUnit(List<WaitingPreUnit> neededBy, java.time.Instant requested) {}
 
     /**
      * Checks basic correctness of a slice of preunits and then adds correct ones to

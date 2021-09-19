@@ -24,7 +24,7 @@ import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.UnitReference;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.waitingPreUnit;
+import com.salesforce.apollo.ethereal.Adder.WaitingPreUnit;
 import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.RoundScheduler.Timer;
@@ -160,12 +160,12 @@ public class ChRbc {
     private final Orderer                   orderer;
     private final Map<Digest, ProposedUnit> proposed = new ConcurrentHashMap<>();
     @SuppressWarnings("unused")
-    private final Channel<waitingPreUnit>   ready;
+    private final Channel<WaitingPreUnit>   ready;
     private final AtomicInteger             round    = new AtomicInteger();
 
     private final RoundScheduler scheduler;
 
-    public ChRbc(RoundScheduler scheduler, Consumer<ChRbcMessage> bc, Orderer orderer, Channel<waitingPreUnit> ready) {
+    public ChRbc(RoundScheduler scheduler, Consumer<ChRbcMessage> bc, Orderer orderer, Channel<WaitingPreUnit> ready) {
         this.ready = ready;
         this.scheduler = scheduler;
         this.bc = bc;
@@ -198,7 +198,7 @@ public class ChRbc {
         }
     }
 
-    public void proposed(waitingPreUnit wpu) {
+    public void proposed(WaitingPreUnit wpu) {
         proposed.computeIfAbsent(wpu.pu().hash(), h -> new ProposedUnitImpl(wpu.pu().hash(), wpu.pu().id()))
                 .schedulePrevote();
         log.info("Proposed: {} on: {}", wpu, config().pid());
