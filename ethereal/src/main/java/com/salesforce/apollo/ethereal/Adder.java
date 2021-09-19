@@ -134,13 +134,12 @@ public interface Adder {
             if (waitingById.get(id) != null) {
                 throw new IllegalStateException("Fork in the road"); // fork! TODO
             }
-            var wp = new WaitingPreUnit(pu, id, source, new AtomicInteger(), new AtomicInteger(), new ArrayList<>(),
-                                        new AtomicBoolean());
+            var wp = new WaitingPreUnit(pu, id, source);
             waiting.put(pu.hash(), wp);
             waitingById.put(id, wp);
             checkParents(wp);
             checkIfMissing(wp);
-            if (wp.missingParents().get() > 0) {
+            if (wp.missingParents.get() > 0) {
                 log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
                 return;
             }
@@ -167,40 +166,40 @@ public interface Adder {
          */
         private void checkIfMissing(WaitingPreUnit wp) {
             log.trace("Checking if missing: {} on: {}", wp, conf.pid());
-            var mp = missing.get(wp.id());
+            var mp = missing.get(wp.id);
             if (mp != null) {
-                wp.children().clear();
-                wp.children().addAll(mp.neededBy());
-                for (var ch : wp.children()) {
-                    ch.missingParents().decrementAndGet();
-                    ch.waitingParents().incrementAndGet();
+                wp.children.clear();
+                wp.children.addAll(mp.neededBy);
+                for (var ch : wp.children) {
+                    ch.missingParents.decrementAndGet();
+                    ch.waitingParents.incrementAndGet();
                     log.trace("Found parent {} for: {} on: {}", wp, ch, conf.pid());
                 }
-                missing.remove(wp.id());
+                missing.remove(wp.id);
             } else {
-                wp.children().clear();
+                wp.children.clear();
             }
         }
 
         /**
          * finds out which parents of a newly created WaitingPreUnit are in the dag,
          * which are waiting, and which are missing. Sets values of waitingParents() and
-         * missingParents() accordingly. Additionally, returns maximal heights of dag.
+         * missingParents accordingly. Additionally, returns maximal heights of dag.
          */
         private int[] checkParents(WaitingPreUnit wp) {
-            var epoch = wp.pu().epoch();
+            var epoch = wp.pu.epoch();
             var maxHeights = dag.maxView().heights();
-            var heights = wp.pu().view().heights();
+            var heights = wp.pu.view().heights();
             for (short creator = 0; creator < heights.length; creator++) {
                 var height = heights[creator];
                 if (height > maxHeights[creator]) {
                     long parentID = id(height, creator, epoch);
                     var par = waitingById.get(parentID);
                     if (par != null) {
-                        wp.waitingParents().incrementAndGet();
-                        par.children().add(wp);
+                        wp.waitingParents.incrementAndGet();
+                        par.children.add(wp);
                     } else {
-                        wp.missingParents().incrementAndGet();
+                        wp.missingParents.incrementAndGet();
                         registerMissing(parentID, wp);
                     }
                 }
@@ -223,7 +222,7 @@ public interface Adder {
             mtx.lock();
             try {
                 // 1. Decode Parents
-                var decoded = dag.decodeParents(wp.pu());
+                var decoded = dag.decodeParents(wp.pu);
                 var parents = decoded.parents();
                 if (decoded.inError()) {
                     if (decoded instanceof AmbiguousParents ap) {
@@ -238,20 +237,20 @@ public interface Adder {
                             }
                         }
                     }
-                    wp.failed().set(true);
+                    wp.failed.set(true);
                     return;
                 }
                 var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
                                     .toList();
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
-                if (!calculated.equals(wp.pu().view().controlHash())) {
-                    wp.failed().set(true);
-                    handleInvalidControlHash(wp.source(), wp.pu(), parents);
+                if (!calculated.equals(wp.pu.view().controlHash())) {
+                    wp.failed.set(true);
+                    handleInvalidControlHash(wp.source, wp.pu, parents);
                     return;
                 }
 
                 // 2. Build Unit
-                var freeUnit = dag.build(wp.pu(), parents);
+                var freeUnit = dag.build(wp.pu, parents);
 
                 // 3. Check
                 var err = dag.check(freeUnit);
@@ -306,13 +305,13 @@ public interface Adder {
         private void remove(WaitingPreUnit wp) {
             mtx.lock();
             try {
-                if (wp.failed().get()) {
+                if (wp.failed.get()) {
                     removeFailed(wp);
                 } else {
-                    waiting.remove(wp.pu().hash());
-                    waitingById.remove(wp.id());
-                    for (var ch : wp.children()) {
-                        ch.waitingParents().decrementAndGet();
+                    waiting.remove(wp.pu.hash());
+                    waitingById.remove(wp.id);
+                    for (var ch : wp.children) {
+                        ch.waitingParents.decrementAndGet();
                         sendIfReady(ch);
                     }
                 }
@@ -326,9 +325,9 @@ public interface Adder {
          * add, together with all its descendants.
          */
         private void removeFailed(WaitingPreUnit wp) {
-            waiting.remove(wp.pu().hash());
-            waitingById.remove(wp.id());
-            for (var ch : wp.children()) {
+            waiting.remove(wp.pu.hash());
+            waitingById.remove(wp.id);
+            for (var ch : wp.children) {
                 removeFailed(ch);
             }
         }
@@ -339,7 +338,7 @@ public interface Adder {
          * dedicated worker.
          */
         private void sendIfReady(WaitingPreUnit wp) {
-            if (wp.waitingParents().get() == 0 && wp.missingParents().get() == 0) {
+            if (wp.waitingParents.get() == 0 && wp.missingParents.get() == 0) {
                 log.trace("Sending unit for processing: {} on: {}", wp, conf.pid());
                 ready.submit(wp);
             }
@@ -351,8 +350,21 @@ public interface Adder {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
-    public record WaitingPreUnit(PreUnit pu, long id, long source, AtomicInteger missingParents,
-                                 AtomicInteger waitingParents, List<WaitingPreUnit> children, AtomicBoolean failed) {
+    public static class WaitingPreUnit {
+        final PreUnit              pu;
+        final long                 id;
+        final long                 source;
+        final AtomicInteger        missingParents = new AtomicInteger();
+        final AtomicInteger        waitingParents = new AtomicInteger();
+        final List<WaitingPreUnit> children       = new ArrayList<>();
+        final AtomicBoolean        failed         = new AtomicBoolean();
+
+        WaitingPreUnit(PreUnit pu, long id, long source) {
+            this.pu = pu;
+            this.id = id;
+            this.source = source;
+        }
+
         public String toString() {
             return "wpu[" + pu.shortString() + "]";
         }

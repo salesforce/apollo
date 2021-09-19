@@ -199,7 +199,7 @@ public class ChRbc {
     }
 
     public void proposed(WaitingPreUnit wpu) {
-        proposed.computeIfAbsent(wpu.pu().hash(), h -> new ProposedUnitImpl(wpu.pu().hash(), wpu.pu().id()))
+        proposed.computeIfAbsent(wpu.pu.hash(), h -> new ProposedUnitImpl(wpu.pu.hash(), wpu.pu.id()))
                 .schedulePrevote();
         log.info("Proposed: {} on: {}", wpu, config().pid());
     }
