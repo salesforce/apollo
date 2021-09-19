@@ -400,7 +400,8 @@ public interface Dag {
          */
         public getResult get(int[] heights) {
             if (heights.length != width) {
-                throw new IllegalStateException("Wrong number of heights passed to fiber map");
+                throw new IllegalStateException("Wrong number of heights passed to fiber map: " + heights.length
+                + " expected: " + width);
             }
             List<List<Unit>> result = IntStream.range(0, width).mapToObj(e -> new ArrayList<Unit>())
                                                .collect(Collectors.toList());

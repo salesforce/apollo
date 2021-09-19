@@ -25,6 +25,7 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 import com.salesforce.apollo.utils.Channel;
@@ -39,6 +40,7 @@ public interface Adder {
     class AdderImpl implements Adder {
         private static final Logger log = LoggerFactory.getLogger(Adder.class);
 
+        private final Consumer<ChRbcMessage>      chRBC;
         private final Config                      conf;
         private final Dag                         dag;
         private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
@@ -47,9 +49,10 @@ public interface Adder {
         private final Map<Digest, waitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, waitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
-        public AdderImpl(Dag dag, Config conf) {
+        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> chRBC) {
             this.dag = dag;
             this.conf = conf;
+            this.chRBC = chRBC;
             ready = new SimpleChannel<>(String.format("Ready units for: %s", conf.pid()),
                                         conf.epochLength() * conf.nProc() * 10);
             ready.consume(readyHandler());
@@ -114,6 +117,11 @@ public interface Adder {
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
             ready.close();
+        }
+
+        @Override
+        public void submit(Unit u) {
+            chRBC.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build()); // TODO CH-RBC
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -362,5 +370,7 @@ public interface Adder {
     Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
 
     void close();
+
+    void submit(Unit u);
 
 }

@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
@@ -74,6 +75,10 @@ public class Orderer {
         public void sync(Consumer<PreUnit> send) {
             dag.sync(send);
         }
+        /** submit the unit to the CH-RBC of the receiver epoch **/
+        public void submit(Unit u) {
+            adder.submit(u);
+        }
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
@@ -95,6 +100,8 @@ public class Orderer {
     private volatile RandomSourceFactory rsf;
     private final Consumer<List<Unit>>   toPreblock;
     private final Channel<Unit>          unitBelt;
+
+    private Consumer<ChRbcMessage> chRBC;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock) {
         this.config = conf;
@@ -197,12 +204,13 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf, Consumer<PreUnit> synchronizer) {
+    public void start(RandomSourceFactory rsf, Consumer<ChRbcMessage> chRbc) {
         this.rsf = rsf;
+        this.chRBC = chRbc;
         creator = new Creator(config, ds, u -> {
             log.trace("Sending: {} on: {}", u, config.pid());
             insert(u);
-            synchronizer.accept(u.toPreUnit());
+            current.get().submit(u);
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
 
         newEpoch(0);
@@ -299,7 +307,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC), ext, rs, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {

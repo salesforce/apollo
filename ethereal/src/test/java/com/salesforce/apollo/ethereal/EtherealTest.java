@@ -75,7 +75,7 @@ public class EtherealTest {
     @Test
     public void fourWay() throws Exception {
         short nProc = 4;
-        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
+        ChannelConsumer<PreUnit_s> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -94,7 +94,7 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
             var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu));
+                                             pu -> synchronizer.getChannel().offer(pu.getPropose()));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -109,7 +109,8 @@ public class EtherealTest {
             for (short i = 0; i < controllers.size(); i++) {
                 var controller = controllers.get(i);
                 short pid = i;
-                pu.forEach(p -> {
+                pu.forEach(p_s -> {
+                    var p = PreUnit.from(p_s, DigestAlgorithm.DEFAULT);
                     try {
                         Thread.sleep(1);
                     } catch (InterruptedException e1) {
@@ -203,10 +204,7 @@ public class EtherealTest {
             out.consume(l -> output.addAll(l));
             ReliableBroadcaster caster = casting.get(members[i]);
             var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> {
-                                                 caster.publish(pu.toPreUnit_s());
-//                System.out.println("Broadcasting: "+ pu + " on: " + caster.getMember());
-                                             });
+                                             pu -> caster.publish(pu.getPropose()));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);

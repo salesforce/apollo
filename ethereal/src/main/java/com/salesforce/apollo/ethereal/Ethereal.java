@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
@@ -47,17 +48,13 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input, Runnable sync) {
+    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input) {
         public void start() {
             starte.run();
         }
 
         public void stop() {
             stope.run();
-        }
-
-        public void synchronize() {
-            sync.run();
         }
     }
 
@@ -105,7 +102,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer,
+                                       Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
                                        Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
@@ -122,7 +119,7 @@ public class Ethereal {
         }, () -> {
             setup.stope.run();
             consensus.stope.run();
-        }, consensus.input, consensus.sync);
+        }, consensus.input);
     }
 
     /**
@@ -137,7 +134,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                    Consumer<PreUnit> synchronizer) {
+                                    Consumer<ChRbcMessage> synchronizer) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -145,7 +142,7 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(consensus.starte, consensus.stope, consensus.input, consensus.sync);
+        return new Controller(consensus.starte, consensus.stope, consensus.input);
     }
 
     /**
@@ -164,7 +161,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<PreUnit> synchronizer, Runnable onClose) {
+                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -177,11 +174,12 @@ public class Ethereal {
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.starte, consensus.input, consensus.sync);
+        }, consensus.starte, consensus.input);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<PreUnit> synchronizer, Runnable onClose) {
+                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
+                                 Runnable onClose) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
@@ -227,11 +225,11 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input, () -> ord.get().sync(synchronizer));
+        return new Controller(start, stop, input);
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                              Consumer<PreUnit> synchronizer) {
+                                              Consumer<ChRbcMessage> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
@@ -284,7 +282,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input, () -> ord.get().sync(synchronizer));
+        return new Controller(start, stop, input);
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -312,6 +310,6 @@ public class Ethereal {
 
         var ord = new Orderer(conf, null, extractHead);
         return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> ord.stop(), null, null);
+        }), () -> ord.stop(), null);
     }
 }

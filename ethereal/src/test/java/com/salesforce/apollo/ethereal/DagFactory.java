@@ -31,7 +31,7 @@ public interface DagFactory {
             dag.addCheck(Checks.noSelfForkingEvidence());
             dag.addCheck(Checks.forkerMuting());
 
-            return new DagAdder(dag, new AdderImpl(dag, cnf));
+            return new DagAdder(dag, new AdderImpl(dag, cnf, null));
         }
     }
 
@@ -80,6 +80,10 @@ public interface DagFactory {
 
         @Override
         public void close() {
+        }
+
+        @Override
+        public void submit(Unit u) {
         }
     }
 
