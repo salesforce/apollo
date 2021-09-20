@@ -10,6 +10,7 @@ import static com.salesforce.apollo.ethereal.Dag.newDag;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,6 +134,15 @@ public class Orderer {
             preunits = preunits.subList(end, preunits.size());
         }
         return errors;
+    }
+    
+    /** handle the CH-RBC protocol msg **/
+    public void chRbc(short from, ChRbcMessage msg) {
+        if (msg.hasPropose()) {
+            addPreunits(from, Collections.singletonList(PreUnit.from(msg.getPropose(), config.digestAlgorithm())));
+        } else {
+            current.get().adder.chRbc(from, msg);
+        }
     }
 
     /**

@@ -114,6 +114,12 @@ public interface Adder {
         }
 
         @Override
+        public void chRbc(short from, ChRbcMessage msg) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
             ready.close();
@@ -351,13 +357,13 @@ public interface Adder {
     }
 
     public static class WaitingPreUnit {
-        final PreUnit              pu;
-        final long                 id;
-        final long                 source;
-        final AtomicInteger        missingParents = new AtomicInteger();
-        final AtomicInteger        waitingParents = new AtomicInteger();
         final List<WaitingPreUnit> children       = new ArrayList<>();
         final AtomicBoolean        failed         = new AtomicBoolean();
+        final long                 id;
+        final AtomicInteger        missingParents = new AtomicInteger();
+        final PreUnit              pu;
+        final long                 source;
+        final AtomicInteger        waitingParents = new AtomicInteger();
 
         WaitingPreUnit(PreUnit pu, long id, long source) {
             this.pu = pu;
@@ -380,6 +386,9 @@ public interface Adder {
      * is normally added and processed, error is returned only for log purpose.
      */
     Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
+
+    /** Handle the CH-RBC protocol msgs PREVOTE and COMMIT **/
+    void chRbc(short from, ChRbcMessage msg);
 
     void close();
 
