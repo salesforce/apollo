@@ -24,6 +24,7 @@ import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -91,25 +92,26 @@ public class Ethereal {
      * key for subsequent randomness, to be revealed when appropriate in the
      * protocol phases.
      * 
-     * @param setupConfig   - configuration for random beacon setup phase
-     * @param config        - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param onClose       - run when the consensus has produced all units for
-     *                      epochs
+     * @param setupConfig    - configuration for random beacon setup phase
+     * @param config         - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param synchronizer   - the channel that broadcasts PreUnits to other members
+     * @param onClose        - run when the consensus has produced all units for
+     *                       epochs
+     * @param roundScheduler
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
                                        Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
-                                       Runnable onClose) {
+                                       Runnable onClose, RoundScheduler roundScheduler) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        Controller setup = setup(setupConfig, wtkChan);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose);
+        Controller setup = setup(setupConfig, wtkChan, roundScheduler);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose, roundScheduler);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -126,19 +128,20 @@ public class Ethereal {
      * Deterministic consensus processing entry point for Ethereal. Does not
      * strongly guarantee liveness, but does guarantee correctness.
      * 
-     * @param config        - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
+     * @param config         - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param synchronizer   - the channel that broadcasts PreUnits to other members
+     * @param roundScheduler
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                    Consumer<ChRbcMessage> synchronizer) {
+                                    Consumer<ChRbcMessage> synchronizer, RoundScheduler roundScheduler) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, roundScheduler);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -150,23 +153,24 @@ public class Ethereal {
      * for the ABFT random beacon, rather relying on a fixed seeded WeakThresholdKey
      * is used for the main consensus.
      * 
-     * @param conf          - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param onClose       - run when the consensus has produced all units for
-     *                      epochs
-     * @param connector     - the Consumer of the created Orderer for this system
+     * @param conf           - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param synchronizer   - the channel that broadcasts PreUnits to other members
+     * @param onClose        - run when the consensus has produced all units for
+     *                       epochs
+     * @param roundScheduler
+     * @param connector      - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose) {
+                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose, RoundScheduler roundScheduler) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose, roundScheduler);
         return new Controller(() -> {
             consensus.starte.run();
             try {
@@ -178,8 +182,8 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
-                                 Runnable onClose) {
+                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer, Runnable onClose,
+                                 RoundScheduler roundScheduler) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
@@ -208,9 +212,10 @@ public class Ethereal {
                         throw new IllegalStateException("Unable to exchange wtk", e);
                     }
                     logWTK(wtkey);
-                    var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock);
+                    var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
+                                              synchronizer, roundScheduler);
                     ord.set(orderer);
-                    orderer.start(Coin.newFactory(config.pid(), wtkey), synchronizer);
+                    orderer.start(Coin.newFactory(config.pid(), wtkey));
                 } finally {
                     started.set(true);
                 }
@@ -229,7 +234,7 @@ public class Ethereal {
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                              Consumer<ChRbcMessage> synchronizer) {
+                                              Consumer<ChRbcMessage> synchronizer, RoundScheduler roundScheduler) {
         Consumer<List<Unit>> makePreblock = units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
@@ -271,9 +276,9 @@ public class Ethereal {
         };
 
         Runnable start = () -> {
-            var orderer = new Orderer(config, ds, makePreblock);
+            var orderer = new Orderer(config, ds, makePreblock, synchronizer, roundScheduler);
             ord.set(orderer);
-            orderer.start(new DsrFactory(), synchronizer);
+            orderer.start(new DsrFactory());
         };
         Runnable stop = () -> {
             in.shutdown();
@@ -293,7 +298,7 @@ public class Ethereal {
         log.info("Global Weak Threshold Key threshold: {} share providers: {}", wtkey.threshold(), providers);
     }
 
-    private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
+    private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan, RoundScheduler roundScheduler) {
         var rsf = new Beacon(conf);
         Consumer<List<Unit>> extractHead = units -> {
             var head = units.get(units.size() - 1);
@@ -308,8 +313,8 @@ public class Ethereal {
             }
         };
 
-        var ord = new Orderer(conf, null, extractHead);
-        return new Controller(() -> ord.start(rsf, p -> {
-        }), () -> ord.stop(), null);
+        var ord = new Orderer(conf, null, extractHead, p -> {
+        }, roundScheduler);
+        return new Controller(() -> ord.start(rsf), () -> ord.stop(), null);
     }
 }

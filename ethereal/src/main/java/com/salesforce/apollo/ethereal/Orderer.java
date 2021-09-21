@@ -40,6 +40,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
 import com.salesforce.apollo.utils.Channel;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -76,6 +77,7 @@ public class Orderer {
         public void sync(Consumer<PreUnit> send) {
             dag.sync(send);
         }
+
         /** submit the unit to the CH-RBC of the receiver epoch **/
         public void submit(Unit u) {
             adder.submit(u);
@@ -91,6 +93,7 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
+    private final Consumer<ChRbcMessage> chRBC;
     private final Config                 config;
     private volatile Creator             creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
@@ -98,19 +101,21 @@ public class Orderer {
     private final Queue<Unit>            lastTiming;
     private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
     private final AtomicReference<epoch> previous = new AtomicReference<>();
+    private final RoundScheduler         roundScheduler;
     private volatile RandomSourceFactory rsf;
     private final Consumer<List<Unit>>   toPreblock;
     private final Channel<Unit>          unitBelt;
 
-    private Consumer<ChRbcMessage> chRBC;
-
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<ChRbcMessage> chRbc,
+                   RoundScheduler roundScheduler) {
         this.config = conf;
         this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.unitBelt = new SimpleChannel<>(String.format("Unit belt for: %s", config.pid()),
-                                            conf.epochLength() * conf.nProc()); 
+                                            conf.epochLength() * conf.nProc());
+        this.chRBC = chRbc;
+        this.roundScheduler = roundScheduler;
     }
 
     /**
@@ -135,7 +140,7 @@ public class Orderer {
         }
         return errors;
     }
-    
+
     /** handle the CH-RBC protocol msg **/
     public void chRbc(short from, ChRbcMessage msg) {
         if (msg.hasPropose()) {
@@ -214,9 +219,8 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf, Consumer<ChRbcMessage> chRbc) {
+    public void start(RandomSourceFactory rsf) {
         this.rsf = rsf;
-        this.chRBC = chRbc;
         creator = new Creator(config, ds, u -> {
             log.trace("Sending: {} on: {}", u, config.pid());
             insert(u);
@@ -317,7 +321,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC, roundScheduler), ext, rs, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {

@@ -13,7 +13,6 @@ import java.util.Map;
 
 import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Dag.Decoded;
 
 /**
@@ -32,7 +31,7 @@ public interface DagFactory {
             dag.addCheck(Checks.noSelfForkingEvidence());
             dag.addCheck(Checks.forkerMuting());
 
-            return new DagAdder(dag, new AdderImpl(dag, cnf, null));
+            return new DagAdder(dag, new DagFactory.TestAdder(dag));
         }
     }
 
@@ -80,15 +79,15 @@ public interface DagFactory {
         }
 
         @Override
+        public void chRbc(short from, ChRbcMessage msg) {
+        }
+
+        @Override
         public void close() {
         }
 
         @Override
         public void submit(Unit u) {
-        }
-
-        @Override
-        public void chRbc(short from, ChRbcMessage msg) {
         }
     }
 

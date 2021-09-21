@@ -45,6 +45,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
 import com.salesforce.apollo.utils.ChannelConsumer;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -93,8 +94,9 @@ public class EtherealTest {
             var out = new ChannelConsumer<>(new LinkedBlockingDeque<PreBlock>(100));
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
+            RoundScheduler roundScheduler = new RoundScheduler(1);
             var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu.getPropose()));
+                                             pu -> synchronizer.getChannel().offer(pu.getPropose()), roundScheduler);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -203,8 +205,10 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(i);
             out.consume(l -> output.addAll(l));
             ReliableBroadcaster caster = casting.get(members[i]);
+            RoundScheduler roundScheduler = new RoundScheduler(context.timeToLive());
+            caster.register(r -> roundScheduler.tick(r));
             var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> caster.publish(pu.getPropose()));
+                                             pu -> caster.publish(pu.getPropose()), roundScheduler);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);

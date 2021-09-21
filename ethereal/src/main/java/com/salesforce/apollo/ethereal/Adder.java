@@ -10,13 +10,16 @@ import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -26,9 +29,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
+import com.salesfoce.apollo.ethereal.proto.UnitReference;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.ethereal.Adder.AdderImpl.WaitingPreUnit;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 import com.salesforce.apollo.utils.Channel;
+import com.salesforce.apollo.utils.RoundScheduler;
+import com.salesforce.apollo.utils.RoundScheduler.Timer;
 import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
@@ -38,24 +45,121 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public interface Adder {
 
     class AdderImpl implements Adder {
-        private static final Logger log = LoggerFactory.getLogger(Adder.class);
 
+        class WaitingPreUnit {
+            private static final String COMMIT  = "COMMIT";
+            private static final Logger log     = LoggerFactory.getLogger(WaitingPreUnit.class);
+            private static final String PREVOTE = "PREVOTE";
+
+            final List<WaitingPreUnit>       children       = new ArrayList<>();
+            final Set<Short>                 commits        = Collections.newSetFromMap(new ConcurrentHashMap<>());
+            final AtomicBoolean              failed         = new AtomicBoolean();
+            final long                       id;
+            final AtomicInteger              missingParents = new AtomicInteger();
+            final Set<Short>                 prevotes       = Collections.newSetFromMap(new ConcurrentHashMap<>());
+            final PreUnit                    pu;
+            final long                       source;
+            final AtomicInteger              waitingParents = new AtomicInteger();
+            private final UnitReference      ref;
+            private final Map<String, Timer> timers         = new HashMap<>();
+
+            WaitingPreUnit(PreUnit pu, long id, long source) {
+                this.pu = pu;
+                this.id = id;
+                this.source = source;
+                this.ref = UnitReference.newBuilder().setHash(pu.hash().toDigeste()).setUid(id).build();
+            }
+
+            public void commit(short pid) {
+                commits.add(pid);
+            }
+
+            public void prevote(short pid) {
+                prevotes.add(pid);
+                schedulePrevote();
+                scheduleCommit();
+            }
+
+            public void schedulePrevote() {
+                if (shouldPrevote()) {
+                    timers.computeIfAbsent(PREVOTE, h -> {
+                        log.info("Prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                        chRBC.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                        return scheduler.schedule(periodicPrevote(), 1);
+                    });
+                }
+            }
+
+            public String toString() {
+                return "wpu[" + pu.shortString() + "]";
+            }
+
+            private boolean parentsOutput() {
+                return waitingParents.get() == 0 && missingParents.get() == 0;
+            }
+
+            private Runnable periodicCommit() {
+                AtomicReference<Runnable> c = new AtomicReference<>();
+                c.set(() -> {
+                    log.info("Recommitting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                    chRBC.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                    timers.put(COMMIT, scheduler.schedule(c.get(), 1));
+                });
+                return c.get();
+            }
+
+            private Runnable periodicPrevote() {
+                AtomicReference<Runnable> c = new AtomicReference<>();
+                c.set(() -> {
+                    log.info("Re-prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                    chRBC.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                    timers.put(PREVOTE, scheduler.schedule(c.get(), 1));
+                });
+                return c.get();
+            }
+
+            private void scheduleCommit() {
+                if (shouldCommit()) {
+                    timers.computeIfAbsent(COMMIT, h -> {
+                        log.info("Committing: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                        chRBC.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                        return scheduler.schedule(periodicCommit(), 1);
+                    });
+                }
+            }
+
+            private boolean shouldCommit() {
+                return parentsOutput() && commits.size() > minimalQuorum && pu.height() <= round.get() + 1;
+            }
+
+            private boolean shouldPrevote() {
+                return pu.height() <= round.get() + 1;
+            }
+        }
+
+        private static final Logger               log         = LoggerFactory.getLogger(Adder.class);
         private final Consumer<ChRbcMessage>      chRBC;
         private final Config                      conf;
         private final Dag                         dag;
+        private final int                         minimalQuorum;
         private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
         private final Channel<WaitingPreUnit>     ready;
+        private final AtomicInteger               round       = new AtomicInteger();
+        private final RoundScheduler              scheduler;
         private final Map<Digest, WaitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, WaitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
-        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> chRBC) {
+        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> chRBC, RoundScheduler scheduler) {
             this.dag = dag;
             this.conf = conf;
             this.chRBC = chRBC;
+            this.scheduler = scheduler;
+
             ready = new SimpleChannel<>(String.format("Ready units for: %s", conf.pid()),
                                         conf.epochLength() * conf.nProc() * 10);
             ready.consume(readyHandler());
+            minimalQuorum = Dag.minimalQuorum(conf.nProc(), conf.bias());
         }
 
         /**
@@ -115,8 +219,16 @@ public interface Adder {
 
         @Override
         public void chRbc(short from, ChRbcMessage msg) {
-            // TODO Auto-generated method stub
-
+            switch (msg.getTCase()) {
+            case COMMIT:
+                commit(from, msg.getPrevote().getUid(), new Digest(msg.getCommit().getHash()));
+                break;
+            case PREVOTE:
+                prevote(from, msg.getPrevote().getUid(), new Digest(msg.getPrevote().getHash()));
+                break;
+            default:
+                break;
+            }
         }
 
         @Override
@@ -213,6 +325,12 @@ public interface Adder {
             return maxHeights;
         }
 
+        private void commit(short pid, long uid, Digest digest) {
+            var pu = waitingById.get(uid);
+            pu.commit(pid);
+            log.info("Commit: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+        }
+
         private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
             log.debug("Invalid control hash from: {} witness: {} parents: {} on: {}", sourcePID, witness, parents,
                       conf.pid());
@@ -270,6 +388,14 @@ public interface Adder {
             } finally {
                 remove(wp);
                 mtx.unlock();
+            }
+        }
+
+        private void prevote(short pid, long uid, Digest digest) {
+            var pu = waitingById.get(uid);
+            if (pu != null) {
+                pu.prevote(pid);
+                log.info("Prevote: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
             }
         }
 
@@ -354,26 +480,6 @@ public interface Adder {
 
     enum Correctness {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
-    }
-
-    public static class WaitingPreUnit {
-        final List<WaitingPreUnit> children       = new ArrayList<>();
-        final AtomicBoolean        failed         = new AtomicBoolean();
-        final long                 id;
-        final AtomicInteger        missingParents = new AtomicInteger();
-        final PreUnit              pu;
-        final long                 source;
-        final AtomicInteger        waitingParents = new AtomicInteger();
-
-        WaitingPreUnit(PreUnit pu, long id, long source) {
-            this.pu = pu;
-            this.id = id;
-            this.source = source;
-        }
-
-        public String toString() {
-            return "wpu[" + pu.shortString() + "]";
-        }
     }
 
     record missingPreUnit(List<WaitingPreUnit> neededBy, java.time.Instant requested) {}

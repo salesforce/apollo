@@ -51,12 +51,12 @@ public class ChRbc {
 
     private class ProposedUnitImpl implements ProposedUnit {
         final Set<Short>         commits       = new HashSet<>();
+        final Digest             hash;
         final int                height;
         final AtomicBoolean      parentsOutput = new AtomicBoolean();
         final Set<Short>         prevotes      = new HashSet<>();
         final UnitReference      ref;
         final Map<String, Timer> timers        = new HashMap<>();
-        final Digest             hash;
 
         ProposedUnitImpl(Digest hash, long uid) {
             ref = UnitReference.newBuilder().setHash(hash.toDigeste()).setUid(uid).build();
