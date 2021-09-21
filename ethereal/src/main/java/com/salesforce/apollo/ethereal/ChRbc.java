@@ -24,7 +24,7 @@ import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.UnitReference;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.WaitingPreUnit;
+import com.salesforce.apollo.ethereal.Adder.AdderImpl.WaitingPreUnit;
 import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.RoundScheduler.Timer;
