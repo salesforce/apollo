@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesforce.apollo.ethereal.Adder;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
@@ -35,11 +36,13 @@ public class ExtenderService {
     private final Consumer<List<Unit>> output;
     private final Config               config;
     private final Semaphore            exclusive = new Semaphore(1);
+    private final Adder adder;
 
-    public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits, Adder adder) {
         ordering = new Extender(dag, rs, config);
         this.output = orderedUnits;
         this.config = config;
+        this.adder = adder;
     }
 
     public void chooseNextTimingUnits() {
@@ -61,6 +64,7 @@ public class ExtenderService {
                 log.debug("Producing timing round: {} on: {}", round, config.pid());
                 var units = round.orderedUnits(config.digestAlgorithm());
                 log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
+                adder.roundComplete(round.currentTU().level());
                 output.accept(units);
                 round = ordering.nextRound();
             }

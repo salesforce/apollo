@@ -313,7 +313,8 @@ public class Orderer {
     private epoch createEpoch(int epoch) {
         Dag dg = newDag(config, epoch);
         RandomSource rs = rsf.newRandomSource(dg);
-        ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
+        final AdderImpl adder = new AdderImpl(dg, config, chRBC, roundScheduler);
+        ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds(), adder);
         dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
             // don't put our own units on the unit belt, creator already knows about them.
@@ -321,7 +322,7 @@ public class Orderer {
                 unitBelt.submit(u);
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC, roundScheduler), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, adder, ext, rs, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {

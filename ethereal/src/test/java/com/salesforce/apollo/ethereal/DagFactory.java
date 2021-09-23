@@ -87,6 +87,10 @@ public interface DagFactory {
         }
 
         @Override
+        public void roundComplete(int level) {
+        }
+
+        @Override
         public void submit(Unit u) {
         }
     }
