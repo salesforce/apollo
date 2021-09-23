@@ -8,6 +8,7 @@ package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -165,6 +166,11 @@ public interface Adder {
                 return pu.height() <= round.get() + 1;
             }
 
+            void stateFrom(MissingPreUnit mp) {
+                commits.addAll(mp.commits);
+                prevotes.addAll(mp.prevotes);
+            }
+
             private boolean parentsOutput() {
                 return waitingParents.get() == 0 && missingParents.get() == 0;
             }
@@ -179,7 +185,7 @@ public interface Adder {
         private final Config                      conf;
         private final Dag                         dag;
         private final int                         minimalQuorum;
-        private final Map<Long, missingPreUnit>   missing     = new ConcurrentHashMap<>();
+        private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
         private final Channel<WaitingPreUnit>     ready;
         private final AtomicInteger               round       = new AtomicInteger();
@@ -329,6 +335,7 @@ public interface Adder {
             log.trace("Checking if missing: {} on: {}", wp, conf.pid());
             var mp = missing.get(wp.pu.id());
             if (mp != null) {
+                wp.stateFrom(mp);
                 wp.children.clear();
                 wp.children.addAll(mp.neededBy);
                 for (var ch : wp.children) {
@@ -376,7 +383,10 @@ public interface Adder {
             if (pu != null) {
                 pu.commit(pid);
                 log.info("Commit: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+                return;
             }
+            log.info("Commit for missing: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+            missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant())).commits.add(pid);
         }
 
         private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
@@ -447,7 +457,10 @@ public interface Adder {
             if (pu != null) {
                 pu.prevote(pid);
                 log.info("Prevote: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+                return;
             }
+            log.info("Prevote for missing: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+            missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant())).prevotes.add(pid);
         }
 
         private Consumer<List<WaitingPreUnit>> readyHandler() {
@@ -479,8 +492,7 @@ public interface Adder {
          * unknown unit with the given id.
          */
         private void registerMissing(long id, WaitingPreUnit wp) {
-            missing.putIfAbsent(id, new missingPreUnit(new ArrayList<>(), conf.clock().instant()));
-            missing.get(id).neededBy().add(wp);
+            missing.computeIfAbsent(id, i -> new MissingPreUnit(conf.clock().instant())).neededBy.add(wp);
             log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.pid());
         }
 
@@ -533,7 +545,16 @@ public interface Adder {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
-    record missingPreUnit(List<WaitingPreUnit> neededBy, java.time.Instant requested) {}
+    static class MissingPreUnit {
+        final Set<Short>           commits  = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final List<WaitingPreUnit> neededBy = new ArrayList<>();
+        final Set<Short>           prevotes = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Instant              requested;
+
+        MissingPreUnit(Instant requested) {
+            this.requested = requested;
+        }
+    }
 
     /**
      * Checks basic correctness of a slice of preunits and then adds correct ones to
