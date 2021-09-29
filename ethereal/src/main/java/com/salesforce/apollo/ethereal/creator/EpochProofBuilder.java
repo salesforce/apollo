@@ -100,15 +100,15 @@ public interface EpochProofBuilder {
                 return null;
             }
             if (!conf.WTKey().verifyShare(share)) {
-                log.warn("WTK cannot verify share data: {} on: {}", u.data(), conf.pid());
+                log.warn("WTK cannot verify share: {} data: {} on: {}", u, u.data(), conf.pid());
                 return null;
             }
             var sig = shares.add(share);
             if (sig != null) {
-                log.debug("WTK signature generated on: {}", conf.pid());
+                log.debug("WTK signature generated: {} on: {}", u, conf.pid());
                 return encodeSignature(sig, share.proof);
             }
-            log.debug("WTK signature generation failed on: {}", conf.pid());
+            log.debug("WTK signature generation failed: {} on: {}", u, conf.pid());
             return null;
         }
 

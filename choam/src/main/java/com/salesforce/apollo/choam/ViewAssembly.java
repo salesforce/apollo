@@ -63,6 +63,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -112,9 +113,11 @@ abstract public class ViewAssembly implements Reconfiguration {
         }
         config.setEpochLength(4).setNumberOfEpochs(1);
 
+        final RoundScheduler roundScheduler = new RoundScheduler(reContext.timeToLive());
+        coordinator.register(i -> roundScheduler.tick(i));
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> create(preblock, last),
-                                                  preUnit -> broadcast(preUnit));
+                                                  preUnit -> broadcast(preUnit), roundScheduler);
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, Reconfigure.GATHER, true);
         fsm.setName("View Recon" + params().member().getId());

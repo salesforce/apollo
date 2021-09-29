@@ -224,6 +224,11 @@ public interface Dag {
         }
 
         @Override
+        public short pid() {
+            return config.pid();
+        }
+
+        @Override
         public void sync(Consumer<PreUnit> send) {
             read(() -> _sync(send));
         }
@@ -551,6 +556,8 @@ public interface Dag {
     DagInfo maxView();
 
     short nProc();
+
+    short pid();
 
     void sync(Consumer<PreUnit> send);
 

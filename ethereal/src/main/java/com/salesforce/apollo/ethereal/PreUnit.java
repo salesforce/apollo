@@ -285,7 +285,7 @@ public interface PreUnit {
     }
 
     Digest hash();
-
+    
     int height();
 
     default long id() {
@@ -297,6 +297,10 @@ public interface PreUnit {
     }
 
     byte[] randomSourceData();
+
+    default int round(Config conf) {
+        return height() + (conf.epochLength() * epoch());
+    }
 
     String shortString();
 

@@ -87,7 +87,7 @@ public interface DagFactory {
         }
 
         @Override
-        public void roundComplete(int level) {
+        public void round(int r) {
         }
 
         @Override

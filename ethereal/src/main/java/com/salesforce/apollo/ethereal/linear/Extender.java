@@ -67,7 +67,8 @@ public class Extender {
         lastDecideResult.set(false);
         var dagMaxLevel = dag.maxLevel();
         if (dagMaxLevel < orderStartLevel) {
-            log.trace("No round, max dag level: {} is < order start level: {}", dagMaxLevel, orderStartLevel);
+            log.trace("No round, max dag level: {} is < order start level: {} on: {}", dagMaxLevel, orderStartLevel,
+                      dag.pid());
             return null;
         }
         var level = orderStartLevel;
@@ -76,7 +77,8 @@ public class Extender {
             level = previousTU.level() + 1;
         }
         if (dagMaxLevel < level + firstDecidedRound) {
-            log.trace("No round, max dag level: {} is < ({} + {})", dagMaxLevel, level, firstDecidedRound);
+            log.trace("No round, max dag level: {} is < ({} + {}) on: {}", dagMaxLevel, level, firstDecidedRound,
+                      dag.pid());
             return null;
         }
 
@@ -97,7 +99,7 @@ public class Extender {
                 return false;
             }
             if (decision.decision() == Vote.UNDECIDED) {
-                log.trace("No round, undecided");
+                log.trace("No round, undecided on: {}", dag.pid());
                 return false;
             }
             return true;
@@ -111,7 +113,7 @@ public class Extender {
         }
         final var ctu = currentTU.get();
         final var ltu = lastTUs.get();
-        log.trace("Timing round: {} last: {}", ctu, ltu);
+        log.trace("Timing round: {} last: {} on: {}", ctu, ltu, dag.pid());
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 

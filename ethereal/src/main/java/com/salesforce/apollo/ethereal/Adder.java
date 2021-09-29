@@ -9,10 +9,8 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.time.Instant;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,12 +31,9 @@ import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.UnitReference;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.AdderImpl.WaitingPreUnit;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
-import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.RoundScheduler.Timer;
-import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * @author hal.hildebrand
@@ -47,6 +42,18 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public interface Adder {
 
     class AdderImpl implements Adder {
+
+        static class MissingPreUnit {
+            final Set<Short>           commits  = Collections.newSetFromMap(new ConcurrentHashMap<>());
+            final List<WaitingPreUnit> neededBy = new ArrayList<>();
+            final Set<Short>           prevotes = Collections.newSetFromMap(new ConcurrentHashMap<>());
+            final Instant              requested;
+
+            MissingPreUnit(Instant requested) {
+                this.requested = requested;
+            }
+        }
+
         abstract class Pending {
             final Set<Short>         commits  = Collections.newSetFromMap(new ConcurrentHashMap<>());
             final Set<Short>         prevotes = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -61,6 +68,11 @@ public interface Adder {
 
             void commit(short pid) {
                 commits.add(pid);
+            }
+
+            void complete() {
+                timers.values().forEach(t -> t.cancel());
+                timers.clear();
             }
 
             Runnable periodicCommit() {
@@ -122,6 +134,10 @@ public interface Adder {
                 super(u);
                 unit = u.toPreUnit_s();
                 propose();
+            }
+
+            public String toString() {
+                return "spu[" + pu.shortString() + "]";
             }
 
             @Override
@@ -187,7 +203,6 @@ public interface Adder {
         private final int                         minimalQuorum;
         private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
-        private final Channel<WaitingPreUnit>     ready;
         private final AtomicInteger               round       = new AtomicInteger();
         private final RoundScheduler              scheduler;
         private final Map<Long, SubmittedUnit>    submitted   = new ConcurrentHashMap<>();
@@ -199,10 +214,6 @@ public interface Adder {
             this.conf = conf;
             this.chRBC = chRBC;
             this.scheduler = scheduler;
-
-            ready = new SimpleChannel<>(String.format("Ready units for: %s", conf.pid()),
-                                        conf.epochLength() * conf.nProc() * 10);
-            ready.consume(readyHandler());
             minimalQuorum = Dag.minimalQuorum(conf.nProc(), conf.bias());
         }
 
@@ -278,17 +289,25 @@ public interface Adder {
         @Override
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
-            ready.close();
         }
 
         @Override
-        public void roundComplete(int level) {
-            round.set(level);
+        public void round(final int r) {
+            round.set(r);
+            submitted.entrySet().forEach(e -> {
+                if (e.getValue().pu.round(conf) < r) {
+                    submitted.remove(e.getKey());
+                    e.getValue().complete();
+                }
+            });
         }
 
         @Override
         public void submit(Unit u) {
-            chRBC.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build()); // TODO CH-RBC
+            log.trace("Submit: {} on: {}", u, conf.pid());
+            submitted.put(u.id(), new SubmittedUnit(u));
+            chRBC.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
+            round(u.level());
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -463,30 +482,6 @@ public interface Adder {
             missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant())).prevotes.add(pid);
         }
 
-        private Consumer<List<WaitingPreUnit>> readyHandler() {
-            @SuppressWarnings("unchecked")
-            Deque<WaitingPreUnit>[] ready = new ArrayDeque[conf.nProc()];
-            for (int i = 0; i < ready.length; i++) {
-                ready[i] = new ArrayDeque<>();
-            }
-            return wpus -> {
-                wpus.forEach(wpu -> {
-                    ready[wpu.pu.creator()].add(wpu);
-                });
-                boolean handled = true;
-                while (handled) {
-                    handled = false;
-                    for (int i = 0; i < ready.length; i++) {
-                        final Deque<WaitingPreUnit> q = ready[i];
-                        if (!q.isEmpty()) {
-                            handleReady(q.removeFirst());
-                            handled = true;
-                        }
-                    }
-                }
-            };
-        }
-
         /**
          * registerMissing registers the fact that the given WaitingPreUnit needs an
          * unknown unit with the given id.
@@ -535,7 +530,7 @@ public interface Adder {
         private void sendIfReady(WaitingPreUnit wp) {
             if (wp.waitingParents.get() == 0 && wp.missingParents.get() == 0) {
                 log.trace("Sending unit for processing: {} on: {}", wp, conf.pid());
-                ready.submit(wp);
+                handleReady(wp);
             }
         }
 
@@ -543,17 +538,6 @@ public interface Adder {
 
     enum Correctness {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
-    }
-
-    static class MissingPreUnit {
-        final Set<Short>           commits  = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        final List<WaitingPreUnit> neededBy = new ArrayList<>();
-        final Set<Short>           prevotes = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        final Instant              requested;
-
-        MissingPreUnit(Instant requested) {
-            this.requested = requested;
-        }
     }
 
     /**
@@ -570,7 +554,7 @@ public interface Adder {
 
     void close();
 
-    void roundComplete(int level);
+    void round(int r);
 
     void submit(Unit u);
 

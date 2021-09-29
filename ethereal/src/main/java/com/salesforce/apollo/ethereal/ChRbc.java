@@ -6,14 +6,13 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -25,7 +24,6 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.UnitReference;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl.WaitingPreUnit;
-import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.RoundScheduler.Timer;
 
@@ -35,148 +33,222 @@ import com.salesforce.apollo.utils.RoundScheduler.Timer;
  */
 public class ChRbc {
 
-    private interface ProposedUnit {
+    private class MissingUnit extends ProposedUnit {
+        final Digest               hash;
+        final List<WaitingPreUnit> neededBy = new ArrayList<>();
+        final long                 uid;
 
-        void allParentsAreOutput();
+        public MissingUnit(Digest digest, long uid) {
+            hash = digest;
+            this.uid = uid;
+        }
 
-        void commit(short pid);
+        @Override
+        Digest hash() {
+            return hash;
+        }
 
-        void prevote(short pid);
+        @Override
+        int height() {
+            return PreUnit.decode(uid).height();
+        }
 
-        void scheduleCommit();
+        @Override
+        UnitReference ref() {
+            return UnitReference.getDefaultInstance();
+        }
 
-        void schedulePrevote();
+        @Override
+        boolean shouldCommit() {
+            return false;
+        }
 
+        @Override
+        boolean shouldPrevote() {
+            return false;
+        }
     }
 
-    private class ProposedUnitImpl implements ProposedUnit {
-        final Set<Short>         commits       = new HashSet<>();
-        final Digest             hash;
-        final int                height;
-        final AtomicBoolean      parentsOutput = new AtomicBoolean();
-        final Set<Short>         prevotes      = new HashSet<>();
-        final UnitReference      ref;
-        final Map<String, Timer> timers        = new HashMap<>();
+    abstract private class ProposedUnit {
+        final Set<Short>         commits  = new HashSet<>();
+        final Set<Short>         prevotes = new HashSet<>();
+        final Map<String, Timer> timers   = new HashMap<>();
 
-        ProposedUnitImpl(Digest hash, long uid) {
-            ref = UnitReference.newBuilder().setHash(hash.toDigeste()).setUid(uid).build();
-            height = PreUnit.decode(uid).height();
-            this.hash = hash;
-        }
-
-        @Override
-        public void allParentsAreOutput() {
-            parentsOutput.set(true);
-        }
-
-        @Override
-        public void commit(short pid) {
+        void commit(short pid) {
             commits.add(pid);
         }
 
-        @Override
-        public void prevote(short pid) {
-            prevotes.add(pid);
-            schedulePrevote();
-            scheduleCommit();
+        void complete() {
+            timers.values().forEach(t -> t.cancel());
+            timers.clear();
         }
 
-        @Override
-        public void scheduleCommit() {
-            if (shouldCommit()) {
-                timers.computeIfAbsent(COMMIT, h -> {
-                    log.info("Committing: {} height: {} on: {}", hash, height, config().pid());
-                    bc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
-                    return scheduler.schedule(periodicCommit(), 1);
-                });
-            }
-        }
+        abstract Digest hash();
 
-        @Override
-        public void schedulePrevote() {
-            if (shouldPrevote()) {
-                timers.computeIfAbsent(PREVOTE, h -> {
-                    log.info("Prevoting: {} height: {} on: {}", hash, height, config().pid());
-                    bc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
-                    return scheduler.schedule(periodicPrevote(), 1);
-                });
-            }
-        }
+        abstract int height();
 
-        private Runnable periodicCommit() {
+        Runnable periodicCommit() {
             AtomicReference<Runnable> c = new AtomicReference<>();
             c.set(() -> {
-                log.info("Recommitting: {} height: {} on: {}", hash, height, config().pid());
-                bc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                log.info("Recommitting: {} height: {} on: {}", hash(), height(), config.pid());
+                bc.accept(ChRbcMessage.newBuilder().setCommit(ref()).build());
                 timers.put(COMMIT, scheduler.schedule(c.get(), 1));
             });
             return c.get();
         }
 
-        private Runnable periodicPrevote() {
+        Runnable periodicPrevote() {
             AtomicReference<Runnable> c = new AtomicReference<>();
             c.set(() -> {
-                log.info("Re-prevoting: {} height: {} on: {}", hash, height, config().pid());
-                bc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                log.info("Re-prevoting: {} height: {} on: {}", hash(), height(), config.pid());
+                bc.accept(ChRbcMessage.newBuilder().setPrevote(ref()).build());
                 timers.put(PREVOTE, scheduler.schedule(c.get(), 1));
             });
             return c.get();
         }
 
-        private boolean shouldCommit() {
-            return parentsOutput.get() && prevotes.size() > minimalQuorum && height <= round.get() + 1;
+        void prevote(short pid) {
+            prevotes.add(pid);
+            schedulePrevote();
+            scheduleCommit();
         }
 
-        private boolean shouldPrevote() {
-            return height <= round.get() + 1;
+        abstract UnitReference ref();
+
+        void scheduleCommit() {
+            if (shouldCommit()) {
+                timers.computeIfAbsent(COMMIT, h -> {
+                    log.info("Committing: {} height: {} on: {}", hash(), height(), config.pid());
+                    bc.accept(ChRbcMessage.newBuilder().setCommit(ref()).build());
+                    return scheduler.schedule(periodicCommit(), 1);
+                });
+            }
         }
+
+        void schedulePrevote() {
+            if (shouldPrevote()) {
+                timers.computeIfAbsent(PREVOTE, h -> {
+                    log.info("Prevoting: {} height: {} on: {}", hash(), height(), config.pid());
+                    bc.accept(ChRbcMessage.newBuilder().setPrevote(ref()).build());
+                    return scheduler.schedule(periodicPrevote(), 1);
+                });
+            }
+        }
+
+        abstract boolean shouldCommit();
+
+        abstract boolean shouldPrevote();
     }
 
-    private class SubmittedUnit extends ProposedUnitImpl {
-        final PreUnit_s unit;
+    private class SubmittedUnit extends ProposedUnit {
+        final PreUnit_s             pus;
+        private final UnitReference ref;
+        private final Unit          unit;
 
         SubmittedUnit(Unit unit) {
-            super(unit.hash(), unit.id());
-            parentsOutput.set(true);
+            this.unit = unit;
             commits.add(unit.creator());
             prevotes.add(unit.creator());
-            this.unit = unit.toPreUnit_s();
+            this.pus = unit.toPreUnit_s();
+            ref = UnitReference.newBuilder().setHash(unit.hash().toDigeste()).setUid(unit.id()).build();
             propose();
+        }
+
+        @Override
+        Digest hash() {
+            return unit.hash();
+        }
+
+        @Override
+        int height() {
+            return unit.height();
+        }
+
+        @Override
+        UnitReference ref() {
+            return ref;
+        }
+
+        @Override
+        boolean shouldCommit() {
+            return true;
+        }
+
+        @Override
+        boolean shouldPrevote() {
+            return true;
         }
 
         private void propose() {
             timers.computeIfAbsent(PROPOSE, l -> scheduler.schedule(() -> propose(), 1));
-            bc.accept(ChRbcMessage.newBuilder().setPropose(unit).build());
+            bc.accept(ChRbcMessage.newBuilder().setPropose(pus).build());
+        }
+    }
+
+    private class WaitingUnit extends ProposedUnit {
+        private final List<WaitingUnit> children       = new ArrayList<>();
+        private boolean                 failed         = false;
+        private int                     missingParents = 0;
+        private final PreUnit           pu;
+        private int                     waitingParents = 0;
+
+        private WaitingUnit(PreUnit pu) {
+            this.pu = pu;
+        }
+
+        private WaitingUnit(PreUnit pu, MissingUnit mp) {
+            this(pu);
+            commits.addAll(mp.commits);
+            prevotes.addAll(mp.prevotes);
+        }
+
+        @Override
+        Digest hash() {
+            return pu.hash();
+        }
+
+        @Override
+        int height() {
+            return pu.height();
+        }
+
+        @Override
+        UnitReference ref() {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        boolean shouldCommit() {
+            return parentsOutput() && commits.size() > minimalQuorum && height() <= round + 1;
+        }
+
+        boolean shouldPrevote() {
+            return height() <= round + 1;
+        }
+
+        private boolean parentsOutput() {
+            return waitingParents == 0 && missingParents == 0;
         }
     }
 
     private static final String COMMIT  = "COMMIT";
     private static final Logger log     = LoggerFactory.getLogger(ChRbc.class);
     private static final String PREVOTE = "PREVOTE";
+    private static final String PROPOSE = "PROPOSE";
 
-    private static final String             PROPOSE  = "PROPOSE";
     private final Consumer<ChRbcMessage>    bc;
+    private final Config                    config;
+    private volatile int                    epoch;
     private final short                     minimalQuorum;
-    private final Orderer                   orderer;
     private final Map<Digest, ProposedUnit> proposed = new ConcurrentHashMap<>();
-    @SuppressWarnings("unused")
-    private final Channel<WaitingPreUnit>   ready;
-    private final AtomicInteger             round    = new AtomicInteger();
+    private volatile int                    round;
+    private final RoundScheduler            scheduler;
 
-    private final RoundScheduler scheduler;
-
-    public ChRbc(RoundScheduler scheduler, Consumer<ChRbcMessage> bc, Orderer orderer, Channel<WaitingPreUnit> ready) {
-        this.ready = ready;
+    public ChRbc(Config config, RoundScheduler scheduler, Consumer<ChRbcMessage> bc) {
+        this.config = config;
         this.scheduler = scheduler;
         this.bc = bc;
-        this.orderer = orderer;
-        minimalQuorum = Dag.minimalQuorum(config().nProc(), config().bias());
-    }
-
-    public void parentsOutput(Digest hash) {
-        final ProposedUnit propU = proposed.get(hash);
-        propU.allParentsAreOutput();
-        propU.scheduleCommit();
+        minimalQuorum = Dag.minimalQuorum(config.nProc(), config.bias());
     }
 
     public void process(short pid, ChRbcMessage msg) {
@@ -188,41 +260,67 @@ public class ChRbc {
             prevote(pid, msg.getPrevote().getUid(), new Digest(msg.getPrevote().getHash()));
             break;
         case PROPOSE:
-            orderer.addPreunits(pid,
-                                Collections.singletonList(PreUnit.from(msg.getPropose(), config().digestAlgorithm())));
-            break;
-        case T_NOT_SET:
+            proposed(pid, msg.getPropose());
             break;
         default:
+            log.trace("What you talking about? {}", msg);
             break;
         }
     }
 
-    public void proposed(WaitingPreUnit wpu) {
-        proposed.computeIfAbsent(wpu.pu.hash(), h -> new ProposedUnitImpl(wpu.pu.hash(), wpu.pu.id()))
-                .schedulePrevote();
-        log.info("Proposed: {} on: {}", wpu, config().pid());
-    }
-
     public void submit(Unit u) {
         assert !proposed.containsKey(u.hash());
-        proposed.put(u.hash(), new SubmittedUnit(u));
-        log.info("submitted: {} on: {}", u, config().pid());
+        proposed.put(u.hash(), new SubmittedUnit(u)); // purposeful overwrite if exists ;)
+        log.info("submitted: {} on: {}", u, config.pid());
     }
 
     private void commit(short pid, long uid, Digest digest) {
-        var pu = proposed.computeIfAbsent(digest, h -> new ProposedUnitImpl(digest, uid));
+        var pu = proposed.computeIfAbsent(digest, h -> new MissingUnit(digest, uid));
         pu.commit(pid);
-        log.info("Commit: {}:{} from: {} on: {}", digest, uid, pid, config().pid());
-    }
-
-    private Config config() {
-        return orderer.getConfig();
+        log.info("Commit: {}:{} from: {} on: {}", digest, uid, pid, config.pid());
     }
 
     private void prevote(short pid, long uid, Digest digest) {
-        ProposedUnit proposedU = proposed.computeIfAbsent(digest, d -> new ProposedUnitImpl(d, uid));
+        ProposedUnit proposedU = proposed.computeIfAbsent(digest, d -> new MissingUnit(d, uid));
         proposedU.prevote(pid);
-        log.info("Prevote: {}:{} from: {} on: {}", digest, uid, pid, config().pid());
+        log.info("Prevote: {}:{} from: {} on: {}", digest, uid, pid, config.pid());
+    }
+
+    private void proposed(short pid, PreUnit_s propose) {
+        PreUnit pu = PreUnit.from(propose, config.digestAlgorithm());
+        if (!validate(pu)) {
+            return;
+        }
+        proposed.compute(pu.hash(), (h, pending) -> {
+            if (pending == null) {
+                return new WaitingUnit(pu);
+            }
+            if (pending instanceof MissingUnit u) {
+                return new WaitingUnit(pu, u);
+            }
+            return pending;
+        }).schedulePrevote();
+        log.info("Proposed: {} on: {}", pu, config.pid());
+    }
+
+    private boolean validate(PreUnit pu) {
+        if (pu.creator() == config.pid()) {
+            log.debug("Self created: {} on: {}", pu, config.pid());
+            return false;
+        }
+        if (pu.creator() >= config.nProc()) {
+            log.debug("Invalid creator: {} > {} on: {}", pu, config.nProc() - 1, config.pid());
+            return false;
+        }
+
+        if ((pu.creator() >= config.nProc())) {
+            log.debug("Invalid creator: {} on: {}", pu, epoch, config.pid());
+            return false;
+        }
+        if (pu.epoch() != epoch) {
+            log.error("Invalid epoch: {} expected: {}, but received: {} on: {}", pu, epoch, pu.epoch(), config.pid());
+            return false;
+        }
+        return true;
     }
 }

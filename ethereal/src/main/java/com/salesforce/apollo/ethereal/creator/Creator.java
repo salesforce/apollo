@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
-import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.utils.Channel;
@@ -56,7 +55,7 @@ public class Creator {
 
     private record built(Unit[] parents, int level) {}
 
-    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
+    private static final Logger log = LoggerFactory.getLogger(Creator.class);
 
     /**
      * MakeConsistent ensures that the set of parents follows "parent consistency
