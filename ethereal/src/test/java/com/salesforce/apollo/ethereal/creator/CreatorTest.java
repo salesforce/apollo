@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal.creator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.KeyPair;
 import java.util.ArrayList;
@@ -16,7 +15,6 @@ import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -35,7 +33,6 @@ import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
 import com.salesforce.apollo.utils.SimpleChannel;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -118,18 +115,9 @@ public class CreatorTest {
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        AtomicBoolean finished = new AtomicBoolean();
-
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
-
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
-        assertTrue(finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         Unit[] parents = new Unit[nProc];
         var crown = Crown.emptyCrown(nProc, DigestAlgorithm.DEFAULT);
@@ -174,14 +162,8 @@ public class CreatorTest {
 
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
-        AtomicBoolean finished = new AtomicBoolean();
         var lastTiming = new ArrayBlockingQueue<Unit>(100);
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         Unit[] parents = new Unit[nProc];
         var maxLevels = 2;
@@ -201,7 +183,6 @@ public class CreatorTest {
             parents = newParents.toArray(new Unit[parents.length]);
         }
 
-        assertTrue(finished.get());
         for (int level = 0; level < 4; level++) {
             var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
 
@@ -227,8 +208,6 @@ public class CreatorTest {
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        AtomicBoolean finished = new AtomicBoolean();
-
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         Unit[] parents = new Unit[nProc];
@@ -250,14 +229,7 @@ public class CreatorTest {
         }
 
         var lastTiming = new ArrayBlockingQueue<Unit>(100);
-
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
-        assertTrue(finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
         assertNotNull(createdUnit);
@@ -287,8 +259,6 @@ public class CreatorTest {
         var creator = newCreator(cnf, send);
         assertNotNull(creator);
 
-        AtomicBoolean finished = new AtomicBoolean();
-
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
         Unit[] parents = new Unit[nProc];
@@ -302,14 +272,7 @@ public class CreatorTest {
             unitBelt.submit(unit);
         }
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
-
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
-        assertTrue(finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
         assertNotNull(createdUnit);
@@ -341,18 +304,10 @@ public class CreatorTest {
         var creator = newCreator(cnf, send, false);
         assertNotNull(creator);
 
-        AtomicBoolean finished = new AtomicBoolean();
-
+        @SuppressWarnings("resource")
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
         var lastTiming = new ArrayBlockingQueue<Unit>(2);
-
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
-        assertTrue(finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         Unit[] parents = new Unit[nProc];
         var crown = Crown.newCrownFromParents(parents, DigestAlgorithm.DEFAULT);
@@ -407,14 +362,8 @@ public class CreatorTest {
 
         var unitBelt = new SimpleChannel<Unit>("Unit belt", 100);
 
-        AtomicBoolean finished = new AtomicBoolean();
         var lastTiming = new ArrayBlockingQueue<Unit>(100);
-        ForkJoinPool.commonPool().execute(() -> {
-            creator.createUnits(unitBelt, lastTiming);
-            finished.set(true);
-        });
-
-        Utils.waitForCondition(4_000, 500, () -> finished.get());
+        unitBelt.consume(us -> creator.consume(us, lastTiming));
 
         Unit[] parents = new Unit[nProc];
 
@@ -427,8 +376,6 @@ public class CreatorTest {
             var unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
-
-        assertTrue(finished.get());
         var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
 
         assertNotNull(createdUnit);

@@ -39,9 +39,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
-import com.salesforce.apollo.utils.Channel;
 import com.salesforce.apollo.utils.RoundScheduler;
-import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -95,27 +93,28 @@ public class Orderer {
 
     private final Consumer<ChRbcMessage> chRBC;
     private final Config                 config;
-    private volatile Creator             creator;
+    private final Creator                creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
-    private final DataSource             ds;
     private final Queue<Unit>            lastTiming;
     private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
     private final AtomicReference<epoch> previous = new AtomicReference<>();
     private final RoundScheduler         roundScheduler;
-    private volatile RandomSourceFactory rsf;
+    private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
-    private final Channel<Unit>          unitBelt;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<ChRbcMessage> chRbc,
-                   RoundScheduler roundScheduler) {
+                   RoundScheduler roundScheduler, RandomSourceFactory rsf) {
         this.config = conf;
-        this.ds = ds;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
-        this.unitBelt = new SimpleChannel<>(String.format("Unit belt for: %s", config.pid()),
-                                            conf.epochLength() * conf.nProc());
         this.chRBC = chRbc;
         this.roundScheduler = roundScheduler;
+        this.rsf = rsf;
+        creator = new Creator(config, ds, u -> {
+            log.trace("Sending: {} on: {}", u, config.pid());
+            insert(u);
+            current.get().submit(u);
+        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
     /**
@@ -219,19 +218,8 @@ public class Orderer {
         return null;
     }
 
-    public void start(RandomSourceFactory rsf) {
-        this.rsf = rsf;
-        creator = new Creator(config, ds, u -> {
-            log.trace("Sending: {} on: {}", u, config.pid());
-            insert(u);
-            current.get().submit(u);
-        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
-
+    public void start() {
         newEpoch(0);
-
-        // Start creator
-        creator.createUnits(unitBelt, lastTiming);
-
     }
 
     public void stop() {
@@ -241,7 +229,6 @@ public class Orderer {
         if (current != null) {
             current.get().close();
         }
-        unitBelt.close();
         log.trace("Orderer stopped on: {}", config.pid());
     }
 
@@ -318,7 +305,7 @@ public class Orderer {
         dg.afterInsert(u -> {
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
-                unitBelt.submit(u);
+                creator.consume(Collections.singletonList(u), lastTiming);
             }
         });
         return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC, roundScheduler), ext, rs, new AtomicBoolean(true));
@@ -454,9 +441,10 @@ public class Orderer {
      */
     private RsData rsData() {
         return (level, parents, epoch) -> {
+            final RandomSourceFactory r = rsf;
             byte[] result = null;
             if (level == 0) {
-                result = rsf.dealingData(epoch);
+                result = r.dealingData(epoch);
             } else {
                 epochWithNewer ep = getEpoch(epoch);
                 if (ep != null) {

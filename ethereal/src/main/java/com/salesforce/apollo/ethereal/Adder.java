@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -78,8 +77,8 @@ public interface Adder {
             Runnable periodicCommit() {
                 AtomicReference<Runnable> c = new AtomicReference<>();
                 c.set(() -> {
-                    log.info("Recommitting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                    chRBC.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                    log.info("Committing: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                    rbc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
                     timers.put(COMMIT, scheduler.schedule(c.get(), 1));
                 });
                 return c.get();
@@ -88,8 +87,8 @@ public interface Adder {
             Runnable periodicPrevote() {
                 AtomicReference<Runnable> c = new AtomicReference<>();
                 c.set(() -> {
-                    log.info("Re-prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                    chRBC.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                    log.info("Prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
+                    rbc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
                     timers.put(PREVOTE, scheduler.schedule(c.get(), 1));
                 });
                 return c.get();
@@ -105,7 +104,7 @@ public interface Adder {
                 if (shouldCommit()) {
                     timers.computeIfAbsent(COMMIT, h -> {
                         log.info("Committing: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                        chRBC.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                        rbc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
                         return scheduler.schedule(periodicCommit(), 1);
                     });
                 }
@@ -115,7 +114,7 @@ public interface Adder {
                 if (shouldPrevote()) {
                     timers.computeIfAbsent(PREVOTE, h -> {
                         log.info("Prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                        chRBC.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                        rbc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
                         return scheduler.schedule(periodicPrevote(), 1);
                     });
                 }
@@ -151,17 +150,18 @@ public interface Adder {
             }
 
             private void propose() {
+                log.debug("Proposing: {}:{} on: {}", pu.hash(), pu, conf.pid());
                 timers.computeIfAbsent(PROPOSE, l -> scheduler.schedule(() -> propose(), 1));
-                chRBC.accept(ChRbcMessage.newBuilder().setPropose(unit).build());
+                rbc.accept(ChRbcMessage.newBuilder().setPropose(unit).build());
             }
         }
 
         class WaitingPreUnit extends Pending {
             private final List<WaitingPreUnit> children       = new ArrayList<>();
-            private final AtomicBoolean        failed         = new AtomicBoolean();
-            private final AtomicInteger        missingParents = new AtomicInteger();
+            private volatile boolean           failed         = false;
+            private volatile int               missingParents = 0;
             private final long                 source;
-            private final AtomicInteger        waitingParents = new AtomicInteger();
+            private volatile int               waitingParents = 0;
 
             WaitingPreUnit(PreUnit pu, long source) {
                 super(pu);
@@ -188,7 +188,7 @@ public interface Adder {
             }
 
             private boolean parentsOutput() {
-                return waitingParents.get() == 0 && missingParents.get() == 0;
+                return waitingParents == 0 && missingParents == 0;
             }
         }
 
@@ -197,22 +197,22 @@ public interface Adder {
         private static final String PREVOTE = "PREVOTE";
         private static final String PROPOSE = "PROPOSE";
 
-        private final Consumer<ChRbcMessage>      chRBC;
         private final Config                      conf;
         private final Dag                         dag;
         private final int                         minimalQuorum;
         private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
+        private final Consumer<ChRbcMessage>      rbc;
         private final AtomicInteger               round       = new AtomicInteger();
         private final RoundScheduler              scheduler;
         private final Map<Long, SubmittedUnit>    submitted   = new ConcurrentHashMap<>();
         private final Map<Digest, WaitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, WaitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
-        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> chRBC, RoundScheduler scheduler) {
+        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> rbc, RoundScheduler scheduler) {
             this.dag = dag;
             this.conf = conf;
-            this.chRBC = chRBC;
+            this.rbc = rbc;
             this.scheduler = scheduler;
             minimalQuorum = Dag.minimalQuorum(conf.nProc(), conf.bias());
         }
@@ -306,7 +306,7 @@ public interface Adder {
         public void submit(Unit u) {
             log.trace("Submit: {} on: {}", u, conf.pid());
             submitted.put(u.id(), new SubmittedUnit(u));
-            chRBC.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
+            rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
             round(u.level());
         }
 
@@ -325,7 +325,7 @@ public interface Adder {
             waitingById.put(id, wp);
             checkParents(wp);
             checkIfMissing(wp);
-            if (wp.missingParents.get() > 0) {
+            if (wp.missingParents > 0) {
                 log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
                 return;
             }
@@ -358,8 +358,8 @@ public interface Adder {
                 wp.children.clear();
                 wp.children.addAll(mp.neededBy);
                 for (var ch : wp.children) {
-                    ch.missingParents.decrementAndGet();
-                    ch.waitingParents.incrementAndGet();
+                    ch.missingParents--;
+                    ch.waitingParents++;
                     log.trace("Found parent {} for: {} on: {}", wp, ch, conf.pid());
                 }
                 missing.remove(wp.pu.id());
@@ -383,10 +383,10 @@ public interface Adder {
                     long parentID = id(height, creator, epoch);
                     var par = waitingById.get(parentID);
                     if (par != null) {
-                        wp.waitingParents.incrementAndGet();
+                        wp.waitingParents++;
                         par.children.add(wp);
                     } else {
-                        wp.missingParents.incrementAndGet();
+                        wp.missingParents++;
                         registerMissing(parentID, wp);
                     }
                 }
@@ -438,14 +438,14 @@ public interface Adder {
                             }
                         }
                     }
-                    wp.failed.set(true);
+                    wp.failed = true;
                     return;
                 }
                 var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
                                     .toList();
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
                 if (!calculated.equals(wp.pu.view().controlHash())) {
-                    wp.failed.set(true);
+                    wp.failed = true;
                     handleInvalidControlHash(wp.source, wp.pu, parents);
                     return;
                 }
@@ -495,13 +495,13 @@ public interface Adder {
         private void remove(WaitingPreUnit wp) {
             mtx.lock();
             try {
-                if (wp.failed.get()) {
+                if (wp.failed) {
                     removeFailed(wp);
                 } else {
                     waiting.remove(wp.pu.hash());
                     waitingById.remove(wp.pu.id());
                     for (var ch : wp.children) {
-                        ch.waitingParents.decrementAndGet();
+                        ch.waitingParents--;
                         sendIfReady(ch);
                     }
                 }
@@ -528,7 +528,7 @@ public interface Adder {
          * dedicated worker.
          */
         private void sendIfReady(WaitingPreUnit wp) {
-            if (wp.waitingParents.get() == 0 && wp.missingParents.get() == 0) {
+            if (wp.waitingParents == 0 && wp.missingParents == 0) {
                 log.trace("Sending unit for processing: {} on: {}", wp, conf.pid());
                 handleReady(wp);
             }

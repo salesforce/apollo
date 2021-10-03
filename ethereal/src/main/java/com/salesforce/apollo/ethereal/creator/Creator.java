@@ -28,7 +28,6 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.utils.Channel;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -106,18 +105,7 @@ public class Creator {
         this.send = send;
         this.candidates = new Unit[config.nProc()];
         quorum = (int) ((config.bias() - 1.0) * ((double) config.byzantine()) + 1.0);
-    }
-
-    /**
-     * Spawns the main loop of the creator. Units appearing on unitBelt are examined
-     * and stored to be used as parents of future units. When there are enough new
-     * parents, a new unit is produced. lastTiming is a channel on which the last
-     * timing unit of each epoch is expected to appear. This method is stopped by
-     * closing unitBelt channel.
-     */
-    public void createUnits(Channel<Unit> unitBelt, Queue<Unit> lastTiming) {
         newEpoch(epoch.get(), ByteString.EMPTY);
-        unitBelt.consume(units -> consume(units, lastTiming));
     }
 
     private built buildParents() {
@@ -129,7 +117,12 @@ public class Creator {
         }
     }
 
-    private void consume(List<Unit> units, Queue<Unit> lastTiming) {
+    /**
+     * Units are examined and stored to be used as parents of future units. When
+     * there are enough new parents, a new unit is produced. lastTiming is a channel
+     * on which the last timing unit of each epoch is expected to appear.
+     */
+    public void consume(List<Unit> units, Queue<Unit> lastTiming) {
         log.trace("Processing next units: {} on: {}", units.size(), conf.pid());
         mx.lock();
         try {
@@ -156,7 +149,11 @@ public class Creator {
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm());
-        log.debug("Created unit: {} on: {}", u, conf.pid());
+        if (log.isTraceEnabled()) {
+            log.debug("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
+        } else {
+            log.info("Created unit: {} on: {}", u, conf.pid());
+        }
         send.accept(u);
         update(u);
     }
@@ -177,7 +174,7 @@ public class Creator {
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            log.trace("No timing unit: {} on: {}", level, conf.pid());
+            log.info("No timing unit: {} on: {}", level, conf.pid());
             return ByteString.EMPTY;
         }
         // in a rare case there can be timing units from previous epochs left on
@@ -190,7 +187,7 @@ public class Creator {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
-                log.debug("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
+                log.info("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",

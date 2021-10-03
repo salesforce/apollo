@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +28,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.comm.RouterMetricsImpl;
@@ -76,7 +75,7 @@ public class EtherealTest {
     @Test
     public void fourWay() throws Exception {
         short nProc = 4;
-        ChannelConsumer<PreUnit_s> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
+        ChannelConsumer<ChRbcMessage> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -91,12 +90,10 @@ public class EtherealTest {
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
-            var out = new ChannelConsumer<>(new LinkedBlockingDeque<PreBlock>(100));
             List<PreBlock> output = produced.get(i);
-            out.consume(l -> output.addAll(l));
             RoundScheduler roundScheduler = new RoundScheduler(1);
-            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> synchronizer.getChannel().offer(pu.getPropose()), roundScheduler);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> output.add(pb),
+                                             pu -> synchronizer.getChannel().offer(pu), roundScheduler);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -110,18 +107,13 @@ public class EtherealTest {
         synchronizer.consume(pu -> {
             for (short i = 0; i < controllers.size(); i++) {
                 var controller = controllers.get(i);
-                short pid = i;
                 pu.forEach(p_s -> {
-                    var p = PreUnit.from(p_s, DigestAlgorithm.DEFAULT);
                     try {
                         Thread.sleep(1);
                     } catch (InterruptedException e1) {
                         return;
                     }
-                    if (pid == p.creator()) {
-                    } else {
-                        controller.input().accept((short) 0, Collections.singletonList(p));
-                    }
+                    controller.input().accept((short) 0, p_s);
                 });
             }
             controllers.forEach(e -> {
@@ -167,7 +159,7 @@ public class EtherealTest {
         RouterMetrics metrics = new RouterMetricsImpl(registry);
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        short nProc = 30;
+        short nProc = 4;
         SigningMember[] members = new SigningMember[nProc];
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, nProc);
         Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();
@@ -201,14 +193,12 @@ public class EtherealTest {
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
-            var out = new ChannelConsumer<PreBlock>(new LinkedBlockingDeque<>(100));
             List<PreBlock> output = produced.get(i);
-            out.consume(l -> output.addAll(l));
             ReliableBroadcaster caster = casting.get(members[i]);
             RoundScheduler roundScheduler = new RoundScheduler(context.timeToLive());
             caster.register(r -> roundScheduler.tick(r));
-            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> out.getChannel().offer(pb),
-                                             pu -> caster.publish(pu.getPropose()), roundScheduler);
+            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> output.add(pb),
+                                             pu -> caster.publish(pu), roundScheduler);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -223,13 +213,11 @@ public class EtherealTest {
                 var controller = controllers.get(i);
                 var caster = casting.get(members[i]);
                 caster.registerHandler((ctx, msgs) -> msgs.forEach(msg -> {
-                    preUnit pu;
                     try {
-                        pu = PreUnit.from(PreUnit_s.parseFrom(msg.content()), DigestAlgorithm.DEFAULT);
-                    } catch (InvalidProtocolBufferException e) {
-                        throw new IllegalStateException(e);
+                        controller.input().accept((short) 0, ChRbcMessage.parseFrom(msg.content()));
+                    } catch (InvalidProtocolBufferException e1) {
+                        e1.printStackTrace();
                     }
-                    controller.input().accept(pu.creator(), Collections.singletonList(pu));
 //                    System.out.println("Input: "+ pu + " on: " + caster.getMember());
                 }));
                 caster.start(Duration.ofMillis(5), scheduler);

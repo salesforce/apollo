@@ -49,7 +49,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, List<PreUnit>> input) {
+    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, ChRbcMessage> input) {
         public void start() {
             starte.run();
         }
@@ -200,7 +200,7 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> ord.get().addPreunits(source, pus);
+        BiConsumer<Short, ChRbcMessage> input = (source, rbc) -> ord.get().chRbc((short) 0, rbc);
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -213,9 +213,9 @@ public class Ethereal {
                     }
                     logWTK(wtkey);
                     var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              synchronizer, roundScheduler);
+                                              synchronizer, roundScheduler, Coin.newFactory(config.pid(), wtkey));
                     ord.set(orderer);
-                    orderer.start(Coin.newFactory(config.pid(), wtkey));
+                    orderer.start();
                 } finally {
                     started.set(true);
                 }
@@ -262,12 +262,12 @@ public class Ethereal {
             t.setDaemon(true);
             return t;
         });
-        BiConsumer<Short, List<PreUnit>> input = (source, pus) -> {
+        BiConsumer<Short, ChRbcMessage> input = (source, pus) -> {
             try {
                 in.execute(() -> {
                     Orderer orderer = ord.get();
                     if (orderer != null) {
-                        orderer.addPreunits(source, pus);
+                        orderer.chRbc(source, pus);
                     }
                 });
             } catch (RejectedExecutionException e) {
@@ -276,9 +276,8 @@ public class Ethereal {
         };
 
         Runnable start = () -> {
-            var orderer = new Orderer(config, ds, makePreblock, synchronizer, roundScheduler);
+            var orderer = new Orderer(config, ds, makePreblock, synchronizer, roundScheduler, new DsrFactory());
             ord.set(orderer);
-            orderer.start(new DsrFactory());
         };
         Runnable stop = () -> {
             in.shutdown();
@@ -314,7 +313,7 @@ public class Ethereal {
         };
 
         var ord = new Orderer(conf, null, extractHead, p -> {
-        }, roundScheduler);
-        return new Controller(() -> ord.start(rsf), () -> ord.stop(), null);
+        }, roundScheduler, rsf);
+        return new Controller(() -> ord.start(), () -> ord.stop(), null);
     }
 }
