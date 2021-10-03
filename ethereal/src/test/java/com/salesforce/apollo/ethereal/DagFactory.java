@@ -87,10 +87,6 @@ public interface DagFactory {
         }
 
         @Override
-        public void round(int r) {
-        }
-
-        @Override
         public void submit(Unit u) {
         }
     }

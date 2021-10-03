@@ -174,12 +174,12 @@ public interface Adder {
 
             @Override
             boolean shouldCommit() {
-                return parentsOutput() && commits.size() > minimalQuorum && pu.height() <= round.get() + 1;
+                return parentsOutput() && commits.size() > minimalQuorum && pu.height() + 1 <= round.get();
             }
 
             @Override
             boolean shouldPrevote() {
-                return pu.height() <= round.get() + 1;
+                return pu.height() + 1 <= round.get();
             }
 
             void stateFrom(MissingPreUnit mp) {
@@ -187,8 +187,21 @@ public interface Adder {
                 prevotes.addAll(mp.prevotes);
             }
 
+            /**
+             * sendIfReady checks if a waitingPreunit is ready (has no waiting or missing
+             * parents). If yes, the preunit is inserted into ye DAG.
+             */
+            void sendIfReady() {
+                if (parentsOutput()) {
+                    log.trace("Sending unit for processing: {} on: {}", this, conf.pid());
+                    handleReady(this);
+                }
+            }
+
             private boolean parentsOutput() {
-                return waitingParents == 0 && missingParents == 0;
+                final int cMissingParents = missingParents;
+                final int cWaitingParents = waitingParents;
+                return cWaitingParents == 0 && cMissingParents == 0;
             }
         }
 
@@ -292,7 +305,11 @@ public interface Adder {
         }
 
         @Override
-        public void round(final int r) {
+        public void submit(Unit u) {
+            log.trace("Submit: {} on: {}", u, conf.pid());
+            submitted.put(u.id(), new SubmittedUnit(u));
+            rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
+            final int r = u.level();
             round.set(r);
             submitted.entrySet().forEach(e -> {
                 if (e.getValue().pu.round(conf) < r) {
@@ -300,14 +317,6 @@ public interface Adder {
                     e.getValue().complete();
                 }
             });
-        }
-
-        @Override
-        public void submit(Unit u) {
-            log.trace("Submit: {} on: {}", u, conf.pid());
-            submitted.put(u.id(), new SubmittedUnit(u));
-            rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
-            round(u.level());
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -330,7 +339,7 @@ public interface Adder {
                 return;
             }
             log.trace("Unit now waiting: {} on: {}", pu, conf.pid());
-            sendIfReady(wp);
+            wp.sendIfReady();
         }
 
         private Correctness checkCorrectness(PreUnit pu) {
@@ -502,7 +511,7 @@ public interface Adder {
                     waitingById.remove(wp.pu.id());
                     for (var ch : wp.children) {
                         ch.waitingParents--;
-                        sendIfReady(ch);
+                        ch.sendIfReady();
                     }
                 }
             } finally {
@@ -519,18 +528,6 @@ public interface Adder {
             waitingById.remove(wp.pu.id());
             for (var ch : wp.children) {
                 removeFailed(ch);
-            }
-        }
-
-        /**
-         * sendIfReady checks if a waitingPreunit is ready (has no waiting or missing
-         * parents). If yes, the preunit is sent to the channel corresponding to its
-         * dedicated worker.
-         */
-        private void sendIfReady(WaitingPreUnit wp) {
-            if (wp.waitingParents == 0 && wp.missingParents == 0) {
-                log.trace("Sending unit for processing: {} on: {}", wp, conf.pid());
-                handleReady(wp);
             }
         }
 
@@ -553,8 +550,6 @@ public interface Adder {
     void chRbc(short from, ChRbcMessage msg);
 
     void close();
-
-    void round(int r);
 
     void submit(Unit u);
 
