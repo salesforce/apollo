@@ -152,7 +152,7 @@ public class Creator {
         if (log.isTraceEnabled()) {
             log.debug("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
         } else {
-            log.info("Created unit: {} on: {}", u, conf.pid());
+            log.debug("Created unit: {} on: {}", u, conf.pid());
         }
         send.accept(u);
         update(u);
@@ -174,7 +174,7 @@ public class Creator {
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            log.info("No timing unit: {} on: {}", level, conf.pid());
+            log.trace("No timing unit: {} on: {}", level, conf.pid());
             return ByteString.EMPTY;
         }
         // in a rare case there can be timing units from previous epochs left on
@@ -187,7 +187,7 @@ public class Creator {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
-                log.info("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
+                log.debug("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
@@ -325,7 +325,7 @@ public class Creator {
             if (u.level() > maxLvl.get()) {
                 maxLvl.set(u.level());
                 onMaxLvl.set(1);
-                log.trace("Update candidate {} new maxLvl: {} on: {}", u, conf.pid());
+                log.trace("Update candidate {} new maxLvl: {} on: {}", u, maxLvl.get(), conf.pid());
             }
             level.set(maxLvl.get());
             log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.pid());

@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -66,7 +67,15 @@ public interface Adder {
             }
 
             void commit(short pid) {
-                commits.add(pid);
+                if (commits.add(pid)) {
+                    log.trace("Commit: {} for: {}:{} height: {} from: {} on: {}", commits.size(), pu, pu.hash(),
+                              pu.height(), pid, conf.pid());
+                    if (commits.size() > 2 * conf.byzantine()) {
+                        sendIfReady();
+                    } else {
+                        maybeScheduleCommit();
+                    }
+                }
             }
 
             void complete() {
@@ -74,7 +83,52 @@ public interface Adder {
                 timers.clear();
             }
 
-            Runnable periodicCommit() {
+            void maybeScheduleCommit() {
+                if (shouldCommit()) {
+                    scheduleCommit();
+                }
+            }
+
+            void maybeSchedulePrevote() {
+                if (shouldPrevote()) {
+                    schedulePrevote();
+                }
+            }
+
+            void prevote(short pid) {
+                if (prevotes.add(pid)) {
+                    log.trace("Prevote: {} for: {}:{} height: {} from: {} on: {}", prevotes.size(), pu, pu.hash(),
+                              pu.height(), pid, conf.pid());
+                    maybeSchedulePrevote();
+                    if (prevotes.size() > 2 * conf.byzantine()) {
+                        scheduleCommit();
+                    }
+                }
+            }
+
+            void scheduleCommit() {
+                timers.computeIfAbsent(COMMIT, h -> {
+                    commits.add(conf.pid());
+                    rbc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
+                    return scheduler.schedule(periodicCommit(), 1);
+                });
+            }
+
+            void schedulePrevote() {
+                timers.computeIfAbsent(PREVOTE, h -> {
+                    prevotes.add(conf.pid());
+                    rbc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
+                    return scheduler.schedule(periodicPrevote(), 1);
+                });
+            }
+
+            abstract void sendIfReady();
+
+            abstract boolean shouldCommit();
+
+            abstract boolean shouldPrevote();
+
+            private Runnable periodicCommit() {
                 AtomicReference<Runnable> c = new AtomicReference<>();
                 c.set(() -> {
                     log.info("Committing: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
@@ -84,7 +138,7 @@ public interface Adder {
                 return c.get();
             }
 
-            Runnable periodicPrevote() {
+            private Runnable periodicPrevote() {
                 AtomicReference<Runnable> c = new AtomicReference<>();
                 c.set(() -> {
                     log.info("Prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
@@ -93,36 +147,6 @@ public interface Adder {
                 });
                 return c.get();
             }
-
-            void prevote(short pid) {
-                prevotes.add(pid);
-                schedulePrevote();
-                scheduleCommit();
-            }
-
-            void scheduleCommit() {
-                if (shouldCommit()) {
-                    timers.computeIfAbsent(COMMIT, h -> {
-                        log.info("Committing: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                        rbc.accept(ChRbcMessage.newBuilder().setCommit(ref).build());
-                        return scheduler.schedule(periodicCommit(), 1);
-                    });
-                }
-            }
-
-            void schedulePrevote() {
-                if (shouldPrevote()) {
-                    timers.computeIfAbsent(PREVOTE, h -> {
-                        log.info("Prevoting: {} height: {} on: {}", pu.hash(), pu.height(), conf.pid());
-                        rbc.accept(ChRbcMessage.newBuilder().setPrevote(ref).build());
-                        return scheduler.schedule(periodicPrevote(), 1);
-                    });
-                }
-            }
-
-            abstract boolean shouldCommit();
-
-            abstract boolean shouldPrevote();
         }
 
         class SubmittedUnit extends Pending {
@@ -140,6 +164,44 @@ public interface Adder {
             }
 
             @Override
+            void commit(short pid) {
+                if (commits.add(pid)) {
+                    if (commits.size() > 2 * conf.byzantine()) {
+                        Timer t = timers.remove(COMMIT);
+                        if (t != null) {
+                            t.cancel();
+                        }
+                        t = timers.remove(PROPOSE);
+                        if (t != null) {
+                            t.cancel();
+                        }
+                    }
+
+                }
+            }
+
+            @Override
+            void prevote(short pid) {
+                if (prevotes.add(pid)) {
+                    if (prevotes.size() > 2 * conf.byzantine()) {
+                        Timer t = timers.remove(PREVOTE);
+                        if (t != null) {
+                            t.cancel();
+                        }
+                        t = timers.remove(PROPOSE);
+                        if (t != null) {
+                            t.cancel();
+                        }
+                    }
+                }
+            }
+
+            @Override
+            void sendIfReady() {
+                // Already in DAG
+            }
+
+            @Override
             boolean shouldCommit() {
                 return true;
             }
@@ -153,6 +215,8 @@ public interface Adder {
                 log.debug("Proposing: {}:{} on: {}", pu.hash(), pu, conf.pid());
                 timers.computeIfAbsent(PROPOSE, l -> scheduler.schedule(() -> propose(), 1));
                 rbc.accept(ChRbcMessage.newBuilder().setPropose(unit).build());
+                schedulePrevote();
+                scheduleCommit();
             }
         }
 
@@ -172,19 +236,8 @@ public interface Adder {
                 return "wpu[" + pu.shortString() + "]";
             }
 
-            @Override
-            boolean shouldCommit() {
-                return parentsOutput() && commits.size() > minimalQuorum && pu.height() + 1 <= round.get();
-            }
-
-            @Override
-            boolean shouldPrevote() {
-                return pu.height() + 1 <= round.get();
-            }
-
-            void stateFrom(MissingPreUnit mp) {
-                commits.addAll(mp.commits);
-                prevotes.addAll(mp.prevotes);
+            boolean committed() {
+                return commits.size() > 2 * conf.byzantine();
             }
 
             /**
@@ -192,10 +245,33 @@ public interface Adder {
              * parents). If yes, the preunit is inserted into ye DAG.
              */
             void sendIfReady() {
-                if (parentsOutput()) {
-                    log.trace("Sending unit for processing: {} on: {}", this, conf.pid());
+                final boolean po = parentsOutput();
+                final boolean co = committed();
+                if (po && co) {
+                    complete();
                     handleReady(this);
                 }
+            }
+
+            @Override
+            boolean shouldCommit() {
+                return commits.size() > conf.byzantine();
+            }
+
+            @Override
+            boolean shouldPrevote() {
+                return pu.height() == 0 || round.get() + 1 >= pu.height();
+            }
+
+            void stateFrom(MissingPreUnit mp) {
+                commits.addAll(mp.commits);
+                prevotes.addAll(mp.prevotes);
+            }
+
+            void updated() {
+                maybeSchedulePrevote();
+                maybeScheduleCommit();
+                sendIfReady();
             }
 
             private boolean parentsOutput() {
@@ -212,7 +288,6 @@ public interface Adder {
 
         private final Config                      conf;
         private final Dag                         dag;
-        private final int                         minimalQuorum;
         private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
         private final Consumer<ChRbcMessage>      rbc;
@@ -227,7 +302,6 @@ public interface Adder {
             this.conf = conf;
             this.rbc = rbc;
             this.scheduler = scheduler;
-            minimalQuorum = Dag.minimalQuorum(conf.nProc(), conf.bias());
         }
 
         /**
@@ -238,65 +312,49 @@ public interface Adder {
          * is normally added and processed, error is returned only for log purpose.
          */
         @Override
-        public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
-            mtx.lock();
-            try {
+        public Map<Digest, Correctness> add(short source, PreUnit pu) {
+            return exclusive(() -> {
                 var errors = new HashMap<Digest, Correctness>();
-                var failed = new ArrayList<Boolean>();
-                for (int i = 0; i < preunits.size(); i++) {
-                    failed.add(false);
+                var alreadyInDag = dag.get(pu.hash());
+                if (alreadyInDag != null) {
+                    log.debug("Add: {} already in dag: {} on: {}", pu, alreadyInDag, conf.pid());
+                    return errors;
                 }
-                var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
 
-                log.debug("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
-
-                for (int i = 0; i < preunits.size(); i++) {
-                    var pu = preunits.get(i);
-                    if (pu.creator() == conf.pid()) {
-                        log.debug("Self created: {} on: {}", pu, conf.pid());
-                        continue;
-                    }
-                    if (pu.creator() >= conf.nProc()) {
-                        log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.pid());
-                        errors.put(pu.hash(), Correctness.DATA_ERROR);
-                        failed.set(i, true);
-                    }
-                    if (alreadyInDag.get(i) != null) {
-                        Correctness check = checkCorrectness(pu);
-                        if (check != Correctness.CORRECT) {
-                            log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.pid());
-                            errors.put(pu.hash(), check);
-                            failed.set(i, true);
-                        } else {
-                            log.trace("Duplicate unit: {} on: {}", pu, conf.pid());
-                            errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
-                            failed.set(i, true);
-                        }
-                    }
+                if (pu.creator() == conf.pid()) {
+                    log.debug("Self created: {} on: {}", pu, conf.pid());
+                    return errors;
                 }
-                for (int i = 0; i < preunits.size(); i++) {
-                    if (!failed.get(i)) {
-                        addToWaiting(preunits.get(i), source);
-                    }
+                if (pu.creator() >= conf.nProc()) {
+                    log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.pid());
+                    errors.put(pu.hash(), Correctness.DATA_ERROR);
+                }
+                Correctness check = checkCorrectness(pu);
+                if (check != Correctness.CORRECT) {
+                    log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.pid());
+                    errors.put(pu.hash(), check);
+                }
+                if (errors.isEmpty()) {
+                    addToWaiting(pu, source);
                 }
                 return errors;
-            } finally {
-                mtx.unlock();
-            }
+            });
         }
 
         @Override
         public void chRbc(short from, ChRbcMessage msg) {
-            switch (msg.getTCase()) {
-            case COMMIT:
-                commit(from, msg.getPrevote().getUid(), new Digest(msg.getCommit().getHash()));
-                break;
-            case PREVOTE:
-                prevote(from, msg.getPrevote().getUid(), new Digest(msg.getPrevote().getHash()));
-                break;
-            default:
-                break;
-            }
+            exclusive(() -> {
+                switch (msg.getTCase()) {
+                case COMMIT:
+                    commit(from, msg.getCommit().getUid(), new Digest(msg.getCommit().getHash()));
+                    break;
+                case PREVOTE:
+                    prevote(from, msg.getPrevote().getUid(), new Digest(msg.getPrevote().getHash()));
+                    break;
+                default:
+                    break;
+                }
+            });
         }
 
         @Override
@@ -306,23 +364,26 @@ public interface Adder {
 
         @Override
         public void submit(Unit u) {
-            log.trace("Submit: {} on: {}", u, conf.pid());
-            submitted.put(u.id(), new SubmittedUnit(u));
-            rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
-            final int r = u.level();
-            round.set(r);
-            submitted.entrySet().forEach(e -> {
-                if (e.getValue().pu.round(conf) < r) {
-                    submitted.remove(e.getKey());
-                    e.getValue().complete();
-                }
+            exclusive(() -> {
+                log.trace("Submit: {}:{} on: {}", u, u.hash(), conf.pid());
+                submitted.put(u.id(), new SubmittedUnit(u));
+                rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
+                final int r = u.level();
+                round.set(r);
+                submitted.entrySet().forEach(e -> {
+                    if (e.getValue().pu.round(conf) <= r) {
+                        submitted.remove(e.getKey());
+                        e.getValue().complete();
+                    }
+                });
+                waiting.values().forEach(wpu -> wpu.updated());
             });
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
         private void addToWaiting(PreUnit pu, short source) {
             if (waiting.containsKey(pu.hash())) {
-                log.trace("Already waiting unit: {} on: {}", pu, conf.pid());
+                log.trace("Already waiting unit: {}:{} on: {}", pu, pu.hash(), conf.pid());
                 return;
             }
             var id = pu.id();
@@ -338,12 +399,14 @@ public interface Adder {
                 log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
                 return;
             }
-            log.trace("Unit now waiting: {} on: {}", pu, conf.pid());
-            wp.sendIfReady();
+            log.trace("Unit now waiting: {}:{} on: {}", pu, pu.hash(), conf.pid());
+            wp.updated();
         }
 
         private Correctness checkCorrectness(PreUnit pu) {
             if ((pu.creator() >= dag.nProc()) || (pu.epoch() != dag.epoch())) {
+                log.error("Invalid unit: {} failed: nProc: {} epoch: {} on: {}", pu, conf.nProc(), dag.epoch(),
+                          conf.pid());
                 return Correctness.DATA_ERROR;
             }
             if (pu.epoch() != dag.epoch()) {
@@ -361,7 +424,7 @@ public interface Adder {
          */
         private void checkIfMissing(WaitingPreUnit wp) {
             log.trace("Checking if missing: {} on: {}", wp, conf.pid());
-            var mp = missing.get(wp.pu.id());
+            var mp = missing.remove(wp.pu.id());
             if (mp != null) {
                 wp.stateFrom(mp);
                 wp.children.clear();
@@ -371,7 +434,6 @@ public interface Adder {
                     ch.waitingParents++;
                     log.trace("Found parent {} for: {} on: {}", wp, ch, conf.pid());
                 }
-                missing.remove(wp.pu.id());
             } else {
                 wp.children.clear();
             }
@@ -404,17 +466,23 @@ public interface Adder {
         }
 
         private void commit(short pid, long uid, Digest digest) {
-            Pending pu = waitingById.get(uid);
-            if (pu == null) {
-                pu = submitted.get(uid);
-            }
-            if (pu != null) {
-                pu.commit(pid);
-                log.info("Commit: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
+            if (dag.get(digest) != null) {
+//                log.trace("Commit for inserted: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
                 return;
             }
-            log.info("Commit for missing: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
-            missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant())).commits.add(pid);
+            Pending pu = waitingById.get(uid);
+            if (pu != null) {
+                pu.commit(pid);
+                return;
+            }
+            pu = submitted.get(uid);
+            if (pu != null) {
+                pu.commit(pid);
+                return;
+            }
+            var mu = missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant()));
+            mu.commits.add(pid);
+            log.trace("Commit: {} for missing: {}:{} from: {} on: {}", mu.commits.size(), digest, uid, pid, conf.pid());
         }
 
         private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
@@ -428,9 +496,11 @@ public interface Adder {
         }
 
         private void handleReady(WaitingPreUnit wp) {
-            log.debug("Handle ready: {} on: {}", wp, conf.pid());
-            mtx.lock();
             try {
+                log.debug("Handle ready: {} on: {}", wp, conf.pid());
+                if (!waiting.containsKey(wp.pu.hash())) {
+                    log.trace("Ignoring redundant ready: {} on: {}", wp, conf.pid());
+                }
                 // 1. Decode Parents
                 var decoded = dag.decodeParents(wp.pu);
                 var parents = decoded.parents();
@@ -465,30 +535,37 @@ public interface Adder {
                 // 3. Check
                 var err = dag.check(freeUnit);
                 if (err != null) {
-                    log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.pid());
+                    log.warn("Failed: {}:{} check: {} on: {}", freeUnit, freeUnit.hash(), err, conf.pid());
                 } else {
                     // 4. Insert
                     dag.insert(freeUnit);
-                    log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
+                    log.debug("Inserted: {}:{} on: {}", freeUnit, freeUnit.hash(), conf.pid());
                 }
             } finally {
                 remove(wp);
-                mtx.unlock();
             }
         }
 
         private void prevote(short pid, long uid, Digest digest) {
-            Pending pu = waitingById.get(uid);
-            if (pu == null) {
+            exclusive(() -> {
+                if (dag.get(digest) != null) {
+                    return;
+                }
+                Pending pu = waitingById.get(uid);
+                if (pu != null) {
+                    pu.prevote(pid);
+                    return;
+                }
                 pu = submitted.get(uid);
-            }
-            if (pu != null) {
-                pu.prevote(pid);
-                log.info("Prevote: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
-                return;
-            }
-            log.info("Prevote for missing: {}:{} from: {} on: {}", digest, uid, pid, conf.pid());
-            missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant())).prevotes.add(pid);
+                if (pu != null) {
+                    pu.prevote(pid);
+                    return;
+                }
+                var mu = missing.computeIfAbsent(uid, id -> new MissingPreUnit(conf.clock().instant()));
+                mu.prevotes.add(pid);
+                log.trace("Prevote: {} for missing: {}:{} from: {} on: {}", mu.prevotes.size(), digest, uid, pid,
+                         conf.pid());
+            });
         }
 
         /**
@@ -502,20 +579,15 @@ public interface Adder {
 
         /** remove waitingPreunit from the buffer zone and notify its children. */
         private void remove(WaitingPreUnit wp) {
-            mtx.lock();
-            try {
-                if (wp.failed) {
-                    removeFailed(wp);
-                } else {
-                    waiting.remove(wp.pu.hash());
-                    waitingById.remove(wp.pu.id());
-                    for (var ch : wp.children) {
-                        ch.waitingParents--;
-                        ch.sendIfReady();
-                    }
+            if (wp.failed) {
+                removeFailed(wp);
+            } else {
+                waiting.remove(wp.pu.hash());
+                waitingById.remove(wp.pu.id());
+                for (var ch : wp.children) {
+                    ch.waitingParents--;
+                    ch.sendIfReady();
                 }
-            } finally {
-                mtx.unlock();
             }
         }
 
@@ -528,6 +600,24 @@ public interface Adder {
             waitingById.remove(wp.pu.id());
             for (var ch : wp.children) {
                 removeFailed(ch);
+            }
+        }
+
+        private <T> T exclusive(Supplier<T> call) {
+            mtx.lock();
+            try {
+                return call.get();
+            } finally {
+                mtx.unlock();
+            }
+        }
+
+        private void exclusive(Runnable f) {
+            mtx.lock();
+            try {
+                f.run();
+            } finally {
+                mtx.unlock();
             }
         }
 
@@ -544,7 +634,7 @@ public interface Adder {
      * a unit is already in dag/waiting - UnknownParents - in that case the preunit
      * is normally added and processed, error is returned only for log purpose.
      */
-    Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
+    Map<Digest, Correctness> add(short source, PreUnit pu);
 
     /** Handle the CH-RBC protocol msgs PREVOTE and COMMIT **/
     void chRbc(short from, ChRbcMessage msg);

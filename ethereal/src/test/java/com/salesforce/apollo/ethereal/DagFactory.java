@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
@@ -43,38 +42,30 @@ public interface DagFactory {
         }
 
         @Override
-        public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        public Map<Digest, Correctness> add(short source, PreUnit pu) {
             var errors = new HashMap<Digest, Correctness>();
             var hashes = new ArrayList<Digest>();
             var failed = new ArrayList<Boolean>();
-            for (var pu : preunits) {
-                failed.add(false);
-                hashes.add(pu.hash());
-            }
+            failed.add(false);
+            hashes.add(pu.hash());
 
-            for (int i = 0; i < preunits.size(); i++) {
-                var pu = preunits.get(i);
-                if (pu.epoch() != dag.epoch()) {
-                    errors.put(pu.hash(), Correctness.DATA_ERROR);
-                    failed.set(i, true);
-                    continue;
-                }
-                var alreadyInDag = dag.get(pu.hash());
-                if (alreadyInDag != null) {
-                    errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
-                    failed.set(i, true);
-                    continue;
-                }
-                Decoded decodedParents = dag.decodeParents(pu);
-                if (decodedParents.inError()) {
-                    errors.put(pu.hash(), decodedParents.classification());
-                    failed.set(i, true);
-                    continue;
-                }
-                Unit[] parents = decodedParents.parents();
-                var freeUnit = dag.build(pu, parents);
-                dag.insert(freeUnit);
+            if (pu.epoch() != dag.epoch()) {
+                errors.put(pu.hash(), Correctness.DATA_ERROR);
+                return errors;
             }
+            var alreadyInDag = dag.get(pu.hash());
+            if (alreadyInDag != null) {
+                errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
+                return errors;
+            }
+            Decoded decodedParents = dag.decodeParents(pu);
+            if (decodedParents.inError()) {
+                errors.put(pu.hash(), decodedParents.classification());
+                return errors;
+            }
+            Unit[] parents = decodedParents.parents();
+            var freeUnit = dag.build(pu, parents);
+            dag.insert(freeUnit);
             return errors.isEmpty() ? null : errors;
         }
 

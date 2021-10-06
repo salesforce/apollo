@@ -74,8 +74,10 @@ public class EtherealTest {
 
     @Test
     public void fourWay() throws Exception {
+        record msg(short pid, ChRbcMessage msg) {}
+
         short nProc = 4;
-        ChannelConsumer<ChRbcMessage> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
+        ChannelConsumer<msg> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -90,39 +92,41 @@ public class EtherealTest {
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
-            List<PreBlock> output = produced.get(i);
+            final short pid = i;
+            List<PreBlock> output = produced.get(pid);
             RoundScheduler roundScheduler = new RoundScheduler(1);
-            var controller = e.deterministic(builder.setPid(i).build(), ds, (pb, last) -> output.add(pb),
-                                             pu -> synchronizer.getChannel().offer(pu), roundScheduler);
+            var controller = e.deterministic(builder.setPid(pid).build(), ds, (pb, last) -> output.add(pb),
+                                             pu -> synchronizer.getChannel().offer(new msg(pid, pu)), roundScheduler);
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 500; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + i + " data: " + d)).build()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
                                             .toByteString());
             }
         }
 
-        synchronizer.consume(pu -> {
+        synchronizer.consume(msgs -> {
             for (short i = 0; i < controllers.size(); i++) {
-                var controller = controllers.get(i);
-                pu.forEach(p_s -> {
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e1) {
-                        return;
+                final short pid = i;
+                var controller = controllers.get(pid);
+                msgs.forEach(msg -> {
+                    if (msg.pid != pid) {
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException e1) {
+                            return;
+                        }
+                        controller.input().accept(msg.pid, msg.msg);
                     }
-                    controller.input().accept((short) 0, p_s);
                 });
             }
-            controllers.forEach(e -> {
-            });
         });
         try {
             controllers.forEach(e -> e.start());
 
-            Utils.waitForCondition(15_000, 100, () -> {
+            Utils.waitForCondition(30_000, 100, () -> {
                 for (var pb : produced) {
                     if (pb.size() < 87) {
                         return false;

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Scanner;
 
@@ -79,7 +78,7 @@ public class DagReader {
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
                                 ByteString.copyFromUtf8(" "), rsData, DigestAlgorithm.DEFAULT);
-            var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
+            var errors = da.adder().add(pu.creator(), pu);
             log.info("insert: {}", pu);
             if (errors != null) {
                 log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);

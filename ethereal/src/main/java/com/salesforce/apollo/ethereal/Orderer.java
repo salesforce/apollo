@@ -32,6 +32,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
 import com.salesforce.apollo.ethereal.Dag.DagInfo;
+import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.creator.Creator;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
@@ -117,33 +118,12 @@ public class Orderer {
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
-    /**
-     * Sends preunits received from other committee members to their corresponding
-     * epochs. It assumes preunits are ordered by ascending epochID and, within each
-     * epoch, they are topologically sorted.
-     */
-    public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
-        log.debug("Adding: {} from: {} on: {}", preunits, source, config.pid());
-        var errors = new HashMap<Digest, Correctness>();
-        while (preunits.size() > 0) {
-            var epoch = preunits.get(0).epoch();
-            var end = 0;
-            while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
-                end++;
-            }
-            epoch ep = retrieveEpoch(preunits.get(0), source);
-            if (ep != null) {
-                errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
-            }
-            preunits = preunits.subList(end, preunits.size());
-        }
-        return errors;
-    }
-
     /** handle the CH-RBC protocol msg **/
     public void chRbc(short from, ChRbcMessage msg) {
         if (msg.hasPropose()) {
-            addPreunits(from, Collections.singletonList(PreUnit.from(msg.getPropose(), config.digestAlgorithm())));
+            final preUnit u = PreUnit.from(msg.getPropose(), config.digestAlgorithm());
+            log.trace("Receiving propose: {} from: {} on: {}", u, from, config.pid());
+            add(from, u);
         } else {
             current.get().adder.chRbc(from, msg);
         }
@@ -295,6 +275,20 @@ public class Orderer {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Sends preunits received from other committee members to their corresponding
+     * epochs. It assumes preunits are ordered by ascending epochID and, within each
+     * epoch, they are topologically sorted.
+     */
+    private Map<Digest, Correctness> add(short source, PreUnit pu) {
+        var errors = new HashMap<Digest, Correctness>();
+        epoch ep = retrieveEpoch(pu, source);
+        if (ep != null) {
+            errors.putAll(ep.adder().add(source, pu));
+        }
+        return errors;
     }
 
     private epoch createEpoch(int epoch) {
