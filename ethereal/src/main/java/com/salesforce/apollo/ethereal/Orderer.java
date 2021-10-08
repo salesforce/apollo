@@ -113,7 +113,9 @@ public class Orderer {
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             log.trace("Sending: {} on: {}", u, config.pid());
-            insert(u);
+            if (getEpoch(u.epoch()).newer) {
+                newEpoch(u.epoch());
+            }
             current.get().submit(u);
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
@@ -122,7 +124,7 @@ public class Orderer {
     public void chRbc(short from, ChRbcMessage msg) {
         if (msg.hasPropose()) {
             final preUnit u = PreUnit.from(msg.getPropose(), config.digestAlgorithm());
-            log.trace("Receiving propose: {} from: {} on: {}", u, from, config.pid());
+            log.trace("Receiving propose: {}:{} from: {} on: {}", u, u.hash(), from, config.pid());
             add(from, u);
         } else {
             current.get().adder.chRbc(from, msg);
@@ -200,13 +202,14 @@ public class Orderer {
 
     public void start() {
         newEpoch(0);
+        creator.start();
     }
 
     public void stop() {
         if (previous.get() != null) {
             previous.get().close();
         }
-        if (current != null) {
+        if (current.get() != null) {
             current.get().close();
         }
         log.trace("Orderer stopped on: {}", config.pid());
@@ -297,7 +300,6 @@ public class Orderer {
         ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
         dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
-            // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
                 creator.consume(Collections.singletonList(u), lastTiming);
             }
@@ -351,31 +353,6 @@ public class Orderer {
             }
             current.set(epoch);
         };
-    }
-
-    /**
-     * insert puts the provided unit directly into the corresponding epoch. If such
-     * epoch does not exist, creates it. All correctness checks (epoch proof, adder,
-     * dag checks) are skipped. This method is meant for our own units only.
-     */
-    private void insert(Unit unit) {
-        if (unit.creator() != config.pid()) {
-            log.warn("Invalid unit creator: {} on: {}", unit.creator(), config.pid());
-            return;
-        }
-        var rslt = getEpoch(unit.epoch());
-        epoch ep = rslt.epoch;
-        if (rslt.newer) {
-            ep = newEpoch(unit.epoch());
-        }
-        if (ep != null) {
-            ep.dag.insert(unit);
-            log.trace("Inserted Unit creator: {} epoch: {} height: {} level: {} on: {}", unit.creator(), unit.epoch(),
-                      unit.height(), unit.level(), config.pid());
-        } else {
-            log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
-                      unit.creator(), unit.epoch(), unit.height(), unit.level(), config.pid());
-        }
     }
 
     /**

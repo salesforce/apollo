@@ -148,6 +148,10 @@ public interface Dag {
         @Override
         public void insert(Unit v) {
             write(() -> {
+                if (units.containsKey(v.hash())) {
+                    log.info("Already in DAG: {}:{} on: {}", v, v.hash(), config.pid());
+                    return;
+                }
                 var unit = v.embed(this);
                 for (var hook : preInsert) {
                     hook.accept(unit);
@@ -156,6 +160,7 @@ public interface Dag {
                 updateUnitsOnLevel(unit);
                 units.put(unit.hash(), unit);
                 updateMaximal(unit);
+                log.trace("Inserted into DAG: {}:{} on: {}", v, v.hash(), config.pid());
                 for (var hook : postInsert) {
                     hook.accept(unit);
                 }
@@ -329,7 +334,6 @@ public interface Dag {
             lock.lock();
             try {
                 r.run();
-                ;
             } catch (Exception e) {
                 throw new IllegalStateException("Error during write locked call", e);
             } finally {

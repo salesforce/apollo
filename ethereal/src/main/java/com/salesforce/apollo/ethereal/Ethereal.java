@@ -9,8 +9,6 @@ package com.salesforce.apollo.ethereal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Exchanger;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -257,30 +255,19 @@ public class Ethereal {
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
 
-        var in = Executors.newSingleThreadExecutor(r -> {
-            var t = new Thread(r, "Input for: " + config.pid());
-            t.setDaemon(true);
-            return t;
-        });
         BiConsumer<Short, ChRbcMessage> input = (source, pus) -> {
-            try {
-                in.execute(() -> {
-                    Orderer orderer = ord.get();
-                    if (orderer != null) {
-                        orderer.chRbc(source, pus);
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                // ignored
+            Orderer orderer = ord.get();
+            if (orderer != null) {
+                orderer.chRbc(source, pus);
             }
         };
 
         Runnable start = () -> {
             var orderer = new Orderer(config, ds, makePreblock, synchronizer, roundScheduler, new DsrFactory());
             ord.set(orderer);
+            orderer.start();
         };
         Runnable stop = () -> {
-            in.shutdown();
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();

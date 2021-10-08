@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -70,7 +69,7 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
                 List<T> available = new ArrayList<T>();
                 T polled;
                 try {
-                    polled = queue.poll(2, TimeUnit.MILLISECONDS);
+                    polled = queue.take();
                 } catch (InterruptedException e) {
                     return;
                 }
@@ -78,9 +77,9 @@ public class SimpleChannel<T> implements Closeable, Channel<T> {
                     return;
                 }
                 if (polled != null) {
-                    available.add(polled);
                     int count = queue.size();
                     queue.drainTo(available, count);
+                    available.add(0, polled);
                     try {
                         consumer.accept(available);
                     } catch (Throwable e) {

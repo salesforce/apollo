@@ -105,16 +105,6 @@ public class Creator {
         this.send = send;
         this.candidates = new Unit[config.nProc()];
         quorum = (int) ((config.bias() - 1.0) * ((double) config.byzantine()) + 1.0);
-        newEpoch(epoch.get(), ByteString.EMPTY);
-    }
-
-    private built buildParents() {
-        if (conf.canSkipLevel()) {
-            return new built(getParents(), level.get());
-        } else {
-            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
-            return new built(getParentsForLevel(l), l);
-        }
     }
 
     /**
@@ -123,7 +113,7 @@ public class Creator {
      * on which the last timing unit of each epoch is expected to appear.
      */
     public void consume(List<Unit> units, Queue<Unit> lastTiming) {
-        log.trace("Processing next units: {} on: {}", units.size(), conf.pid());
+        log.trace("Processing next units: {} on: {}", units, conf.pid());
         mx.lock();
         try {
             for (Unit u : units) {
@@ -144,6 +134,59 @@ public class Creator {
         }
     }
 
+    public void start() {
+        newEpoch(epoch.get(), ByteString.EMPTY);
+    }
+
+    /**
+     * takes a unit and updates the receiver's state with information contained in
+     * the unit.
+     */
+    public void update(Unit unit) {
+        log.trace("updating: {} on: {}", unit, conf.pid());
+        // if the unit is from an older epoch or unit's creator is known to be a forker,
+        // we simply ignore it
+        final int e = epoch.get();
+        if (frozen.contains(unit.creator()) || unit.epoch() < e) {
+            log.debug("Unit: {} rejected frozen: {} current: {} on: {}", unit, frozen.contains(unit.creator()), epoch,
+                      conf.pid());
+            return;
+        }
+
+        // If the unit is from a new epoch, switch to that epoch.
+        // Since units appear on the belt in order they were added to the dag,
+        // the first unit from a new epoch is always a dealing unit.
+        if (unit.epoch() > e) {
+            if (!epochProof.get().verify(unit)) {
+                log.warn("Unit did not verify epoch, rejected on: {}", conf.pid());
+                return;
+            }
+            newEpoch(unit.epoch(), unit.data());
+        }
+
+        // If this is a finishing unit try to extract threshold signature share from it.
+        // If there are enough shares to produce the signature (and therefore a proof
+        // that the current epoch is finished) switch to a new epoch.
+        ByteString ep = epochProof.get().tryBuilding(unit);
+        if (ep != null) {
+            log.info("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
+            newEpoch(e + 1, ep);
+            return;
+        }
+        log.trace("No epoch proof generated from: {} on: {}", unit, conf.pid());
+
+        updateCandidates(unit);
+    }
+
+    private built buildParents() {
+        if (conf.canSkipLevel()) {
+            return new built(getParents(), level.get());
+        } else {
+            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
+            return new built(getParentsForLevel(l), l);
+        }
+    }
+
     private void createUnit(Unit[] parents, int level, ByteString data) {
         assert parents.length == conf.nProc();
         final int e = epoch.get();
@@ -154,8 +197,8 @@ public class Creator {
         } else {
             log.debug("Created unit: {} on: {}", u, conf.pid());
         }
-        send.accept(u);
         update(u);
+        send.accept(u);
     }
 
     /**
@@ -245,7 +288,11 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private boolean ready() {
-        final int l = ((Unit) varHandle.get(candidates, conf.pid())).level();
+        final Unit last = (Unit) varHandle.get(candidates, conf.pid());
+        if (last == null) {
+            return false;
+        }
+        final int l = last.level();
         boolean ready = !epochDone.get() && level.get() > l;
         log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(), l, conf.pid());
         return ready;
@@ -263,46 +310,6 @@ public class Creator {
         maxLvl.set(-1);
         onMaxLvl.set(0);
         level.set(0);
-    }
-
-    /**
-     * takes a unit and updates the receiver's state with information contained in
-     * the unit.
-     */
-    private void update(Unit unit) {
-        log.trace("updating: {} on: {}", unit, conf.pid());
-        // if the unit is from an older epoch or unit's creator is known to be a forker,
-        // we simply ignore it
-        final int e = epoch.get();
-        if (frozen.contains(unit.creator()) || unit.epoch() < e) {
-            log.debug("Unit: {} rejected frozen: {} current: {} on: {}", unit, frozen.contains(unit.creator()), epoch,
-                      conf.pid());
-            return;
-        }
-
-        // If the unit is from a new epoch, switch to that epoch.
-        // Since units appear on the belt in order they were added to the dag,
-        // the first unit from a new epoch is always a dealing unit.
-        if (unit.epoch() > e) {
-            if (!epochProof.get().verify(unit)) {
-                log.warn("Unit did not verify epoch, rejected on: {}", conf.pid());
-                return;
-            }
-            newEpoch(unit.epoch(), unit.data());
-        }
-
-        // If this is a finishing unit try to extract threshold signature share from it.
-        // If there are enough shares to produce the signature (and therefore a proof
-        // that the current epoch is finished) switch to a new epoch.
-        ByteString ep = epochProof.get().tryBuilding(unit);
-        if (ep != null) {
-            log.info("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
-            newEpoch(e + 1, ep);
-            return;
-        }
-        log.trace("No epoch proof generated from: {} on: {}", unit, conf.pid());
-
-        updateCandidates(unit);
     }
 
     /**
