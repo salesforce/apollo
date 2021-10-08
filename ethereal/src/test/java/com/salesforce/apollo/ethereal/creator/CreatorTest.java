@@ -87,7 +87,9 @@ public class CreatorTest {
         Function<Integer, EpochProofBuilder> epochProofBuilder = epoch -> {
             return new testEpochProofBuilder(u -> proofResult);
         };
-        return new Creator(cnf, dataSource, send, rsData, epochProofBuilder);
+        final Creator creator = new Creator(cnf, dataSource, send, rsData, epochProofBuilder);
+        creator.start();
+        return creator;
     }
 
     public static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
