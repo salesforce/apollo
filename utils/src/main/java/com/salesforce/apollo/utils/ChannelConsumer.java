@@ -9,6 +9,7 @@ package com.salesforce.apollo.utils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -55,10 +56,10 @@ public class ChannelConsumer<T> {
             while (!closed.get()) {
                 try {
                     List<T> available = new ArrayList<T>();
-                    var polled = queue.take();
+                    var polled = queue.poll(1, TimeUnit.SECONDS);
                     if (polled != null) {
+                        available.add(polled);
                         queue.drainTo(available);
-                        available.add(0, polled);
                         try {
                             consumer.accept(available);
                         } catch (Throwable e) {
