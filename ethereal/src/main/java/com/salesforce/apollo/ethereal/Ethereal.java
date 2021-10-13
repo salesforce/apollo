@@ -105,13 +105,13 @@ public class Ethereal {
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
                                        Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
-                                       Runnable onClose, RoundScheduler roundScheduler) {
+                                       Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        Controller setup = setup(setupConfig, wtkChan, roundScheduler);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose, roundScheduler);
+        Controller setup = setup(setupConfig, wtkChan);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -165,12 +165,12 @@ public class Ethereal {
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose, RoundScheduler roundScheduler) {
+                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose, roundScheduler);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose);
         return new Controller(() -> {
             consensus.starte.run();
             try {
@@ -182,8 +182,8 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer, Runnable onClose,
-                                 RoundScheduler roundScheduler) {
+                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
+                                 Runnable onClose) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
@@ -213,7 +213,7 @@ public class Ethereal {
                     }
                     logWTK(wtkey);
                     var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              synchronizer, roundScheduler, Coin.newFactory(config.pid(), wtkey));
+                                              synchronizer, Coin.newFactory(config.pid(), wtkey));
                     ord.set(orderer);
                     orderer.start();
                 } finally {
@@ -276,7 +276,7 @@ public class Ethereal {
         };
 
         Runnable start = () -> {
-            var orderer = new Orderer(config, ds, makePreblock, synchronizer, roundScheduler, new DsrFactory());
+            var orderer = new Orderer(config, ds, makePreblock, synchronizer, new DsrFactory());
             ord.set(orderer);
         };
         Runnable stop = () -> {
@@ -297,7 +297,7 @@ public class Ethereal {
         log.info("Global Weak Threshold Key threshold: {} share providers: {}", wtkey.threshold(), providers);
     }
 
-    private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan, RoundScheduler roundScheduler) {
+    private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
         var rsf = new Beacon(conf);
         Consumer<List<Unit>> extractHead = units -> {
             var head = units.get(units.size() - 1);
@@ -313,7 +313,7 @@ public class Ethereal {
         };
 
         var ord = new Orderer(conf, null, extractHead, p -> {
-        }, roundScheduler, rsf);
+        }, rsf);
         return new Controller(() -> ord.start(), () -> ord.stop(), null);
     }
 }

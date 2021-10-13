@@ -89,12 +89,6 @@ public class TestCHOAM {
                 if (!proceed.get()) {
                     return;
                 }
-                final int tot = lineTotal.incrementAndGet();
-                if (tot % 100 == 0 && tot % (100 * 100) == 0) {
-                    System.out.println(".");
-                } else if (tot % 100 == 0) {
-                    System.out.print(".");
-                }
 
                 if (t != null) {
                     var tc = latency.time();
@@ -108,6 +102,12 @@ public class TestCHOAM {
                     }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
                 } else {
                     time.close();
+                    final int tot = lineTotal.incrementAndGet();
+                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                        System.out.println(".");
+                    } else if (tot % 100 == 0) {
+                        System.out.print(".");
+                    }
                     var tc = latency.time();
                     if (completed.incrementAndGet() < max) {
                         scheduler.schedule(() -> {
@@ -205,7 +205,7 @@ public class TestCHOAM {
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
                                                               .build())
                                .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
-        params.getProducer().coordination().setBufferSize(1500);
+        params.getProducer().coordination().setExecutor(routerExec).setBufferSize(1500);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)

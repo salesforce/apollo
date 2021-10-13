@@ -159,7 +159,7 @@ public class EtherealTest {
         RouterMetrics metrics = new RouterMetricsImpl(registry);
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        short nProc = 4;
+        short nProc = 31;
         SigningMember[] members = new SigningMember[nProc];
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 0.33, nProc);
         Map<SigningMember, ReliableBroadcaster> casting = new HashMap<>();

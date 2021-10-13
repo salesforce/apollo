@@ -39,7 +39,6 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
-import com.salesforce.apollo.utils.RoundScheduler;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -98,17 +97,15 @@ public class Orderer {
     private final Queue<Unit>            lastTiming;
     private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
     private final AtomicReference<epoch> previous = new AtomicReference<>();
-    private final RoundScheduler         roundScheduler;
     private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<ChRbcMessage> chRbc,
-                   RoundScheduler roundScheduler, RandomSourceFactory rsf) {
+                   RandomSourceFactory rsf) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.chRBC = chRbc;
-        this.roundScheduler = roundScheduler;
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             log.trace("Sending: {} on: {}", u, config.pid());
@@ -308,7 +305,7 @@ public class Orderer {
                 creator.consume(Collections.singletonList(u), lastTiming);
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC, roundScheduler), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC), ext, rs, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {

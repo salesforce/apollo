@@ -52,8 +52,6 @@ import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -271,12 +269,8 @@ public class Producer {
      * Reliably broadcast this preUnit to all valid members of this committee
      */
     private void broadcast(ChRbcMessage msg) {
-        var preUnit = PreUnit.from(msg.getPropose(), params().digestAlgorithm());
-        if (metrics() != null) {
-            metrics().broadcast(preUnit);
-        }
-        log.trace("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params().member());
-        coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build());
+        log.trace("Broadcasting ch-rbc: {} for: {} on: {}", msg.getTCase(), getViewId(), params().member());
+        coordinator.publish(Coordinate.newBuilder().setChRbc(msg).build());
     }
 
     /**
@@ -385,7 +379,7 @@ public class Producer {
         if (metrics() != null) {
             metrics().incTotalMessages();
         }
-        if (coordination.hasUnit()) {
+        if (coordination.hasChRbc()) {
             Short source = view.roster().get(msg.source());
             if (source == null) {
                 log.debug("No pid in roster: {} matching: {} on: {}", view.roster(), msg.source(), params().member());
@@ -394,7 +388,7 @@ public class Producer {
                 }
                 return;
             }
-            publish(msg.source(), source, PreUnit.from(coordination.getUnit(), params().digestAlgorithm()));
+            publish(msg.source(), source, coordination.getChRbc());
         } else {
             linear.execute(() -> valdateBlock(coordination.getValidate()));
         }
@@ -427,18 +421,11 @@ public class Producer {
     /**
      * Publish or perish
      */
-    private void publish(Digest member, short source, preUnit pu) {
-        if (pu.creator() != source) {
-            log.debug("Received invalid unit: {} from: {} should be creator: {} on: {}", pu, member, source,
-                      params().member());
-            if (metrics() != null) {
-                metrics().invalidUnit();
-            }
-            return;
-        }
-        log.trace("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params().member());
+    private void publish(Digest member, short source, ChRbcMessage chRBC) {
+        log.trace("Received chRBC: {} source pid: {} member: {} on: {}", chRBC.getTCase(), source, member,
+                  params().member());
         final Controller current = controller;
-        current.input().accept(source, Collections.singletonList(pu));
+        current.input().accept(source, chRBC);
     }
 
     private void valdateBlock(Validate validate) {

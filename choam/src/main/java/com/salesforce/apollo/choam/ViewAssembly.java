@@ -12,7 +12,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +56,6 @@ import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -185,7 +183,7 @@ abstract public class ViewAssembly implements Reconfiguration {
     }
 
     protected boolean process(Digest sender, Coordinate coordination) {
-        if (coordination.hasUnit()) {
+        if (coordination.hasChRbc()) {
             Short source = view.roster().get(sender);
             if (source == null) {
                 log.debug("No pid in roster: {} matching: {} on: {}", view.roster(), sender, params().member());
@@ -194,7 +192,7 @@ abstract public class ViewAssembly implements Reconfiguration {
                 }
                 return true;
             }
-            publish(sender, source, PreUnit.from(coordination.getUnit(), params().digestAlgorithm()));
+            publish(sender, source, coordination.getChRbc());
             return true;
         }
         return false;
@@ -234,7 +232,7 @@ abstract public class ViewAssembly implements Reconfiguration {
             params().metrics().broadcast(preUnit);
         }
         log.trace("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params().member());
-        coordinator.publish(Coordinate.newBuilder().setUnit(preUnit.toPreUnit_s()).build());
+        coordinator.publish(Coordinate.newBuilder().setChRbc(msg).build());
     }
 
     private void completeSlice(AtomicBoolean proceed, AtomicReference<Runnable> reiterate, AtomicInteger countDown) {
@@ -366,17 +364,10 @@ abstract public class ViewAssembly implements Reconfiguration {
         process(msg.source(), coordination);
     }
 
-    private void publish(Digest member, Short source, preUnit pu) {
-        if (pu.creator() != source) {
-            log.debug("Received invalid unit: {} from: {} should be creator: {} on: {}", pu, member, source,
-                      params().member());
-            if (params().metrics() != null) {
-                params().metrics().invalidUnit();
-            }
-            return;
-        }
-        log.trace("Received unit: {} source pid: {} member: {} on: {}", pu, source, member, params().member());
-        controller.input().accept(source, Collections.singletonList(pu));
+    private void publish(Digest member, Short source, ChRbcMessage chRBC) {
+        log.trace("Received chRBC: {} source pid: {} member: {} on: {}", chRBC.getTCase(), source, member,
+                  params().member());
+        controller.input().accept(source, chRBC);
     }
 
     private Join reduce(Member member, Collection<Join> js) {
