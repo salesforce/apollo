@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.Decoded;
 
@@ -79,15 +78,7 @@ public interface DagFactory {
         }
 
         @Override
-        public void chRbc(short from, ChRbcMessage msg) {
-        }
-
-        @Override
         public void close() {
-        }
-
-        @Override
-        public void submit(Unit u) {
         }
     }
 

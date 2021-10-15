@@ -36,7 +36,7 @@ import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Driven;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
@@ -52,6 +52,8 @@ import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
+import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -213,7 +215,7 @@ public class Producer {
         var ethereal = new Ethereal();
         // Our handle on consensus
         controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
-                                            preUnit -> broadcast(preUnit), scheduler);
+                                            preUnit -> broadcast(preUnit));
         assert controller != null : "Controller is null";
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
@@ -268,9 +270,9 @@ public class Producer {
     /**
      * Reliably broadcast this preUnit to all valid members of this committee
      */
-    private void broadcast(ChRbcMessage msg) {
-        log.trace("Broadcasting ch-rbc: {} for: {} on: {}", msg.getTCase(), getViewId(), params().member());
-        coordinator.publish(Coordinate.newBuilder().setChRbc(msg).build());
+    private void broadcast(Unit unit) {
+        log.trace("Broadcasting unit: {} for: {} on: {}", unit, getViewId(), params().member());
+        coordinator.publish(Coordinate.newBuilder().setUnit(unit.toPreUnit_s()).build());
     }
 
     /**
@@ -379,7 +381,7 @@ public class Producer {
         if (metrics() != null) {
             metrics().incTotalMessages();
         }
-        if (coordination.hasChRbc()) {
+        if (coordination.hasUnit()) {
             Short source = view.roster().get(msg.source());
             if (source == null) {
                 log.debug("No pid in roster: {} matching: {} on: {}", view.roster(), msg.source(), params().member());
@@ -388,7 +390,7 @@ public class Producer {
                 }
                 return;
             }
-            publish(msg.source(), source, coordination.getChRbc());
+            publish(msg.source(), source, coordination.getUnit());
         } else {
             linear.execute(() -> valdateBlock(coordination.getValidate()));
         }
@@ -421,11 +423,16 @@ public class Producer {
     /**
      * Publish or perish
      */
-    private void publish(Digest member, short source, ChRbcMessage chRBC) {
-        log.trace("Received chRBC: {} source pid: {} member: {} on: {}", chRBC.getTCase(), source, member,
-                  params().member());
+    private void publish(Digest member, short source, PreUnit_s preUnit_s) {
         final Controller current = controller;
-        current.input().accept(source, chRBC);
+        PreUnit pu = PreUnit.from(preUnit_s, params().digestAlgorithm());
+        if (pu.creator() != source) {
+            log.trace("Received: {} invalid source pid: {} from member: {} on: {}", pu, source, member,
+                      params().member());
+            return;
+        }
+        log.trace("Received: {} source pid: {} member: {} on: {}", pu, source, member, params().member());
+        current.input().accept(source, pu);
     }
 
     private void valdateBlock(Validate validate) {

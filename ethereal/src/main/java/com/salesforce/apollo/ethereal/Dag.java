@@ -491,7 +491,7 @@ public interface Dag {
 
     static short minimalQuorum(short np, double bias) {
         var nProcesses = (double) np;
-        short minimalQuorum = (short) Math.floor(nProcesses - nProcesses / bias);
+        short minimalQuorum = (short) Math.floor(nProcesses - (nProcesses / bias));
         return minimalQuorum;
     }
 

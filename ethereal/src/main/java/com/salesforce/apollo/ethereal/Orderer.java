@@ -27,7 +27,6 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
@@ -74,11 +73,6 @@ public class Orderer {
         public void sync(Consumer<PreUnit> send) {
             dag.sync(send);
         }
-
-        /** submit the unit to the CH-RBC of the receiver epoch **/
-        public void submit(Unit u) {
-            adder.submit(u);
-        }
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
@@ -90,7 +84,6 @@ public class Orderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
 
-    private final Consumer<ChRbcMessage> chRBC;
     private final Config                 config;
     private final Creator                creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
@@ -100,17 +93,16 @@ public class Orderer {
     private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<ChRbcMessage> chRbc,
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Unit> rbc,
                    RandomSourceFactory rsf) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
-        this.chRBC = chRbc;
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             log.trace("Sending: {} on: {}", u, config.pid());
             insert(u);
-            current.get().submit(u);
+            rbc.accept(u);
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
@@ -131,19 +123,12 @@ public class Orderer {
             epoch ep = retrieveEpoch(preunits.get(0), source);
             if (ep != null) {
                 errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
+            } else {
+                log.debug("No epoch for: {} from: {} on: {}", preunits, source, config.pid());
             }
             preunits = preunits.subList(end, preunits.size());
         }
         return errors;
-    }
-
-    /** handle the CH-RBC protocol msg **/
-    public void chRbc(short from, ChRbcMessage msg) {
-        if (msg.hasPropose()) {
-            addPreunits(from, Collections.singletonList(PreUnit.from(msg.getPropose(), config.digestAlgorithm())));
-        } else {
-            current.get().adder.chRbc(from, msg);
-        }
     }
 
     /**
@@ -217,6 +202,7 @@ public class Orderer {
 
     public void start() {
         newEpoch(0);
+        creator.start();
     }
 
     public void stop() {
@@ -305,7 +291,7 @@ public class Orderer {
                 creator.consume(Collections.singletonList(u), lastTiming);
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config, chRBC), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {
@@ -373,8 +359,7 @@ public class Orderer {
         }
         if (ep != null) {
             ep.dag.insert(unit);
-            log.trace("Inserted Unit creator: {} epoch: {} height: {} level: {} on: {}", unit.creator(), unit.epoch(),
-                      unit.height(), unit.level(), config.pid());
+            log.trace("Inserted: {} on: {}", unit, config.pid());
         } else {
             log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
                       unit.creator(), unit.epoch(), unit.height(), unit.level(), config.pid());

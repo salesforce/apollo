@@ -7,9 +7,11 @@
 package com.salesforce.apollo.ethereal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,11 +22,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
-import com.salesforce.apollo.utils.RoundScheduler;
+import com.salesforce.apollo.utils.ChannelConsumer;
+import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -49,7 +51,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, ChRbcMessage> input) {
+    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, PreUnit> input) {
         public void start() {
             starte.run();
         }
@@ -104,8 +106,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
-                                       Runnable onClose) {
+                                       Consumer<PreBlock> preblockSink, Consumer<Unit> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -131,17 +132,18 @@ public class Ethereal {
      * @param config         - the Config
      * @param ds             - the DataSource to use to build Units
      * @param prebblockSink  - the channel to send assembled PreBlocks as output
-     * @param synchronizer   - the channel that broadcasts PreUnits to other members
+     * @param synchronizer   - the channel that broadcasts created Units to other
+     *                       members
      * @param roundScheduler
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                    Consumer<ChRbcMessage> synchronizer, RoundScheduler roundScheduler) {
-        if (!started.compareAndSet(false, true)) {
+                                    Consumer<Unit> synchronizer) {
+        if (started.get()) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer, roundScheduler);
+        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -165,7 +167,7 @@ public class Ethereal {
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<ChRbcMessage> synchronizer, Runnable onClose) {
+                                 Consumer<Unit> synchronizer, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -182,8 +184,7 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<ChRbcMessage> synchronizer,
-                                 Runnable onClose) {
+                                 Consumer<PreBlock> preblockSink, Consumer<Unit> synchronizer, Runnable onClose) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
@@ -200,7 +201,7 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        BiConsumer<Short, ChRbcMessage> input = (source, rbc) -> ord.get().chRbc((short) 0, rbc);
+        BiConsumer<Short, PreUnit> input = (source, pu) -> ord.get().addPreunits(source, Collections.singletonList(pu));
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -234,7 +235,7 @@ public class Ethereal {
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                              Consumer<ChRbcMessage> synchronizer, RoundScheduler roundScheduler) {
+                                              Consumer<Unit> synchronizer) {
         Consumer<List<Unit>> makePreblock = units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
@@ -255,36 +256,29 @@ public class Ethereal {
             }
         };
 
-        AtomicReference<Orderer> ord = new AtomicReference<>();
+        var orderer = new Orderer(config, ds, makePreblock, synchronizer, new DsrFactory());
+        record input(short pid, PreUnit pu) {}
+        var in = new SimpleChannel<input>("Input for: " + config.pid(), new LinkedBlockingQueue<>());
 
-        var in = Executors.newSingleThreadExecutor(r -> {
-            var t = new Thread(r, "Input for: " + config.pid());
-            t.setDaemon(true);
-            return t;
-        });
-        BiConsumer<Short, ChRbcMessage> input = (source, pus) -> {
-            try {
-                in.execute(() -> {
-                    Orderer orderer = ord.get();
-                    if (orderer != null) {
-                        orderer.chRbc(source, pus);
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                // ignored
-            }
-        };
+        BiConsumer<Short, PreUnit> input = (source, pu) -> in.submit(new input(source, pu));
+        in.open();
 
         Runnable start = () -> {
-            var orderer = new Orderer(config, ds, makePreblock, synchronizer, new DsrFactory());
-            ord.set(orderer);
+            if (!started.compareAndSet(false, true)) {
+                return;
+            }
+            orderer.start();
+            in.open();
+            in.consumeEach(i -> orderer.addPreunits(i.pid, Collections.singletonList(i.pu)));
         };
         Runnable stop = () -> {
-            in.shutdown();
-            Orderer orderer = ord.get();
+            if (!started.compareAndSet(true, false)) {
+                return;
+            }
             if (orderer != null) {
                 orderer.stop();
             }
+            in.close();
         };
         return new Controller(start, stop, input);
     }

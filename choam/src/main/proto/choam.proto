@@ -155,7 +155,7 @@ message Joins {
 
 message Coordinate {
     oneof msg {
-        ethereal.ChRbcMessage chRbc = 1;
+        ethereal.PreUnit_s unit = 1;
         Validate validate = 2;
     }
 }

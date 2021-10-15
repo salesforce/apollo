@@ -33,7 +33,7 @@ public interface WeakThresholdKey {
 
         @Override
         public JohnHancock combineShares(Collection<Share> shareSlice) {
-            return shareSlice.size() > threshold ? new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]) : null;
+            return shareSlice.size() >= threshold ? new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]) : null;
         }
 
         @Override

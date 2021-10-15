@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
@@ -104,17 +105,7 @@ public class Creator {
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
         this.candidates = new Unit[config.nProc()];
-        quorum = (int) ((config.bias() - 1.0) * ((double) config.byzantine()) + 1.0);
-        newEpoch(epoch.get(), ByteString.EMPTY);
-    }
-
-    private built buildParents() {
-        if (conf.canSkipLevel()) {
-            return new built(getParents(), level.get());
-        } else {
-            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
-            return new built(getParentsForLevel(l), l);
-        }
+        quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
     }
 
     /**
@@ -130,18 +121,54 @@ public class Creator {
                 // Step 1: update candidates with all units waiting on the unit belt
                 update(u);
             }
-            while (ready()) {
+            var built = ready();
+            while (built != null) {
                 log.trace("Ready, creating units on: {}", conf.pid());
                 // Step 2: get parents and level using current strategy
-                var built = buildParents();
                 // Step 3: create unit
                 createUnit(built.parents, built.level, getData(built.level, lastTiming));
+                built = ready();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.pid(), e);
         } finally {
             mx.unlock();
         }
+    }
+
+    public void start() {
+        newEpoch(epoch.get(), ByteString.EMPTY);
+    }
+
+    private built buildParents() {
+        if (conf.canSkipLevel()) {
+            final Unit[] parents = getParents();
+            if (count(parents) >= quorum) {
+                return new built(parents, level.get());
+            } else {
+                log.info("Parents not ready: {} on: {}", parents, conf.pid());
+                return null;
+            }
+        } else {
+            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
+            final Unit[] parents = getParentsForLevel(l);
+            if (count(parents) >= quorum) {
+                log.info("Parents not ready: {} on: {}", parents, conf.pid());
+                return new built(parents, l);
+            } else {
+                return null;
+            }
+        }
+    }
+
+    private int count(Unit[] parents) {
+        int count = 0;
+        for (int i = 0; i < parents.length; i++) {
+            if (parents[i] != null) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private void createUnit(Unit[] parents, int level, ByteString data) {
@@ -152,7 +179,7 @@ public class Creator {
         if (log.isTraceEnabled()) {
             log.debug("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
         } else {
-            log.info("Created unit: {} on: {}", u, conf.pid());
+            log.debug("Created unit: {} on: {}", u, conf.pid());
         }
         send.accept(u);
         update(u);
@@ -174,7 +201,7 @@ public class Creator {
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            log.info("No timing unit: {} on: {}", level, conf.pid());
+            log.trace("No timing unit: {} on: {}", level, conf.pid());
             return ByteString.EMPTY;
         }
         // in a rare case there can be timing units from previous epochs left on
@@ -187,7 +214,7 @@ public class Creator {
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
-                log.info("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
+                log.debug("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
@@ -244,11 +271,14 @@ public class Creator {
      * than the previous one?" Besides that, we stop producing units for the current
      * epoch after creating a unit with signature share.
      */
-    private boolean ready() {
+    private built ready() {
         final int l = ((Unit) varHandle.get(candidates, conf.pid())).level();
         boolean ready = !epochDone.get() && level.get() > l;
         log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(), l, conf.pid());
-        return ready;
+        if (ready) {
+            return buildParents();
+        }
+        return null;
     }
 
     /**
@@ -325,7 +355,8 @@ public class Creator {
             if (u.level() > maxLvl.get()) {
                 maxLvl.set(u.level());
                 onMaxLvl.set(1);
-                log.trace("Update candidate {} new maxLvl: {} on: {}", u, conf.pid());
+                log.trace("Update candidate {} new maxLvl: {} onMaxLvl: {} on: {}", u, maxLvl.get(), onMaxLvl.get(),
+                          conf.pid());
             }
             level.set(maxLvl.get());
             log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.pid());

@@ -29,7 +29,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     int byzantine, Clock clock, double bias) {
+                     Clock clock, double bias) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -56,7 +56,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         }
 
         private int                                      bias            = 3;
-        private int                                      byzantine       = -1;
         private boolean                                  canSkipLevel    = false;
         private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
         private Clock                                    clock           = Clock.systemUTC();
@@ -125,12 +124,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (pByz <= -1) {
                 pByz = 1.0 / (double) bias;
             }
-            if (byzantine <= -1) {
-                assert byzantine < nProc;
-                byzantine = (int) (((double) nProc) * pByz);
-            }
             if (wtk == null) {
-                wtk = new NoOpWeakThresholdKey((int) ((((double) bias - 1.0) * (double) byzantine)));
+                wtk = new NoOpWeakThresholdKey(Dag.minimalQuorum(nProc, bias) + 1);
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
@@ -139,7 +134,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, clock, bias);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, clock, bias);
         }
 
         @Override
@@ -153,10 +148,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public int getBias() {
             return bias;
-        }
-
-        public int getByzantine() {
-            return byzantine;
         }
 
         public List<BiFunction<Unit, Dag, Correctness>> getChecks() {
@@ -240,11 +231,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setBias(int bias) {
             this.bias = bias;
-            return this;
-        }
-
-        public Builder setByzantine(int byzantine) {
-            this.byzantine = byzantine;
             return this;
         }
 

@@ -41,7 +41,7 @@ import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Joins;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.ViewMember;
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
@@ -56,6 +56,7 @@ import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
@@ -115,7 +116,7 @@ abstract public class ViewAssembly implements Reconfiguration {
         coordinator.register(i -> roundScheduler.tick(i));
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> create(preblock, last),
-                                                  preUnit -> broadcast(preUnit), roundScheduler);
+                                                  preUnit -> broadcast(preUnit));
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, Reconfigure.GATHER, true);
         fsm.setName("View Recon" + params().member().getId());
@@ -183,7 +184,7 @@ abstract public class ViewAssembly implements Reconfiguration {
     }
 
     protected boolean process(Digest sender, Coordinate coordination) {
-        if (coordination.hasChRbc()) {
+        if (coordination.hasUnit()) {
             Short source = view.roster().get(sender);
             if (source == null) {
                 log.debug("No pid in roster: {} matching: {} on: {}", view.roster(), sender, params().member());
@@ -192,7 +193,7 @@ abstract public class ViewAssembly implements Reconfiguration {
                 }
                 return true;
             }
-            publish(sender, source, coordination.getChRbc());
+            publish(sender, source, coordination.getUnit());
             return true;
         }
         return false;
@@ -226,13 +227,12 @@ abstract public class ViewAssembly implements Reconfiguration {
         assembled(aggregate);
     }
 
-    private void broadcast(ChRbcMessage msg) {
-        var preUnit = PreUnit.from(msg.getPropose(), params().digestAlgorithm());
+    private void broadcast(Unit unit) {
         if (params().metrics() != null) {
-            params().metrics().broadcast(preUnit);
+            params().metrics().broadcast(unit);
         }
-        log.trace("Broadcasting: {} for: {} on: {}", preUnit, getViewId(), params().member());
-        coordinator.publish(Coordinate.newBuilder().setChRbc(msg).build());
+        log.trace("Broadcasting: {} for: {} on: {}", unit, getViewId(), params().member());
+        coordinator.publish(Coordinate.newBuilder().setUnit(unit.toPreUnit_s()).build());
     }
 
     private void completeSlice(AtomicBoolean proceed, AtomicReference<Runnable> reiterate, AtomicInteger countDown) {
@@ -364,10 +364,16 @@ abstract public class ViewAssembly implements Reconfiguration {
         process(msg.source(), coordination);
     }
 
-    private void publish(Digest member, Short source, ChRbcMessage chRBC) {
-        log.trace("Received chRBC: {} source pid: {} member: {} on: {}", chRBC.getTCase(), source, member,
-                  params().member());
-        controller.input().accept(source, chRBC);
+    private void publish(Digest member, Short source, PreUnit_s preUnit) {
+        final Controller current = controller;
+        PreUnit pu = PreUnit.from(preUnit, params().digestAlgorithm());
+        if (pu.creator() != source) {
+            log.trace("Received: {} invalid source pid: {} from member: {} on: {}", pu, source, member,
+                      params().member());
+            return;
+        }
+        log.trace("Received: {} source pid: {} member: {} on: {}", pu, source, member, params().member());
+        current.input().accept(source, pu);
     }
 
     private Join reduce(Member member, Collection<Join> js) {

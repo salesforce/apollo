@@ -14,15 +14,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesfoce.apollo.ethereal.proto.ChRbcMessage;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 
@@ -73,14 +72,12 @@ public interface Adder {
         private final Dag                         dag;
         private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
         private final Lock                        mtx         = new ReentrantLock();
-        private final Consumer<ChRbcMessage>      rbc;
         private final Map<Digest, WaitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, WaitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
-        public AdderImpl(Dag dag, Config conf, Consumer<ChRbcMessage> rbc) {
+        public AdderImpl(Dag dag, Config conf) {
             this.dag = dag;
             this.conf = conf;
-            this.rbc = rbc;
         }
 
         /**
@@ -92,13 +89,18 @@ public interface Adder {
          */
         @Override
         public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
-            mtx.lock();
+            var errors = new HashMap<Digest, Correctness>();
+            var failed = new ArrayList<Boolean>();
+            for (int i = 0; i < preunits.size(); i++) {
+                failed.add(false);
+            }
             try {
-                var errors = new HashMap<Digest, Correctness>();
-                var failed = new ArrayList<Boolean>();
-                for (int i = 0; i < preunits.size(); i++) {
-                    failed.add(false);
-                }
+                mtx.tryLock(1, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                log.error("Cannot obtain mtx for adding: {} on: {}", preunits, conf.pid());
+                return errors;
+            }
+            try {
                 var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
 
                 log.debug("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
@@ -139,22 +141,8 @@ public interface Adder {
         }
 
         @Override
-        public void chRbc(short from, ChRbcMessage msg) {
-            switch (msg.getTCase()) {
-            default:
-                break;
-            }
-        }
-
-        @Override
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
-        }
-
-        @Override
-        public void submit(Unit u) {
-            log.trace("Submit: {} on: {}", u, conf.pid());
-            rbc.accept(ChRbcMessage.newBuilder().setPropose(u.toPreUnit_s()).build());
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -251,7 +239,6 @@ public interface Adder {
 
         private void handleReady(WaitingPreUnit wp) {
             log.debug("Handle ready: {} on: {}", wp, conf.pid());
-            mtx.lock();
             try {
                 // 1. Decode Parents
                 var decoded = dag.decodeParents(wp.pu);
@@ -295,7 +282,6 @@ public interface Adder {
                 }
             } finally {
                 remove(wp);
-                mtx.unlock();
             }
         }
 
@@ -310,20 +296,15 @@ public interface Adder {
 
         /** remove waitingPreunit from the buffer zone and notify its children. */
         private void remove(WaitingPreUnit wp) {
-            mtx.lock();
-            try {
-                if (wp.failed) {
-                    removeFailed(wp);
-                } else {
-                    waiting.remove(wp.pu.hash());
-                    waitingById.remove(wp.pu.id());
-                    for (var ch : wp.children) {
-                        ch.waitingParents--;
-                        sendIfReady(ch);
-                    }
+            if (wp.failed) {
+                removeFailed(wp);
+            } else {
+                waiting.remove(wp.pu.hash());
+                waitingById.remove(wp.pu.id());
+                for (var ch : wp.children) {
+                    ch.waitingParents--;
+                    sendIfReady(ch);
                 }
-            } finally {
-                mtx.unlock();
             }
         }
 
@@ -361,11 +342,6 @@ public interface Adder {
      */
     Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
 
-    /** Handle the CH-RBC protocol msgs PREVOTE and COMMIT **/
-    void chRbc(short from, ChRbcMessage msg);
-
     void close();
-
-    void submit(Unit u);
 
 }

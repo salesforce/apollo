@@ -10,6 +10,19 @@ import "util.proto";
 
 package ethereal;
 
+service Terminal {
+    rpc gossip (Gossip) returns (Update) {}
+}
+
+message Gossip {
+    utils.Digeste context = 1;
+    utils.Biff have = 2;
+}
+
+message Update {
+    repeated PreUnit_s missing = 1;
+}
+
 message EpochProof {
     Proof msg = 1;
     int32 owner = 2;
