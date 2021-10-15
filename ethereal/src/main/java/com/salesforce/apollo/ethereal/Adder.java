@@ -160,7 +160,7 @@ public interface Adder {
             waitingById.put(id, wp);
             checkParents(wp);
             checkIfMissing(wp);
-            if (wp.missingParents > 0) {
+            if (wp.missingParents > 0) { 
                 log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
                 return;
             }

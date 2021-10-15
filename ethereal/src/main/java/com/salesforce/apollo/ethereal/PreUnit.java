@@ -30,12 +30,18 @@ public interface PreUnit {
 
         @Override
         public boolean equals(Object obj) {
-            return p.equals(obj);
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof PreUnit pu) {
+                return hash().equals(pu.hash());
+            }
+            return false;
         }
 
         @Override
         public int hashCode() {
-            return p.hashCode();
+            return hash().hashCode();
         }
 
         @Override
@@ -153,10 +159,10 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (!(obj instanceof Unit u)) {
-                return false;
+            if (obj instanceof PreUnit u) {
+                return hash.equals(u.hash());
             }
-            return hash.equals(u.hash());
+            return false;
         }
 
         @Override
@@ -273,10 +279,10 @@ public interface PreUnit {
     }
 
     int epoch();
-
-    default boolean equals(PreUnit v) {
-        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
-    }
+//
+//    default boolean equals(PreUnit v) {
+//        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
+//    } 
 
     default Unit from(Unit[] parents, double bias) {
         freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents, bias), new HashMap<>());

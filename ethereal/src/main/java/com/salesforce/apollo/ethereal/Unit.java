@@ -31,10 +31,13 @@ public interface Unit extends PreUnit {
 
         @Override
         public boolean equals(Object obj) {
-            if (obj instanceof unitInDag uid) {
-                return (unit.equals(uid));
+            if (this == obj) {
+                return true;
             }
-            return unit.equals(obj);
+            if (obj instanceof PreUnit uid) {
+                return hash().equals(uid.hash());
+            }
+            return false;
         }
 
         @Override

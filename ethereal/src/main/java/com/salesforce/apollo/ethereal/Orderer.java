@@ -100,9 +100,16 @@ public class Orderer {
         this.toPreblock = toPreblock;
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
-            log.trace("Sending: {} on: {}", u, config.pid());
-            insert(u);
-            rbc.accept(u);
+            assert u.creator() == config.pid();
+            final Lock lock = mx.writeLock();
+            lock.lock();
+            try {
+                log.trace("Sending: {} on: {}", u, config.pid());
+                insert(u);
+                rbc.accept(u);
+            } finally {
+                lock.unlock();
+            }
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
@@ -112,23 +119,29 @@ public class Orderer {
      * epoch, they are topologically sorted.
      */
     public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
-        log.debug("Adding: {} from: {} on: {}", preunits, source, config.pid());
-        var errors = new HashMap<Digest, Correctness>();
-        while (preunits.size() > 0) {
-            var epoch = preunits.get(0).epoch();
-            var end = 0;
-            while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
-                end++;
+        final Lock lock = mx.writeLock();
+        lock.lock();
+        try {
+            log.debug("Adding: {} from: {} on: {}", preunits, source, config.pid());
+            var errors = new HashMap<Digest, Correctness>();
+            while (preunits.size() > 0) {
+                var epoch = preunits.get(0).epoch();
+                var end = 0;
+                while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
+                    end++;
+                }
+                epoch ep = retrieveEpoch(preunits.get(0), source);
+                if (ep != null) {
+                    errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
+                } else {
+                    log.debug("No epoch for: {} from: {} on: {}", preunits, source, config.pid());
+                }
+                preunits = preunits.subList(end, preunits.size());
             }
-            epoch ep = retrieveEpoch(preunits.get(0), source);
-            if (ep != null) {
-                errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
-            } else {
-                log.debug("No epoch for: {} from: {} on: {}", preunits, source, config.pid());
-            }
-            preunits = preunits.subList(end, preunits.size());
+            return errors;
+        } finally {
+            lock.unlock();
         }
-        return errors;
     }
 
     /**

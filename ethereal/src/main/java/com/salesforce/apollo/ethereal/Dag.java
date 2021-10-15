@@ -147,6 +147,10 @@ public interface Dag {
 
         @Override
         public void insert(Unit v) {
+            if (v.epoch() != epoch) {
+                throw new IllegalStateException("Invalid insert of: " + v + " into epoch: " + epoch + " on: "
+                + config.pid());
+            }
             write(() -> {
                 var unit = v.embed(this);
                 for (var hook : preInsert) {

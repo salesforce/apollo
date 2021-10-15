@@ -23,6 +23,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -81,7 +82,7 @@ public class EtherealTest {
     public void fourWay() throws Exception {
         record Massage(short pid, Unit msg) {}
 
-        short nProc = 33;
+        short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
         ChannelConsumer<Massage> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
@@ -164,7 +165,7 @@ public class EtherealTest {
         RouterMetrics metrics = new RouterMetricsImpl(registry);
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-        short nProc = 33;
+        short nProc = 61;
         CountDownLatch finished = new CountDownLatch(nProc);
         SigningMember[] members = new SigningMember[nProc];
         Map<Digest, Short> ordering = new HashMap<>();
@@ -205,7 +206,9 @@ public class EtherealTest {
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             ReliableBroadcaster caster = casting.get(members[pid]);
+            AtomicInteger round = new AtomicInteger();
             var controller = e.deterministic(builder.setPid(pid).build(), ds, (pb, last) -> {
+                System.out.println("Preblock: " + round.getAndIncrement() + " on: " + pid);
                 output.add(pb);
                 if (last) {
                     finished.countDown();
@@ -236,7 +239,7 @@ public class EtherealTest {
                     }
 //                    System.out.println("Input: "+ pu + " on: " + caster.getMember());
                 }));
-                caster.start(Duration.ofMillis(5), scheduler);
+                caster.start(Duration.ofMillis(100), scheduler);
             }
             Thread.sleep(2);
             controllers.forEach(e -> e.start());

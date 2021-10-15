@@ -138,20 +138,19 @@ public class Digest implements Comparable<Digest> {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof Digest)) {
-            return false;
-        }
-        Digest other = (Digest) obj;
-        if (algorithm != other.algorithm) {
-            return false;
-        }
-
-        for (int i = 0; i < hash.length; i++) {
-            if (hash[i] != other.hash[i]) {
+        if (obj instanceof Digest other) {
+            if (algorithm != other.algorithm) {
                 return false;
             }
+
+            for (int i = 0; i < hash.length; i++) {
+                if (hash[i] != other.hash[i]) {
+                    return false;
+                }
+            }
+            return true;
         }
-        return true;
+        return false;
     }
 
     public DigestAlgorithm getAlgorithm() {
@@ -224,7 +223,7 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
-    public Digest prefix(String prefix) { 
+    public Digest prefix(String prefix) {
         return prefix(prefix.getBytes());
     }
 
