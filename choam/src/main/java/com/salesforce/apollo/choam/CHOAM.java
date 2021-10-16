@@ -608,7 +608,7 @@ public class CHOAM {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        log.info("CHOAM startup tolerance level: {} on: {}", params.context().toleranceLevel(), params.member());
+        log.info("CHOAM startup tolerance level: {} on: {}", params.toleranceLevel(), params.member());
         combine.start(params.producer().gossipDuration(), params.scheduler());
         transitions.fsm().enterStartState();
         transitions.start();

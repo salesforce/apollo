@@ -25,6 +25,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -181,7 +182,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters build() {
             final double n = context.getRingCount();
-            var toleranceLevel = (int) ((n - 1.0) / 3.0 + 1.0);
+            var toleranceLevel = Dag.minimalQuorum((short) n, 3);
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
                                   checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,

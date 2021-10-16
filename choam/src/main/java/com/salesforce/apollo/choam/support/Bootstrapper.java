@@ -199,21 +199,6 @@ public class Bootstrapper {
                                                         () -> scheduleViewChainCompletion(start, end));
     }
 
-    private ListenableFuture<Blocks> completeViewChain(Terminal link, AtomicLong start, long end) {
-        log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
-                  link.getMember().getId(), params.member().getId());
-        long seed = Utils.bitStreamEntropy().nextLong();
-        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
-                                                                      params.combine().getFalsePositiveRate());
-        start.set(store.lastViewChainFrom(start.get()));
-        store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
-        BlockReplication replication = BlockReplication.newBuilder().setContext(params.context().getId().toDigeste())
-                                                       .setBlocksBff(blocksBff.toBff()).setFrom(start.get()).setTo(end)
-                                                       .build();
-
-        return link.fetchViewChain(replication);
-    }
-
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicLong start, long end,
                                       Terminal link) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
@@ -243,9 +228,24 @@ public class Bootstrapper {
         return true;
     }
 
+    private ListenableFuture<Blocks> completeViewChain(Terminal link, AtomicLong start, long end) {
+        log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
+                  link.getMember().getId(), params.member().getId());
+        long seed = Utils.bitStreamEntropy().nextLong();
+        BloomFilter<Long> blocksBff = new BloomFilter.LongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+                                                                      params.combine().getFalsePositiveRate());
+        start.set(store.lastViewChainFrom(start.get()));
+        store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
+        BlockReplication replication = BlockReplication.newBuilder().setContext(params.context().getId().toDigeste())
+                                                       .setBlocksBff(blocksBff.toBff()).setFrom(start.get()).setTo(end)
+                                                       .build();
+
+        return link.fetchViewChain(replication);
+    }
+
     private void computeGenesis(Map<Digest, Initial> votes) {
-        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(),
-                 params.context().toleranceLevel() + 1, params.member());
+        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.toleranceLevel(),
+                 params.member());
         Multiset<HashedCertifiedBlock> tally = TreeMultiset.create();
         Map<Digest, Initial> valid = votes.entrySet().stream().filter(e -> e.getValue().hasGenesis()) // Has a genesis
                                           .filter(e -> genesis == null ? true : genesis.hash.equals(e.getKey())) // If
@@ -274,11 +274,11 @@ public class Bootstrapper {
                                                                                         e.getValue().getGenesis())))
                                           .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
-        int threshold = params.context().toleranceLevel();
+        int threshold = params.toleranceLevel();
         if (genesis == null) {
             Pair<HashedCertifiedBlock, Integer> winner = null;
 
-            log.info("Tally: {} required: {} on: {}", tally, params.context().toleranceLevel() + 1, params.member());
+            log.info("Tally: {} required: {} on: {}", tally, params.toleranceLevel(), params.member());
             for (HashedCertifiedBlock cb : tally) {
                 int count = tally.count(cb);
                 if (count > threshold) {
@@ -311,8 +311,8 @@ public class Bootstrapper {
         store.put(genesis);
 
         long anchorTo;
-        boolean genesisBootstrap = mostRecent == null
-        || mostRecent.getCheckpointView().getBlock().getHeader().getHeight() == 0;
+        boolean genesisBootstrap = mostRecent == null ||
+                                   mostRecent.getCheckpointView().getBlock().getHeader().getHeight() == 0;
         if (!genesisBootstrap) {
             checkpointCompletion(threshold, mostRecent);
             anchorTo = checkpoint.height();

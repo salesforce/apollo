@@ -151,6 +151,7 @@ public class ViewReconTest {
         committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
+            params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
                                                validators, reconfigure);
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));

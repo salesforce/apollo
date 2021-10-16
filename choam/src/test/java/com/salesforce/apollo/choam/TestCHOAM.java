@@ -235,6 +235,7 @@ public class TestCHOAM {
                     }
                 }
             };
+            params.getProducer().ethereal().setSigner(m);
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
                                    .build(),
                              MVStore.open(null));
