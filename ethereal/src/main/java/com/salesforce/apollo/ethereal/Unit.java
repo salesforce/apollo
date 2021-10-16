@@ -16,6 +16,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
@@ -137,6 +138,11 @@ public interface Unit extends PreUnit {
         @Override
         public JohnHancock signature() {
             return unit.signature();
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return unit.verify(verifiers);
         }
     }
 

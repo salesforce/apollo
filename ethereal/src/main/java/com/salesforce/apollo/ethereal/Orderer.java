@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
@@ -65,6 +66,10 @@ public class Orderer {
             dag.have(biff);
         }
 
+        public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
+            dag.missing(have, missing);
+        }
+
         public void noMoreUnits() {
             more.set(false);
         }
@@ -76,7 +81,6 @@ public class Orderer {
         public boolean wantsMoreUnits() {
             return more.get();
         }
-
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
@@ -122,11 +126,11 @@ public class Orderer {
      * epochs. It assumes preunits are ordered by ascending epochID and, within each
      * epoch, they are topologically sorted.
      */
-    public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+    public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
         final Lock lock = mx.writeLock();
         lock.lock();
         try {
-            log.debug("Adding: {} from: {} on: {}", preunits, source, config.pid());
+            log.debug("Adding: {} on: {}", preunits, config.pid());
             var errors = new HashMap<Digest, Correctness>();
             while (preunits.size() > 0) {
                 var epoch = preunits.get(0).epoch();
@@ -134,11 +138,11 @@ public class Orderer {
                 while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
                     end++;
                 }
-                epoch ep = retrieveEpoch(preunits.get(0), source);
+                epoch ep = retrieveEpoch(preunits.get(0));
                 if (ep != null) {
-                    errors.putAll(ep.adder().addPreunits(source, preunits.subList(0, end)));
+                    errors.putAll(ep.adder().addPreunits(preunits.subList(0, end)));
                 } else {
-                    log.debug("No epoch for: {} from: {} on: {}", preunits, source, config.pid());
+                    log.debug("No epoch for: {} on: {}", preunits, config.pid());
                 }
                 preunits = preunits.subList(end, preunits.size());
             }
@@ -239,6 +243,25 @@ public class Orderer {
             return ep.epoch.dag.maximalUnitsPerProcess();
         }
         return null;
+    }
+
+    public List<PreUnit_s> missing(BloomFilter<Digest> have) {
+        List<PreUnit_s> missing = new ArrayList<>();
+        final var lock = mx.readLock();
+        lock.lock();
+        try {
+            var p = previous.get();
+            if (p != null) {
+                p.missing(have, missing);
+            }
+            var c = current.get();
+            if (c != null) {
+                c.missing(have, missing);
+            }
+        } finally {
+            lock.unlock();
+        }
+        return missing;
     }
 
     public void start() {
@@ -427,18 +450,15 @@ public class Orderer {
 
     /**
      * retrieveEpoch returns an epoch for the given preunit. If the preunit comes
-     * from a future epoch, it is checked for new epoch proof. If failed, requests
-     * gossip with source of the preunit.
+     * from a future epoch, it is checked for new epoch proof.
      */
-    private epoch retrieveEpoch(PreUnit pu, short source) {
+    private epoch retrieveEpoch(PreUnit pu) {
         var epochId = pu.epoch();
         var e = getEpoch(epochId);
         var epoch = e.epoch;
         if (e.newer) {
             if (EpochProofBuilder.epochProof(pu, config.WTKey())) {
                 epoch = newEpoch(epochId);
-            } else {
-//                ord.syncer.RequestGossip(source)
             }
         }
         return epoch;

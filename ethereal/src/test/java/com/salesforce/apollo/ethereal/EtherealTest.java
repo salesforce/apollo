@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -85,11 +84,10 @@ public class EtherealTest {
 
     @Test
     public void fourWay() throws Exception {
-        record Massage(short pid, Unit msg) {}
 
         short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
-        ChannelConsumer<Massage> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
+        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -115,7 +113,7 @@ public class EtherealTest {
                                                  if (last) {
                                                      finished.countDown();
                                                  }
-                                             }, pu -> synchronizer.getChannel().offer(new Massage(pid, pu)));
+                                             }, pu -> synchronizer.getChannel().offer(pu));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -127,15 +125,11 @@ public class EtherealTest {
         }
         List<Short> ordering = IntStream.range(0, nProc).mapToObj(i -> (short) i).collect(Collectors.toList());
         synchronizer.consume(msgs -> {
-            msgs.forEach(msg -> {
-                Collections.shuffle(ordering);
-                ordering.stream().forEach(i -> {
-                    final short pid = i;
-                    var controller = controllers.get(pid);
-                    if (msg.pid != pid) {
-                        controller.input().accept(msg.pid, msg.msg);
-                    }
-                });
+            Collections.shuffle(ordering);
+            var pus = PreUnit.topologicalSort(msgs);
+            ordering.stream().forEach(pid -> {
+                var controller = controllers.get(pid);
+                controller.input().accept(pus.stream().filter(u -> u.creator() != pid).toList());
             });
         });
         try {
@@ -240,14 +234,15 @@ public class EtherealTest {
                 var controller = controllers.get(pid);
                 var caster = casting.get(members[pid]);
                 caster.registerHandler((ctx, msgs) -> msgs.forEach(m -> {
-                    try {
-                        Digest src = m.source();
-                        ByteString content = m.content();
-                        controller.input().accept(ordering.get(src),
-                                                  PreUnit.from(PreUnit_s.parseFrom(content), DigestAlgorithm.DEFAULT));
-                    } catch (InvalidProtocolBufferException e1) {
-                        e1.printStackTrace();
-                    }
+                    var pus = PreUnit.topologicalSort(msgs.stream().map(msg -> {
+                        try {
+                            return PreUnit.from(PreUnit_s.parseFrom(msg.content()), DigestAlgorithm.DEFAULT);
+                        } catch (Throwable t) {
+                            t.printStackTrace();
+                            return null;
+                        }
+                    }).collect(Collectors.toList()));
+                    controller.input().accept(pus);
 //                    System.out.println("Input: "+ pu + " on: " + caster.getMember());
                 }));
                 caster.start(Duration.ofMillis(100), scheduler);

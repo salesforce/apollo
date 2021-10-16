@@ -9,8 +9,10 @@ package com.salesforce.apollo.crypto;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
+import java.util.List;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -63,6 +65,11 @@ public interface Verifier {
             return algo.verify(key, signature, message);
         }
 
+        @Override
+        public boolean verify(JohnHancock signature, List<ByteBuffer> buffers) {
+            return algo.verify(key, signature, BbBackedInputStream.aggregate(buffers));
+        }
+
     }
 
     class MockVerifier implements Verifier {
@@ -92,6 +99,12 @@ public interface Verifier {
             return true;
         }
 
+        @Override
+        public boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
     }
 
     PublicKey getPublicKey();
@@ -103,4 +116,6 @@ public interface Verifier {
     boolean verify(JohnHancock signature, ByteString... message);
 
     boolean verify(JohnHancock signature, InputStream message);
+
+    boolean verify(JohnHancock signature, List<ByteBuffer> forSigning);
 }

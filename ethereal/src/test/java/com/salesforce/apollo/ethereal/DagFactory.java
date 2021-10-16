@@ -42,7 +42,7 @@ public interface DagFactory {
         }
 
         @Override
-        public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
             var errors = new HashMap<Digest, Correctness>();
             var hashes = new ArrayList<Digest>();
             var failed = new ArrayList<Boolean>();

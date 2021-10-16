@@ -523,7 +523,7 @@ public class ReliableBroadcaster {
             try {
                 handler.message(params.context.getId(), newMsgs);
             } catch (Throwable e) {
-                log.debug("Error in message handler on: {}", params.member, e);
+                log.warn("Error in message handler on: {}", params.member, e);
             }
         });
     }

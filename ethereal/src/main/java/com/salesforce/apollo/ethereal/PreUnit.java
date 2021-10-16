@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.Crown.crownFromParents;
+import static com.salesforce.apollo.ethereal.PreUnit.forSigning;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
@@ -152,6 +154,11 @@ public interface PreUnit {
         public PreUnit_s toPreUnit_s() {
             return p.toPreUnit_s();
         }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return p.verify(verifiers);
+        }
     }
 
     public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
@@ -179,6 +186,7 @@ public interface PreUnit {
             return rsData;
         }
 
+        @Override
         public PreUnit_s toPreUnit_s() {
             Builder builder = PreUnit_s.newBuilder().setSignature(signature.toSig()).setId(id())
                                        .setCrown(crown.toCrown_s());
@@ -210,15 +218,24 @@ public interface PreUnit {
         public PreUnit toPreUnit() {
             return this;
         }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            if (creator >= verifiers.length) {
+                return false;
+            }
+            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData));
+        }
     }
 
     public record DecodedId(int height, short creator, int epoch) {
+        @Override
         public String toString() {
             return "[" + creator + ":" + height + ":" + epoch + "]";
         }
     }
 
-    public static preUnit from(PreUnit_s pu, DigestAlgorithm algo) {
+    public static PreUnit from(PreUnit_s pu, DigestAlgorithm algo) {
         var decoded = decode(pu.getId());
         byte[] rsData = pu.getRsData().size() > 0 ? pu.getRsData().toByteArray() : null;
 
@@ -254,6 +271,30 @@ public interface PreUnit {
         return new DecodedId(height, creator, (int) (id >> 16));
     }
 
+    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] rsData) {
+        var buffers = new ArrayList<ByteBuffer>();
+        ByteBuffer idBuff = ByteBuffer.allocate(8);
+        idBuff.putLong(id);
+        idBuff.flip();
+
+        buffers.add(idBuff);
+        if (data != null) {
+            buffers.addAll(data.asReadOnlyByteBufferList());
+        }
+        if (rsData != null) {
+            buffers.add(ByteBuffer.wrap(rsData));
+        }
+
+        for (int h : crown.heights()) {
+            ByteBuffer heightBuff = ByteBuffer.allocate(4);
+            heightBuff.putInt(h);
+            heightBuff.flip();
+            buffers.add(heightBuff);
+        }
+        buffers.add(crown.controlHash().toByteBuffer());
+        return buffers;
+    }
+
     static long id(int height, short creator, int epoch) {
         var result = (long) height;
         result += ((long) creator) << 16;
@@ -276,28 +317,7 @@ public interface PreUnit {
     }
 
     static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData) {
-        var buffers = new ArrayList<ByteBuffer>();
-        ByteBuffer idBuff = ByteBuffer.allocate(8);
-        idBuff.putLong(id);
-        idBuff.flip();
-
-        buffers.add(idBuff);
-        if (data != null) {
-            buffers.addAll(data.asReadOnlyByteBufferList());
-        }
-        if (rsData != null) {
-            buffers.add(ByteBuffer.wrap(rsData));
-        }
-
-        for (int h : crown.heights()) {
-            ByteBuffer heightBuff = ByteBuffer.allocate(4);
-            heightBuff.putInt(h);
-            heightBuff.flip();
-            buffers.add(heightBuff);
-        }
-        buffers.add(crown.controlHash().toByteBuffer());
-
-        return signer.sign(buffers);
+        return signer.sign(forSigning(id, crown, data, rsData));
     }
 
     short creator();
@@ -345,6 +365,8 @@ public interface PreUnit {
     PreUnit toPreUnit();
 
     PreUnit_s toPreUnit_s();
+
+    boolean verify(Verifier[] verifiers);
 
     Crown view();
 }

@@ -28,8 +28,10 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
@@ -229,6 +231,15 @@ public interface Dag {
         }
 
         @Override
+        public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
+            units.entrySet().forEach(e -> {
+                if (!have.contains(e.getKey())) {
+                    missing.add(e.getValue().toPreUnit_s());
+                }
+            });
+        }
+
+        @Override
         public short nProc() {
             return config.nProc();
         }
@@ -339,7 +350,6 @@ public interface Dag {
             lock.lock();
             try {
                 r.run();
-                ;
             } catch (Exception e) {
                 throw new IllegalStateException("Error during write locked call", e);
             } finally {
@@ -566,6 +576,8 @@ public interface Dag {
     int maxLevel();
 
     DagInfo maxView();
+
+    void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
 
     short nProc();
 

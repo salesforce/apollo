@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -48,7 +47,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, BiConsumer<Short, PreUnit> input) {
+    public record Controller(Runnable starte, Runnable stope, Consumer<List<PreUnit>> input) {
         public void start() {
             starte.run();
         }
@@ -198,7 +197,7 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        BiConsumer<Short, PreUnit> input = (source, pu) -> ord.get().addPreunits(source, Collections.singletonList(pu));
+        Consumer<List<PreUnit>> input = pus -> ord.get().addPreunits(pus);
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -254,10 +253,9 @@ public class Ethereal {
         };
 
         var orderer = new Orderer(config, ds, makePreblock, synchronizer, new DsrFactory());
-        record input(short pid, PreUnit pu) {}
-        var in = new SimpleChannel<input>("Input for: " + config.pid(), new LinkedBlockingQueue<>());
+        var in = new SimpleChannel<List<PreUnit>>("Input for: " + config.pid(), new LinkedBlockingQueue<>());
 
-        BiConsumer<Short, PreUnit> input = (source, pu) -> in.submit(new input(source, pu));
+        Consumer<List<PreUnit>> input = pus -> in.submit(pus);
         in.open();
 
         Runnable start = () -> {
@@ -266,7 +264,7 @@ public class Ethereal {
             }
             orderer.start();
             in.open();
-            in.consumeEach(i -> orderer.addPreunits(i.pid, Collections.singletonList(i.pu)));
+            in.consumeEach(pus -> orderer.addPreunits(pus));
         };
         Runnable stop = () -> {
             if (!started.compareAndSet(true, false)) {

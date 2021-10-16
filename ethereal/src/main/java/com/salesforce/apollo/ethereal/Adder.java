@@ -47,12 +47,10 @@ public interface Adder {
             private volatile boolean           failed         = false;
             private volatile int               missingParents = 0;
             private final PreUnit              pu;
-            private final long                 source;
             private volatile int               waitingParents = 0;
 
-            WaitingPreUnit(PreUnit pu, long source) {
+            WaitingPreUnit(PreUnit pu) {
                 this.pu = pu;
-                this.source = source;
             }
 
             public String toString() {
@@ -88,7 +86,7 @@ public interface Adder {
          * is normally added and processed, error is returned only for log purpose.
          */
         @Override
-        public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
             var errors = new HashMap<Digest, Correctness>();
             var failed = new ArrayList<Boolean>();
             for (int i = 0; i < preunits.size(); i++) {
@@ -131,7 +129,7 @@ public interface Adder {
                 }
                 for (int i = 0; i < preunits.size(); i++) {
                     if (!failed.get(i)) {
-                        addToWaiting(preunits.get(i), source);
+                        addToWaiting(preunits.get(i));
                     }
                 }
                 return errors;
@@ -146,7 +144,7 @@ public interface Adder {
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
-        private void addToWaiting(PreUnit pu, short source) {
+        private void addToWaiting(PreUnit pu) {
             if (waiting.containsKey(pu.hash())) {
                 log.trace("Already waiting unit: {} on: {}", pu, conf.pid());
                 return;
@@ -155,12 +153,12 @@ public interface Adder {
             if (waitingById.get(id) != null) {
                 throw new IllegalStateException("Fork in the road"); // fork! TODO
             }
-            var wp = new WaitingPreUnit(pu, source);
+            var wp = new WaitingPreUnit(pu);
             waiting.put(pu.hash(), wp);
             waitingById.put(id, wp);
             checkParents(wp);
             checkIfMissing(wp);
-            if (wp.missingParents > 0) { 
+            if (wp.missingParents > 0) {
                 log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
                 return;
             }
@@ -227,9 +225,8 @@ public interface Adder {
             return maxHeights;
         }
 
-        private void handleInvalidControlHash(long sourcePID, PreUnit witness, Unit[] parents) {
-            log.debug("Invalid control hash from: {} witness: {} parents: {} on: {}", sourcePID, witness, parents,
-                      conf.pid());
+        private void handleInvalidControlHash(PreUnit witness, Unit[] parents) {
+            log.debug("Invalid control hash witness: {} parents: {} on: {}", witness, parents, conf.pid());
             var ids = new ArrayList<Long>();
             short pid = 0;
             for (var height : witness.view().heights()) {
@@ -264,7 +261,7 @@ public interface Adder {
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
                 if (!calculated.equals(wp.pu.view().controlHash())) {
                     wp.failed = true;
-                    handleInvalidControlHash(wp.source, wp.pu, parents);
+                    handleInvalidControlHash(wp.pu, parents);
                     return;
                 }
 
@@ -340,7 +337,7 @@ public interface Adder {
      * a unit is already in dag/waiting - UnknownParents - in that case the preunit
      * is normally added and processed, error is returned only for log purpose.
      */
-    Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits);
+    Map<Digest, Correctness> addPreunits(List<PreUnit> preunits);
 
     void close();
 

@@ -136,12 +136,11 @@ public class TestCHOAM {
 
     private static final int CARDINALITY = 5;
 
-    private Map<Digest, List<Digest>> blocks;
-    private Map<Digest, CHOAM>        choams;
-    private List<SigningMember>       members;
-    private Map<Digest, Router>       routers;
-    private ScheduledExecutorService  scheduler;
-
+    private Map<Digest, List<Digest>>      blocks;
+    private Map<Digest, CHOAM>             choams;
+    private List<SigningMember>            members;
+    private Map<Digest, Router>            routers;
+    private ScheduledExecutorService       scheduler;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
