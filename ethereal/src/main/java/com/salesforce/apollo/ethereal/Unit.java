@@ -15,6 +15,7 @@ import java.util.List;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
  * @author hal.hildebrand
@@ -131,6 +132,11 @@ public interface Unit extends PreUnit {
         @Override
         public PreUnit_s toPreUnit_s() {
             return unit.toPreUnit_s();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return unit.signature();
         }
     }
 

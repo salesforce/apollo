@@ -175,7 +175,7 @@ public class Creator {
         assert parents.length == conf.nProc();
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
-                                     conf.digestAlgorithm());
+                                     conf.digestAlgorithm(), conf.signer());
         if (log.isTraceEnabled()) {
             log.debug("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
         } else {

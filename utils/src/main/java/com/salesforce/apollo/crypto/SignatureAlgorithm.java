@@ -366,8 +366,7 @@ public enum SignatureAlgorithm {
 
     public static final SignatureAlgorithm DEFAULT = ED_25519;
 
-    private static final String ECDSA_ALGORITHM_NAME = "EC";
-
+    private static final String ECDSA_ALGORITHM_NAME             = "EC";
     private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
     @SuppressWarnings("unused")
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";

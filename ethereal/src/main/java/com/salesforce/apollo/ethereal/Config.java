@@ -16,6 +16,7 @@ import java.util.function.BiFunction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 
@@ -29,7 +30,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     Clock clock, double bias) {
+                     Clock clock, double bias, Verifier[] verifiers) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -72,6 +73,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private double                                   pByz            = -1;
         private short                                    pid;
         private Signer                                   signer          = new MockSigner();
+        private Verifier[]                               verifiers;
         private WeakThresholdKey                         wtk;
         private int                                      zeroVoteRoundForCommonVote;
 
@@ -134,7 +136,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, clock, bias);
+                              canSkipLevel, numberOfEpochs, checks, wtk, executor, clock, bias, verifiers);
         }
 
         @Override
@@ -208,6 +210,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Signer getSigner() {
             return signer;
+        }
+
+        public Verifier[] getVerifiers() {
+            return verifiers;
         }
 
         public WeakThresholdKey getWtk() {
@@ -311,6 +317,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setSigner(Signer signer) {
             this.signer = signer;
+            return this;
+        }
+
+        public Builder setVerifiers(Verifier[] verifiers) {
+            this.verifiers = verifiers;
             return this;
         }
 

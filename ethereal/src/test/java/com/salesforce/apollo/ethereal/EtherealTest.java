@@ -41,9 +41,13 @@ import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.ethereal.creator.CreatorTest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -64,8 +68,9 @@ public class EtherealTest {
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        return new preUnit(t.creator(), t.epoch(), t.height(), PreUnit.computeHash(algo, id, crown, data, rsData),
-                           crown, data, rsData);
+        JohnHancock signature = PreUnit.sign(CreatorTest.DEFAULT_SIGNER, id, crown, data, rsData);
+        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData,
+                           signature);
     }
 
     private static class SimpleDataSource implements DataSource {
@@ -101,12 +106,16 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            var controller = e.deterministic(builder.setPid(pid).build(), ds, (pb, last) -> {
-                output.add(pb);
-                if (last) {
-                    finished.countDown();
-                }
-            }, pu -> synchronizer.getChannel().offer(new Massage(pid, pu)));
+            var controller = e.deterministic(builder.setSigner(new SignerImpl(0,
+                                                                              SignatureAlgorithm.DEFAULT.generateKeyPair()
+                                                                                                        .getPrivate()))
+                                                    .setPid(pid).build(),
+                                             ds, (pb, last) -> {
+                                                 output.add(pb);
+                                                 if (last) {
+                                                     finished.countDown();
+                                                 }
+                                             }, pu -> synchronizer.getChannel().offer(new Massage(pid, pu)));
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -207,8 +216,10 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(pid);
             ReliableBroadcaster caster = casting.get(members[pid]);
             AtomicInteger round = new AtomicInteger();
-            var controller = e.deterministic(builder.setPid(pid).build(), ds, (pb, last) -> {
-                System.out.println("Preblock: " + round.getAndIncrement() + " on: " + pid);
+            var controller = e.deterministic(builder.setSigner(members[pid]).setPid(pid).build(), ds, (pb, last) -> {
+                if (pid == 0) {
+                    System.out.println("Preblock: " + round.getAndIncrement());
+                }
                 output.add(pb);
                 if (last) {
                     finished.countDown();

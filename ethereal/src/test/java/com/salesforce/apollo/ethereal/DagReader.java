@@ -17,8 +17,11 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.ethereal.creator.CreatorTest;
 
 /**
  * @author hal.hildebrand
@@ -91,14 +94,15 @@ public class DagReader {
     }
 
     private static PreUnit newPreUnit(short puCreator, Crown crown, ByteString data, byte[] rsData,
-                                      DigestAlgorithm default1) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, default1);
+                                      DigestAlgorithm algo) {
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, algo, CreatorTest.DEFAULT_SIGNER);
         return newsie;
     }
 
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
-                                               DigestAlgorithm default1) {
-        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1,
-                           PreUnit.computeHash(default1, puCreator, crown, data, rsData), crown, data, rsData);
+                                               DigestAlgorithm algo, Signer signer) {
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData);
+        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
+                           rsData, signature);
     }
 }

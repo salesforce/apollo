@@ -38,6 +38,9 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -54,25 +57,26 @@ public class Orderer {
             more.set(false);
         }
 
-        public boolean wantsMoreUnits() {
-            return more.get();
-        }
-
         public Collection<? extends Unit> allUnits() {
             return dag.unitsAbove(null);
         }
 
-        public Collection<? extends Unit> unitsAbove(int[] heights) {
-            return dag.unitsAbove(heights);
+        public void have(DigestBloomFilter biff) {
+            dag.have(biff);
         }
 
         public void noMoreUnits() {
             more.set(false);
         }
 
-        public void sync(Consumer<PreUnit> send) {
-            dag.sync(send);
+        public Collection<? extends Unit> unitsAbove(int[] heights) {
+            return dag.unitsAbove(heights);
         }
+
+        public boolean wantsMoreUnits() {
+            return more.get();
+        }
+
     }
 
     record epochWithNewer(epoch epoch, boolean newer) {
@@ -204,6 +208,30 @@ public class Orderer {
         }
     }
 
+    /**
+     * Answer the BloomFilter containing the receiver's DAG state in the current and
+     * previous epoch
+     */
+    public BloomFilter<Digest> have() {
+        var biff = new BloomFilter.DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                                     config.epochLength() * 2 * config.nProc(), 0.125);
+        final var lock = mx.readLock();
+        lock.lock();
+        try {
+            var p = previous.get();
+            if (p != null) {
+                p.have(biff);
+            }
+            var c = current.get();
+            if (c != null) {
+                c.have(biff);
+            }
+        } finally {
+            lock.unlock();
+        }
+        return biff;
+    }
+
     /** MaxUnits returns maximal units per process from the chosen epoch. */
     public SlottedUnits maxUnits(int epoch) {
         var ep = getEpoch(epoch);
@@ -226,20 +254,6 @@ public class Orderer {
             current.get().close();
         }
         log.trace("Orderer stopped on: {}", config.pid());
-    }
-
-    /**
-     * Publish this process' state
-     */
-    public void sync(Consumer<PreUnit> send) {
-        var p = previous.get();
-        if (p != null) {
-            p.sync(send);
-        }
-        var c = current.get();
-        if (c != null) {
-            c.sync(send);
-        }
     }
 
     /**

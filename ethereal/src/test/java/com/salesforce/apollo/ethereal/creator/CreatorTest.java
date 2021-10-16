@@ -24,6 +24,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Crown;
@@ -39,7 +40,6 @@ import com.salesforce.apollo.utils.SimpleChannel;
  *
  */
 public class CreatorTest {
-
     static class RandomDataSource implements DataSource {
         final int size;
 
@@ -73,7 +73,16 @@ public class CreatorTest {
         }
     }
 
+    public static final KeyPair DEFAULT_KEYPAIR;
+
+    public static final Signer DEFAULT_SIGNER;
+
     private final static Random entropy = new Random(0x1638);
+
+    static {
+        DEFAULT_KEYPAIR = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        DEFAULT_SIGNER = new SignerImpl(0, DEFAULT_KEYPAIR.getPrivate());
+    }
 
     public static Creator newCreator(Config cnf, Consumer<Unit> send) {
         return newCreator(cnf, send, true);
@@ -92,13 +101,15 @@ public class CreatorTest {
         return creator;
     }
 
-    public static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
+    public static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo,
+                                     Signer signer) {
         var t = PreUnit.decode(id);
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        return new preUnit(t.creator(), t.epoch(), t.height(), PreUnit.computeHash(algo, id, crown, data, rsData),
-                           crown, data, rsData);
+        final var signature = PreUnit.sign(signer, id, crown, data, rsData);
+        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData,
+                           signature);
     }
 
     private double bias = 3.0;
@@ -108,9 +119,9 @@ public class CreatorTest {
         short nProc = 4;
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
-                                .build();
+        var cnf = Config.Builder.empty().setSigner(DEFAULT_SIGNER).setExecutor(ForkJoinPool.commonPool())
+                                .setnProc(nProc).setSigner(new SignerImpl(0, keyPair.getPrivate()))
+                                .setNumberOfEpochs(epoch + 1).build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -127,7 +138,7 @@ public class CreatorTest {
         var rsData = new byte[0];
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
-        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
         var unit = pu.from(parents, bias);
         assertEquals(epoch, unit.epoch());
         unitBelt.submit(unit);
@@ -154,9 +165,8 @@ public class CreatorTest {
     @Test
     public void shouldBuildUnitsForEachConsecutiveLevel() throws Exception {
         short nProc = 4;
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -177,7 +187,7 @@ public class CreatorTest {
                 var unitData = ByteString.copyFromUtf8(" ");
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
-                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
                 var unit = pu.from(parents, bias);
                 newParents.add(unit);
                 unitBelt.submit(unit);
@@ -202,9 +212,8 @@ public class CreatorTest {
     @Test
     public void shouldBuildUnitsOnHighestPossibleLevel() throws Exception {
         short nProc = 4;
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(true).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -222,7 +231,7 @@ public class CreatorTest {
                 var unitData = ByteString.copyFromUtf8(" ");
                 var rsData = new byte[0];
                 long id = PreUnit.id(0, pid, 0);
-                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+                var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
                 var unit = pu.from(parents, bias);
                 newParents.add(unit);
                 unitBelt.submit(unit);
@@ -253,9 +262,8 @@ public class CreatorTest {
     @Test
     public void shouldCreatUnitOnNextLevel() throws Exception {
         short nProc = 4;
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -269,7 +277,7 @@ public class CreatorTest {
             var unitData = ByteString.copyFromUtf8(" ");
             var rsData = new byte[0];
             long id = PreUnit.id(0, pid, 0);
-            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
             var unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
@@ -297,9 +305,8 @@ public class CreatorTest {
     public void valdFromFutureShouldProduceUnitOfThatEpoch() throws Exception {
         short nProc = 4;
         var epoch = 7;
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch).build();
+                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(epoch).build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -317,7 +324,7 @@ public class CreatorTest {
         var rsData = new byte[0];
         short pid = 1;
         long id = PreUnit.id(0, pid, epoch);
-        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+        var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
         var unit = pu.from(parents, bias);
         assertEquals(epoch, unit.epoch());
         unitBelt.submit(unit);
@@ -334,7 +341,7 @@ public class CreatorTest {
             unitData = ByteString.copyFromUtf8(" ");
             rsData = new byte[0];
             id = PreUnit.id(0, pid, 0);
-            pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+            pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
             unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }
@@ -354,9 +361,8 @@ public class CreatorTest {
     @Test
     public void withoutEnoughUnitsOnALevelShouldNotCreateNewUnits() throws Exception {
         short nProc = 4;
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(2).build();
+                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -374,7 +380,7 @@ public class CreatorTest {
             var unitData = ByteString.copyFromUtf8(" ");
             var rsData = new byte[0];
             var id = PreUnit.id(0, pid, 0);
-            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT);
+            var pu = newPreUnit(id, crown, unitData, rsData, DigestAlgorithm.DEFAULT, DEFAULT_SIGNER);
             var unit = pu.from(parents, bias);
             unitBelt.submit(unit);
         }

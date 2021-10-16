@@ -65,6 +65,35 @@ public interface Verifier {
 
     }
 
+    class MockVerifier implements Verifier {
+
+        @Override
+        public PublicKey getPublicKey() {
+            return null;
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, byte[]... message) {
+            return true;
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, ByteBuffer... message) {
+            return true;
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, ByteString... message) {
+            return true;
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return true;
+        }
+
+    }
+
     PublicKey getPublicKey();
 
     boolean verify(JohnHancock signature, byte[]... message);

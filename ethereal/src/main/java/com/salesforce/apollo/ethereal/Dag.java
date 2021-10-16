@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -143,6 +144,11 @@ public interface Dag {
 
                 return fiber == null ? null : fiber.get(decoded.creator());
             });
+        }
+
+        @Override
+        public void have(DigestBloomFilter biff) {
+            units.keySet().forEach(d -> biff.add(d));
         }
 
         @Override
@@ -543,6 +549,8 @@ public interface Dag {
     List<Unit> get(List<Digest> digests);
 
     List<Unit> get(long id);
+
+    void have(DigestBloomFilter biff);
 
     void insert(Unit u);
 
