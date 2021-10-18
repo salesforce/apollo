@@ -47,7 +47,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, Consumer<List<PreUnit>> input) {
+    public record Controller(Runnable starte, Runnable stope, Consumer<List<PreUnit>> input, Orderer orderer) {
         public void start() {
             starte.run();
         }
@@ -77,6 +77,7 @@ public class Ethereal {
         return data.isEmpty() ? null : new PreBlock(data, randomBytes);
     }
 
+    private Config              config;
     private final AtomicBoolean started = new AtomicBoolean();
 
     /**
@@ -106,6 +107,7 @@ public class Ethereal {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
+        this.config = config;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
         Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose);
@@ -118,7 +120,7 @@ public class Ethereal {
         }, () -> {
             setup.stope.run();
             consensus.stope.run();
-        }, consensus.input);
+        }, consensus.input, null);
     }
 
     /**
@@ -139,11 +141,16 @@ public class Ethereal {
         if (started.get()) {
             return null;
         }
+        this.config = config;
         Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(consensus.starte, consensus.stope, consensus.input);
+        return new Controller(consensus.starte, consensus.stope, consensus.input, consensus.orderer);
+    }
+
+    public Config getConfig() {
+        return config;
     }
 
     /**
@@ -167,6 +174,7 @@ public class Ethereal {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
+        this.config = conf;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose);
         return new Controller(() -> {
@@ -176,7 +184,7 @@ public class Ethereal {
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.starte, consensus.input);
+        }, consensus.starte, consensus.input, null);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
@@ -227,7 +235,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input);
+        return new Controller(start, stop, input, null);
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
@@ -275,7 +283,7 @@ public class Ethereal {
             }
             in.close();
         };
-        return new Controller(start, stop, input);
+        return new Controller(start, stop, input, orderer);
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -303,6 +311,6 @@ public class Ethereal {
 
         var ord = new Orderer(conf, null, extractHead, p -> {
         }, rsf);
-        return new Controller(() -> ord.start(), () -> ord.stop(), null);
+        return new Controller(() -> ord.start(), () -> ord.stop(), null, null);
     }
 }

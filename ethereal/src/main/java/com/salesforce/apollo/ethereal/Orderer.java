@@ -28,6 +28,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
@@ -64,10 +65,12 @@ public class Orderer {
 
         public void have(DigestBloomFilter biff) {
             dag.have(biff);
+            adder.have(biff);
         }
 
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
             dag.missing(have, missing);
+            adder.missing(have, missing);
         }
 
         public void noMoreUnits() {
@@ -114,7 +117,7 @@ public class Orderer {
             try {
                 log.trace("Sending: {} on: {}", u, config.pid());
                 insert(u);
-                rbc.accept(u);
+//                rbc.accept(u);
             } finally {
                 lock.unlock();
             }
@@ -245,8 +248,8 @@ public class Orderer {
         return null;
     }
 
-    public List<PreUnit_s> missing(BloomFilter<Digest> have) {
-        List<PreUnit_s> missing = new ArrayList<>();
+    public Update missing(BloomFilter<Digest> have) { 
+        List<PreUnit_s> missing = new ArrayList<>(); 
         final var lock = mx.readLock();
         lock.lock();
         try {
@@ -261,7 +264,7 @@ public class Orderer {
         } finally {
             lock.unlock();
         }
-        return missing;
+        return Update.newBuilder().addAllMissing(missing).build();
     }
 
     public void start() {

@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -22,8 +21,11 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -92,16 +94,11 @@ public interface Adder {
             for (int i = 0; i < preunits.size(); i++) {
                 failed.add(false);
             }
-            try {
-                mtx.tryLock(1, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                log.error("Cannot obtain mtx for adding: {} on: {}", preunits, conf.pid());
-                return errors;
-            }
+            mtx.lock();
             try {
                 var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
 
-                log.debug("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
+                log.trace("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
 
                 for (int i = 0; i < preunits.size(); i++) {
                     var pu = preunits.get(i);
@@ -141,6 +138,17 @@ public interface Adder {
         @Override
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
+        }
+
+        @Override
+        public void have(DigestBloomFilter biff) {
+            waiting.keySet().stream().forEach(d -> biff.add(d));
+        }
+
+        @Override
+        public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
+            waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
+                   .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -234,8 +242,12 @@ public interface Adder {
             }
         }
 
+        // Ye Jesu Nute
+        // The waiting pre unit is ready to be added to ye DAG, may fail if parents
+        // don't check out
         private void handleReady(WaitingPreUnit wp) {
             log.debug("Handle ready: {} on: {}", wp, conf.pid());
+            mtx.lock();
             try {
                 // 1. Decode Parents
                 var decoded = dag.decodeParents(wp.pu);
@@ -279,6 +291,7 @@ public interface Adder {
                 }
             } finally {
                 remove(wp);
+                mtx.unlock();
             }
         }
 
@@ -320,10 +333,13 @@ public interface Adder {
         private void sendIfReady(WaitingPreUnit ch) {
             if (ch.parentsOutput()) {
                 log.trace("Sending unit for processing: {} on: {}", ch, conf.pid());
-                handleReady(ch);
+                try {
+                    handleReady(ch);
+                } catch (Throwable t) {
+                    log.error("Unable to handle: {} on: {}", ch.pu, conf.pid(), t);
+                }
             }
         }
-
     }
 
     enum Correctness {
@@ -340,5 +356,9 @@ public interface Adder {
     Map<Digest, Correctness> addPreunits(List<PreUnit> preunits);
 
     void close();
+
+    void have(DigestBloomFilter biff);
+
+    void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
 
 }

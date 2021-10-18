@@ -59,8 +59,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                                      bias            = 3;
         private boolean                                  canSkipLevel    = false;
         private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
-        private Clock                                    clock           = Clock.systemUTC();
-        private int                                      commonVoteDeterministicPrefix;
+        private Clock                                    clock           = Clock.systemUTC(); 
         private short                                    crpFixedPrefix;
         private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int                                      epochLength     = 30;
@@ -83,7 +82,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         public Builder(Config config) {
             canSkipLevel = config.canSkipLevel;
             checks = config.checks;
-            commonVoteDeterministicPrefix = config.commonVoteDeterministicPrefix;
             crpFixedPrefix = config.crpFixedPrefix;
             digestAlgorithm = config.digestAlgorithm;
             epochLength = config.epochLength;
@@ -98,7 +96,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         }
 
         public Builder addConsensusConfig() {
-            canSkipLevel = true;
+            canSkipLevel = false;
             orderStartLevel = 0;
             crpFixedPrefix = 4;
             numberOfEpochs = 3;
@@ -126,8 +124,9 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (pByz <= -1) {
                 pByz = 1.0 / (double) bias;
             }
+            final var minimalQuorum = Dag.minimalQuorum(nProc, bias);
             if (wtk == null) {
-                wtk = new NoOpWeakThresholdKey(Dag.minimalQuorum(nProc, bias) + 1);
+                wtk = new NoOpWeakThresholdKey(minimalQuorum + 1);
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
@@ -135,7 +134,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 addLastLevel();
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
+                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
                               canSkipLevel, numberOfEpochs, checks, wtk, executor, clock, bias, verifiers);
         }
 
@@ -158,11 +157,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Clock getClock() {
             return clock;
-        }
-
-        public int getCommonVoteDeterministicPrefix() {
-            return commonVoteDeterministicPrefix;
-        }
+        } 
 
         public short getCrpFixedPrefix() {
             return crpFixedPrefix;
@@ -230,7 +225,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder requiredByLinear() {
             firstDecidedRound = 3;
-            commonVoteDeterministicPrefix = 10;
             zeroVoteRoundForCommonVote = 3;
             return this;
         }
@@ -253,12 +247,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         public Builder setClock(Clock clock) {
             this.clock = clock;
             return this;
-        }
-
-        public Builder setCommonVoteDeterministicPrefix(int commonVoteDeterministicPrefix) {
-            this.commonVoteDeterministicPrefix = commonVoteDeterministicPrefix;
-            return this;
-        }
+        } 
 
         public Builder setCrpFixedPrefix(short crpFixedPrefix) {
             this.crpFixedPrefix = crpFixedPrefix;

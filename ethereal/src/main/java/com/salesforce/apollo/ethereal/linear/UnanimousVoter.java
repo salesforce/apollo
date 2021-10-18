@@ -93,7 +93,7 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
                 AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
 
                 var commonVote = v.lazyCommonVote(level);
-                v.dag.iterateUnitsOnLevel(level, (primes) -> {
+                v.dag.iterateUnitsOnLevel(level, primes -> {
                     for (var v : primes) {
                         Vote vDecision = decide(v);
                         if (vDecision != Vote.UNDECIDED && vDecision == commonVote.get()) {

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.Crown.crownFromParents;
-import static com.salesforce.apollo.ethereal.PreUnit.forSigning;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

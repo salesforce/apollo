@@ -16,7 +16,11 @@
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
-    <logger name="com.salesforce.apollo.ethereal" level="trace"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.ethereal.Gossiper" level="WARN"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

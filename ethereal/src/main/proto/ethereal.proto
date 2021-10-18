@@ -17,6 +17,7 @@ message Gossip {
 
 message Update {
     repeated PreUnit_s missing = 1;
+    repeated PreUnit_s waiting = 2;
 }
 
 message EpochProof {

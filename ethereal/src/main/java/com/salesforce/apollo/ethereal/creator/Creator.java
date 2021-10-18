@@ -146,14 +146,14 @@ public class Creator {
             if (count(parents) >= quorum) {
                 return new built(parents, level.get());
             } else {
-                log.info("Parents not ready: {} on: {}", parents, conf.pid());
+                log.trace("Parents not ready: {} on: {}", parents, conf.pid());
                 return null;
             }
         } else {
             var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
             final Unit[] parents = getParentsForLevel(l);
             if (count(parents) >= quorum) {
-                log.info("Parents not ready: {} on: {}", parents, conf.pid());
+                log.trace("Parents not ready: {} on: {}", parents, conf.pid());
                 return new built(parents, l);
             } else {
                 return null;
