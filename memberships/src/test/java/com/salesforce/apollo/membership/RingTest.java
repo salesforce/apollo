@@ -186,12 +186,31 @@ public class RingTest {
     public void testRingCalculation() {
         double epsilon = 0.99999;
         double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20, 0.25, 0.33 };
-        int[] cardinality = new int[] { 10, 100, 1_0000, 10_0000, 1_000_000, 10_000_000 };
+        int[] cardinality = new int[] { 10, 100, 1_000, 10_000, 1_000_000, 10_000_000 };
 
         for (double pByz : probabilityByzantine) {
             for (int card : cardinality) {
                 int t = Context.minMajority(pByz, card, epsilon);
-                System.out.println(String.format("T: %s K: %s Pbyz: %s Cardinality: %s", t, 2 * t + 1, pByz, card));
+                System.out.println(String.format("Bias: 2 T: %s K: %s Pbyz: %s Cardinality: %s", t, (2 * t) + 1, pByz, card));
+            }
+        }
+    }
+
+    @Test
+    public void testRingCalculationTwoThirdsMajority() {
+        double epsilon = 0.8;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
+        int[] cardinality = new int[] { 10, 100, 1_000, 10_000, 1_000_000, 10_000_000 };
+
+        for (double pByz : probabilityByzantine) {
+            for (int card : cardinality) {
+                try {
+                    int t = Context.minMajority(pByz, card, epsilon, 3);
+                    System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1, pByz,
+                                                     card));
+                } catch (Exception e) {
+                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                }
             }
         }
     }

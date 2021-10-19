@@ -11,7 +11,6 @@ import java.io.IOException;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -38,15 +37,9 @@ public interface ReliableBroadcast extends Link {
             public ListenableFuture<Reconcile> gossip(MessageBff bff) {
                 return null;
             }
-
-            @Override
-            public void update(Reconciliation push) {
-            }
         };
     }
 
     ListenableFuture<Reconcile> gossip(MessageBff bff);
-
-    void update(Reconciliation push);
 
 }

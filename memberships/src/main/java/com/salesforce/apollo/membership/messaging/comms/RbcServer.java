@@ -7,11 +7,9 @@
 package com.salesforce.apollo.membership.messaging.comms;
 
 import com.codahale.metrics.Timer.Context;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCImplBase;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.crypto.Digest;
@@ -47,35 +45,6 @@ public class RbcServer extends RBCImplBase {
                     metrics.outboundBandwidth().mark(request.getSerializedSize());
                     metrics.inboundGossip().update(request.getSerializedSize());
                     metrics.gossipReply().update(response.getSerializedSize());
-                }
-            } finally {
-                if (timer != null) {
-                    timer.stop();
-                }
-            }
-        });
-    }
-
-    @Override
-    public void update(Reconciliation request, StreamObserver<Empty> responseObserver) {
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundUpdateTimer().time();
-            }
-            try {
-                Digest from = identity.getFrom();
-                if (from == null) {
-                    responseObserver.onError(new IllegalStateException("Member has been removed"));
-                    return;
-                }
-                s.update(request, from);
-                responseObserver.onNext(Empty.getDefaultInstance());
-                responseObserver.onCompleted();
-                if (metrics != null) {
-                    metrics.inboundUpdateRate().mark();
-                    metrics.inboundBandwidth().mark(request.getSerializedSize());
-                    metrics.inboundUpdate().update(request.getSerializedSize());
                 }
             } finally {
                 if (timer != null) {

@@ -104,8 +104,7 @@ public class Orderer {
     private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Unit> rbc,
-                   RandomSourceFactory rsf) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, RandomSourceFactory rsf) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
@@ -117,7 +116,6 @@ public class Orderer {
             try {
                 log.trace("Sending: {} on: {}", u, config.pid());
                 insert(u);
-//                rbc.accept(u);
             } finally {
                 lock.unlock();
             }
@@ -248,8 +246,8 @@ public class Orderer {
         return null;
     }
 
-    public Update missing(BloomFilter<Digest> have) { 
-        List<PreUnit_s> missing = new ArrayList<>(); 
+    public Update missing(BloomFilter<Digest> have) {
+        List<PreUnit_s> missing = new ArrayList<>();
         final var lock = mx.readLock();
         lock.lock();
         try {

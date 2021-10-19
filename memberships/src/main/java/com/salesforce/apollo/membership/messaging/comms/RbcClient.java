@@ -15,7 +15,6 @@ import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc;
 import com.salesfoce.apollo.messaging.proto.RBCGrpc.RBCFutureStub;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -97,25 +96,5 @@ public class RbcClient implements ReliableBroadcast {
     @Override
     public String toString() {
         return String.format("->[%s]", member);
-    }
-
-    @Override
-    public void update(Reconciliation push) {
-        Context timer = null;
-        if (metrics != null) {
-            timer = metrics.outboundUpdateTimer().time();
-        }
-        try {
-            client.update(push);
-            if (metrics != null) {
-                metrics.outboundBandwidth().mark(push.getSerializedSize());
-                metrics.outboundUpdate().update(push.getSerializedSize());
-                metrics.outboundUpdateRate().mark();
-            }
-        } finally {
-            if (timer != null) {
-                timer.stop();
-            }
-        }
     }
 }

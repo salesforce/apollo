@@ -10,6 +10,10 @@ import "util.proto";
 
 package ethereal;
 
+service Gossiper {
+    rpc gossip (Gossip) returns (Update) {}
+}
+
 message Gossip {
     utils.Digeste context = 1;
     utils.Biff have = 2;

@@ -110,8 +110,8 @@ public class Context<T extends Member> {
             throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
         }
         double e = epsilon / cardinality;
-        for (int t = 1; t <= cardinality; t++) {
-            double pf = 1.0 - Util.binomialc(t, bias * t + 1, pByz);
+        for (int t = 1; t <= ((cardinality - 1) / bias); t++) {
+            double pf = 1.0 - Util.binomialc(t, (bias * t) + 1, pByz);
             if (e >= pf) {
                 if (cardinality >= (bias * t) + 1) {
                     return t;

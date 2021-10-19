@@ -40,7 +40,6 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.messaging.proto.AgedMessage;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
-import com.salesfoce.apollo.messaging.proto.Reconciliation;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -197,22 +196,7 @@ public class ReliableBroadcaster {
                 return Reconcile.getDefaultInstance();
             }
             return Reconcile.newBuilder().addAllUpdates(buffer.reconcile(BloomFilter.from(request.getDigests()), from))
-                            .setBff(buffer.forReconcilliation().toBff()).build();
-        }
-
-        public void update(Reconciliation request, Digest from) {
-            if (request.getRing() < 0 || request.getRing() >= params.context.getRingCount()) {
-                log.trace("Invalid inbound messages update on {}:{} from: {} on invalid ring: {}",
-                          params.context.getId(), params.member, from, request.getRing());
-                return;
-            }
-            Member predecessor = params.context.ring(request.getRing()).predecessor(params.member);
-            if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.trace("Invalid inbound messages update on: {}:{} from: {} on ring: {} - not predecessor: {}",
-                          params.context.getId(), params.member, from, request.getRing(), predecessor);
-                return;
-            }
-            buffer.receive(request.getUpdatesList());
+                            .build();
         }
     }
 
@@ -560,14 +544,6 @@ public class ReliableBroadcaster {
                 return;
             }
             buffer.receive(gossip.getUpdatesList());
-            try {
-                link.update(Reconciliation.newBuilder().setContext(params.context.getId().toDigeste()).setRing(ring)
-                                          .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getBff()),
-                                                                          link.getMember().getId()))
-                                          .build());
-            } catch (Throwable e) {
-                log.debug("error updating {}", link.getMember(), e);
-            }
         } finally {
             if (started.get()) {
                 scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);

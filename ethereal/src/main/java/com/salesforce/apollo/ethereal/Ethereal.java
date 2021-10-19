@@ -94,23 +94,22 @@ public class Ethereal {
      * @param setupConfig    - configuration for random beacon setup phase
      * @param config         - the Config
      * @param ds             - the DataSource to use to build Units
-     * @param prebblockSink  - the channel to send assembled PreBlocks as output
-     * @param synchronizer   - the channel that broadcasts PreUnits to other members
      * @param onClose        - run when the consensus has produced all units for
      *                       epochs
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
      * @param roundScheduler
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       Consumer<PreBlock> preblockSink, Consumer<Unit> synchronizer, Runnable onClose) {
+                                       Consumer<PreBlock> preblockSink, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         this.config = config;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, onClose);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, onClose);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -130,19 +129,16 @@ public class Ethereal {
      * @param config         - the Config
      * @param ds             - the DataSource to use to build Units
      * @param prebblockSink  - the channel to send assembled PreBlocks as output
-     * @param synchronizer   - the channel that broadcasts created Units to other
-     *                       members
      * @param roundScheduler
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                    Consumer<Unit> synchronizer) {
+    public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker) {
         if (started.get()) {
             return null;
         }
         this.config = config;
-        Controller consensus = deterministicConsensus(config, ds, blocker, synchronizer);
+        Controller consensus = deterministicConsensus(config, ds, blocker);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
@@ -160,23 +156,22 @@ public class Ethereal {
      * 
      * @param conf           - the Config
      * @param ds             - the DataSource to use to build Units
-     * @param prebblockSink  - the channel to send assembled PreBlocks as output
-     * @param synchronizer   - the channel that broadcasts PreUnits to other members
      * @param onClose        - run when the consensus has produced all units for
      *                       epochs
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
      * @param roundScheduler
      * @param connector      - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Consumer<Unit> synchronizer, Runnable onClose) {
+                                 Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
         this.config = conf;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, onClose);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, onClose);
         return new Controller(() -> {
             consensus.starte.run();
             try {
@@ -188,7 +183,7 @@ public class Ethereal {
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 Consumer<PreBlock> preblockSink, Consumer<Unit> synchronizer, Runnable onClose) {
+                                 Consumer<PreBlock> preblockSink, Runnable onClose) {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
@@ -218,7 +213,7 @@ public class Ethereal {
                     }
                     logWTK(wtkey);
                     var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              synchronizer, Coin.newFactory(config.pid(), wtkey));
+                                              Coin.newFactory(config.pid(), wtkey));
                     ord.set(orderer);
                     orderer.start();
                 } finally {
@@ -238,8 +233,7 @@ public class Ethereal {
         return new Controller(start, stop, input, null);
     }
 
-    private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                                              Consumer<Unit> synchronizer) {
+    private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker) {
         Consumer<List<Unit>> makePreblock = units -> {
             log.trace("Make pre block: {} on: {}", units, config.pid());
             PreBlock preBlock = toPreBlock(units);
@@ -260,7 +254,7 @@ public class Ethereal {
             }
         };
 
-        var orderer = new Orderer(config, ds, makePreblock, synchronizer, new DsrFactory());
+        var orderer = new Orderer(config, ds, makePreblock, new DsrFactory());
         var in = new SimpleChannel<List<PreUnit>>("Input for: " + config.pid(), new LinkedBlockingQueue<>());
 
         Consumer<List<PreUnit>> input = pus -> in.submit(pus);
@@ -309,8 +303,7 @@ public class Ethereal {
             }
         };
 
-        var ord = new Orderer(conf, null, extractHead, p -> {
-        }, rsf);
+        var ord = new Orderer(conf, null, extractHead, rsf);
         return new Controller(() -> ord.start(), () -> ord.stop(), null, null);
     }
 }

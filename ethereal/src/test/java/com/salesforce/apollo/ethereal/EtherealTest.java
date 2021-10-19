@@ -14,32 +14,18 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.RouterMetrics;
-import com.salesforce.apollo.comm.RouterMetricsImpl;
-import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -50,13 +36,6 @@ import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.creator.CreatorTest;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
-import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
-import com.salesforce.apollo.utils.ChannelConsumer;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -90,7 +69,6 @@ public class EtherealTest {
 
         short nProc = 31;
         CountDownLatch finished = new CountDownLatch(nProc);
-        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -124,7 +102,7 @@ public class EtherealTest {
                                                  if (last) {
                                                      finished.countDown();
                                                  }
-                                             }, pu -> synchronizer.getChannel().offer(pu));
+                                             });
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
@@ -190,7 +168,6 @@ public class EtherealTest {
 
         short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
-        ChannelConsumer<PreUnit> synchronizer = new ChannelConsumer<>(new LinkedBlockingDeque<>());
 
         List<Ethereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -222,7 +199,7 @@ public class EtherealTest {
                                                  if (last) {
                                                      finished.countDown();
                                                  }
-                                             }, pu -> synchronizer.getChannel().offer(pu));
+                                             });
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);

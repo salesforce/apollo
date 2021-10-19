@@ -38,12 +38,13 @@ final public class Util {
         if (p == 0.0) {
             return 1.0;
         }
-        if (p == 1.0)
+        if (p == 1.0) {
             if (k == n) {
                 return 1.0;
             } else {
                 return 0.0;
             }
+        }
 
         double q = 1.0 - p;
         double m = n + 1;

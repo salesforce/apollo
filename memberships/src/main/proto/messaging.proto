@@ -71,18 +71,10 @@ message ByteMessage {
 
 service RBC {
     rpc gossip (MessageBff) returns (Reconcile) {}
-    rpc update (Reconciliation) returns (google.protobuf.Empty) {}
 }
 
-message Reconciliation {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated  AgedMessage updates = 3;
-}
-
-message Reconcile {
-    utils.Biff  bff = 1;
-    repeated  AgedMessage updates = 2;
+message Reconcile { 
+    repeated  AgedMessage updates = 1;
 }
 message AgedMessage {
     int32 age = 1;
