@@ -20,7 +20,7 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.ethereal.Gossiper" level="WARN"
+    <logger name="com.salesforce.apollo.ethereal.Gossiper" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

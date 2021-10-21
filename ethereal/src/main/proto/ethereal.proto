@@ -16,7 +16,8 @@ service Gossiper {
 
 message Gossip {
     utils.Digeste context = 1;
-    utils.Biff have = 2;
+    int32 ring = 2;
+    utils.Biff have = 3;
 }
 
 message Update {

@@ -40,9 +40,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -61,11 +59,6 @@ public class Orderer {
 
         public Collection<? extends Unit> allUnits() {
             return dag.unitsAbove(null);
-        }
-
-        public void have(DigestBloomFilter biff) {
-            dag.have(biff);
-            adder.have(biff);
         }
 
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
@@ -211,30 +204,6 @@ public class Orderer {
         } finally {
             lock.unlock();
         }
-    }
-
-    /**
-     * Answer the BloomFilter containing the receiver's DAG state in the current and
-     * previous epoch
-     */
-    public BloomFilter<Digest> have() {
-        var biff = new BloomFilter.DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
-                                                     config.epochLength() * 2 * config.nProc(), 0.125);
-        final var lock = mx.readLock();
-        lock.lock();
-        try {
-            var p = previous.get();
-            if (p != null) {
-                p.have(biff);
-            }
-            var c = current.get();
-            if (c != null) {
-                c.have(biff);
-            }
-        } finally {
-            lock.unlock();
-        }
-        return biff;
     }
 
     /** MaxUnits returns maximal units per process from the chosen epoch. */

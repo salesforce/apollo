@@ -17,7 +17,9 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -26,6 +28,9 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesforce.apollo.comm.LocalRouter;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -36,6 +41,10 @@ import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.creator.CreatorTest;
+import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -67,7 +76,7 @@ public class EtherealTest {
     @Test
     public void large() throws Exception {
 
-        short nProc = 31;
+        short nProc = 61;
         CountDownLatch finished = new CountDownLatch(nProc);
 
         List<Ethereal> ethereals = new ArrayList<>();
@@ -85,13 +94,13 @@ public class EtherealTest {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
+        var level = new AtomicInteger();
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             builder.setSigner(new SignerImpl(0, cpks.get(i).getPrivateKey()));
-            var level = new AtomicInteger();
             var controller = e.deterministic(builder.setSigner(new SignerImpl(0, cpks.get(pid).getPrivateKey()))
                                                     .setPid(pid).build(),
                                              ds, (pb, last) -> {
@@ -240,6 +249,114 @@ public class EtherealTest {
                 }
                 assertEquals(a.randomBytes(), b.randomBytes());
             }
+        }
+    }
+
+    @Test
+    public void context() throws Exception {
+
+        short nProc = 61;
+        CountDownLatch finished = new CountDownLatch(nProc);
+
+        List<Ethereal> ethereals = new ArrayList<>();
+        List<DataSource> dataSources = new ArrayList<>();
+        List<Controller> controllers = new ArrayList<>();
+        List<ContextGossiper<SigningMember, SigningMember>> gossipers = new ArrayList<>();
+        List<Router> comms = new ArrayList<>();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc);
+
+        List<SigningMember> members = IntStream.range(0, nProc)
+                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
+                                               .toList();
+
+        Context<SigningMember> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.33, members.size());
+        context.activate(members);
+        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+                            .setVerifiers(members.toArray(new Verifier[members.size()]));
+        var executor = Executors.newCachedThreadPool();
+
+        List<List<PreBlock>> produced = new ArrayList<>();
+        for (int i = 0; i < nProc; i++) {
+            produced.add(new CopyOnWriteArrayList<>());
+        }
+
+        var level = new AtomicInteger();
+        for (short i = 0; i < nProc; i++) {
+            var e = new Ethereal();
+            var ds = new SimpleDataSource();
+            final short pid = i;
+            List<PreBlock> output = produced.get(pid);
+            var controller = e.deterministic(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
+                if (pid == 0) {
+                    System.out.println("Preblock: " + level.incrementAndGet());
+                }
+                output.add(pb);
+                if (last) {
+                    finished.countDown();
+                }
+            });
+            ethereals.add(e);
+            dataSources.add(ds);
+            controllers.add(controller);
+            for (int d = 0; d < 500; d++) {
+                ds.dataStack.add(ByteMessage.newBuilder()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
+                                            .toByteString());
+            }
+            Router com = new LocalRouter(members.get(i), ServerConnectionCache.newBuilder(), executor);
+            comms.add(com);
+            gossipers.add(new ContextGossiper<>(new Gossiper(controller), context, members.get(i), com, executor,
+                                                null));
+        }
+        try {
+            controllers.forEach(e -> e.start());
+            comms.forEach(e -> e.start());
+            gossipers.forEach(e -> e.start(Duration.ofMillis(1), scheduler));
+            finished.await(1360, TimeUnit.SECONDS);
+        } finally {
+            comms.forEach(e -> e.close());
+            gossipers.forEach(e -> e.stop());
+            controllers.forEach(e -> e.stop());
+        }
+        final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
+        assertFalse(first.isEmpty(), "No process produced 87 blocks");
+        List<PreBlock> preblocks = first.get();
+        List<String> outputOrder = new ArrayList<>();
+        int success = 0;
+        for (int i = 0; i < nProc; i++) {
+            final List<PreBlock> output = produced.get(i);
+            if (output.size() != 87) {
+                System.out.println("Did not get all expected blocks on: " + i);
+                break;
+            }
+            for (int j = 0; j < preblocks.size(); j++) {
+                var a = preblocks.get(j);
+                var b = output.get(j);
+                if (a.data().size() != b.data().size()) {
+                    System.out.println("Mismatch at block: " + j + " process: " + i);
+                    break;
+                }
+                boolean s = true;
+                for (int k = 0; k < a.data().size(); k++) {
+                    if (a.data().get(k) != b.data().get(k)) {
+                        s = false;
+                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
+                        + a.data().get(k) + " received: " + b.data().get(k));
+                        break;
+                    }
+                    outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
+                }
+                if (a.randomBytes() != b.randomBytes()) {
+                    System.out.println("Mismatch random bytea at block: " + j + " process: " + i);
+                    break;
+                }
+                if (s) {
+                    success++;
+                }
+            }
+            var minQuorum = Dag.minimalQuorum(nProc, builder.getBias());
+            assertTrue(success > minQuorum,
+                       "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
         }
     }
 }

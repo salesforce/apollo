@@ -47,7 +47,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class Ethereal {
 
-    public record Controller(Runnable starte, Runnable stope, Consumer<List<PreUnit>> input, Orderer orderer) {
+    public record Controller(Runnable starte, Runnable stope, Orderer orderer) {
         public void start() {
             starte.run();
         }
@@ -119,7 +119,7 @@ public class Ethereal {
         }, () -> {
             setup.stope.run();
             consensus.stope.run();
-        }, consensus.input, null);
+        }, null);
     }
 
     /**
@@ -142,7 +142,7 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(consensus.starte, consensus.stope, consensus.input, consensus.orderer);
+        return new Controller(consensus.starte, consensus.stope, consensus.orderer);
     }
 
     public Config getConfig() {
@@ -164,8 +164,7 @@ public class Ethereal {
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink,
-                                 Runnable onClose) {
+    public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
@@ -179,7 +178,7 @@ public class Ethereal {
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.starte, consensus.input, null);
+        }, consensus.starte, null);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
@@ -200,7 +199,6 @@ public class Ethereal {
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-        Consumer<List<PreUnit>> input = pus -> ord.get().addPreunits(pus);
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -230,7 +228,7 @@ public class Ethereal {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop, input, null);
+        return new Controller(start, stop, null);
     }
 
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker) {
@@ -257,9 +255,6 @@ public class Ethereal {
         var orderer = new Orderer(config, ds, makePreblock, new DsrFactory());
         var in = new SimpleChannel<List<PreUnit>>("Input for: " + config.pid(), new LinkedBlockingQueue<>());
 
-        Consumer<List<PreUnit>> input = pus -> in.submit(pus);
-        in.open();
-
         Runnable start = () -> {
             if (!started.compareAndSet(false, true)) {
                 return;
@@ -277,7 +272,7 @@ public class Ethereal {
             }
             in.close();
         };
-        return new Controller(start, stop, input, orderer);
+        return new Controller(start, stop, orderer);
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -304,6 +299,6 @@ public class Ethereal {
         };
 
         var ord = new Orderer(conf, null, extractHead, rsf);
-        return new Controller(() -> ord.start(), () -> ord.stop(), null, null);
+        return new Controller(() -> ord.start(), () -> ord.stop(), null);
     }
 }

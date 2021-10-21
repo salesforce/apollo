@@ -25,7 +25,6 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -138,11 +137,6 @@ public interface Adder {
         @Override
         public void close() {
             log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
-        }
-
-        @Override
-        public void have(DigestBloomFilter biff) {
-            waiting.keySet().stream().forEach(d -> biff.add(d));
         }
 
         @Override
@@ -356,8 +350,6 @@ public interface Adder {
     Map<Digest, Correctness> addPreunits(List<PreUnit> preunits);
 
     void close();
-
-    void have(DigestBloomFilter biff);
 
     void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
 
