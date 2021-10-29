@@ -181,8 +181,8 @@ public class Creator {
         } else {
             log.debug("Created unit: {} on: {}", u, conf.pid());
         }
-        send.accept(u);
         update(u);
+        send.accept(u);
     }
 
     /**

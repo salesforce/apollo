@@ -135,13 +135,14 @@ public class Context<T extends Member> {
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
+    private final int                          bias;
     private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
     private final Digest                       id;
     private Logger                             log                 = LoggerFactory.getLogger(Context.class);
     private final List<MembershipListener<T>>  membershipListeners = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<Digest, T> offline             = new ConcurrentHashMap<>();
-
-    private final Ring<T>[] rings;
+    private final double                       pByz;
+    private final Ring<T>[]                    rings;
 
     public Context(Digest id) {
         this(id, 1);
@@ -159,7 +160,7 @@ public class Context<T extends Member> {
      * @param cardinality
      */
     public Context(Digest id, double pByz, int cardinality) {
-        this(id, minMajority(pByz, cardinality) * 2 + 1);
+        this(pByz, 2, id, minMajority(pByz, cardinality) * 2 + 1);
     }
 
     /**
@@ -175,17 +176,23 @@ public class Context<T extends Member> {
      * @param epsilon
      */
     public Context(Digest id, double pByz, int cardinality, double epsilon, int bias) {
-        this(id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
+        this(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
     }
 
     public Context(Digest id, double pByz, int cardinality, int bias) {
-        this(id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
+        this(pByz, bias, id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
+    }
+
+    public Context(Digest id, int r) {
+        this(0.0, 2, id, r);
     }
 
     @SuppressWarnings("unchecked")
-    public Context(Digest id, int r) {
+    public Context(double pbyz, int bias, Digest id, int r) {
+        this.pByz = pbyz;
         this.id = id;
         this.rings = new Ring[r];
+        this.bias = bias;
         for (int i = 0; i < r; i++) {
             rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
         }
@@ -287,6 +294,10 @@ public class Context<T extends Member> {
         return active.get(memberID);
     }
 
+    public int getBias() {
+        return bias;
+    }
+
     public Digest getId() {
         return id;
     }
@@ -301,6 +312,10 @@ public class Context<T extends Member> {
 
     public Collection<T> getOffline() {
         return offline.values();
+    }
+
+    public double getProbabilityByzantine() {
+        return pByz;
     }
 
     public int getRingCount() {

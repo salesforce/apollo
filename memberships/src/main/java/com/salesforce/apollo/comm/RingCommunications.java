@@ -79,7 +79,7 @@ public class RingCommunications<Comm extends Link> {
 
     public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
         try (Comm link = nextRing(null)) {
-            executor.execute(Utils.wrapped(() -> execute(round, handler, link), log));
+            execute(round, handler, link);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -88,7 +88,7 @@ public class RingCommunications<Comm extends Link> {
     public <T> void execute(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Handler<T, Comm> handler) {
         try (Comm link = nextRing(digest)) {
-            executor.execute(Utils.wrapped(() -> execute(round, handler, link), log));
+            execute(round, handler, link);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -142,7 +142,7 @@ public class RingCommunications<Comm extends Link> {
     private int getLastRing() {
         final int current = lastRingIndex;
         if (current < 0) {// shutdown
-            return 0; 
+            return 0;
         }
         return traversalOrder.get(current);
     }

@@ -14,10 +14,10 @@ package apollo.choam;
 
 service Terminal {
     rpc submit (SubmitTransaction) returns (SubmitResult) {}
-    
+
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
-    
+
     /* bootstrapping */
     rpc sync(Synchronize) returns (Initial) {}
     rpc fetchBlocks(BlockReplication) returns (Blocks) {}
@@ -28,7 +28,6 @@ service Terminal {
 message JoinRequest {
     utils.Digeste context = 1;
     utils.Digeste nextView = 2;
-    ViewMember member = 3;
 }
 
 message SubmitTransaction {
@@ -147,17 +146,23 @@ message Validate {
     Certification witness = 2;
 }
 
+message Reassemble {
+    oneof assembly {
+        ViewMembers viewMembers = 1; 
+        Validations validations = 2;
+    }
+}
+
+message ViewMembers {
+    repeated ViewMember members = 1;
+}
+
 message Joins {
     repeated Join joins = 1;
 }
 
-/** Coordination **/
-
-message Coordinate {
-    oneof msg {
-        ethereal.PreUnit_s unit = 1;
-        Validate validate = 2;
-    }
+message Validations {
+    repeated Validate validations = 1;
 }
 
 message Synchronize {
@@ -198,4 +203,21 @@ message CheckpointSegments {
 message Slice {
     int32 index = 1;
     bytes block = 2;
+}
+
+
+service Gossip {
+    rpc gossip (Have) returns (Update) {}
+}
+
+message Have {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    utils.Biff validations = 3;
+    utils.Biff joins = 4;
+}
+
+message Update {
+    repeated Validate validations = 1;
+    repeated ViewMember joins = 2;
 }

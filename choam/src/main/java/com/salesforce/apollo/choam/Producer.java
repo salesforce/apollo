@@ -214,8 +214,7 @@ public class Producer {
         // Ethereal consensus
         var ethereal = new Ethereal();
         // Our handle on consensus
-        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
-                                            preUnit -> broadcast(preUnit));
+        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last));
         assert controller != null : "Controller is null";
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());

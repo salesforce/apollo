@@ -19,11 +19,7 @@
     <logger name="com.salesforce.apollo.ethereal" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>
-    <logger name="com.salesforce.apollo.ethereal.Gossiper" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
+    </logger> 
     <logger name="com.salesforce.apollo.membership.messaging.rbc" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />

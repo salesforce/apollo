@@ -7,8 +7,6 @@
 package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.FsmExecutor;
-import com.salesfoce.apollo.choam.proto.Joins;
-import com.salesfoce.apollo.choam.proto.Validate;
 
 /**
  * Leaf action interface for the view reconfiguration FSM
@@ -19,7 +17,7 @@ import com.salesfoce.apollo.choam.proto.Validate;
 public interface Reconfiguration {
     /** Transition events for the view reconfiguration FSM **/
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
-        default Transitions assembled() {
+        default Transitions gathered() {
             throw fsm().invalidTransitionOn();
         }
 
@@ -31,32 +29,20 @@ public interface Reconfiguration {
             return Reconfigure.PROTOCOL_FAILURE;
         }
 
-        default Transitions joins(Joins joins) {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions nominated() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions reconfigured() {
-            throw fsm().invalidTransitionOn();
-        }
-
-        default Transitions validate(Validate validate) {
+        default Transitions nextEpoch() {
             throw fsm().invalidTransitionOn();
         }
     }
 
     void complete();
 
-    void continueValidating();
-
-    void convene();
+    void elect();
 
     void failed();
 
-    void gatherAssembly();
+    void gather();
 
-    void validation(Validate validate);
+    void nominate();
+
+    void certify();
 }

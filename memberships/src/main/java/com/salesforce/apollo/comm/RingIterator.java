@@ -57,9 +57,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        executor.execute(Utils.wrapped(() -> internalIterate(digest, onMajority, round, failedMajority, handler,
-                                                             onComplete, tally),
-                                       log));
+        internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
 
     }
 
@@ -128,7 +126,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             }
         } else if (allow) {
             log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-            executor.execute(Utils.wrapped(proceed, log));
+            proceed.run();
         } else {
             log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
         }

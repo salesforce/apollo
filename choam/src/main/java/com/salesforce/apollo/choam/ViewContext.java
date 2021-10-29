@@ -18,7 +18,7 @@ import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
@@ -81,6 +81,22 @@ public class ViewContext {
         return validation;
     }
 
+    public Validate generateValidation(ViewMember vm) {
+        final var vmId = Digest.from(vm.getId());
+        log.trace("Signing view member: {}  on: {}", vmId, params.member());
+        final var vmSig = vm.getSignature();
+        JohnHancock signature = signer.sign(vmSig.toByteString());
+        if (signature == null) {
+            log.error("Unable to sign view member: {}  on: {}", vmId, params.member());
+            return null;
+        }
+        var validation = Validate.newBuilder().setHash(vm.getId())
+                                 .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
+                                                          .setSignature(signature.toSig()).build())
+                                 .build();
+        return validation;
+    }
+
     public Signer getSigner() {
         return signer;
     }
@@ -109,12 +125,18 @@ public class ViewContext {
         return roster;
     }
 
-    public boolean validate(Member m, PubKey encoded, JohnHancock sig) {
-        Verifier v = validators.get(m);
-        if (v == null) {
-            log.debug("Unable to validate key by non existant validator: {} on: {}", m.getId(), params.member());
+    public boolean validate(ViewMember vm, Validate validate) {
+        final var mid = Digest.from(validate.getWitness().getId());
+        var m = context.getMember(mid);
+        if (m == null) {
+            log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
             return false;
         }
-        return v.verify(sig, encoded.toByteString());
+        Verifier v = validators.get(m);
+        if (v == null) {
+            log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
+            return false;
+        }
+        return v.verify(JohnHancock.from(validate.getWitness().getSignature()), vm.getSignature().toByteString());
     }
 }

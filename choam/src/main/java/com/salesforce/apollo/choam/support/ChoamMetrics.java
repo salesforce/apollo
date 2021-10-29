@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.Timer;
-import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit;
@@ -23,8 +22,6 @@ public interface ChoamMetrics extends RouterMetrics {
     void invalidUnit();
 
     void preBlockProduced(PreBlock preblock);
-
-    void coordination(Coordinate coordination);
 
     void broadcast(PreUnit preUnit);
 

@@ -17,8 +17,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -26,22 +27,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import com.salesfoce.apollo.choam.proto.Assemble;
-import com.salesfoce.apollo.choam.proto.Block;
-import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
-import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
-import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -58,7 +52,7 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class ViewReconTest {
+public class ViewAssemblyTest {
 
     @Test
     public void func() throws Exception {
@@ -68,55 +62,22 @@ public class ViewReconTest {
 
         List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                                         .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (Member) e).toList();
-        Context<Member> base = new Context<>(viewId, 0.33, members.size());
+        Context<Member> base = new Context<>(viewId, 0.1, members.size(), 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));
 
+        final var executor = Executors.newCachedThreadPool();
         Parameters.Builder params = Parameters.newBuilder().setScheduler(Executors.newScheduledThreadPool(cardinality))
+                                              .setDispatcher(executor)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(100)).setContext(base);
-        List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
+        List<List<Join>> published = new CopyOnWriteArrayList<>();
 
-        Map<Member, ViewReconfiguration> recons = new HashMap<>();
-
-        HashedCertifiedBlock previous = new HashedCertifiedBlock(DigestAlgorithm.DEFAULT,
-                                                                 CertifiedBlock.getDefaultInstance());
-        BlockProducer reconfigure = new BlockProducer() {
-
-            @Override
-            public Block checkpoint() {
-                return null;
-            }
-
-            @Override
-            public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return null;
-            }
-
-            @Override
-            public Block produce(Long height, Digest prev, Assemble assemble) {
-                return null;
-            }
-
-            @Override
-            public Block produce(Long height, Digest prev, Executions executions) {
-                return null;
-            }
-
-            @Override
-            public void publish(CertifiedBlock cb) {
-                published.add(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, cb));
-            }
-
-            @Override
-            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return CHOAM.reconfigure(nextViewId, joining, previous, committee, previous, params.build(), previous);
-            }
-        };
+        Map<Member, ViewAssembly> recons = new HashMap<>();
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
@@ -132,12 +93,12 @@ public class ViewReconTest {
                 }
             });
         });
-
+        CountDownLatch complete = new CountDownLatch(committee.cardinality());
         Map<Member, Router> communications = members.stream()
                                                     .collect(Collectors.toMap(m -> m,
                                                                               m -> new LocalRouter(m,
                                                                                                    ServerConnectionCache.newBuilder(),
-                                                                                                   ForkJoinPool.commonPool())));
+                                                                                                   executor)));
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
@@ -153,16 +114,30 @@ public class ViewReconTest {
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
-                                               validators, reconfigure);
-            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));
+                                               validators, null);
+            recons.put(m, new ViewAssembly(nextViewId, view, comms.get(m)) {
+
+                @Override
+                public void complete() {
+                    super.complete();
+                    published.add(getSlate());
+                    complete.countDown();
+                }
+
+                @Override
+                public void failed() {
+                    super.failed();
+                    complete.countDown();
+                }
+            });
         });
 
         try {
             communications.values().forEach(r -> r.start());
             recons.values().forEach(r -> r.start());
 
-            Utils.waitForCondition(20_000, () -> published.size() == committee.activeMembers().size());
-            assertEquals(published.size(), committee.activeMembers().size());
+            complete.await(20, TimeUnit.SECONDS);
+            assertEquals(committee.cardinality(), published.size());
         } finally {
             communications.values().forEach(r -> r.close());
         }

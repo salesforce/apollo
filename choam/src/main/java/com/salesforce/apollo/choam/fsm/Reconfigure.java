@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.Entry;
-import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
 
 /**
@@ -15,60 +14,39 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
  *
  */
 public enum Reconfigure implements Transitions {
-    COMPLETED {
-
+    CERTIFICATION {
         @Entry
-        public void completion() {
-            context().complete();
+        public void certify() {
+            context().certify();
         }
 
         @Override
-        public Transitions validate(Validate validate) {
-            // Ignored, as we have already published the reconfiguration block
-            return null;
-        }
-    },
-    CONVENE {
-
-        @Entry
-        public void consolidate() {
-            context().convene();
-        }
-
-        @Override
-        public Transitions nominated() {
-            return NOMINATION;
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            context().validation(validate);
-            return null;
+        public Transitions nextEpoch() {
+            return RECONFIGURE;
         }
     },
     GATHER {
 
-        @Override
-        public Transitions assembled() {
-            return CONVENE;
-        }
-
         @Entry
         public void assembly() {
-            context().gatherAssembly();
+            context().gather();
+        }
+
+        @Override
+        public Transitions gathered() {
+            return NOMINATION;
         }
     },
     NOMINATION {
 
         @Override
-        public Transitions reconfigured() {
-            return RECONFIGURED;
+        public Transitions nextEpoch() {
+            return CERTIFICATION;
         }
 
-        @Override
-        public Transitions validate(Validate validate) {
-            context().validation(validate);
-            return null;
+        @Entry
+        public void nominate() {
+            context().nominate();
         }
     },
     PROTOCOL_FAILURE {
@@ -77,23 +55,27 @@ public enum Reconfigure implements Transitions {
             context().failed();
         }
     },
+    RECONFIGURE {
+        @Override
+        public Transitions complete() {
+            return RECONFIGURED;
+        }
+
+        @Entry
+        public void elect() {
+            context().elect();
+        }
+    },
     RECONFIGURED {
 
         @Override
         public Transitions complete() {
-            return COMPLETED;
-        }
-
-        @Entry
-        public void validations() {
-            context().continueValidating();
-        }
-
-        @Override
-        public Transitions validate(Validate validate) {
-            // Ignored, as we have already published the reconfiguration block
             return null;
         }
 
+        @Entry
+        public void completion() {
+            context().complete();
+        }
     };
 }

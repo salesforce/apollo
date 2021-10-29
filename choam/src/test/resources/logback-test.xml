@@ -18,12 +18,7 @@
     <logger name="com.salesforce.apollo.choam" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>
-    
-    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
+    </logger> 
      
     
     <logger name="com.chiralbehaviors.tron" level="info"
@@ -42,6 +37,14 @@
     </logger>
     
     <logger name="com.salesforce.apollo.ethereal" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    <logger name="com.salesforce.apollo.ethereal.Gossiper" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    <logger name="com.salesforce.apollo.ethereal.memberships" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

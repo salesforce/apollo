@@ -96,11 +96,14 @@ public class Orderer {
     private final AtomicReference<epoch> previous = new AtomicReference<>();
     private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
+    private final Consumer<Integer>      newEpochAction;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, RandomSourceFactory rsf) {
+    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Integer> newEpochAction,
+                   RandomSourceFactory rsf) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
+        this.newEpochAction = newEpochAction;
         this.rsf = rsf;
         creator = new Creator(config, ds, u -> {
             assert u.creator() == config.pid();
@@ -403,6 +406,9 @@ public class Orderer {
                 previous.set(c);
                 epoch newEpoch = createEpoch(epoch);
                 current.set(newEpoch);
+                if (epoch != 0 && newEpochAction != null) {
+                    newEpochAction.accept(epoch);
+                }
                 return newEpoch;
             }
             if (epoch == c.id()) {

@@ -59,8 +59,7 @@ public class SliceIterator<Comm extends Link> {
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round, SlicePredicateHandler<T, Comm> handler,
                             Runnable onComplete) {
-        executor.execute(Utils.wrapped(() -> internalIterate(round, handler, onComplete), log));
-
+        internalIterate(round, handler, onComplete);
     }
 
     private <T> void internalIterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
