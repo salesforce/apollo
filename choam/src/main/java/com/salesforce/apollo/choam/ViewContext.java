@@ -125,18 +125,30 @@ public class ViewContext {
         return roster;
     }
 
+    public boolean validate(HashedBlock block, Validate validate) {
+        Verifier v = verifierOf(validate);
+        return v == null ? false : v.verify(JohnHancock.from(validate.getWitness().getSignature()),
+                                            block.block.getHeader().toByteString());
+    }
+
     public boolean validate(ViewMember vm, Validate validate) {
+        Verifier v = verifierOf(validate);
+        return v == null ? false : v.verify(JohnHancock.from(validate.getWitness().getSignature()),
+                                            vm.getSignature().toByteString());
+    }
+
+    protected Verifier verifierOf(Validate validate) {
         final var mid = Digest.from(validate.getWitness().getId());
         var m = context.getMember(mid);
         if (m == null) {
             log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
-            return false;
+            return null;
         }
         Verifier v = validators.get(m);
         if (v == null) {
             log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
-            return false;
+            return null;
         }
-        return v.verify(JohnHancock.from(validate.getWitness().getSignature()), vm.getSignature().toByteString());
+        return v;
     }
 }

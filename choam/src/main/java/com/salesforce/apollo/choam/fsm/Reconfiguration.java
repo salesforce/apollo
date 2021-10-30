@@ -17,10 +17,6 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Reconfiguration {
     /** Transition events for the view reconfiguration FSM **/
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
-        default Transitions gathered() {
-            throw fsm().invalidTransitionOn();
-        }
-
         default Transitions complete() {
             throw fsm().invalidTransitionOn();
         }
@@ -29,9 +25,23 @@ public interface Reconfiguration {
             return Reconfigure.PROTOCOL_FAILURE;
         }
 
+        default Transitions gathered() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions nextEpoch() {
             throw fsm().invalidTransitionOn();
         }
+
+        default Transitions reconfigureBlock() {
+            throw fsm().invalidTransitionOn();
+        }
+    }
+
+    void certify();
+
+    default void certifyBlock() {
+        // do nothing
     }
 
     void complete();
@@ -44,5 +54,7 @@ public interface Reconfiguration {
 
     void nominate();
 
-    void certify();
+    default void produceBlock() {
+        // do nothing
+    }
 }

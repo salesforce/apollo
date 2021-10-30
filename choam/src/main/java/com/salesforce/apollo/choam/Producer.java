@@ -29,7 +29,6 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Coordinate;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
@@ -214,7 +213,7 @@ public class Producer {
         // Ethereal consensus
         var ethereal = new Ethereal();
         // Our handle on consensus
-        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last));
+        controller = ethereal.deterministic(config.build(), ds, (preblock, last) -> create(preblock, last), null);
         assert controller != null : "Controller is null";
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());

@@ -66,6 +66,19 @@ public enum Reconfigure implements Transitions {
             context().elect();
         }
     },
+    RECONFIGURE_BLOCK {
+        @Entry
+        public void certifyBlock() {
+            context().certifyBlock();
+        }
+
+        @Override
+        public Transitions complete() {
+            context().produceBlock();
+            return null;
+        }
+
+    },
     RECONFIGURED {
 
         @Override
@@ -76,6 +89,11 @@ public enum Reconfigure implements Transitions {
         @Entry
         public void completion() {
             context().complete();
+        }
+
+        @Override
+        public Transitions reconfigureBlock() {
+            return RECONFIGURE_BLOCK;
         }
     };
 }

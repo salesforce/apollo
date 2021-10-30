@@ -241,7 +241,7 @@ public class Ethereal {
             var timingUnit = units.get(units.size() - 1);
             var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
-                log.info("Closing at last level: {} and epochs: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                log.info("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
                          config.pid());
                 last = true;
             }

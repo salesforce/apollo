@@ -8,9 +8,7 @@ package com.salesforce.apollo.choam;
 
 import java.util.Collections;
 
-import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -23,11 +21,6 @@ public class GenesisContext extends ViewContext {
 
     public GenesisContext(Context<Member> context, Parameters params, Signer signer, BlockProducer blockProducer) {
         super(context, params, signer, Collections.emptyMap(), blockProducer);
-    }
-
-    @Override
-    public boolean validate(Member m, PubKey encoded, JohnHancock sig) {
-        return true; // no validators on genesis
     }
 
 }
