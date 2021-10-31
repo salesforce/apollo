@@ -59,7 +59,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                                      bias            = 3;
         private boolean                                  canSkipLevel    = false;
         private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
-        private Clock                                    clock           = Clock.systemUTC(); 
+        private Clock                                    clock           = Clock.systemUTC();
         private short                                    crpFixedPrefix;
         private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int                                      epochLength     = 30;
@@ -134,8 +134,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 addLastLevel();
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, clock, bias, verifiers);
+                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs,
+                              checks, wtk, executor, clock, bias, verifiers);
         }
 
         @Override
@@ -157,7 +157,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Clock getClock() {
             return clock;
-        } 
+        }
 
         public short getCrpFixedPrefix() {
             return crpFixedPrefix;
@@ -247,7 +247,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         public Builder setClock(Clock clock) {
             this.clock = clock;
             return this;
-        } 
+        }
 
         public Builder setCrpFixedPrefix(short crpFixedPrefix) {
             this.crpFixedPrefix = crpFixedPrefix;

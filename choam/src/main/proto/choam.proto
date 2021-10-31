@@ -107,6 +107,11 @@ message Transaction {
     utils.Sig signature = 4; 
 }
 
+message UnitData {
+    repeated Validate validations = 1;
+    repeated Transaction transactions = 2;
+}
+
 message Join {
     utils.Digeste view = 1;
     ViewMember member = 2;

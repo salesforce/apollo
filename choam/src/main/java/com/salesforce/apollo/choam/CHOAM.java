@@ -375,7 +375,7 @@ public class CHOAM {
         @Override
         public void complete() {
             if (reconfigure != null) {
-                reconfigure.complete();
+                reconfigure.stop();
             }
         }
 

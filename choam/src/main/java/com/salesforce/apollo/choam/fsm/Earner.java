@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
-import com.chiralbehaviors.tron.Exit;
 import com.salesforce.apollo.choam.fsm.Driven.Transitions;
 
 /**
@@ -33,10 +32,6 @@ public enum Earner implements Driven.Transitions {
         }
     },
     COMPLETE {
-        @Exit
-        public void bail() {
-            context().cancelTimers();
-        }
 
         @Override
         public Transitions lastBlock() {

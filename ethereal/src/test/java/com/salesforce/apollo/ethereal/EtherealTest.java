@@ -56,6 +56,12 @@ public class EtherealTest {
 
     private static class SimpleDataSource implements DataSource {
         final Deque<ByteString> dataStack = new ArrayDeque<>();
+        final short             pid;
+        final AtomicInteger     round     = new AtomicInteger();
+
+        SimpleDataSource(short pid) {
+            this.pid = pid;
+        }
 
         @Override
         public ByteString getData() {
@@ -63,6 +69,7 @@ public class EtherealTest {
                 Thread.sleep(Utils.bitStreamEntropy().nextLong(100));
             } catch (InterruptedException e) {
             }
+            System.out.println("Polling data: " + round.getAndIncrement() + " for: " + pid);
             return dataStack.pollFirst();
         }
 
@@ -111,7 +118,7 @@ public class EtherealTest {
         var level = new AtomicInteger();
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
-            var ds = new SimpleDataSource();
+            var ds = new SimpleDataSource(i);
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             var controller = e.deterministic(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
@@ -210,8 +217,9 @@ public class EtherealTest {
 
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
-            var ds = new SimpleDataSource();
+            var ds = new SimpleDataSource(i);
             final short pid = i;
+            final AtomicInteger round = new AtomicInteger();
             List<PreBlock> output = produced.get(pid);
             builder.setSigner(new SignerImpl(0, cpks.get(i).getPrivateKey()));
             var controller = e.deterministic(builder.setSigner(new SignerImpl(0,
@@ -219,6 +227,8 @@ public class EtherealTest {
                                                                                                         .getPrivate()))
                                                     .setPid(pid).build(),
                                              ds, (pb, last) -> {
+                                                 System.out.println("Output: " + round.incrementAndGet() + " for: "
+                                                 + pid);
                                                  output.add(pb);
                                                  if (last) {
                                                      finished.countDown();
@@ -291,13 +301,16 @@ public class EtherealTest {
         var level = new AtomicInteger();
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
-            var ds = new SimpleDataSource();
+            var ds = new SimpleDataSource(i);
             final short pid = i;
+            final AtomicInteger round = new AtomicInteger();
             List<PreBlock> output = produced.get(pid);
             builder.setSigner(new SignerImpl(0, cpks.get(i).getPrivateKey()));
             var controller = e.deterministic(builder.setSigner(new SignerImpl(0, cpks.get(pid).getPrivateKey()))
                                                     .setPid(pid).build(),
                                              ds, (pb, last) -> {
+                                                 System.out.println("Output: " + round.incrementAndGet() + " for: "
+                                                 + pid);
                                                  if (pid == 0) {
                                                      System.out.println("Preblock: " + level.incrementAndGet());
                                                  }

@@ -7,21 +7,17 @@
 package com.salesforce.apollo.choam.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.Parameters;
-import com.salesforce.apollo.choam.Parameters.ProducerParameters;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.impl.MemberImpl;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -31,14 +27,8 @@ public class TxDataSourceTest {
 
     @Test
     public void func() {
-        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9); 
-        var parameters = Parameters.newBuilder()
-                                   .setScheduler(exec)
-                                   .setContext(context)
-                                   .setProducer(ProducerParameters.newBuilder().setMaxBatchByteSize(1024).build())
-                                   .build();
-        TxDataSource ds = new TxDataSource(parameters, 1024 * 5);
+        TxDataSource ds = new TxDataSource(new MemberImpl(Utils.getMember(0).getX509Certificate()), 100, null, 1024,
+                                           Duration.ofMillis(100), 100);
         Transaction tx = Transaction.newBuilder()
                                     .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();
@@ -46,53 +36,37 @@ public class TxDataSourceTest {
         while (ds.offer(tx)) {
             count++;
         }
-        assertEquals(121, count);
-        assertEquals(121, ds.getProcessing());
-        assertEquals(38, ds.getRemaining());
-        assertEquals(5082, ds.getBuffered());
+        assertEquals(155, count);
+        assertEquals(5, ds.getProcessing());
 
         var data = ds.getData();
         assertNotNull(data);
-        assertEquals(1056, data.size());
-        assertEquals(-986, ds.getRemaining());
-        assertEquals(4074, ds.getBuffered());
+        assertEquals(1144, data.size());
 
-        assertFalse(ds.offer(tx));
+        assertTrue(ds.offer(tx));
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1056, data.size());
-        assertEquals(-2010, ds.getRemaining());
-        assertEquals(3066, ds.getBuffered());
+        assertEquals(1144, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1056, data.size());
-        assertEquals(-3034, ds.getRemaining());
-        assertEquals(2058, ds.getBuffered());
+        assertEquals(1144, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1056, data.size());
-        assertEquals(-4058, ds.getRemaining());
-        assertEquals(1050, ds.getBuffered());
+        assertEquals(1144, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(1056, data.size());
-        assertEquals(-5082, ds.getRemaining());
-        assertEquals(42, ds.getBuffered());
+        assertEquals(1144, data.size());
 
         data = ds.getData();
         assertNotNull(data);
-        assertEquals(44, data.size());
-        assertEquals(-6106, ds.getRemaining());
-        assertEquals(0, ds.getBuffered());
+        assertEquals(1100, data.size());
 
         data = ds.getData();
         assertNotNull(data);
         assertEquals(0, data.size());
-        assertEquals(-6106, ds.getRemaining());
-        assertEquals(0, ds.getBuffered());
     }
 }

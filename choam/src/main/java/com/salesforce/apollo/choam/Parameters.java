@@ -90,19 +90,28 @@ public record Parameters(Context<Member> context, Router communications, Signing
     }
 
     public record ProducerParameters(Config.Builder ethereal, Duration gossipDuration,
-                                     ReliableBroadcaster.Parameters.Builder coordination, int maxBatchByteSize) {
+                                     ReliableBroadcaster.Parameters.Builder coordination, int maxBatchByteSize,
+                                     Duration batchInterval, int maxBatchCount) {
 
         public static Builder newBuilder() {
             return new Builder();
         }
+
         public static class Builder {
+            private Duration                               batchInterval    = Duration.ofMillis(100);
             private ReliableBroadcaster.Parameters.Builder coordination     = ReliableBroadcaster.Parameters.newBuilder();
             private Config.Builder                         ethereal         = Config.deterministic();
             private Duration                               gossipDuration   = Duration.ofSeconds(1);
-            private int                                    maxBatchByteSize = 256 * 1024;;
+            private int                                    maxBatchByteSize = 256 * 1024;
+            private int                                    maxBatchCount    = 1000;
 
             public ProducerParameters build() {
-                return new ProducerParameters(ethereal, gossipDuration, coordination, maxBatchByteSize);
+                return new ProducerParameters(ethereal, gossipDuration, coordination, maxBatchByteSize, batchInterval,
+                                              maxBatchCount);
+            }
+
+            public Duration getBatchInterval() {
+                return batchInterval;
             }
 
             public ReliableBroadcaster.Parameters.Builder getCoordination() {
@@ -119,6 +128,15 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
             public int getMaxBatchByteSize() {
                 return maxBatchByteSize;
+            }
+
+            public int getMaxBatchCount() {
+                return maxBatchCount;
+            }
+
+            public Builder setBatchInterval(Duration batchInterval) {
+                this.batchInterval = batchInterval;
+                return this;
             }
 
             public Builder setCoordination(ReliableBroadcaster.Parameters.Builder coordination) {
@@ -138,6 +156,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
             public Builder setMaxBatchByteSize(int maxBatchByteSize) {
                 this.maxBatchByteSize = maxBatchByteSize;
+                return this;
+            }
+
+            public Builder setMaxBatchCount(int maxBatchCount) {
+                this.maxBatchCount = maxBatchCount;
                 return this;
             }
         }

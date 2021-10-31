@@ -68,13 +68,15 @@ public class AgeBatchingQueue<T> {
     private final AtomicReference<AgeBatch>     currentBatch;
     private volatile ScheduledFuture<?>         fs;
     private final String                        label;
+    private final int                           limit;
     private final LinkedBlockingQueue<AgeBatch> oldBatches;
     private final AtomicBoolean                 oldBatchesQueueFull;
     private final AtomicInteger                 size    = new AtomicInteger();
     private final AtomicBoolean                 started = new AtomicBoolean();
 
-    AgeBatchingQueue(String label, int queueSize) {
+    AgeBatchingQueue(String label, int queueSize, int limit) {
         this.label = label;
+        this.limit = limit;
         oldBatches = new LinkedBlockingQueue<>(queueSize);
         currentBatch = new AtomicReference<>(createNewBatch());
         oldBatchesQueueFull = new AtomicBoolean();
@@ -87,8 +89,13 @@ public class AgeBatchingQueue<T> {
         return batch.events;
     }
 
-    public AgeBatch blockingTakeWithTimeout(long timeoutInMillis) throws InterruptedException {
-        return oldBatches.poll(timeoutInMillis, TimeUnit.MILLISECONDS);
+    public Queue<T> blockingTakeWithTimeout(Duration timeout) throws InterruptedException {
+        final var batch = oldBatches.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (batch == null) {
+            return null;
+        }
+        size.decrementAndGet();
+        return batch.events;
     }
 
     public void clear() {
@@ -106,6 +113,9 @@ public class AgeBatchingQueue<T> {
     }
 
     public boolean offer(T event) {
+        if (size.get() >= limit) {
+            return false;
+        }
         if (oldBatchesQueueFull.get()) {
             if (!reapCurrentBatch("Offering Thread")) {
                 return false;

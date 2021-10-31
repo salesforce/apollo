@@ -8,8 +8,10 @@ package com.salesforce.apollo.choam;
 
 import java.util.Collections;
 
+import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 
@@ -23,4 +25,8 @@ public class GenesisContext extends ViewContext {
         super(context, params, signer, Collections.emptyMap(), blockProducer);
     }
 
+    @Override
+    protected Verifier verifierOf(Validate validate) {
+        return new Verifier.MockVerifier();
+    }
 }

@@ -78,6 +78,11 @@ public enum Reconfigure implements Transitions {
             return null;
         }
 
+        @Override
+        public Transitions nextEpoch() {
+            return null;
+        }
+
     },
     RECONFIGURED {
 

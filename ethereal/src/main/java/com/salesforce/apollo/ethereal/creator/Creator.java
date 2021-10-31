@@ -193,7 +193,7 @@ public class Creator {
      * channel)
      **/
     private ByteString getData(int level, Queue<Unit> lastTiming) {
-        if (level <= conf.lastLevel()) {
+        if (level < conf.lastLevel()) {
             if (ds != null) {
                 return ds.getData();
             }

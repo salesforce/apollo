@@ -6,18 +6,23 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesforce.apollo.choam.Parameters;
+import com.salesfoce.apollo.choam.proto.UnitData;
+import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.CapacityBatchingQueue;
 
 /**
  * 
@@ -33,61 +38,58 @@ import com.salesforce.apollo.ethereal.DataSource;
  *
  */
 public class TxDataSource implements DataSource {
+
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
-    private final AtomicInteger              buffered   = new AtomicInteger();
-    private final Parameters                 parameters;
-    private final BlockingDeque<Transaction> processing = new LinkedBlockingDeque<>();
-    private final AtomicInteger              remaining  = new AtomicInteger();
+    private final Duration                           batchInterval;
+    private final Member                             member;
+    private final CapacityBatchingQueue<Transaction> processing;
+    private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
 
-    public TxDataSource(Parameters parameters, int maxBufferSize) {
-        this.parameters = parameters;
-        remaining.set(maxBufferSize);
-    }
-
-    public int getBuffered() {
-        return buffered.get();
+    public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
+                        Duration batchInterval, int maxBatchCount) {
+        this.member = member;
+        this.batchInterval = batchInterval;
+        processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
+                                                            maxBatchCount, maxBatchByteSize,
+                                                            tx -> tx.toByteString().size(), 5);
     }
 
     @Override
     public ByteString getData() {
-        Executions.Builder builder = Executions.newBuilder();
-        int batchSize = 0;
-        int bytesRemaining = parameters.producer().maxBatchByteSize();
-        while (processing.peek() != null && bytesRemaining >= processing.peek().getSerializedSize()) {
-            Transaction next = processing.poll();
-            bytesRemaining -= next.getSerializedSize();
-            batchSize++;
-            builder.addExecutions(next);
+        Queue<Transaction> batch;
+        try {
+            batch = processing.blockingTakeWithTimeout(batchInterval);
+        } catch (InterruptedException e) {
+            return ByteString.EMPTY;
         }
-        int byteSize = parameters.producer().maxBatchByteSize() - bytesRemaining;
-        buffered.addAndGet(-byteSize);
-        if (parameters.metrics() != null) {
-            parameters.metrics().publishedBatch(batchSize, byteSize);
+        var builder = UnitData.newBuilder();
+        if (batch != null) {
+            builder.addAllTransactions(batch);
         }
-        if (batchSize > 0) {
-            remaining.addAndGet(-parameters.producer().maxBatchByteSize());
-        }
-        log.trace("Processed: {} txns totalling: {} bytes  on: {}", batchSize, byteSize, parameters.member());
-        return builder.build().toByteString();
+        var vdx = new ArrayList<Validate>();
+        validations.drainTo(vdx);
+        builder.addAllValidations(vdx);
+        final var data = builder.build();
+        final var bs = data.toByteString();
+        log.info("Unit data: {} txns {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
+                 data.getValidationsCount(), bs.size(), member);
+        return bs;
     }
 
     public int getProcessing() {
         return processing.size();
     }
 
-    public int getRemaining() {
-        return remaining.get();
+    public boolean offer(Transaction txn) {
+        return processing.offer(txn);
     }
 
-    public boolean offer(Transaction txn) {
-        if (remaining.addAndGet(-txn.getSerializedSize()) > 0) {
-            buffered.addAndGet(txn.getSerializedSize());
-            processing.add(txn);
-            return true;
-        } else {
-            remaining.addAndGet(txn.getSerializedSize());
-            return false;
-        }
+    public void offer(Validate generateValidation) {
+        validations.offer(generateValidation);
+    }
+
+    public void start(Duration batchInterval, ScheduledExecutorService scheduler) {
+        processing.start(batchInterval, scheduler);
     }
 }

@@ -10,14 +10,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class SizeAndAgeBatchingQueue<T> extends AgeBatchingQueue<T> {
 
-    private class AgeAndSizeBatch extends AgeBatch {
+    class AgeAndSizeBatch extends AgeBatch {
+ 
+        private final AtomicInteger currentBatchSize;
 
-        private final int     batchSize;
-        private AtomicInteger currentBatchSize;
-
-        protected AgeAndSizeBatch(int batchSize) {
-            super();
-            this.batchSize = batchSize;
+        protected AgeAndSizeBatch( ) {
+            super(); 
             currentBatchSize = new AtomicInteger();
         }
 
@@ -44,13 +42,13 @@ public class SizeAndAgeBatchingQueue<T> extends AgeBatchingQueue<T> {
 
     private final int batchSize;
 
-    public SizeAndAgeBatchingQueue(int batchSize, String label, int queueSize) {
-        super(label, queueSize);
+    public SizeAndAgeBatchingQueue(int batchSize, String label, int queueSize, int limit) {
+        super(label, queueSize, limit);
         this.batchSize = batchSize;
     }
 
     @Override
     AgeBatch createNewBatch() {
-        return new AgeAndSizeBatch(batchSize);
+        return new AgeAndSizeBatch();
     }
 }
