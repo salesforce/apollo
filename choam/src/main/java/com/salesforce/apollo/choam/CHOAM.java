@@ -242,7 +242,7 @@ public class CHOAM {
 
         @Override
         public void complete() {
-            producer.complete();
+            producer.stop();
         }
 
         @Override

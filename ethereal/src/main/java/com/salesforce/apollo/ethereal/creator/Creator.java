@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
@@ -79,8 +77,6 @@ public class Creator {
         }
     }
 
-    VarHandle varHandle = MethodHandles.arrayElementVarHandle(Unit[].class);
-
     private final Unit[]                               candidates;
     private final Config                               conf;
     private final DataSource                           ds;
@@ -150,7 +146,7 @@ public class Creator {
                 return null;
             }
         } else {
-            var l = ((Unit) varHandle.get(candidates, conf.pid())).level() + 1;
+            var l = candidates[conf.pid()].level() + 1;
             final Unit[] parents = getParentsForLevel(l);
             if (count(parents) >= quorum) {
                 log.trace("Parents not ready: {} on: {}", parents, conf.pid());
@@ -227,7 +223,7 @@ public class Creator {
     private Unit[] getParents() {
         Unit[] result = new Unit[candidates.length];
         for (int i = 0; i < result.length; i++) {
-            result[i] = (Unit) varHandle.get(candidates, i);
+            result[i] = candidates[i];
         }
         makeConsistent(result);
         return result;
@@ -240,7 +236,7 @@ public class Creator {
     private Unit[] getParentsForLevel(int level) {
         var result = new Unit[conf.nProc()];
         for (int i = 0; i < candidates.length; i++) {
-            Unit u = (Unit) varHandle.get(candidates, i);
+            Unit u = candidates[i];
             for (; u != null && u.level() >= level; u = u.predecessor())
                 ;
             if (u != null) {
@@ -272,7 +268,7 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private built ready() {
-        final int l = ((Unit) varHandle.get(candidates, conf.pid())).level();
+        final int l = candidates[conf.pid()].level();
         boolean ready = !epochDone.get() && level.get() > l;
         log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(), l, conf.pid());
         if (ready) {
@@ -288,7 +284,7 @@ public class Creator {
     private void resetEpoch() {
         log.debug("Resetting epoch on: {}", conf.pid());
         for (int i = 0; i < candidates.length; i++) {
-            varHandle.set(candidates, i, null);
+            candidates[i] = null;
         }
         maxLvl.set(-1);
         onMaxLvl.set(0);
@@ -344,9 +340,9 @@ public class Creator {
         if (u.epoch() != epoch.get()) {
             return;
         }
-        var prev = (Unit) varHandle.get(candidates, u.creator());
+        var prev = candidates[u.creator()];
         if (prev == null || prev.level() < u.level()) {
-            varHandle.set(candidates, u.creator(), u);
+            candidates[u.creator()] = u;
             log.trace("Update candidate to: {} on: {}", u, conf.pid());
             if (u.level() == maxLvl.get()) {
                 onMaxLvl.incrementAndGet();

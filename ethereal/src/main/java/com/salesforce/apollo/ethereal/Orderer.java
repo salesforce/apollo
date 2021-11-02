@@ -406,7 +406,7 @@ public class Orderer {
                 previous.set(c);
                 epoch newEpoch = createEpoch(epoch);
                 current.set(newEpoch);
-                if (epoch != 0 && newEpochAction != null) {
+                if (newEpochAction != null) {
                     newEpochAction.accept(epoch);
                 }
                 return newEpoch;

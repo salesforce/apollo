@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -55,6 +54,8 @@ import com.salesforce.apollo.membership.Member;
  */
 public class Producer {
 
+    record PendingBlock(HashedBlock block, Map<Member, Validate> witnesses, AtomicBoolean published) {}
+
     /** Leaf action driver coupling for the Producer FSM */
     private class DriveIn implements Driven {
 
@@ -80,7 +81,7 @@ public class Producer {
 
         @Override
         public void complete() {
-            Producer.this.complete();
+            stop();
         }
 
         @Override
@@ -95,6 +96,7 @@ public class Producer {
                 var p = new PendingBlock(rhb, new HashMap<>(), new AtomicBoolean());
                 pending.put(rhb.hash, p);
                 p.witnesses.put(params().member(), validation);
+                ds.offer(validation);
                 log.debug("Reconfiguration block: {} height: {} created on: {}", rhb.hash, rhb.height(),
                           params().member());
             } else {
@@ -107,6 +109,7 @@ public class Producer {
         @Override
         public void startProduction() {
             log.info("Starting production for: {} on: {}", getViewId(), params().member());
+            produceAssemble();
             controller.start();
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
         }
@@ -122,11 +125,8 @@ public class Producer {
         }
     }
 
-    record PendingBlock(HashedBlock block, Map<Member, Validate> witnesses, AtomicBoolean published) {}
-
     private static final Logger                     log           = LoggerFactory.getLogger(Producer.class);
     private volatile ViewAssembly                   assembly;
-    private final AtomicBoolean                     closed        = new AtomicBoolean(false);
     private final CommonCommunications<Terminal, ?> comms;
     private final Controller                        controller;
     private final ContextGossiper                   coordinator;
@@ -136,7 +136,8 @@ public class Producer {
     private volatile Digest                         nextViewId;
     private final Map<Digest, PendingBlock>         pending       = new ConcurrentHashMap<>();
     private final AtomicReference<HashedBlock>      previousBlock = new AtomicReference<>();
-    private final AtomicInteger                     reconfigureCountdown;
+    private final int                               reconfigurationEpoch;
+    private final AtomicBoolean                     started       = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;
 
@@ -145,12 +146,16 @@ public class Producer {
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.comms = comms;
-        this.reconfigureCountdown = new AtomicInteger(2); // TODO params
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
         final Builder ep = producerParams.ethereal();
-        final int maxElements = ((ep.getEpochLength() - 1) * ep.getNumberOfEpochs()) - 4;
+
+        // Number of rounds we can provide data for
+        final int maxElements = ((ep.getEpochLength() - 4) * ep.getNumberOfEpochs() - 1);
+
+        reconfigurationEpoch = ep.getNumberOfEpochs() - 1;
+
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount());
 
@@ -169,19 +174,17 @@ public class Producer {
             config.setPid(pid).setnProc((short) view.roster().size());
         }
 
-        controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last), null);
+        controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
+                                                  epoch -> newEpoch(epoch));
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
                                           params().dispatcher(), params().metrics());
 
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
-    public void complete() {
-        log.info("Closing producer for: {} on: {}", getViewId(), params().member());
-        controller.stop();
-        coordinator.stop();
-        if (assembly != null) {
-            assembly.complete();
+    private void newEpoch(Integer epoch) {
+        if (epoch == reconfigurationEpoch) {
+            transitions.lastBlock();
         }
     }
 
@@ -191,6 +194,9 @@ public class Producer {
     }
 
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         final Block prev = previousBlock.get().block;
         ds.start(params().producer().batchInterval(), params().scheduler());
         if (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0) { // genesis block won't ever be
@@ -201,10 +207,22 @@ public class Producer {
         }
     }
 
+    public void stop() {
+        if (started.compareAndSet(true, false)) {
+            return;
+        }
+        log.info("Closing producer for: {} on: {}", getViewId(), params().member());
+        controller.stop();
+        coordinator.stop();
+        if (assembly != null) {
+            assembly.complete();
+        }
+    }
+
     public SubmitResult submit(Transaction transaction) {
         log.trace("Submit received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                   params().member());
-        if (closed.get()) {
+        if (!started.get()) {
             log.trace("Failure, cannot submit received txn: {} on: {}",
                       CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
             return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
@@ -250,11 +268,40 @@ public class Producer {
 
         log.debug("Block: {} height: {} created on: {}", next.hash, next.height(), params().member());
         if (last) {
-            closed.set(true);
-            transitions.lastBlock();
-        } else if (reconfigureCountdown.decrementAndGet() == 0) {
-            produceAssemble();
+            started.set(true);
+            transitions.complete();
         }
+    }
+
+    private Digest getViewId() {
+        return view.context().getId();
+    }
+
+    private Parameters params() {
+        return view.params();
+    }
+
+    private void produceAssemble() {
+        final var vlb = previousBlock.get();
+        nextViewId = vlb.hash;
+        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
+        final var reconfigure = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height()
+        + 1, vlb.hash, Assemble.newBuilder().setNextView(vlb.hash.toDigeste()).build()));
+        previousBlock.set(reconfigure);
+        final var validation = view.generateValidation(reconfigure);
+        final var p = new PendingBlock(reconfigure, new HashMap<>(), new AtomicBoolean());
+        pending.put(reconfigure.hash, p);
+        p.witnesses.put(params().member(), validation);
+        ds.offer(validation);
+        log.debug("Next view: {} created: {} height: {} body: {} from: {} on: {}", nextViewId, reconfigure.hash,
+                  reconfigure.height(), reconfigure.block.getBodyCase(), getViewId(), params().member());
+        assembly = new ViewAssembly(nextViewId, view, comms) {
+            @Override
+            public void complete() {
+                joins.putAll(getSlate());
+            }
+        };
+        assembly.start();
     }
 
     private void publish(PendingBlock p) {
@@ -279,35 +326,5 @@ public class Producer {
         }
         p.witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);
         return p;
-    }
-
-    private Digest getViewId() {
-        return view.context().getId();
-    }
-
-    private Parameters params() {
-        return view.params();
-    }
-
-    private void produceAssemble() {
-        final var vlb = previousBlock.get();
-        nextViewId = vlb.hash;
-        nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
-        final var reconfigure = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height()
-        + 1, vlb.hash, Assemble.newBuilder().setNextView(vlb.hash.toDigeste()).build()));
-        previousBlock.set(reconfigure);
-        final var validation = view.generateValidation(reconfigure);
-        final var p = new PendingBlock(reconfigure, new HashMap<>(), new AtomicBoolean());
-        pending.put(reconfigure.hash, p);
-        p.witnesses.put(params().member(), validation);
-        log.debug("Next view: {} created: {} height: {} body: {} from: {} on: {}", nextViewId, reconfigure.hash,
-                  reconfigure.height(), reconfigure.block.getBodyCase(), getViewId(), params().member());
-        assembly = new ViewAssembly(nextViewId, view, comms) {
-            @Override
-            public void complete() {
-                joins.putAll(getSlate());
-            }
-        };
-        assembly.start();
     }
 }

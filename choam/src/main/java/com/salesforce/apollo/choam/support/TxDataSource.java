@@ -12,6 +12,7 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +45,8 @@ public class TxDataSource implements DataSource {
     private final Duration                           batchInterval;
     private final Member                             member;
     private final CapacityBatchingQueue<Transaction> processing;
-    private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Validate>            validations     = new LinkedBlockingQueue<>();
+    private final AtomicBoolean                      validationsOnly = new AtomicBoolean(false);
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount) {
@@ -57,23 +59,33 @@ public class TxDataSource implements DataSource {
 
     @Override
     public ByteString getData() {
-        Queue<Transaction> batch;
-        try {
-            batch = processing.blockingTakeWithTimeout(batchInterval);
-        } catch (InterruptedException e) {
-            return ByteString.EMPTY;
-        }
         var builder = UnitData.newBuilder();
-        if (batch != null) {
-            builder.addAllTransactions(batch);
+
+        if (validationsOnly.get()) {
+            try {
+                var validation = validations.take();
+                builder.addValidations(validation);
+            } catch (InterruptedException e) {
+                return null;
+            }
+        } else {
+            Queue<Transaction> batch;
+            try {
+                batch = processing.blockingTakeWithTimeout(batchInterval);
+            } catch (InterruptedException e) {
+                return ByteString.EMPTY;
+            }
+            if (batch != null) {
+                builder.addAllTransactions(batch);
+            }
         }
         var vdx = new ArrayList<Validate>();
         validations.drainTo(vdx);
         builder.addAllValidations(vdx);
         final var data = builder.build();
         final var bs = data.toByteString();
-        log.info("Unit data: {} txns {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
-                 data.getValidationsCount(), bs.size(), member);
+        log.trace("Unit data: {} txns {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
+                  data.getValidationsCount(), bs.size(), member);
         return bs;
     }
 

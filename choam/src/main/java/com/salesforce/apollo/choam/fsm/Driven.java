@@ -30,6 +30,10 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions complete() {
+            return null;
+        }
+
         default Transitions establish() {
             throw fsm().invalidTransitionOn();
         }

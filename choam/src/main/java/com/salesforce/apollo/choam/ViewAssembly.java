@@ -121,7 +121,7 @@ public class ViewAssembly implements Reconfiguration {
         config.setEpochLength(7).setNumberOfEpochs(epochs());
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> process(preblock, last),
-                                                  epoch -> transitions.nextEpoch());
+                                                  epoch -> transitions.nextEpoch(epoch));
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
                                           params().dispatcher(), params().metrics());
@@ -282,6 +282,7 @@ public class ViewAssembly implements Reconfiguration {
         if (countDown.decrementAndGet() >= 0) {
             log.trace("Retrying, attempting full assembly of: {} gathered: {} on: {}", nextViewId, count,
                       params().member());
+            proceed.set(true);
             reiterate.get().run();
             return;
         }
@@ -293,8 +294,8 @@ public class ViewAssembly implements Reconfiguration {
             return;
         }
         log.trace("Proposal incomplete of: {} gathered: {}, retrying on: {}", nextViewId, count, params().member());
-        proceed.set(false);
-        transitions.gathered();
+        proceed.set(true);
+        reiterate.get().run();
     }
 
     private boolean consider(Optional<ListenableFuture<ViewMember>> futureSailor, Terminal term, Member m,

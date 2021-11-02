@@ -21,7 +21,7 @@ public enum Reconfigure implements Transitions {
         }
 
         @Override
-        public Transitions nextEpoch() {
+        public Transitions nextEpoch(int epoch) {
             return RECONFIGURE;
         }
     },
@@ -36,11 +36,16 @@ public enum Reconfigure implements Transitions {
         public Transitions gathered() {
             return NOMINATION;
         }
+
+        @Override
+        public Transitions nextEpoch(int epoch) {
+            return null;
+        }
     },
     NOMINATION {
 
         @Override
-        public Transitions nextEpoch() {
+        public Transitions nextEpoch(int eoch) {
             return CERTIFICATION;
         }
 
@@ -79,7 +84,7 @@ public enum Reconfigure implements Transitions {
         }
 
         @Override
-        public Transitions nextEpoch() {
+        public Transitions nextEpoch(int epoch) {
             return null;
         }
 

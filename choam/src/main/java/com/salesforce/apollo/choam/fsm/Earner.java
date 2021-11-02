@@ -34,14 +34,9 @@ public enum Earner implements Driven.Transitions {
     COMPLETE {
 
         @Override
-        public Transitions lastBlock() {
+        public Transitions complete() {
             context().complete();
             return null;
-        }
-
-        @Entry
-        public void reconfigure() {
-            context().reconfigure();
         }
     },
     INITIAL {
@@ -63,6 +58,11 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions checkpoint() {
+            return null;
+        }
+
+        @Override
+        public Transitions complete() {
             return null;
         }
 
@@ -92,11 +92,22 @@ public enum Earner implements Driven.Transitions {
             context().complete();
         }
     },
+    RECONFIGURE {
+        @Override
+        public Transitions complete() {
+            return COMPLETE;
+        }
+
+        @Entry
+        public void reconfigure() {
+            context().reconfigure();
+        }
+    },
     SPICE {
 
         @Override
         public Transitions lastBlock() {
-            return COMPLETE;
+            return RECONFIGURE;
         }
 
         @Entry

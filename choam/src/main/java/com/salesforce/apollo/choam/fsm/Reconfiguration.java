@@ -29,7 +29,7 @@ public interface Reconfiguration {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions nextEpoch() {
+        default Transitions nextEpoch(int epoch) {
             throw fsm().invalidTransitionOn();
         }
 

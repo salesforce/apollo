@@ -20,7 +20,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.choam.Producer" level="trace"
+    <logger name="com.salesforce.apollo.choam.Producer" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

@@ -79,9 +79,7 @@ public interface Committee {
             if (successors.size() == baseContext.getRingCount()) {
                 return false;
             }
-            boolean contained = successors.contains(m);
-            successors.add(m);
-            return !contained;
+            return successors.add(m);
         });
         assert successors.size() == baseContext.getRingCount();
         return successors;
