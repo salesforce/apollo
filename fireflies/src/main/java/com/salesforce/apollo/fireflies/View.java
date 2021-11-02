@@ -65,7 +65,7 @@ import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.ClientAuth;
 
 /**
  * The View is the active representation view of all members - failed and live -
@@ -268,8 +268,7 @@ public class View {
                 redirectTo(member, ring, successor);
             }
             long seed = Utils.secureEntropy().nextLong();
-            return Gossip.newBuilder()
-                         .setRedirect(false)
+            return Gossip.newBuilder().setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
                                                                     seed, getParameters().falsePositiveRate))
                          .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed,
@@ -288,10 +287,8 @@ public class View {
             node.nextNote();
             recover(node);
             List<Digest> seedList = new ArrayList<>();
-            seeds.stream()
-                 .map(cert -> new Participant(new MemberImpl(cert), node.getParameters()))
-                 .peek(m -> seedList.add(m.getId()))
-                 .forEach(m -> addSeed(m));
+            seeds.stream().map(cert -> new Participant(new MemberImpl(cert), node.getParameters()))
+                 .peek(m -> seedList.add(m.getId())).forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
             int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
@@ -376,7 +373,7 @@ public class View {
 
     public static EndpointProvider getStandardEpProvider(Node node) {
         return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE,
-                CertificateValidator.NONE);
+                                      CertificateValidator.NONE);
     }
 
     /**
@@ -459,7 +456,7 @@ public class View {
         this.fjPool = fjPool;
         this.comm = communications.create(node, id, service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
-                                                  metrics, r),
+                                                            metrics, r),
                                           getCreate(metrics, fjPool), Fireflies.getLocalLoopback(node));
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
@@ -670,7 +667,7 @@ public class View {
             return member;
         }
         member = new Participant(new MemberImpl(cert.certificate), cert.derEncoded, cert.certificateHash,
-                getParameters());
+                                 getParameters());
         log.trace("Adding member via cert: {}", member.getId());
         return add(member);
     }
@@ -759,9 +756,7 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        Note seedNote = Note.newBuilder()
-                            .setId(seed.getId().toDigeste())
-                            .setEpoch(-1)
+        Note seedNote = Note.newBuilder().setId(seed.getId().toDigeste()).setEpoch(-1)
                             .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
                                                                                 Utils.secureEntropy())
                                                              .toByteArray()))
@@ -782,8 +777,8 @@ public class View {
     CertWithHash certificateFrom(EncodedCertificate encoded) {
         X509Certificate certificate;
         try {
-            certificate = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(
-                    encoded.getContent().toByteArray()));
+            certificate = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(encoded.getContent()
+                                                                                                   .toByteArray()));
         } catch (CertificateException e) {
             log.warn("Invalid DER encoded certificate", e);
             return null;
@@ -830,11 +825,9 @@ public class View {
      */
     Digests commonDigests() {
         long seed = Utils.secureEntropy().nextLong();
-        return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+        return Digests.newBuilder().setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .build();
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff()).build();
     }
 
     void gc(Participant member) {
@@ -844,11 +837,9 @@ public class View {
 
     BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
-                getParameters().cardinality * getParameters().rings, p);
-        context.getActive()
-               .stream()
-               .flatMap(m -> m.getAccusations())
-               .filter(e -> e != null)
+                                                                    getParameters().cardinality * getParameters().rings,
+                                                                    p);
+        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(e -> e != null)
                .forEach(m -> bff.add(m.getHash()));
         return bff;
     }
@@ -1107,10 +1098,7 @@ public class View {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive()
-               .stream()
-               .flatMap(m -> m.getAccusations())
-               .filter(a -> !bff.contains(a.getHash()))
+        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
@@ -1123,13 +1111,8 @@ public class View {
         CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        view.values()
-            .stream()
-            .filter(m -> m.getId().equals(from))
-            .filter(m -> !bff.contains(m.getCertificateHash()))
-            .map(m -> m.getEncodedCertificate())
-            .filter(cert -> cert != null)
-            .forEach(cert -> builder.addUpdates(cert));
+        view.values().stream().filter(m -> m.getId().equals(from)).filter(m -> !bff.contains(m.getCertificateHash()))
+            .map(m -> m.getEncodedCertificate()).filter(cert -> cert != null).forEach(cert -> builder.addUpdates(cert));
         builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
         log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
@@ -1152,12 +1135,8 @@ public class View {
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive()
-               .stream()
-               .filter(m -> m.getNote() != null)
-               .filter(m -> !bff.contains(m.getNote().getHash()))
-               .map(m -> m.getNote())
-               .forEach(n -> builder.addUpdates(n.getWrapped()));
+        context.getActive().stream().filter(m -> m.getNote() != null).filter(m -> !bff.contains(m.getNote().getHash()))
+               .map(m -> m.getNote()).forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
@@ -1185,15 +1164,11 @@ public class View {
      */
     void processUpdates(List<EncodedCertificate> certificatUpdates, List<Note> noteUpdates,
                         List<Accusation> accusationUpdates) {
-        certificatUpdates.stream()
-                         .map(cert -> certificateFrom(cert))
-                         .filter(cert -> cert != null)
+        certificatUpdates.stream().map(cert -> certificateFrom(cert)).filter(cert -> cert != null)
                          .forEach(cert -> add(cert));
-        noteUpdates.stream()
-                   .map(s -> new NoteWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
+        noteUpdates.stream().map(s -> new NoteWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
                    .forEach(note -> add(note));
-        accusationUpdates.stream()
-                         .map(s -> new AccusationWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
+        accusationUpdates.stream().map(s -> new AccusationWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
                          .forEach(accusation -> add(accusation));
 
         if (node.isAccused()) {
@@ -1237,10 +1212,8 @@ public class View {
 
         log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
 
-        return Gossip.newBuilder()
-                     .setRedirect(true)
-                     .setCertificates(CertificateGossip.newBuilder()
-                                                       .addUpdates(successor.getEncodedCertificate())
+        return Gossip.newBuilder().setRedirect(true)
+                     .setCertificates(CertificateGossip.newBuilder().addUpdates(successor.getEncodedCertificate())
                                                        .build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
                      .setAccusations(AccusationGossip.newBuilder()
@@ -1305,27 +1278,17 @@ public class View {
 
         // certificates
         BloomFilter<Digest> certBff = BloomFilter.from(gossip.getCertificates().getBff());
-        view.values()
-            .stream()
-            .filter(m -> !certBff.contains((m.getCertificateHash())))
-            .map(m -> m.getEncodedCertificate())
-            .filter(ec -> ec != null)
+        view.values().stream().filter(m -> !certBff.contains((m.getCertificateHash())))
+            .map(m -> m.getEncodedCertificate()).filter(ec -> ec != null)
             .forEach(cert -> builder.addCertificates(cert));
 
         // notes
         BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
-        view.values()
-            .stream()
-            .filter(m -> m.getNote() != null)
-            .filter(m -> !notesBff.contains(m.getNote().getHash()))
-            .map(m -> m.getNote().getWrapped())
-            .forEach(n -> builder.addNotes(n));
+        view.values().stream().filter(m -> m.getNote() != null).filter(m -> !notesBff.contains(m.getNote().getHash()))
+            .map(m -> m.getNote().getWrapped()).forEach(n -> builder.addNotes(n));
 
         BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
-        context.getActive()
-               .stream()
-               .flatMap(m -> m.getAccusations())
-               .filter(a -> !accBff.contains(a.getHash()))
+        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(a -> !accBff.contains(a.getHash()))
                .forEach(a -> builder.addAccusations(a.getWrapped()));
 
         return builder.build();
@@ -1349,14 +1312,10 @@ public class View {
         }
         if (gossip.getAccusations().getUpdatesCount() > 0) {
             // Reset our epoch to whatever the group has recorded for this recovering node
-            long max = gossip.getAccusations()
-                             .getUpdatesList()
-                             .stream()
+            long max = gossip.getAccusations().getUpdatesList().stream()
                              .map(signed -> new AccusationWrapper(getDigestAlgorithm().digest(signed.toByteString()),
-                                     signed))
-                             .mapToLong(a -> a.getEpoch())
-                             .max()
-                             .orElse(-1);
+                                                                  signed))
+                             .mapToLong(a -> a.getEpoch()).max().orElse(-1);
             node.nextNote(max + 1);
         }
         CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
@@ -1365,8 +1324,7 @@ public class View {
             Note signed = gossip.getNotes().getUpdates(0);
             NoteWrapper note = new NoteWrapper(getDigestAlgorithm().digest(signed.toByteString()), signed);
             add(note);
-            gossip.getAccusations()
-                  .getUpdatesList()
+            gossip.getAccusations().getUpdatesList()
                   .forEach(s -> add(new AccusationWrapper(getDigestAlgorithm().digest(s.toByteString()), s)));
             log.debug("Redirected from {} to {} on ring {}", member, note.getId(), ring);
         } else {

@@ -37,19 +37,19 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
-import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ApplicationProtocolNames;
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolNames;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 /**
  * @author hal.hildebrand
@@ -81,20 +81,22 @@ public class MtlsServer implements ClientIdentity {
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
-                                                             privateKey, PROVIDER_BCJSSE));
-        GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_3)
-               .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
-               .clientAuth(clientAuth)
+                                                                                           privateKey,
+                                                                                           PROVIDER_BCJSSE));
+//        GrpcSslContexts.configure(builder);
+        builder.protocols(TL_SV1_3).sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE)).clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
-                       // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
-                       // providers.
-                       SelectorFailureBehavior.NO_ADVERTISE,
-                       // ACCEPT is currently the only mode supported by both OpenSsl and JDK
-                       // providers.
-                       SelectedListenerFailureBehavior.ACCEPT, ApplicationProtocolNames.HTTP_2,
-                       ApplicationProtocolNames.HTTP_1_1));
+                                                                        // NO_ADVERTISE is currently the only mode
+                                                                        // supported by both OpenSsl and JDK
+                                                                        // providers.
+                                                                        SelectorFailureBehavior.NO_ADVERTISE,
+                                                                        // ACCEPT is currently the only mode supported
+                                                                        // by both OpenSsl and JDK
+                                                                        // providers.
+                                                                        SelectedListenerFailureBehavior.ACCEPT,
+                                                                        ApplicationProtocolNames.HTTP_2,
+                                                                        ApplicationProtocolNames.HTTP_1_1));
         try {
             return builder.build();
         } catch (SSLException e) {
@@ -106,20 +108,21 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forServer(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
-                privateKey, PROVIDER_BCJSSE));
-        GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_3)
-               .sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
-               .clientAuth(clientAuth)
+                                                                                          privateKey, PROVIDER_BCJSSE));
+//        GrpcSslContexts.configure(builder);
+        builder.protocols(TL_SV1_3).sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE)).clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
-                       // NO_ADVERTISE is currently the only mode supported by both OpenSsl and JDK
-                       // providers.
-                       SelectorFailureBehavior.NO_ADVERTISE,
-                       // ACCEPT is currently the only mode supported by both OpenSsl and JDK
-                       // providers.
-                       SelectedListenerFailureBehavior.ACCEPT, ApplicationProtocolNames.HTTP_2,
-                       ApplicationProtocolNames.HTTP_1_1));
+                                                                        // NO_ADVERTISE is currently the only mode
+                                                                        // supported by both OpenSsl and JDK
+                                                                        // providers.
+                                                                        SelectorFailureBehavior.NO_ADVERTISE,
+                                                                        // ACCEPT is currently the only mode supported
+                                                                        // by both OpenSsl and JDK
+                                                                        // providers.
+                                                                        SelectedListenerFailureBehavior.ACCEPT,
+                                                                        ApplicationProtocolNames.HTTP_2,
+                                                                        ApplicationProtocolNames.HTTP_1_1));
         try {
             return builder.build();
         } catch (SSLException e) {
@@ -135,7 +138,7 @@ public class MtlsServer implements ClientIdentity {
     private final Context.Key<SSLSession>               sslSessionContext = Context.key("SSLSession");
 
     public MtlsServer(SocketAddress address, ClientAuth clientAuth, String alias, ServerContextSupplier supplier,
-            CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
+                      CertificateValidator validator, MutableHandlerRegistry registry, Executor executor) {
         this.registry = registry;
         interceptor = new TlsInterceptor(sslSessionContext);
         cachedMembership = CacheBuilder.newBuilder().build(new CacheLoader<X509Certificate, Digest>() {
@@ -198,7 +201,7 @@ public class MtlsServer implements ClientIdentity {
             server.awaitTermination();
         } catch (InterruptedException e) {
             throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                    e);
+                                            e);
         }
     }
 }

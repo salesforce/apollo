@@ -22,8 +22,8 @@ import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * A signiner member of a view. This is a local member to the process that can

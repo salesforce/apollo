@@ -34,8 +34,8 @@ import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 import io.grpc.stub.StreamObserver;
 import io.grpc.util.MutableHandlerRegistry;
 
