@@ -29,15 +29,6 @@ import com.salesforce.apollo.membership.SigningMember;
  *
  */
 public interface Terminal extends Link {
-    static Terminal getLocalLoopback(Member member) {
-        return new Terminal() {
-
-            @Override
-            public Member getMember() {
-                return member;
-            }
-        };
-    }
 
     static Terminal getLocalLoopback(SigningMember member, Concierge service) {
         return new Terminal() {
@@ -60,33 +51,44 @@ public interface Terminal extends Link {
                 f.set(service.submit(request, member.getId()));
                 return f;
             }
+
+            @Override
+            public void close() {
+            }
+
+            @Override
+            public ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
+                return null;
+            }
+
+            @Override
+            public ListenableFuture<Initial> sync(Synchronize sync) {
+                return null;
+            }
         };
     }
 
-    default void close() {
-    }
+    void close();
 
-    default ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request) {
-        return null;
-    }
+    ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 
-    default ListenableFuture<Blocks> fetchBlocks(BlockReplication replication) {
-        return null;
-    }
+    ListenableFuture<Blocks> fetchBlocks(BlockReplication replication);
 
-    default ListenableFuture<Blocks> fetchViewChain(BlockReplication replication) {
-        return null;
-    }
+    ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
 
-    default ListenableFuture<ViewMember> join(JoinRequest join) {
-        return null;
-    }
+    ListenableFuture<ViewMember> join(JoinRequest join);
 
-    default ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
-        return null;
-    }
+    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
 
-    default ListenableFuture<Initial> sync(Synchronize sync) {
-        return null;
-    }
+    ListenableFuture<Initial> sync(Synchronize sync);
 }

@@ -30,6 +30,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.h2.mvstore.MVMap;
@@ -120,7 +121,7 @@ public class CHOAM {
 
         @Override
         public void awaitRegeneration() {
-            final HashedCertifiedBlock g = genesis;
+            final HashedCertifiedBlock g = genesis.get();
             if (g != null) {
                 return;
             }
@@ -132,7 +133,7 @@ public class CHOAM {
             }
             log.debug("No anchor to recover from on: {}", params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
-                futureSynchronization = null;
+                futureSynchronization.set(null);
                 awaitRegeneration();
             }, params.regenerationCycles());
         }
@@ -147,7 +148,7 @@ public class CHOAM {
             }
             log.debug("No anchor to recover from on: {}", params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
-                futureSynchronization = null;
+                futureSynchronization.set(null);
                 synchronizationFailed();
             }, params.synchronizationCycles());
         }
@@ -164,11 +165,11 @@ public class CHOAM {
 
         @Override
         public void regenerate() {
-            current.regenerate();
+            current.get().regenerate();
         }
 
         private void synchronizationFailed() {
-            if (current.isMember()) {
+            if (current.get().isMember()) {
                 transitions.regenerate();
             } else {
                 transitions.synchronizationFailed();
@@ -231,12 +232,13 @@ public class CHOAM {
             var context = Committee.viewFor(viewId, params.context());
             context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
             validators.keySet().forEach(m -> context.activate(m));
-            log.trace("Using consensus key: {} on: {}",
+            log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
+                      params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member());
             Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head, comm);
+            producer = new Producer(viewContext, head.get(), comm);
             producer.start();
         }
 
@@ -257,8 +259,9 @@ public class CHOAM {
 
     /** abstract class to maintain the common state */
     private abstract class Administration implements Committee {
-        protected Digest                    viewId;
-        private GroupIterator               servers;
+        protected final Digest viewId;
+
+        private final GroupIterator         servers;
         private final Map<Member, Verifier> validators;
 
         public Administration(Map<Member, Verifier> validators, Digest viewId) {
@@ -299,7 +302,10 @@ public class CHOAM {
                           params.member());
                 return ViewMember.getDefaultInstance();
             }
-            return next.member;
+            final var c = next.get();
+            log.debug("Joining view: {} from: {} members: {} view member: {} on: {}", nextView, source, members,
+                      ViewContext.print(c.member, params.digestAlgorithm()), params.member());
+            return c.member;
         }
 
         @Override
@@ -353,12 +359,14 @@ public class CHOAM {
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
             if (formation.isActive(params.member())) {
-                log.trace("Using consensus key: {} on: {}",
-                          params.digestAlgorithm().digest(next.consensusKeyPair.getPublic().getEncoded()),
-                          params.member());
-                Signer signer = new SignerImpl(0, next.consensusKeyPair.getPrivate());
+                final var c = next.get();
+                log.trace("Using genesis consensus key: {} sig: {} on: {}",
+                          params.digestAlgorithm().digest(c.consensusKeyPair.getPublic().getEncoded()),
+                          params.digestAlgorithm().digest(c.member.getSignature().toByteString()), params.member());
+                Signer signer = new SignerImpl(0, c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head, comm, constructBlock(), true);
+                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, constructBlock(),
+                                                      true);
             } else {
                 reconfigure = null;
             }
@@ -366,9 +374,10 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
-            genesis = head;
-            checkpoint = head;
-            view = head;
+            final var c = head.get();
+            genesis.set(c);
+            checkpoint.set(c);
+            view.set(c);
             process();
         }
 
@@ -386,17 +395,20 @@ public class CHOAM {
 
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
-            Member source = formation.getActiveMember(from);
+            Member source = params.context().getActiveMember(from);
             if (source == null) {
-                log.debug("Request to join from non validator: {} on: {}", from, params.member());
+                log.debug("Request to join from non member: {} on: {}", from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
-            if (!params.genesisViewId().equals(nextView)) {
-                log.debug("Request to join invalid view: {} from: {} on: {}", nextView, source, params.member());
+            final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
+            if (!members.contains(params.member())) {
+                log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
+                          params.member());
                 return ViewMember.getDefaultInstance();
             }
-            return next.member;
+            final var c = next.get();
+            return c.member;
         }
 
         @Override
@@ -529,26 +541,26 @@ public class CHOAM {
 
     private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
 
-    private volatile HashedCertifiedBlock                   checkpoint;
-    private final ReliableBroadcaster                       combine;
-    private final CommonCommunications<Terminal, Concierge> comm;
-    private volatile Committee                              current;
-    private final ExecutorService                           executions;
-    private volatile CompletableFuture<SynchronizedState>   futureBootstrap;
-    private volatile ScheduledFuture<?>                     futureSynchronization;
-    private volatile HashedCertifiedBlock                   genesis;
-    private volatile HashedCertifiedBlock                   head;
-    private final ExecutorService                           linear;
-    private volatile nextView                               next;
-    private final Parameters                                params;
-    private final PriorityQueue<HashedCertifiedBlock>       pending       = new PriorityQueue<>();
-    private final RoundScheduler                            roundScheduler;
-    private final Session                                   session;
-    private final AtomicBoolean                             started       = new AtomicBoolean();
-    private final Store                                     store;
-    private final AtomicBoolean                             synchronizing = new AtomicBoolean(false);
-    private final Combine.Transitions                       transitions;
-    private volatile HashedCertifiedBlock                   view;
+    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
+    private final ReliableBroadcaster                                   combine;
+    private final CommonCommunications<Terminal, Concierge>             comm;
+    private final AtomicReference<Committee>                            current               = new AtomicReference<>();
+    private final ExecutorService                                       executions;
+    private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>>                   futureSynchronization = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>                 genesis               = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
+    private final ExecutorService                                       linear;
+    private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final Parameters                                            params;
+    private final PriorityQueue<HashedCertifiedBlock>                   pending               = new PriorityQueue<>();
+    private final RoundScheduler                                        roundScheduler;
+    private final Session                                               session;
+    private final AtomicBoolean                                         started               = new AtomicBoolean();
+    private final Store                                                 store;
+    private final AtomicBoolean                                         synchronizing         = new AtomicBoolean(false);
+    private final Combine.Transitions                                   transitions;
+    private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
     public CHOAM(Parameters params, MVStore store) {
         this(params, new Store(params.digestAlgorithm(), store));
@@ -572,9 +584,9 @@ public class CHOAM {
             return thread;
         });
         combine.registerHandler((ctx, messages) -> linear.execute(() -> combine(messages)));
-        head = new NullBlock(params.digestAlgorithm());
-        view = new NullBlock(params.digestAlgorithm());
-        checkpoint = new NullBlock(params.digestAlgorithm());
+        head.set(new NullBlock(params.digestAlgorithm()));
+        view.set(new NullBlock(params.digestAlgorithm()));
+        checkpoint.set(new NullBlock(params.digestAlgorithm()));
         final Trampoline service = new Trampoline();
         comm = params.communications()
                      .create(params.member(), params.context().getId(), service,
@@ -587,7 +599,7 @@ public class CHOAM {
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler(params.context().getRingCount());
         combine.register(i -> roundScheduler.tick(i));
-        current = new Formation();
+        current.set(new Formation());
         session = new Session(params, service());
     }
 
@@ -596,7 +608,7 @@ public class CHOAM {
     }
 
     public Digest getViewId() {
-        final var viewChange = view;
+        final var viewChange = view.get();
         if (viewChange == null) {
             return null;
         }
@@ -624,9 +636,9 @@ public class CHOAM {
     }
 
     private void accept(HashedCertifiedBlock next) {
-        head = next;
+        head.set(next);
         store.put(next);
-        final Committee c = current;
+        final Committee c = current.get();
         c.accept(next);
         log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
                   params.member());
@@ -637,22 +649,22 @@ public class CHOAM {
     }
 
     private void cancelSynchronization() {
-        final ScheduledFuture<?> fs = futureSynchronization;
+        final ScheduledFuture<?> fs = futureSynchronization.get();
         if (fs != null) {
             fs.cancel(true);
-            futureSynchronization = null;
+            futureSynchronization.set(null);
         }
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap;
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
         if (fb != null) {
             fb.cancel(true);
-            futureBootstrap = null;
+            futureBootstrap.set(null);
         }
     }
 
     private Block checkpoint() {
         transitions.beginCheckpoint();
-        HashedBlock lb = head;
-        File state = params.checkpointer().apply(head.height());
+        HashedBlock lb = head.get();
+        File state = params.checkpointer().apply(lb.height());
         if (state == null) {
             log.error("Cannot create checkpoint");
             transitions.fail();
@@ -663,8 +675,8 @@ public class CHOAM {
             transitions.fail();
         }
 
-        final HashedCertifiedBlock v = view;
-        final HashedBlock c = checkpoint;
+        final HashedCertifiedBlock v = view.get();
+        final HashedBlock c = checkpoint.get();
         final Block block = Block.newBuilder()
                                  .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
                                                         c.height(), c.hash, v.height(), v.hash))
@@ -672,7 +684,7 @@ public class CHOAM {
 
         MVMap<Integer, byte[]> stored = store.putCheckpoint(height(block), state, cp);
         state.delete();
-        cachedCheckpoints.put(head.height(), new CheckpointState(cp, stored));
+        cachedCheckpoints.put(head.get().height(), new CheckpointState(cp, stored));
         transitions.finishCheckpoint();
         return block;
     }
@@ -681,13 +693,13 @@ public class CHOAM {
         log.trace("Attempting to combine blocks on: {}", params.member());
         var next = pending.peek();
         while (next != null) {
-            final HashedCertifiedBlock h = head;
+            final HashedCertifiedBlock h = head.get();
             if (h.height() >= 0 && next.height() <= h.height()) {
 //                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
 //                          next.height(), h.height(), params.member());
                 pending.poll();
             } else if (isNext(next)) {
-                if (current.validate(next)) {
+                if (current.get().validate(next)) {
                     HashedCertifiedBlock nextBlock = pending.poll();
                     if (nextBlock == null) {
                         return;
@@ -736,16 +748,16 @@ public class CHOAM {
 
             @Override
             public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                final HashedCertifiedBlock cp = checkpoint;
-                final HashedCertifiedBlock v = view;
+                final HashedCertifiedBlock cp = checkpoint.get();
+                final HashedCertifiedBlock v = view.get();
                 return CHOAM.genesis(nextViewId, joining, previous, params.context(), v, params, cp,
                                      params.genesisData());
             }
 
             @Override
             public Block produce(Long height, Digest prev, Assemble assemble) {
-                final HashedCertifiedBlock v = view;
-                final HashedBlock c = checkpoint;
+                final HashedCertifiedBlock v = view.get();
+                final HashedBlock c = checkpoint.get();
                 return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height,
                                                                 c.height(), c.hash, v.height(), v.hash))
                             .setAssemble(assemble).build();
@@ -753,8 +765,8 @@ public class CHOAM {
 
             @Override
             public Block produce(Long height, Digest prev, Executions executions) {
-                final HashedCertifiedBlock c = checkpoint;
-                final HashedCertifiedBlock v = view;
+                final HashedCertifiedBlock c = checkpoint.get();
+                final HashedCertifiedBlock v = view.get();
                 return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height,
                                                                 c.height(), c.hash, v.height(), v.hash))
                             .setExecutions(executions).build();
@@ -767,32 +779,32 @@ public class CHOAM {
 
             @Override
             public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                final HashedCertifiedBlock v = view;
-                final HashedCertifiedBlock c = checkpoint;
+                final HashedCertifiedBlock v = view.get();
+                final HashedCertifiedBlock c = checkpoint.get();
                 return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
             }
         };
     }
 
     private void execute(List<Transaction> execs) {
+        final var h = head.get();
         try {
-            log.trace("Executing transactions for block: {} height: {}  on: {}", head.hash, head.height(),
-                      params.member());
-            params.processor().beginBlock(head.height(), head.hash);
+            log.trace("Executing transactions for block: {} height: {}  on: {}", h.hash, h.height(), params.member());
+            params.processor().beginBlock(h.height(), h.hash);
             execs.forEach(exec -> {
                 Digest hash = hashOf(exec, params.digestAlgorithm());
                 var stxn = session.complete(hash);
-                log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, head.hash,
-                          head.height(), stxn == null ? "null" : "present", params.member());
+                log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, h.hash, h.height(),
+                          stxn == null ? "null" : "present", params.member());
                 try {
                     params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
                 } catch (Throwable t) {
-                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, head.hash,
-                              head.height(), params.member());
+                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash,
+                              h.height(), params.member());
                 }
             });
         } catch (RejectedExecutionException e) {
-            log.trace("Rejected transaction executions for block: {} height: {}  on: {}", head.hash, head.height(),
+            log.trace("Rejected transaction executions for block: {} height: {}  on: {}", h.hash, h.height(),
                       params.member());
         }
     }
@@ -840,24 +852,25 @@ public class CHOAM {
     }
 
     private boolean isNext(HashedBlock next) {
-        if (next != null && next.height() == head.height() + 1) {
+        final var h = head.get();
+        if (next != null && next.height() == h.height() + 1) {
             return true;
         }
         final Digest prev = next.getPrevious();
-        if (head.hash.equals(prev)) {
+        if (h.hash.equals(prev)) {
             return true;
         }
         log.trace("Failed isNext: {} expected height: {} actual: {} expected previous: {} actual: {} on: {}", next.hash,
-                  next.height(), head.height() + 1, prev, head.hash, params.member());
+                  next.height(), h.height() + 1, prev, h.hash, params.member());
         return false;
     }
 
     private ViewMember join(JoinRequest request, Digest from) {
-        return current.join(request, from);
+        final var c = current.get();
+        return c.join(request, from);
     }
 
     private void nextView() {
-        log.trace("Generating next view consensus key on: {}", params.member());
         KeyPair keyPair = params.viewSigAlgorithm().generateKeyPair();
         PubKey pubKey = bs(keyPair.getPublic());
         JohnHancock signed = params.member().sign(pubKey.toByteString());
@@ -865,13 +878,16 @@ public class CHOAM {
             log.error("Unable to generate and sign consensus key on: {}", params.member());
             return;
         }
-        next = new nextView(ViewMember.newBuilder().setId(params.member().getId().toDigeste()).setConsensusKey(pubKey)
-                                      .setSignature(signed.toSig()).build(),
-                            keyPair);
+        log.trace("Generated next view consensus key: {} sig: {} on: {}",
+                  params.digestAlgorithm().digest(pubKey.getEncoded()),
+                  params.digestAlgorithm().digest(signed.toSig().toByteString()), params.member());
+        next.set(new nextView(ViewMember.newBuilder().setId(params.member().getId().toDigeste()).setConsensusKey(pubKey)
+                                        .setSignature(signed.toSig()).build(),
+                              keyPair));
     }
 
     private void process() {
-        final HashedBlock h = head;
+        final HashedBlock h = head.get();
         switch (h.block.getBodyCase()) {
         case CHECKPOINT:
 //            checkpoint();
@@ -882,10 +898,10 @@ public class CHOAM {
         case GENESIS:
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
-            execute(head.block.getGenesis().getInitializeList());
+            execute(h.block.getGenesis().getInitializeList());
             transitions.regenerated();
         case EXECUTIONS:
-            execute(head.block.getExecutions().getExecutionsList());
+            execute(h.block.getExecutions().getExecutionsList());
             break;
         default:
             break;
@@ -893,27 +909,33 @@ public class CHOAM {
     }
 
     private void reconfigure(Reconfigure reconfigure) {
-        final Committee c = current;
+        final Committee c = current.get();
         c.complete();
         var validators = validatorsOf(reconfigure, params.context());
-        var currentView = next;
+        final var currentView = next.get();
         nextView();
-        final HashedCertifiedBlock h = head;
-        view = h;
+        final HashedCertifiedBlock h = head.get();
+        view.set(h);
         if (validators.containsKey(params.member())) {
-            current = new Associate(h, validators, currentView);
+            current.set(new Associate(h, validators, currentView));
         } else {
-            current = new Client(validators, getViewId());
+            current.set(new Client(validators, getViewId()));
         }
-        log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
+        log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
+                 validators.entrySet().stream()
+                           .map(e -> String.format("id: %s key: %s", e.getKey(),
+                                                   params.digestAlgorithm()
+                                                         .digest(e.getValue().getPublicKey().getEncoded())))
+                           .toList(),
+                 params.member());
     }
 
     private void recover(HashedCertifiedBlock anchor) {
         if (futureSynchronization != null) {
-            futureSynchronization.cancel(true);
-            futureSynchronization = null;
+            futureSynchronization.get().cancel(true);
+            futureSynchronization.set(null);
         }
-        futureBootstrap = bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -929,7 +951,7 @@ public class CHOAM {
             log.error("Synchronization failed on: {}", params.member(), t);
             transitions.fail();
             return null;
-        }).orTimeout(params.synchronizeTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        }).orTimeout(params.synchronizeTimeout().toMillis(), TimeUnit.MILLISECONDS));
     }
 
     private void restore() throws IllegalStateException {
@@ -938,19 +960,19 @@ public class CHOAM {
             log.info("No state to restore from on: {}", params.member().getId());
             return;
         }
-        genesis = new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0));
-        head = lastBlock;
+        genesis.set(new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0)));
+        head.set(lastBlock);
         Header header = lastBlock.block.getHeader();
         HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                  store.getCertifiedBlock(header.getLastReconfig()));
         Reconfigure reconfigure = lastView.block.getReconfigure();
-        view = lastView;
+        view.set(lastView);
         var validators = validatorsOf(reconfigure, params.context());
-        current = new Synchronizer(validators);
+        current.set(new Synchronizer(validators));
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
         CertifiedBlock lastCheckpoint = store.getCertifiedBlock(header.getLastCheckpoint());
         if (lastCheckpoint != null) {
-            checkpoint = new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint);
+            checkpoint.set(new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint));
         }
 
         log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}",
@@ -970,7 +992,7 @@ public class CHOAM {
     private Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service() {
         return stx -> {
             log.debug("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
-            final var c = current;
+            final var c = current.get();
             if (c == null) {
                 throw new ServiceUnavailable();
             }
@@ -984,7 +1006,7 @@ public class CHOAM {
             log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setOutcome(Outcome.NOT_A_MEMBER).build();
         }
-        final var c = current;
+        final var c = current.get();
         if (c == null) {
             log.warn("No committee to submit txn from: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
@@ -1001,10 +1023,10 @@ public class CHOAM {
             return Initial.getDefaultInstance();
         }
         Initial.Builder initial = Initial.newBuilder();
-        final HashedCertifiedBlock g = genesis;
+        final HashedCertifiedBlock g = genesis.get();
         if (g != null) {
             initial.setGenesis(g.certifiedBlock);
-            HashedCertifiedBlock cp = checkpoint;
+            HashedCertifiedBlock cp = checkpoint.get();
             if (cp != null) {
                 long height = request.getHeight();
 
@@ -1070,7 +1092,7 @@ public class CHOAM {
         Block block = hcb.block;
         log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
                   params.member());
-        final HashedCertifiedBlock previousBlock = head;
+        final HashedCertifiedBlock previousBlock = head.get();
         Header header = block.getHeader();
         if (previousBlock != null) {
             Digest prev = digest(header.getPrevious());
@@ -1091,7 +1113,8 @@ public class CHOAM {
                           params.member(), previousBlock.hash, prev, prevHeight, hcb.height());
                 return;
             }
-            if (!current.validate(hcb)) {
+            final var c = current.get();
+            if (!c.validate(hcb)) {
                 log.error("Protocol violation on {}. New block is not validated {}", params.member(), hcb.hash);
                 return;
             }
@@ -1102,7 +1125,7 @@ public class CHOAM {
                          params.member(), hcb.hash, 0, header.getHeight());
                 return;
             }
-            if (!current.validateRegeneration(hcb)) {
+            if (!current.get().validateRegeneration(hcb)) {
                 log.error("Protocol violation on: {}. Genesis block is not validated {}", params.member(), hcb.hash);
                 return;
             }

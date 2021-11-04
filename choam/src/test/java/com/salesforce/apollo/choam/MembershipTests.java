@@ -136,7 +136,7 @@ public class MembershipTests {
         scheduler = null;
     }
 
-    @Test
+//    @Test
     public void genesisBootstrap() throws Exception {
         initialize(2000, 5);
         SigningMember testSubject = members.get(0);

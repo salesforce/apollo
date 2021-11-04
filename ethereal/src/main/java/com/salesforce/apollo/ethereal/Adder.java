@@ -10,6 +10,7 @@ import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ public interface Adder {
         private final Config                      conf;
         private final Dag                         dag;
         private final Map<Long, MissingPreUnit>   missing     = new ConcurrentHashMap<>();
-        private final Lock                        mtx         = new ReentrantLock();
+        private final Lock                        mtx         = new ReentrantLock(true);
         private final Map<Digest, WaitingPreUnit> waiting     = new ConcurrentHashMap<>();
         private final Map<Long, WaitingPreUnit>   waitingById = new ConcurrentHashMap<>();
 
@@ -141,8 +142,13 @@ public interface Adder {
 
         @Override
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
-            waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
-                   .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
+            mtx.lock();
+            try {
+                waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
+                       .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
+            } finally {
+                mtx.unlock();
+            }
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.
@@ -247,18 +253,6 @@ public interface Adder {
                 var decoded = dag.decodeParents(wp.pu);
                 var parents = decoded.parents();
                 if (decoded.inError()) {
-                    if (decoded instanceof AmbiguousParents ap) {
-                        parents = new Unit[parents.length];
-                        int i = 0;
-                        for (var possibleParents : ap.units()) {
-                            if (possibleParents.isEmpty()) {
-                                break;
-                            }
-                            if (possibleParents.size() == 1) {
-                                parents[i++] = possibleParents.get(0);
-                            }
-                        }
-                    }
                     wp.failed = true;
                     return;
                 }

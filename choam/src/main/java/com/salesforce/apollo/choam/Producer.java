@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -113,16 +114,6 @@ public class Producer {
             controller.start();
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
         }
-
-        @SuppressWarnings("unused")
-        private boolean validate(Validate validate, CertifiedBlock.Builder p) {
-            Digest id = new Digest(validate.getWitness().getId());
-            Member witness = view.context().getMember(id);
-            if (witness == null) {
-                log.trace("Invalid witness: {} on: {}", id, id, params().member());
-            }
-            return false;
-        }
     }
 
     private static final Logger                     log           = LoggerFactory.getLogger(Producer.class);
@@ -140,6 +131,7 @@ public class Producer {
     private final AtomicBoolean                     started       = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;
+    private final AtomicInteger                     reconfigurationCountdown;
 
     public Producer(ViewContext view, HashedBlock lastBlock, CommonCommunications<Terminal, ?> comms) {
         assert view != null;
@@ -178,7 +170,7 @@ public class Producer {
                                                   epoch -> newEpoch(epoch));
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
                                           params().dispatcher(), params().metrics());
-
+        reconfigurationCountdown = new AtomicInteger(3);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
@@ -270,6 +262,11 @@ public class Producer {
         if (last) {
             started.set(true);
             transitions.complete();
+        } else {
+            if (reconfigurationCountdown.get() >= 0) {
+                reconfigurationCountdown.decrementAndGet();
+                produceAssemble();
+            }
         }
     }
 

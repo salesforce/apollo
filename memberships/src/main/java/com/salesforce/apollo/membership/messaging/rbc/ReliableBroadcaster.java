@@ -482,7 +482,8 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy().nextInt((int) (duration.toMillis() / 2)));
+        Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy()
+                                                         .nextInt((int) Math.max(1, duration.toMillis() * 2)));
         log.info("Starting Reliable Broadcaster[{}] for {}", params.context.getId(), params.member);
         comm.register(params.context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);

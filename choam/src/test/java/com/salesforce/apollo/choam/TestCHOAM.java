@@ -161,7 +161,7 @@ public class TestCHOAM {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, CARDINALITY);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY, 3);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger sd = new AtomicInteger();
@@ -199,9 +199,9 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(250)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(50)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .build())
                                .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
         params.getProducer().coordination().setExecutor(routerExec).setBufferSize(1500);

@@ -48,7 +48,7 @@ public interface Dag {
         private final SlottedUnits                             maxUnits;
         private final List<Consumer<Unit>>                     postInsert = new ArrayList<>();
         private final List<Consumer<Unit>>                     preInsert  = new ArrayList<>();
-        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock();
+        private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
         private final Map<Digest, Unit>                        units      = new HashMap<>();
 
         public DagImpl(Config config, int epoch) {

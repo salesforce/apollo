@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.choam;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,6 +25,7 @@ import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
@@ -34,7 +37,19 @@ import com.salesforce.apollo.membership.Member;
  *
  */
 public class ViewContext {
+
     private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
+
+    public static String print(Validate v, DigestAlgorithm algo) {
+        return String.format("id: %s hash: %s sig: %s", Digest.from(v.getWitness().getId()), Digest.from(v.getHash()),
+                             algo.digest(v.getWitness().getSignature().toByteString()));
+    }
+
+    public static String print(ViewMember vm, DigestAlgorithm algo) {
+        return String.format("id: %s key: %s sig: %s", Digest.from(vm.getId()),
+                             algo.digest(publicKey(vm.getConsensusKey()).getEncoded()),
+                             algo.digest(vm.getSignature().toByteString()));
+    }
 
     private final BlockProducer         blockProducer;
     private final Context<Member>       context;
@@ -83,13 +98,13 @@ public class ViewContext {
 
     public Validate generateValidation(ViewMember vm) {
         final var vmId = Digest.from(vm.getId());
-        log.trace("Signing view member: {}  on: {}", vmId, params.member());
-        final var vmSig = vm.getSignature();
-        JohnHancock signature = signer.sign(vmSig.toByteString());
+        JohnHancock signature = signer.sign(vm.getSignature().toByteString());
         if (signature == null) {
-            log.error("Unable to sign view member: {}  on: {}", vmId, params.member());
+            log.error("Unable to sign view member: {}  on: {}", print(vm, params.digestAlgorithm()), params.member());
             return null;
         }
+        log.trace("Signed view member: {} sig: {} on: {}", print(vm, params.digestAlgorithm()),
+                  params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member());
         var validation = Validate.newBuilder().setHash(vm.getId())
                                  .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
                                                           .setSignature(signature.toSig()).build())
@@ -133,20 +148,28 @@ public class ViewContext {
 
     public boolean validate(ViewMember vm, Validate validate) {
         Verifier v = verifierOf(validate);
-        return v == null ? false : v.verify(JohnHancock.from(validate.getWitness().getSignature()),
-                                            vm.getSignature().toByteString());
+        final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()),
+                                   vm.getSignature().toByteString());
+        if (!valid) {
+            log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
+                      print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
+                      params.digestAlgorithm().digest(v.getPublicKey().getEncoded()), params.member());
+        }
+        return v == null ? false : valid;
     }
 
     protected Verifier verifierOf(Validate validate) {
         final var mid = Digest.from(validate.getWitness().getId());
         var m = context.getMember(mid);
         if (m == null) {
-            log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
+            log.debug("Unable to validate key by non existant validator: {} on: {}",
+                      print(validate, params.digestAlgorithm()), params.member());
             return null;
         }
         Verifier v = validators.get(m);
         if (v == null) {
-            log.debug("Unable to validate key by non existant validator: {} on: {}", mid, params.member());
+            log.debug("Unable to validate key by non existant validator: {} on: {}",
+                      print(validate, params.digestAlgorithm()), params.member());
             return null;
         }
         return v;

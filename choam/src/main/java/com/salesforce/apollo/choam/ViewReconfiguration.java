@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -40,7 +41,7 @@ public class ViewReconfiguration extends ViewAssembly {
     private final AtomicBoolean         published = new AtomicBoolean();
     private volatile HashedBlock        reconfiguration;
     private final BlockProducer         reconfigureBlock;
-    private final Map<Member, Validate> witnesses = new HashMap<>();
+    private final Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
 
     public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedBlock previous,
                                CommonCommunications<Terminal, ?> comms, BlockProducer reconfigureBlock,

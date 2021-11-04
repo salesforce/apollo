@@ -101,8 +101,7 @@ public interface Verifier {
 
         @Override
         public boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
-            // TODO Auto-generated method stub
-            return false;
+            return true;
         }
 
     }

@@ -23,7 +23,14 @@ import com.salesforce.apollo.utils.bloomFilters.Hash;
  *
  */
 public class Digest implements Comparable<Digest> {
-    public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
+    public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]) {
+
+        @Override
+        public String toString() { 
+            return "[NONE]";
+        }
+        
+    };
 
     public static Digest combine(DigestAlgorithm algo, Digest[] digests) {
         return algo.digest(Stream.of(digests).map(e -> e != null ? e : algo.getOrigin())
