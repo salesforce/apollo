@@ -61,6 +61,13 @@ public class Producer {
     private class DriveIn implements Driven {
 
         @Override
+        public void checkAssembly() {
+            if (!joins.isEmpty()) {
+                transitions.viewComplete();
+            }
+        }
+
+        @Override
         public void checkpoint() {
             Block ckpt = view.checkpoint();
             if (ckpt == null) {
@@ -86,6 +93,11 @@ public class Producer {
         }
 
         @Override
+        public void fail() {
+            stop();
+        }
+
+        @Override
         public void reconfigure() {
             log.debug("Attempting assembly of: {} assembled: {} on: {}", nextViewId, joins.size(), params().member());
 
@@ -100,6 +112,7 @@ public class Producer {
                 ds.offer(validation);
                 log.debug("Reconfiguration block: {} height: {} created on: {}", rhb.hash, rhb.height(),
                           params().member());
+                ds.validationsOnly(false);
             } else {
                 log.warn("Aggregate of: {} threshold failed: {} required: {} on: {}", nextViewId, joins.size(),
                          toleranceLevel + 1, params().member());
@@ -126,11 +139,11 @@ public class Producer {
     private volatile Digest                         nextViewId;
     private final Map<Digest, PendingBlock>         pending       = new ConcurrentHashMap<>();
     private final AtomicReference<HashedBlock>      previousBlock = new AtomicReference<>();
+    private final AtomicInteger                     reconfigurationCountdown;
     private final int                               reconfigurationEpoch;
     private final AtomicBoolean                     started       = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;
-    private final AtomicInteger                     reconfigurationCountdown;
 
     public Producer(ViewContext view, HashedBlock lastBlock, CommonCommunications<Terminal, ?> comms) {
         assert view != null;
@@ -173,13 +186,6 @@ public class Producer {
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
-    private void newEpoch(Integer epoch) {
-        if (epoch == reconfigurationEpoch) {
-            ds.validationsOnly(true);
-            transitions.lastBlock();
-        }
-    }
-
     public Digest getNextViewId() {
         final Digest current = nextViewId;
         return current;
@@ -203,7 +209,7 @@ public class Producer {
         if (started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Closing producer for: {} on: {}", getViewId(), params().member());
+        log.trace("Closing producer for: {} on: {}", getViewId(), params().member());
         controller.stop();
         coordinator.stop();
         if (assembly != null) {
@@ -275,6 +281,13 @@ public class Producer {
         return view.context().getId();
     }
 
+    private void newEpoch(Integer epoch) {
+        if (epoch == reconfigurationEpoch) {
+            ds.validationsOnly(true);
+            transitions.lastBlock();
+        }
+    }
+
     private Parameters params() {
         return view.params();
     }
@@ -298,7 +311,8 @@ public class Producer {
             public void complete() {
                 final var slate = getSlate();
                 joins.putAll(slate);
-                log.info("View assembly: {} gathered: {} complete on: {}", nextViewId, slate.size(), params().member());
+                log.debug("View assembly: {} gathered: {} complete on: {}", nextViewId, slate.size(),
+                          params().member());
                 Producer.this.transitions.viewComplete();
             }
         };

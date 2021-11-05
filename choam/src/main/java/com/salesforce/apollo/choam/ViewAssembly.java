@@ -78,8 +78,7 @@ public class ViewAssembly implements Reconfiguration {
 
     private record Proposed(ViewMember vm, Member member, Map<Member, Validate> validations) {}
 
-    private final static Logger log                = LoggerFactory.getLogger(ViewAssembly.class);
-    private final static String RECONFIGURE_PREFIX = "Reconfiguration View";
+    private final static Logger log = LoggerFactory.getLogger(ViewAssembly.class);
 
     protected volatile BlockingQueue<ByteString> ds;
     protected final Map<Digest, Member>          nextAssembly;
@@ -96,6 +95,7 @@ public class ViewAssembly implements Reconfiguration {
     public ViewAssembly(Digest nextViewId, ViewContext vc, CommonCommunications<Terminal, ?> comms) {
         view = vc;
         this.nextViewId = nextViewId;
+        ds = new LinkedBlockingQueue<>();
         nextAssembly = Committee.viewMembersOf(nextViewId, params().context()).stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
@@ -126,27 +126,25 @@ public class ViewAssembly implements Reconfiguration {
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
                                           params().dispatcher(), params().metrics());
 
-        log.info("View Assembly: {} committee: {} from: {} to: {} next assembly: {} on: {}", reContext.getId(),
-                 reContext.activeMembers(), view.context().getId(), nextViewId, nextAssembly.keySet(),
-                 params().member());
+        log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
+                 nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());
     }
 
     @Override
     public void certify() {
-        clear();
+        ds.clear();
         try {
             log.debug("Certifying Join proposals of: {} count: {} on: {}", nextViewId, proposals.size(),
                       params().member());
-            final var current = ds;
-            assert current.size() == 0 : "Existing data! size: " + current.size();
-            current.put(Reassemble.newBuilder()
-                                  .setValidations(Validations.newBuilder()
-                                                             .addAllValidations(proposals.values().stream().map(p -> {
-                                                                 return view.generateValidation(p.vm);
-                                                             }).toList()))
-                                  .build().toByteString());
+            assert ds.size() == 0 : "Existing data! size: " + ds.size();
+            ds.put(Reassemble.newBuilder()
+                             .setValidations(Validations.newBuilder()
+                                                        .addAllValidations(proposals.values().stream().map(p -> {
+                                                            return view.generateValidation(p.vm);
+                                                        }).toList()))
+                             .build().toByteString());
             for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
-                current.put(ByteString.EMPTY);
+                ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
             log.error("Failed enqueing Join proposal of: {} on: {}", nextViewId, params().member(), e);
@@ -156,7 +154,7 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void complete() {
-        log.info("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(), params().member());
+        log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(), params().member());
     }
 
     @Override
@@ -199,19 +197,18 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void nominate() {
-        clear();
+        ds.clear();
         try {
             log.debug("Nominating proposal for: {} members: {} on: {}", nextViewId,
                       proposals.values().stream().map(p -> p.member.getId()).toList(), params().member());
-            final var current = ds;
-            current.put(Reassemble.newBuilder()
-                                  .setViewMembers(ViewMembers.newBuilder()
-                                                             .addAllMembers(proposals.values().stream().map(p -> p.vm)
-                                                                                     .toList())
-                                                             .build())
-                                  .build().toByteString());
+            ds.put(Reassemble.newBuilder()
+                             .setViewMembers(ViewMembers.newBuilder()
+                                                        .addAllMembers(proposals.values().stream().map(p -> p.vm)
+                                                                                .toList())
+                                                        .build())
+                             .build().toByteString());
             for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
-                current.put(ByteString.EMPTY);
+                ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
             log.error("Failed enqueing view members proposal of: {} on: {}", nextViewId, params().member(), e);
@@ -224,7 +221,7 @@ public class ViewAssembly implements Reconfiguration {
     }
 
     public void start() {
-        clear();
+        ds.clear();
         coordinator.start(params().producer().gossipDuration(), params().scheduler());
         controller.start();
         transitions.fsm().enterStartState();
@@ -233,10 +230,6 @@ public class ViewAssembly implements Reconfiguration {
     public void stop() {
         coordinator.stop();
         controller.stop();
-    }
-
-    protected void clear() {
-        ds = new LinkedBlockingQueue<>();
     }
 
     protected int epochs() {
@@ -341,7 +334,6 @@ public class ViewAssembly implements Reconfiguration {
                 try {
                     final var current = ds;
                     final var take = current.take();
-                    log.info("Data: {} on: {}", take, params().member());
                     return take;
                 } catch (InterruptedException e) {
                     return null;

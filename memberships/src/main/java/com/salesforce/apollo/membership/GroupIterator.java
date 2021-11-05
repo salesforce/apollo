@@ -20,7 +20,7 @@ import java.util.concurrent.Semaphore;
  *
  */
 public class GroupIterator {
-    private volatile int       current   = -1;
+    private volatile int       current   = 0;
     private final List<Member> group;
     private final Semaphore    exclusive = new Semaphore(1);
 

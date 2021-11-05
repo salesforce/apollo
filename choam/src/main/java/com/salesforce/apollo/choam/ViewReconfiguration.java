@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,15 +104,13 @@ public class ViewReconfiguration extends ViewAssembly {
         var validate = view.generateValidation(reconfiguration);
         log.trace("Certifying reconfiguration block: {} for: {} count: {} on: {}", reconfiguration.hash, nextViewId,
                   slate.size(), params().member());
-        clear();
+        ds.clear();
         try {
-            final var current = ds;
-            assert current.size() == 0 : "Existing data! size: " + current.size();
-            current.put(Reassemble.newBuilder()
-                                  .setValidations(Validations.newBuilder().addValidations(validate).build()).build()
-                                  .toByteString());
+            assert ds.size() == 0 : "Existing data! size: " + ds.size();
+            ds.put(Reassemble.newBuilder().setValidations(Validations.newBuilder().addValidations(validate).build())
+                             .build().toByteString());
             for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
-                current.put(ByteString.EMPTY);
+                ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
             log.error("Failed enqueing block reconfiguration validation for: {} on: {}", nextViewId, params().member(),
@@ -132,7 +129,7 @@ public class ViewReconfiguration extends ViewAssembly {
         witnesses.entrySet().stream().sorted(Comparator.comparing(e -> e.getKey().getId())).map(e -> e.getValue())
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
-        log.info("Reconfiguration block: {} published for: {} on: {}", reconfiguration.hash, nextViewId,
-                 params().member());
+        log.debug("{}Reconfiguration block: {} published for: {} on: {}", forGenesis ? "Genesis " : "",
+                  reconfiguration.hash, nextViewId, params().member());
     }
 }

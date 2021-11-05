@@ -111,20 +111,25 @@ public interface Committee {
         Digest wid = new Digest(c.getId());
         var witness = params.context().getMember(wid);
         if (witness == null) {
-            log().trace("Witness does not exist: {} in: {} validating: {} on: {}", wid, params.context().getId(), hb,
+            log().debug("Witness does not exist: {} in: {} validating: {} on: {}", wid, params.context().getId(), hb,
                         params.member());
             return false;
         }
         var verify = validators.get(witness);
         if (verify == null) {
-            log().trace("Witness: {} is not a validator for: {} validating: {} on: {}", wid, params.context().getId(),
+            log().debug("Witness: {} is not a validator for: {} validating: {} on: {}", wid, params.context().getId(),
                         hb, params.member());
             return false;
         }
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
-        log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                    DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+        if (!verified) {
+            log().debug("Failed verification: {} using: {} key: {} on: {}", verified, witness.getId(),
+                        DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+        } else {
+            log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
+                        DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+        }
         return verified;
     }
 
@@ -137,7 +142,7 @@ public interface Committee {
         int valid = 0;
         for (var w : hb.certifiedBlock.getCertificationsList()) {
             if (!validate(hb, w, validators)) {
-                log().error("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
+                log().debug("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
                             new Digest(w.getId()), params.member());
             } else {
                 valid++;

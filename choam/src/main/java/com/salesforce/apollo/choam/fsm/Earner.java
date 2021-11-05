@@ -20,6 +20,10 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  */
 public enum Earner implements Driven.Transitions {
     AWAIT_VIEW {
+        @Entry
+        public void checkAssembly() {
+            context().checkAssembly();
+        }
 
         @Override
         public Transitions viewComplete() {
@@ -97,7 +101,12 @@ public enum Earner implements Driven.Transitions {
         @Entry
         public void terminate() {
             log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
-            context().complete();
+            context().fail();
+        }
+
+        @Override
+        public Transitions viewComplete() {
+            return null;
         }
     },
     RECONFIGURE {
@@ -121,6 +130,11 @@ public enum Earner implements Driven.Transitions {
         @Entry
         public void startProduction() {
             context().startProduction();
+        }
+
+        @Override
+        public Transitions viewComplete() {
+            return null;
         }
     };
 

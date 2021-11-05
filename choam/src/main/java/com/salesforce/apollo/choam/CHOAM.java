@@ -286,34 +286,14 @@ public class CHOAM {
 
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
-            Member source = params.context().getActiveMember(from);
-            if (source == null) {
-                log.debug("Request to join from non member: {} on: {}", from, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            if (!validators.containsKey(source)) {
-                log.debug("Request to join from non validator: {} on: {}", source, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            Digest nextView = new Digest(request.getNextView());
-            final var nextId = nextViewId.get();
-            if (nextId == null) {
-                log.debug("Request to join unknown view: {} from: {} on: {}", nextView, source, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            if (!nextId.equals(nextView)) {
-                log.debug("Request to join incorrect view: {} from: {} on: {}", nextView, source, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
-            if (!members.contains(params.member())) {
-                log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
-                          params.member());
+            if (!checkJoin(request, from)) {
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
-            log.debug("Joining view: {} from: {} members: {} view member: {} on: {}", nextView, source, members,
-                      ViewContext.print(c.member, params.digestAlgorithm()), params.member());
+            if (log.isDebugEnabled()) {
+                log.debug("Joining view: {} from: {} view member: {} on: {}", Digest.from(request.getNextView()), from,
+                          ViewContext.print(c.member, params.digestAlgorithm()), params.member());
+            }
             return c.member;
         }
 
@@ -405,28 +385,14 @@ public class CHOAM {
 
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
-            Member source = params.context().getActiveMember(from);
-            if (source == null) {
-                log.debug("Request to join from non member: {} on: {}", from, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            Digest nextView = new Digest(request.getNextView());
-            final var nextId = nextViewId.get();
-            if (nextId == null) {
-                log.debug("Request to join unknown view: {} from: {} on: {}", nextView, source, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            if (!nextId.equals(nextView)) {
-                log.debug("Request to join incorrect view: {} from: {} on: {}", nextView, source, params.member());
-                return ViewMember.getDefaultInstance();
-            }
-            final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
-            if (!members.contains(params.member())) {
-                log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
-                          params.member());
+            if (!checkJoin(request, from)) {
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
+            if (log.isDebugEnabled()) {
+                log.debug("Joining view: {} from: {} view member: {} on: {}", Digest.from(request.getNextView()), from,
+                          ViewContext.print(c.member, params.digestAlgorithm()), params.member());
+            }
             return c.member;
         }
 
@@ -560,7 +526,8 @@ public class CHOAM {
 
     private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
 
-    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
+    private final AtomicReference<HashedCertifiedBlock> checkpoint = new AtomicReference<>();
+
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
@@ -603,7 +570,13 @@ public class CHOAM {
             thread.setDaemon(true);
             return thread;
         });
-        combine.registerHandler((ctx, messages) -> linear.execute(() -> combine(messages)));
+        combine.registerHandler((ctx, messages) -> {
+            try {
+                linear.execute(() -> combine(messages));
+            } catch (RejectedExecutionException e) {
+                // ignore
+            }
+        });
         head.set(new NullBlock(params.digestAlgorithm()));
         view.set(new NullBlock(params.digestAlgorithm()));
         checkpoint.set(new NullBlock(params.digestAlgorithm()));
@@ -653,6 +626,33 @@ public class CHOAM {
         session.cancelAll();
         linear.shutdown();
         executions.shutdown();
+    }
+
+    protected boolean checkJoin(JoinRequest request, Digest from) {
+        Member source = params.context().getActiveMember(from);
+        if (source == null) {
+            log.debug("Request to join from non member: {} on: {}", from, params.member());
+            return false;
+        }
+        Digest nextView = new Digest(request.getNextView());
+        final var nextId = nextViewId.get();
+        if (nextId == null) {
+            log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
+                      params.member());
+            return false;
+        }
+        if (!nextId.equals(nextView)) {
+            log.debug("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId, source,
+                      params.member());
+            return false;
+        }
+        final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
+        if (!members.contains(params.member())) {
+            log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
+                      members, params.member());
+            return false;
+        }
+        return true;
     }
 
     private void accept(HashedCertifiedBlock next) {
