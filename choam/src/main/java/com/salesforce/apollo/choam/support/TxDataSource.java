@@ -104,4 +104,8 @@ public class TxDataSource implements DataSource {
     public void start(Duration batchInterval, ScheduledExecutorService scheduler) {
         processing.start(batchInterval, scheduler);
     }
+
+    public void validationsOnly(boolean only) {
+        validationsOnly.set(only);
+    }
 }

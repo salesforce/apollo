@@ -19,6 +19,14 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  *
  */
 public enum Earner implements Driven.Transitions {
+    AWAIT_VIEW {
+
+        @Override
+        public Transitions viewComplete() {
+            return RECONFIGURE;
+        }
+
+    },
     CHECKPOINTING {
 
         @Entry
@@ -107,7 +115,7 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions lastBlock() {
-            return RECONFIGURE;
+            return AWAIT_VIEW;
         }
 
         @Entry

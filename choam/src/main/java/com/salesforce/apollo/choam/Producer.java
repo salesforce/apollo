@@ -110,7 +110,6 @@ public class Producer {
         @Override
         public void startProduction() {
             log.info("Starting production for: {} on: {}", getViewId(), params().member());
-            produceAssemble();
             controller.start();
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
         }
@@ -176,6 +175,7 @@ public class Producer {
 
     private void newEpoch(Integer epoch) {
         if (epoch == reconfigurationEpoch) {
+            ds.validationsOnly(true);
             transitions.lastBlock();
         }
     }
@@ -263,9 +263,10 @@ public class Producer {
             started.set(true);
             transitions.complete();
         } else {
-            if (reconfigurationCountdown.get() >= 0) {
-                reconfigurationCountdown.decrementAndGet();
-                produceAssemble();
+            if (reconfigurationCountdown.get() > 0) {
+                if (reconfigurationCountdown.decrementAndGet() == 0) {
+                    produceAssemble();
+                }
             }
         }
     }
@@ -290,12 +291,15 @@ public class Producer {
         pending.put(reconfigure.hash, p);
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
-        log.debug("Next view: {} created: {} height: {} body: {} from: {} on: {}", nextViewId, reconfigure.hash,
+        log.debug("View assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, reconfigure.hash,
                   reconfigure.height(), reconfigure.block.getBodyCase(), getViewId(), params().member());
         assembly = new ViewAssembly(nextViewId, view, comms) {
             @Override
             public void complete() {
-                joins.putAll(getSlate());
+                final var slate = getSlate();
+                joins.putAll(slate);
+                log.info("View assembly: {} gathered: {} complete on: {}", nextViewId, slate.size(), params().member());
+                Producer.this.transitions.viewComplete();
             }
         };
         assembly.start();

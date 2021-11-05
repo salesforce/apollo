@@ -12,7 +12,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,7 +47,6 @@ import com.salesforce.apollo.choam.fsm.Reconfigure;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
@@ -158,7 +156,7 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void complete() {
-        log.info("View Assembly: {} completed on: {}", nextViewId, params().member());
+        log.info("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(), params().member());
     }
 
     @Override
@@ -282,8 +280,8 @@ public class ViewAssembly implements Reconfiguration {
         }
 
         if (countDown.decrementAndGet() >= 0) {
-            log.trace("Retrying, attempting full assembly of: {} gathered: {} on: {}", nextViewId, count,
-                      params().member());
+            log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} on: {}", nextViewId, count,
+                      nextAssembly.size(), params().member());
             proceed.set(true);
             reiterate.get().run();
             return;
@@ -291,11 +289,13 @@ public class ViewAssembly implements Reconfiguration {
 
         if (count > params().toleranceLevel()) {
             proceed.set(false);
-            log.trace("Proposal assembled: {} with: {} on: {}", nextViewId, count, params().member());
+            log.trace("Proposal assembled: {} gathered: {} out of: {} on: {}", nextViewId, count, nextAssembly.size(),
+                      params().member());
             transitions.gathered();
             return;
         }
-        log.trace("Proposal incomplete of: {} gathered: {}, retrying on: {}", nextViewId, count, params().member());
+        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying on: {}", nextViewId, count,
+                  params().toleranceLevel(), params().member());
         proceed.set(true);
         reiterate.get().run();
     }
@@ -318,7 +318,7 @@ public class ViewAssembly implements Reconfiguration {
                       e.getCause());
             return proceed.get();
         }
-        if (!member.isInitialized()) {
+        if (member.equals(ViewMember.getDefaultInstance())) {
             log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
             return proceed.get();
         }
@@ -341,6 +341,7 @@ public class ViewAssembly implements Reconfiguration {
                 try {
                     final var current = ds;
                     final var take = current.take();
+                    log.info("Data: {} on: {}", take, params().member());
                     return take;
                 } catch (InterruptedException e) {
                     return null;

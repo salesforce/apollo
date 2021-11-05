@@ -49,6 +49,10 @@ public interface Driven {
         default Transitions start() {
             throw fsm().invalidTransitionOn();
         }
+
+        default Transitions viewComplete() {
+            throw fsm().invalidTransitionOn();
+        }
     }
 
     public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";

@@ -203,7 +203,7 @@ public class TestCHOAM {
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .build())
-                               .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
+                               .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer); 
         params.getProducer().coordination().setExecutor(routerExec).setBufferSize(1500);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))

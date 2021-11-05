@@ -97,7 +97,6 @@ public class ViewContext {
     }
 
     public Validate generateValidation(ViewMember vm) {
-        final var vmId = Digest.from(vm.getId());
         JohnHancock signature = signer.sign(vm.getSignature().toByteString());
         if (signature == null) {
             log.error("Unable to sign view member: {}  on: {}", print(vm, params.digestAlgorithm()), params.member());

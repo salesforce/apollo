@@ -13,10 +13,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -97,6 +99,7 @@ public class Orderer {
     private final RandomSourceFactory    rsf;
     private final Consumer<List<Unit>>   toPreblock;
     private final Consumer<Integer>      newEpochAction;
+    private final ExecutorService        executor;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Integer> newEpochAction,
                    RandomSourceFactory rsf) {
@@ -116,36 +119,47 @@ public class Orderer {
                 lock.unlock();
             }
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
+        executor = Executors.newSingleThreadExecutor(r -> {
+            final var t = new Thread(r, "Order Executor[" + conf.pid() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     /**
-     * Sends preunits received from other committee members to their corresponding
-     * epochs. It assumes preunits are ordered by ascending epochID and, within each
-     * epoch, they are topologically sorted.
+     * Asynchronously sends preunits received from other committee members to their
+     * corresponding epochs. It assumes preunits are ordered by ascending epochID
+     * and, within each epoch, they are topologically sorted.
      */
-    public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
-        final Lock lock = mx.writeLock();
-        lock.lock();
+    public void addPreunits(List<PreUnit> pus) {
         try {
-            log.debug("Adding: {} on: {}", preunits, config.pid());
-            var errors = new HashMap<Digest, Correctness>();
-            while (preunits.size() > 0) {
-                var epoch = preunits.get(0).epoch();
-                var end = 0;
-                while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
-                    end++;
+            executor.execute(() -> {
+                List<PreUnit> preunits = pus;
+                final Lock lock = mx.writeLock();
+                lock.lock();
+                try {
+                    log.debug("Adding: {} on: {}", preunits, config.pid());
+                    var errors = new HashMap<Digest, Correctness>();
+                    while (preunits.size() > 0) {
+                        var epoch = preunits.get(0).epoch();
+                        var end = 0;
+                        while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
+                            end++;
+                        }
+                        epoch ep = retrieveEpoch(preunits.get(0));
+                        if (ep != null) {
+                            errors.putAll(ep.adder().addPreunits(preunits.subList(0, end)));
+                        } else {
+                            log.debug("No epoch for: {} on: {}", preunits, config.pid());
+                        }
+                        preunits = preunits.subList(end, preunits.size());
+                    }
+                } finally {
+                    lock.unlock();
                 }
-                epoch ep = retrieveEpoch(preunits.get(0));
-                if (ep != null) {
-                    errors.putAll(ep.adder().addPreunits(preunits.subList(0, end)));
-                } else {
-                    log.debug("No epoch for: {} on: {}", preunits, config.pid());
-                }
-                preunits = preunits.subList(end, preunits.size());
-            }
-            return errors;
-        } finally {
-            lock.unlock();
+            });
+        } catch (RejectedExecutionException e) {
+            // ignored
         }
     }
 
@@ -249,6 +263,7 @@ public class Orderer {
         if (current != null) {
             current.get().close();
         }
+        executor.shutdown();
         log.trace("Orderer stopped on: {}", config.pid());
     }
 
@@ -311,7 +326,13 @@ public class Orderer {
         dg.afterInsert(u -> {
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
-                creator.consume(Collections.singletonList(u), lastTiming);
+                try {
+                    executor.execute(() -> {
+                        creator.consume(Collections.singletonList(u), lastTiming);
+                    });
+                } catch (RejectedExecutionException e) {
+                    // ignored
+                }
             }
         });
         return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));

@@ -296,6 +296,15 @@ public class CHOAM {
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
+            final var nextId = nextViewId.get();
+            if (nextId == null) {
+                log.debug("Request to join unknown view: {} from: {} on: {}", nextView, source, params.member());
+                return ViewMember.getDefaultInstance();
+            }
+            if (!nextId.equals(nextView)) {
+                log.debug("Request to join incorrect view: {} from: {} on: {}", nextView, source, params.member());
+                return ViewMember.getDefaultInstance();
+            }
             final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
             if (!members.contains(params.member())) {
                 log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
@@ -367,6 +376,7 @@ public class CHOAM {
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
                 reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, constructBlock(),
                                                       true);
+                nextViewId.set(params.genesisViewId());
             } else {
                 reconfigure = null;
             }
@@ -401,6 +411,15 @@ public class CHOAM {
                 return ViewMember.getDefaultInstance();
             }
             Digest nextView = new Digest(request.getNextView());
+            final var nextId = nextViewId.get();
+            if (nextId == null) {
+                log.debug("Request to join unknown view: {} from: {} on: {}", nextView, source, params.member());
+                return ViewMember.getDefaultInstance();
+            }
+            if (!nextId.equals(nextView)) {
+                log.debug("Request to join incorrect view: {} from: {} on: {}", nextView, source, params.member());
+                return ViewMember.getDefaultInstance();
+            }
             final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
             if (!members.contains(params.member())) {
                 log.debug("Request to join invalid view: {} from: {} members: {} on: {}", nextView, source, members,
@@ -552,6 +571,7 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 head                  = new AtomicReference<>();
     private final ExecutorService                                       linear;
     private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
+    private final AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
     private final Parameters                                            params;
     private final PriorityQueue<HashedCertifiedBlock>                   pending               = new PriorityQueue<>();
     private final RoundScheduler                                        roundScheduler;
@@ -889,6 +909,10 @@ public class CHOAM {
     private void process() {
         final HashedBlock h = head.get();
         switch (h.block.getBodyCase()) {
+        case ASSEMBLE:
+            nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
+            log.info("Next view id: {} on: {}", nextViewId.get(), params.member());
+            break;
         case CHECKPOINT:
 //            checkpoint();
             break;
@@ -909,6 +933,7 @@ public class CHOAM {
     }
 
     private void reconfigure(Reconfigure reconfigure) {
+        nextViewId.set(null);
         final Committee c = current.get();
         c.complete();
         var validators = validatorsOf(reconfigure, params.context());
