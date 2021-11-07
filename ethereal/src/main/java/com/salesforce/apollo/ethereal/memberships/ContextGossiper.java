@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,6 +62,7 @@ public class ContextGossiper {
     private final Gossiper                                            gossiper;
     private final SigningMember                                       member;
     private final RingCommunications<Scuttlebutte>                    ring;
+    private volatile ScheduledFuture<?>                               scheduled;
     private final AtomicBoolean                                       started = new AtomicBoolean();
 
     public ContextGossiper(Controller controller, Context<Member> context, SigningMember member, Router communications,
@@ -89,7 +91,7 @@ public class ContextGossiper {
             return;
         }
         Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy().nextLong(2 * duration.toMillis()));
-        log.info("Starting Gossiper[{}] on: {}", context.getId(), member);
+        log.trace("Starting Gossiper[{}] on: {}", context.getId(), member);
         comm.register(context.getId(), new Terminal());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -98,8 +100,13 @@ public class ContextGossiper {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Stopping Gossiper [{}] for {}", context.getId(), member);
+        log.trace("Stopping Gossiper [{}] for {}", context.getId(), member);
         comm.deregister(context.getId());
+        final var current = scheduled;
+        scheduled = null;
+        if (current != null) {
+            current.cancel(true);
+        }
     }
 
     private ListenableFuture<Update> gossipRound(Scuttlebutte link, int ring) {
@@ -122,6 +129,9 @@ public class ContextGossiper {
 
     private void handle(Optional<ListenableFuture<Update>> futureSailor, Scuttlebutte link, int ring, Duration duration,
                         ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
         try {
             if (futureSailor.isEmpty()) {
                 return;
@@ -144,7 +154,8 @@ public class ContextGossiper {
             gossiper.update(update);
         } finally {
             if (started.get()) {
-                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+                scheduled = scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
+                                               TimeUnit.MILLISECONDS);
             }
         }
     }

@@ -12,6 +12,7 @@ import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -43,6 +44,8 @@ public class TxDataSource implements DataSource {
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
     private final Duration                           batchInterval;
+    private volatile Thread                          blockingThread;
+    private final AtomicBoolean                      closed          = new AtomicBoolean();
     private final Member                             member;
     private final CapacityBatchingQueue<Transaction> processing;
     private final BlockingQueue<Validate>            validations     = new LinkedBlockingQueue<>();
@@ -57,16 +60,39 @@ public class TxDataSource implements DataSource {
                                                             tx -> tx.toByteString().size(), 5);
     }
 
+    public void close() {
+        closed.set(true);
+        validationsOnly.set(false);
+        final var current = blockingThread;
+        if (current != null) {
+            current.interrupt();
+        }
+        blockingThread = null;
+    }
+
     @Override
     public ByteString getData() {
+        if (closed.get()) {
+            return ByteString.EMPTY;
+        }
+//        log.info("Requesting Unit data on: {}",  member);
         var builder = UnitData.newBuilder();
 
         if (validationsOnly.get()) {
+            blockingThread = Thread.currentThread();
             try {
-                var validation = validations.take();
+                Validate validation = validations.poll(1, TimeUnit.SECONDS);
+                while (!closed.get() && validation == null) {
+                    validation = validations.poll(1, TimeUnit.SECONDS);
+                }
+                if (closed.get()) {
+                    return ByteString.EMPTY;
+                }
                 builder.addValidations(validation);
             } catch (InterruptedException e) {
-                return null;
+                return ByteString.EMPTY;
+            } finally {
+                blockingThread = null;
             }
         } else {
             Queue<Transaction> batch;
@@ -79,11 +105,14 @@ public class TxDataSource implements DataSource {
                 builder.addAllTransactions(batch);
             }
         }
+
         var vdx = new ArrayList<Validate>();
         validations.drainTo(vdx);
         builder.addAllValidations(vdx);
+
         final var data = builder.build();
         final var bs = data.toByteString();
+
         log.trace("Unit data: {} txns {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
                   data.getValidationsCount(), bs.size(), member);
         return bs;

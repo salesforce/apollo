@@ -322,7 +322,7 @@ public class Creator {
         // that the current epoch is finished) switch to a new epoch.
         ByteString ep = epochProof.get().tryBuilding(unit);
         if (ep != null) {
-            log.info("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
+            log.debug("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
             newEpoch(e + 1, ep);
             return;
         }

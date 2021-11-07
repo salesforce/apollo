@@ -86,11 +86,13 @@ public class ViewAssembly implements Reconfiguration {
     protected final Transitions                  transitions;
     protected final ViewContext                  view;
 
+    private volatile Thread               blockingThread;
     private final SliceIterator<Terminal> committee;
     private final Controller              controller;
     private final ContextGossiper         coordinator;
     private final Map<Digest, Proposed>   proposals = new ConcurrentHashMap<>();
     private final Map<Member, Join>       slate     = new ConcurrentHashMap<>();
+    private final AtomicBoolean           started   = new AtomicBoolean();
 
     public ViewAssembly(Digest nextViewId, ViewContext vc, CommonCommunications<Terminal, ?> comms) {
         view = vc;
@@ -127,7 +129,7 @@ public class ViewAssembly implements Reconfiguration {
                                           params().dispatcher(), params().metrics());
 
         log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
-                 nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());
+                  nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());
     }
 
     @Override
@@ -221,6 +223,9 @@ public class ViewAssembly implements Reconfiguration {
     }
 
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         ds.clear();
         coordinator.start(params().producer().gossipDuration(), params().scheduler());
         controller.start();
@@ -228,8 +233,17 @@ public class ViewAssembly implements Reconfiguration {
     }
 
     public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+        log.trace("Stopping view assembly: {} on: {}", nextViewId, params().member());
         coordinator.stop();
         controller.stop();
+        final var cur = blockingThread;
+        blockingThread = null;
+        if (cur != null) {
+            cur.interrupt();
+        }
     }
 
     protected int epochs() {
@@ -331,12 +345,18 @@ public class ViewAssembly implements Reconfiguration {
         return new DataSource() {
             @Override
             public ByteString getData() {
+                if (!started.get()) {
+                    return ByteString.EMPTY;
+                }
                 try {
+                    blockingThread = Thread.currentThread();
                     final var current = ds;
                     final var take = current.take();
                     return take;
                 } catch (InterruptedException e) {
-                    return null;
+                    return ByteString.EMPTY;
+                } finally {
+                    blockingThread = null;
                 }
             }
         };

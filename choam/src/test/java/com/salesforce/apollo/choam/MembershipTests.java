@@ -223,7 +223,6 @@ public class MembershipTests {
                                                               .build())
                                .setTxnPermits(2_000).setCheckpointBlockSize(checkpointBlockSize)
                                .setCheckpointer(checkpointer);
-        params.getProducer().coordination().setBufferSize(1500);
 
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)

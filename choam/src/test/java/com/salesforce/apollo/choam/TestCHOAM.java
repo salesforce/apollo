@@ -14,12 +14,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -99,7 +99,7 @@ public class TestCHOAM {
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
-                    }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+                    }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                 } else {
                     time.close();
                     final int tot = lineTotal.incrementAndGet();
@@ -110,13 +110,11 @@ public class TestCHOAM {
                     }
                     var tc = latency.time();
                     if (completed.incrementAndGet() < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(session.submit(tx, timeout), tc);
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                        try {
+                            decorate(session.submit(tx, timeout), tc);
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
             });
@@ -161,7 +159,8 @@ public class TestCHOAM {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY, 3);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
+                                    3);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger sd = new AtomicInteger();
@@ -171,7 +170,7 @@ public class TestCHOAM {
             return thread;
         });
         AtomicInteger d = new AtomicInteger();
-        Executor dispatcher = Executors.newFixedThreadPool(CARDINALITY, r -> {
+        Executor dispatcher = Executors.newCachedThreadPool(r -> {
             Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
@@ -199,12 +198,11 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(50)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
                                                               .build())
-                               .setTxnPermits(2_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer); 
-        params.getProducer().coordination().setExecutor(routerExec).setBufferSize(1500);
+                               .setTxnPermits(10_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -222,13 +220,13 @@ public class TestCHOAM {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
+                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
+                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.completeAsync(() -> new Object(), clients);
                     }
@@ -269,11 +267,11 @@ public class TestCHOAM {
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
         AtomicInteger lineTotal = new AtomicInteger();
-        var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
-        final int clientCount = 1_000;
+        var transactioneers = new ArrayList<Transactioneer>();
+        final int clientCount = 10_000;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
-            choams.values().parallelStream()
+            choams.values().stream()
                   .map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal, max))
                   .forEach(e -> transactioneers.add(e));
         }

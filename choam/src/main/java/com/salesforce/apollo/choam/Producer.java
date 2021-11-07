@@ -122,7 +122,7 @@ public class Producer {
 
         @Override
         public void startProduction() {
-            log.info("Starting production for: {} on: {}", getViewId(), params().member());
+            log.debug("Starting production for: {} on: {}", getViewId(), params().member());
             controller.start();
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
         }
@@ -206,15 +206,17 @@ public class Producer {
     }
 
     public void stop() {
-        if (started.compareAndSet(true, false)) {
+        if (!started.compareAndSet(true, false)) {
             return;
         }
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member());
         controller.stop();
         coordinator.stop();
-        if (assembly != null) {
-            assembly.complete();
+        final var c = assembly;
+        if (c != null) {
+            c.stop();
         }
+        ds.close();
     }
 
     public SubmitResult submit(Transaction transaction) {

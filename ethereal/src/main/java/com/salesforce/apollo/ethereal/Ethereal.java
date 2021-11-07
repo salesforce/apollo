@@ -241,7 +241,7 @@ public class Ethereal {
             var timingUnit = units.get(units.size() - 1);
             var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
-                log.info("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
                          config.pid());
                 last = true;
             }
@@ -258,18 +258,12 @@ public class Ethereal {
         var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory());
 
         Runnable start = () -> {
-            if (!started.compareAndSet(false, true)) {
-                return;
-            }
+            started.set(true);
             orderer.start();
         };
         Runnable stop = () -> {
-            if (!started.compareAndSet(true, false)) {
-                return;
-            }
-            if (orderer != null) {
-                orderer.stop();
-            }
+            started.set(false);
+            orderer.stop();
         };
         return new Controller(start, stop, orderer);
     }

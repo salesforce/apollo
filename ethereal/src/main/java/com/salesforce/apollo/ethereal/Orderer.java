@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -93,13 +94,15 @@ public class Orderer {
     private final Config                 config;
     private final Creator                creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
+    private volatile Thread              currentThread;
+    private final ExecutorService        executor;
     private final Queue<Unit>            lastTiming;
     private final ReadWriteLock          mx       = new ReentrantReadWriteLock();
+    private final Consumer<Integer>      newEpochAction;
     private final AtomicReference<epoch> previous = new AtomicReference<>();
     private final RandomSourceFactory    rsf;
+    private final AtomicBoolean          started  = new AtomicBoolean();
     private final Consumer<List<Unit>>   toPreblock;
-    private final Consumer<Integer>      newEpochAction;
-    private final ExecutorService        executor;
 
     public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Integer> newEpochAction,
                    RandomSourceFactory rsf) {
@@ -132,8 +135,15 @@ public class Orderer {
      * and, within each epoch, they are topologically sorted.
      */
     public void addPreunits(List<PreUnit> pus) {
+        if (!started.get()) {
+            return;
+        }
         try {
             executor.execute(() -> {
+                if (!started.get()) {
+                    return;
+                }
+                currentThread = Thread.currentThread();
                 List<PreUnit> preunits = pus;
                 final Lock lock = mx.writeLock();
                 lock.lock();
@@ -155,6 +165,7 @@ public class Orderer {
                         preunits = preunits.subList(end, preunits.size());
                     }
                 } finally {
+                    currentThread = null;
                     lock.unlock();
                 }
             });
@@ -234,19 +245,21 @@ public class Orderer {
 
     public Update missing(BloomFilter<Digest> have) {
         List<PreUnit_s> missing = new ArrayList<>();
+        epoch p;
+        epoch c;
         final var lock = mx.readLock();
         lock.lock();
         try {
-            var p = previous.get();
-            if (p != null) {
-                p.missing(have, missing);
-            }
-            var c = current.get();
-            if (c != null) {
-                c.missing(have, missing);
-            }
+            p = previous.get();
+            c = current.get();
         } finally {
             lock.unlock();
+        }
+        if (p != null) {
+            p.missing(have, missing);
+        }
+        if (c != null) {
+            c.missing(have, missing);
         }
         return Update.newBuilder().addAllMissing(missing).build();
     }
@@ -254,16 +267,30 @@ public class Orderer {
     public void start() {
         newEpoch(0);
         creator.start();
+        started.set(true);
     }
 
     public void stop() {
+        log.trace("Stopping Orderer on: {}", config.pid());
+        started.set(false);
+        executor.shutdown();
+        final var c = currentThread;
+        if (c != null) {
+            c.interrupt();
+        }
+        currentThread = null;
+        try {
+            executor.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            log.info("Orderer executor could not be shutdown, retrying on: {}", config.pid());
+            executor.shutdownNow();
+        }
         if (previous.get() != null) {
             previous.get().close();
         }
         if (current != null) {
             current.get().close();
         }
-        executor.shutdown();
         log.trace("Orderer stopped on: {}", config.pid());
     }
 
@@ -324,11 +351,22 @@ public class Orderer {
         ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
         dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
+            if (!started.get()) {
+                return;
+            }
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
                 try {
                     executor.execute(() -> {
-                        creator.consume(Collections.singletonList(u), lastTiming);
+                        if (!started.get()) {
+                            return;
+                        }
+                        currentThread = Thread.currentThread();
+                        try {
+                            creator.consume(Collections.singletonList(u), lastTiming);
+                        } finally {
+                            currentThread = null;
+                        }
                     });
                 } catch (RejectedExecutionException e) {
                     // ignored

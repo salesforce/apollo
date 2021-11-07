@@ -660,7 +660,7 @@ public class CHOAM {
         store.put(next);
         final Committee c = current.get();
         c.accept(next);
-        log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
+        log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
                   params.member());
     }
 
@@ -911,7 +911,7 @@ public class CHOAM {
         switch (h.block.getBodyCase()) {
         case ASSEMBLE:
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
-            log.info("Next view id: {} on: {}", nextViewId.get(), params.member());
+            log.debug("Next view id: {} on: {}", nextViewId.get(), params.member());
             break;
         case CHECKPOINT:
 //            checkpoint();

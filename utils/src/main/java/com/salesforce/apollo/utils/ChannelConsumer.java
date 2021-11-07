@@ -7,8 +7,10 @@
 package com.salesforce.apollo.utils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -35,9 +37,8 @@ public class ChannelConsumer<T> {
     }
 
     public void close() {
-        if (!closed.compareAndSet(false, true)) {
-            return;
-        }
+        closed.set(true);
+        queue.clear();
         if (handler != null) {
             handler.interrupt();
             handler = null;
@@ -54,18 +55,19 @@ public class ChannelConsumer<T> {
         handler = new Thread(() -> {
             while (!closed.get()) {
                 try {
-                    List<T> available = new ArrayList<T>();
-                    var polled = queue.take();
-                    if (polled != null) {
-                        queue.drainTo(available);
-                        available.add(0, polled);
+                    var polled = queue.poll(1, TimeUnit.SECONDS);
+                    if (!closed.get() && polled != null) {
                         try {
-                            consumer.accept(available);
-                        } catch (Throwable e) {
-                            log.error("Error in consumer", e);
+                            consumer.accept(Collections.singletonList(polled));
+                        } catch (ThreadDeath | IllegalMonitorStateException e) {
+                            System.out.println("Stoping consumer");
+                            return; // Normal exit
+                        }  catch (Throwable e) {
+                            log.error("Error in consumer");
                         }
                     }
-                } catch (InterruptedException e) {
+                } catch (InterruptedException | IllegalMonitorStateException e) {
+                    System.out.println("Stoping consumer");
                     return; // Normal exit
                 }
 
@@ -81,5 +83,13 @@ public class ChannelConsumer<T> {
                 consumer.accept(element);
             }
         });
+    }
+
+    public void submit(T r) {
+        try {
+            queue.put(r);
+        } catch (InterruptedException e) {
+            return;
+        }
     }
 }

@@ -232,10 +232,12 @@ public interface Dag {
 
         @Override
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
-            units.entrySet().forEach(e -> {
-                if (!have.contains(e.getKey())) {
-                    missing.add(e.getValue().toPreUnit_s());
-                }
+            read(() -> {
+                units.entrySet().forEach(e -> {
+                    if (!have.contains(e.getKey())) {
+                        missing.add(e.getValue().toPreUnit_s());
+                    }
+                });
             });
         }
 

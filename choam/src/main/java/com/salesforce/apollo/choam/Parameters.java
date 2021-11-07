@@ -89,8 +89,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         }
     }
 
-    public record ProducerParameters(Config.Builder ethereal, Duration gossipDuration,
-                                     ReliableBroadcaster.Parameters.Builder coordination, int maxBatchByteSize,
+    public record ProducerParameters(Config.Builder ethereal, Duration gossipDuration, int maxBatchByteSize,
                                      Duration batchInterval, int maxBatchCount) {
 
         public static Builder newBuilder() {
@@ -98,24 +97,18 @@ public record Parameters(Context<Member> context, Router communications, Signing
         }
 
         public static class Builder {
-            private Duration                               batchInterval    = Duration.ofMillis(100);
-            private ReliableBroadcaster.Parameters.Builder coordination     = ReliableBroadcaster.Parameters.newBuilder();
-            private Config.Builder                         ethereal         = Config.deterministic();
-            private Duration                               gossipDuration   = Duration.ofSeconds(1);
-            private int                                    maxBatchByteSize = 256 * 1024;
-            private int                                    maxBatchCount    = 1000;
+            private Duration       batchInterval    = Duration.ofMillis(100);
+            private Config.Builder ethereal         = Config.deterministic();
+            private Duration       gossipDuration   = Duration.ofSeconds(1);
+            private int            maxBatchByteSize = 256 * 1024;
+            private int            maxBatchCount    = 1000;
 
             public ProducerParameters build() {
-                return new ProducerParameters(ethereal, gossipDuration, coordination, maxBatchByteSize, batchInterval,
-                                              maxBatchCount);
+                return new ProducerParameters(ethereal, gossipDuration, maxBatchByteSize, batchInterval, maxBatchCount);
             }
 
             public Duration getBatchInterval() {
                 return batchInterval;
-            }
-
-            public ReliableBroadcaster.Parameters.Builder getCoordination() {
-                return coordination;
             }
 
             public Config.Builder getEthereal() {
@@ -136,11 +129,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
             public Builder setBatchInterval(Duration batchInterval) {
                 this.batchInterval = batchInterval;
-                return this;
-            }
-
-            public Builder setCoordination(ReliableBroadcaster.Parameters.Builder coordination) {
-                this.coordination = coordination;
                 return this;
             }
 
