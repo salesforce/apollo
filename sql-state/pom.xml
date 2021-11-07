@@ -60,6 +60,11 @@
 			<artifactId>avalanche</artifactId>
 			<scope>test</scope>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>choam</artifactId>
+            <scope>test</scope>
+        </dependency>
 	</dependencies>
 
 	<build>

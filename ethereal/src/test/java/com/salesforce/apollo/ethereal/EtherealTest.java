@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -258,24 +257,41 @@ public class EtherealTest {
         List<PreBlock> preblocks = produced.get(0);
         List<String> outputOrder = new ArrayList<>();
 
+        int success = 0;
         for (int i = 0; i < nProc; i++) {
             final List<PreBlock> output = produced.get(i);
-            assertEquals(87, output.size(), "Did not get all expected blocks on: " + i);
+            if (output.size() != 87) {
+                System.out.println("Did not get all expected blocks on: " + i);
+                break;
+            }
             for (int j = 0; j < preblocks.size(); j++) {
-                if (output.size() <= j) {
-                    System.out.println(String.format("Agreement with: %s up to: %s", i, j));
-                    break;
-                }
                 var a = preblocks.get(j);
                 var b = output.get(j);
-                assertEquals(a.data().size(), b.data().size(), "Mismatch at block: " + j + " process: " + i);
+                if (a.data().size() != b.data().size()) {
+                    System.out.println("Mismatch at block: " + j + " process: " + i);
+                    break;
+                }
+                boolean s = true;
                 for (int k = 0; k < a.data().size(); k++) {
-                    assertEquals(a.data().get(k), b.data().get(k),
-                                 "Mismatch at block: " + j + " unit: " + k + " process: " + i);
+                    if (!a.data().get(k).equals(b.data().get(k))) {
+                        s = false;
+                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
+                        + a.data().get(k) + " received: " + b.data().get(k));
+                        break;
+                    }
                     outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
-                assertEquals(a.randomBytes(), b.randomBytes());
+                if (a.randomBytes() != b.randomBytes()) {
+                    System.out.println("Mismatch random bytea at block: " + j + " process: " + i);
+                    break;
+                }
+                if (s) {
+                    success++;
+                }
             }
+            var minQuorum = Dag.minimalQuorum(nProc, builder.getBias());
+            assertTrue(success > minQuorum,
+                       "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
         }
     }
 

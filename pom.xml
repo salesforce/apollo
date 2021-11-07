@@ -138,11 +138,6 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>apollo</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -154,11 +149,6 @@
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>sql-state</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>model</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -176,6 +166,11 @@
 				<artifactId>utils</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>choam</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
