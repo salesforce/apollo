@@ -511,7 +511,7 @@ public class Orderer {
                 result = r.dealingData(epoch);
             } else {
                 epochWithNewer ep = getEpoch(epoch);
-                if (ep != null) {
+                if (ep != null && ep.epoch != null) {
                     result = ep.epoch.rs().dataToInclude(parents, level);
                 }
             }
