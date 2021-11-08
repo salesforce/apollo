@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
@@ -74,13 +75,16 @@ public class TestCHOAM {
                                                            .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                            .build();
 
-        Transactioneer(Session session, Duration timeout, Timer latency, AtomicBoolean proceed, AtomicInteger lineTotal,
-                       int max) {
+        private final Counter timeouts;
+
+        Transactioneer(Session session, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
+                       AtomicInteger lineTotal, int max) {
             this.latency = latency;
             this.proceed = proceed;
             this.session = session;
             this.timeout = timeout;
             this.lineTotal = lineTotal;
+            this.timeouts = timeouts;
             this.max = max;
         }
 
@@ -91,6 +95,7 @@ public class TestCHOAM {
                 }
 
                 if (t != null) {
+                    timeouts.inc();
                     var tc = latency.time();
                     failed.incrementAndGet();
                     scheduler.schedule(() -> {
@@ -266,13 +271,14 @@ public class TestCHOAM {
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
+        Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 10_000;
         final int max = 10;
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream()
-                  .map(c -> new Transactioneer(c.getSession(), timeout, latency, proceed, lineTotal, max))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, timeouts, latency, proceed, lineTotal, max))
                   .forEach(e -> transactioneers.add(e));
         }
 
