@@ -30,7 +30,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
                      List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     Clock clock, double bias, Verifier[] verifiers) {
+                     Clock clock, double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -65,6 +65,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                                      epochLength     = 30;
         private Executor                                 executor        = r -> r.run();
         private int                                      firstDecidedRound;
+        private double                                   fpr             = 0.125;
         private int                                      lastLevel       = -1;
         private short                                    nProc;
         private int                                      numberOfEpochs  = 3;
@@ -135,7 +136,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs,
-                              checks, wtk, executor, clock, bias, verifiers);
+                              checks, wtk, executor, clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -177,6 +178,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public int getFirstDecidedRound() {
             return firstDecidedRound;
+        }
+
+        public double getFpr() {
+            return fpr;
         }
 
         public int getLastLevel() {
@@ -271,6 +276,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setFirstDecidedRound(int firstDecidedRound) {
             this.firstDecidedRound = firstDecidedRound;
+            return this;
+        }
+
+        public Builder setFpr(double fpr) {
+            this.fpr = fpr;
             return this;
         }
 

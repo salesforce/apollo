@@ -44,16 +44,11 @@ public class Gossiper {
         this.orderer = orderer;
         biffs = new ArrayList<>();
         Config config = orderer.getConfig();
-        int count;
-        if (config.nProc() >= 4) {
-            count = Math.max(20, config.nProc());
-        } else {
-            count = 4;
-        }
+        int count = Math.max(4, config.nProc()); 
         for (int i = 0; i < count; i++) {
             biffs.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
                                             config.epochLength() * config.numberOfEpochs() * config.nProc() * 2,
-                                            0.125));
+                                            config.fpr()));
         }
     }
 

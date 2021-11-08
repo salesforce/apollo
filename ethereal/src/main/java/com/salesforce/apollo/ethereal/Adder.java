@@ -142,13 +142,8 @@ public interface Adder {
 
         @Override
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
-            mtx.lock();
-            try {
-                waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
-                       .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
-            } finally {
-                mtx.unlock();
-            }
+            waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
+                   .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
         }
 
         // addPreunit as a waitingPreunit to the buffer zone.

@@ -72,7 +72,8 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
 
         Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
                                                      proceed, finalIteration, onComplete);
-        try (Comm link = nextRing(digest)) {
+        final var next = nextRing(digest);
+        try (Comm link = next.link()) {
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);

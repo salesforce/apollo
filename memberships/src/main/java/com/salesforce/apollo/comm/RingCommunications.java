@@ -31,6 +31,8 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class RingCommunications<Comm extends Link> {
+    record linkAndRing<T> (T link, int ring) {}
+
     public enum Direction {
         PREDECESSOR {
             @Override
@@ -54,7 +56,7 @@ public class RingCommunications<Comm extends Link> {
     final Context<Member>               context;
     final Direction                     direction;
     final Executor                      executor;
-    volatile int                        lastRingIndex = -1;
+    volatile int                        lastRingIndex = 0;
     final SigningMember                 member;
     final List<Integer>                 traversalOrder;
 
@@ -78,8 +80,9 @@ public class RingCommunications<Comm extends Link> {
     }
 
     public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
-        try (Comm link = nextRing(null)) {
-            execute(round, handler, link);
+        final var next = nextRing(null);
+        try (Comm link = next.link) {
+            execute(round, handler, link, next.ring);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -87,15 +90,16 @@ public class RingCommunications<Comm extends Link> {
 
     public <T> void execute(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Handler<T, Comm> handler) {
-        try (Comm link = nextRing(digest)) {
-            execute(round, handler, link);
+        final var next = nextRing(digest);
+        try (Comm link = next.link) {
+            execute(round, handler, link, next.ring);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
     }
 
     public void reset() {
-        setLastRingIndex(-1);
+        setLastRingIndex(0);
     }
 
     @Override
@@ -103,8 +107,8 @@ public class RingCommunications<Comm extends Link> {
         return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + getLastRing() + "]";
     }
 
-    Comm nextRing(Digest digest) {
-        Comm link = null;
+    linkAndRing<Comm> nextRing(Digest digest) {
+        linkAndRing<Comm> link = null;
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
@@ -122,18 +126,17 @@ public class RingCommunications<Comm extends Link> {
         return link;
     }
 
-    private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler,
-                             Comm link) {
-        final int current = getLastRing();
+    private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler, Comm link,
+                             int ring) {
         if (link == null) {
-            handler.handle(Optional.empty(), link, current);
+            handler.handle(Optional.empty(), link, ring);
         } else {
-            ListenableFuture<T> futureSailor = round.apply(link, current);
+            ListenableFuture<T> futureSailor = round.apply(link, ring);
             if (futureSailor == null) {
-                handler.handle(Optional.empty(), link, current);
+                handler.handle(Optional.empty(), link, ring);
             } else {
                 futureSailor.addListener(Utils.wrapped(() -> {
-                    handler.handle(Optional.of(futureSailor), link, current);
+                    handler.handle(Optional.of(futureSailor), link, ring);
                 }, log), executor);
             }
         }
@@ -141,13 +144,10 @@ public class RingCommunications<Comm extends Link> {
 
     private int getLastRing() {
         final int current = lastRingIndex;
-        if (current < 0) {// shutdown
-            return 0;
-        }
         return traversalOrder.get(current);
     }
 
-    private Comm linkFor(Digest digest, int index) {
+    private linkAndRing<Comm> linkFor(Digest digest, int index) {
         int r = traversalOrder.get(index);
         Ring<Member> ring = context.ring(r);
         Member successor = direction.retrieve(ring, digest, member);
@@ -156,7 +156,7 @@ public class RingCommunications<Comm extends Link> {
             return null;
         }
         try {
-            return comm.apply(successor, member);
+            return new linkAndRing<>(comm.apply(successor, member), r);
         } catch (Throwable e) {
             log.trace("error opening connection to {}: {}", successor.getId(),
                       (e.getCause() != null ? e.getCause() : e).getMessage());

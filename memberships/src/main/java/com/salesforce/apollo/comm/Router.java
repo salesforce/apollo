@@ -9,6 +9,7 @@ package com.salesforce.apollo.comm;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -31,13 +32,13 @@ import io.grpc.util.MutableHandlerRegistry;
  */
 abstract public class Router {
     public class CommonCommunications<Client extends Link, Service>
-            implements BiFunction<Member, SigningMember, Client> {
+                                     implements BiFunction<Member, SigningMember, Client> {
         private final CreateClientCommunications<Client> createFunction;
         private final Client                             localLoopback;
         private final RoutableService<Service>           routing;
 
         public CommonCommunications(RoutableService<Service> routing, CreateClientCommunications<Client> createFunction,
-                Client localLoopback) {
+                                    Client localLoopback) {
             this.routing = routing;
             this.createFunction = createFunction;
             this.localLoopback = localLoopback;
@@ -45,7 +46,7 @@ abstract public class Router {
 
         @Override
         public Client apply(Member to, SigningMember from) {
-            return to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction);
+            return started.get() ? to.equals(from) ? localLoopback : cache.borrow(to, from, createFunction) : null;
         }
 
         public void deregister(Digest context) {
@@ -65,8 +66,10 @@ abstract public class Router {
 
     public static ForkJoinPool createFjPool(Logger logger) {
         return new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
-                ForkJoinPool.defaultForkJoinWorkerThreadFactory, Utils.uncaughtHandler(logger), false);
+                                ForkJoinPool.defaultForkJoinWorkerThreadFactory, Utils.uncaughtHandler(logger), false);
     }
+
+    protected final AtomicBoolean started = new AtomicBoolean();
 
     private final ServerConnectionCache             cache;
     private final MutableHandlerRegistry            registry;
@@ -77,7 +80,10 @@ abstract public class Router {
         this.registry = registry;
     }
 
-    public void close() {
+    public void close() { 
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
         cache.close();
     }
 

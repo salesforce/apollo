@@ -202,7 +202,7 @@ public class TestCHOAM {
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
+                               .setTxnPermits(100_000).setCheckpointBlockSize(2).setCheckpointer(checkpointer);
 
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -261,7 +261,7 @@ public class TestCHOAM {
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
-        final Duration timeout = Duration.ofSeconds(5);
+        final Duration timeout = Duration.ofSeconds(3);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();

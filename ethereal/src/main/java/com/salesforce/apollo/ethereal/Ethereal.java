@@ -258,10 +258,12 @@ public class Ethereal {
         var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory());
 
         Runnable start = () -> {
+            log.debug("Starting Ethereal on: {}", config.pid());
             started.set(true);
             orderer.start();
         };
         Runnable stop = () -> {
+            log.debug("Stopping Ethereal on: {}", config.pid());
             started.set(false);
             orderer.stop();
         };

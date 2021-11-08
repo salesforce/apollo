@@ -90,7 +90,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
     }
 
     public record ProducerParameters(Config.Builder ethereal, Duration gossipDuration, int maxBatchByteSize,
-                                     Duration batchInterval, int maxBatchCount) {
+                                     Duration batchInterval, int maxBatchCount, Duration maxGossipDelay) {
 
         public static Builder newBuilder() {
             return new Builder();
@@ -101,10 +101,12 @@ public record Parameters(Context<Member> context, Router communications, Signing
             private Config.Builder ethereal         = Config.deterministic();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
             private int            maxBatchByteSize = 256 * 1024;
-            private int            maxBatchCount    = 1000;
+            private int            maxBatchCount    = 10_000;
+            private Duration       maxGossipDelay   = Duration.ofSeconds(10);
 
             public ProducerParameters build() {
-                return new ProducerParameters(ethereal, gossipDuration, maxBatchByteSize, batchInterval, maxBatchCount);
+                return new ProducerParameters(ethereal, gossipDuration, maxBatchByteSize, batchInterval, maxBatchCount,
+                                              maxGossipDelay);
             }
 
             public Duration getBatchInterval() {
@@ -125,6 +127,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
             public int getMaxBatchCount() {
                 return maxBatchCount;
+            }
+
+            public Duration getMaxGossipDelay() {
+                return maxGossipDelay;
             }
 
             public Builder setBatchInterval(Duration batchInterval) {
@@ -149,6 +155,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
             public Builder setMaxBatchCount(int maxBatchCount) {
                 this.maxBatchCount = maxBatchCount;
+                return this;
+            }
+
+            public Builder setMaxGossipDelay(Duration maxGossipDelay) {
+                this.maxGossipDelay = maxGossipDelay;
                 return this;
             }
         }

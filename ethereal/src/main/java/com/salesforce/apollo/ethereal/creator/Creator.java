@@ -114,14 +114,14 @@ public class Creator {
         mx.lock();
         try {
             for (Unit u : units) {
-                // Step 1: update candidates with all units waiting on the unit belt
                 update(u);
             }
             var built = ready();
+            if (built == null) {
+                log.trace("Not ready to create unit on: {}", conf.pid());
+            }
             while (built != null) {
-                log.trace("Ready, creating units on: {}", conf.pid());
-                // Step 2: get parents and level using current strategy
-                // Step 3: create unit
+                log.trace("Ready, creating unit on: {}", conf.pid());
                 createUnit(built.parents, built.level, getData(built.level, lastTiming));
                 built = ready();
             }
@@ -140,6 +140,7 @@ public class Creator {
         if (conf.canSkipLevel()) {
             final Unit[] parents = getParents();
             if (count(parents) >= quorum) {
+                log.trace("Parents ready: {} on: {}", parents, conf.pid());
                 return new built(parents, level.get());
             } else {
                 log.trace("Parents not ready: {} on: {}", parents, conf.pid());
@@ -149,9 +150,10 @@ public class Creator {
             var l = candidates[conf.pid()].level() + 1;
             final Unit[] parents = getParentsForLevel(l);
             if (count(parents) >= quorum) {
-                log.trace("Parents not ready: {} on: {}", parents, conf.pid());
+                log.trace("Parents ready: {} on: {}", parents, conf.pid());
                 return new built(parents, l);
             } else {
+                log.trace("Parents not ready on: {}", conf.pid());
                 return null;
             }
         }
@@ -173,7 +175,7 @@ public class Creator {
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm(), conf.signer());
         if (log.isTraceEnabled()) {
-            log.debug("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
+            log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
         } else {
             log.debug("Created unit: {} on: {}", u, conf.pid());
         }
@@ -270,10 +272,13 @@ public class Creator {
     private built ready() {
         final int l = candidates[conf.pid()].level();
         boolean ready = !epochDone.get() && level.get() > l;
-        log.trace("ready check: {} epoch done: {} : {} : {} on: {}", ready, epochDone, level.get(), l, conf.pid());
         if (ready) {
+            log.trace("Ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, level.get(), l,
+                      conf.pid());
             return buildParents();
         }
+        log.trace("Not ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, level.get(), l,
+                  conf.pid());
         return null;
     }
 

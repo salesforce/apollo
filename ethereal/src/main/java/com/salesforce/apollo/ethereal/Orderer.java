@@ -282,7 +282,7 @@ public class Orderer {
         try {
             executor.awaitTermination(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            log.info("Orderer executor could not be shutdown, retrying on: {}", config.pid());
+            log.warn("Orderer executor could not be shutdown, retrying on: {}", config.pid());
             executor.shutdownNow();
         }
         if (previous.get() != null) {
@@ -441,9 +441,9 @@ public class Orderer {
         }
         if (ep != null) {
             ep.dag.insert(unit);
-            log.trace("Inserted: {} on: {}", unit, config.pid());
+            log.debug("Inserted: {} on: {}", unit, config.pid());
         } else {
-            log.debug("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
+            log.trace("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
                       unit.creator(), unit.epoch(), unit.height(), unit.level(), config.pid());
         }
     }

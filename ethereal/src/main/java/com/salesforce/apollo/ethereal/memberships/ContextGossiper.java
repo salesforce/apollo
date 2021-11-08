@@ -35,6 +35,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /**
@@ -45,13 +46,16 @@ public class ContextGossiper {
     private class Terminal implements GossiperService {
         @Override
         public Update gossip(Gossip request, Digest from) {
-            Member predecessor = context.ring(request.getRing()).predecessor(member);
-            if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.trace("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                          member, from, request.getRing(), predecessor);
-                return Update.getDefaultInstance();
-            }
-            return gossiper.gossip(request);
+            // TODO fix predecessor logic - HSH
+//            Member predecessor = context.ring(request.getRing()).predecessor(member);
+//            if (predecessor == null || !from.equals(predecessor.getId())) {
+//                log.info("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
+//                          member, from, request.getRing(), predecessor);
+//                return Update.getDefaultInstance();
+//            }
+            final var update = gossiper.gossip(request);
+            log.trace("Gossip received from: {} missing: {} on: {}", from, update.getMissingCount(), member);
+            return update;
         }
     }
 
@@ -113,12 +117,12 @@ public class ContextGossiper {
         if (!started.get()) {
             return null;
         }
-        log.trace("gossiping[{}] from {} with {} ring: {} on {}", context.getId(), link.getMember(), ring, member);
+        log.debug("gossiping[{}] with {} ring: {} on {}", context.getId(), link.getMember(), ring, member);
         try {
             return link.gossip(gossiper.gossip(context.getId()));
         } catch (StatusRuntimeException e) {
-            log.debug("gossiping[{}] failed with: {} from {} with {} ring: {} on {}", context.getId(), e.getMessage(),
-                      member, ring, link.getMember(), e);
+            log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(), member,
+                      ring, link.getMember(), e);
             return null;
         } catch (Throwable e) {
             log.warn("gossiping[{}] failed from {} with {} ring: {} on {}", context.getId(), member, ring,
@@ -134,6 +138,7 @@ public class ContextGossiper {
         }
         try {
             if (futureSailor.isEmpty()) {
+                log.trace("no update from {} on: {}", link.getMember(), member);
                 return;
             }
             Update update;
@@ -144,8 +149,11 @@ public class ContextGossiper {
                 return;
             } catch (ExecutionException e) {
                 if (e.getCause()instanceof StatusRuntimeException sre) {
-                    log.debug("error gossiping with {} : {} on: {}", link.getMember(), sre.getMessage(), member);
-                    return;
+                    final var code = sre.getStatus().getCode();
+                    if (code.equals(Status.UNAVAILABLE.getCode()) || code.equals(Status.NOT_FOUND.getCode()) ||
+                        code.equals(Status.UNIMPLEMENTED.getCode())) {
+                        return;
+                    }
                 }
                 log.warn("error gossiping with {} on: {}", link.getMember(), member, e.getCause());
                 return;

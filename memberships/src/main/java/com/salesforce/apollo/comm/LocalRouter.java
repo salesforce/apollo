@@ -16,6 +16,7 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,8 +130,9 @@ public class LocalRouter extends Router {
                                                                                           Metadata.ASCII_STRING_MARSHALLER);
     public static final Context.Key<Member>  CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
     public static final ThreadIdentity       LOCAL_IDENTITY             = new ThreadIdentity();
-    private static final Logger              log                        = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
+
+    private static final Logger              log           = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<Digest, Member> serverMembers = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
@@ -150,32 +152,10 @@ public class LocalRouter extends Router {
                                                                                                                                                                         .build()))
                                                                                                                                .build())
                                                                                      .build();
-        server = InProcessServerBuilder.forName(qb64(member.getId())).executor(executor)
-                                       .intercept(new ServerInterceptor() {
-
-                                           @Override
-                                           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
-                                                                                                        final Metadata requestHeaders,
-                                                                                                        ServerCallHandler<ReqT, RespT> next) {
-                                               String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
-                                               if (id == null) {
-                                                   log.error("No member id in call headers: {}", requestHeaders.keys());
-                                                   throw new IllegalStateException("No member ID in call");
-                                               }
-                                               Member member = serverMembers.get(digest(id));
-                                               if (member == null) {
-                                                   call.close(Status.INTERNAL.withCause(new NullPointerException("Member is null"))
-                                                                             .withDescription("Member is null for id: "
-                                                                             + id),
-                                                              null);
-                                                   return new ServerCall.Listener<ReqT>() {
-                                                   };
-                                               }
-                                               Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
-                                               return Contexts.interceptCall(ctx, call, requestHeaders, next);
-                                           }
-
-                                       }).intercept(limiter).fallbackHandlerRegistry(registry).build();
+        final var name = qb64(member.getId());
+        server = InProcessServerBuilder.forName(name).executor(executor)
+                                       .intercept(interceptor()).intercept(limiter).fallbackHandlerRegistry(registry).build();
+        log.info("Created server: {} on: {}", name, member);
     }
 
     @Override
@@ -198,6 +178,9 @@ public class LocalRouter extends Router {
 
     @Override
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         try {
             serverMembers.put(member.getId(), member);
             server.start();
@@ -205,6 +188,34 @@ public class LocalRouter extends Router {
             log.error("Cannot start in process server for: " + member, e);
         }
         log.info("Starting server for: " + member);
+    }
+
+    private ServerInterceptor interceptor() {
+        return new ServerInterceptor() {
+
+               @Override
+               public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                            final Metadata requestHeaders,
+                                                                            ServerCallHandler<ReqT, RespT> next) {
+                   String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
+                   if (id == null) {
+                       log.error("No member id in call headers: {}", requestHeaders.keys());
+                       throw new IllegalStateException("No member ID in call");
+                   }
+                   Member member = serverMembers.get(digest(id));
+                   if (member == null) {
+                       call.close(Status.INTERNAL.withCause(new NullPointerException("Member is null"))
+                                                 .withDescription("Member is null for id: "
+                                                 + id),
+                                  null);
+                       return new ServerCall.Listener<ReqT>() {
+                       };
+                   }
+                   Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
+                   return Contexts.interceptCall(ctx, call, requestHeaders, next);
+               }
+
+           };
     }
 
 }

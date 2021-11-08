@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.security.PublicKey;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,6 +59,9 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 /**
  * View reconfiguration. Attempts to create a new view reconfiguration. View
  * reconfiguration needs 2f+1 certified members from the next view.
@@ -80,11 +85,11 @@ public class ViewAssembly implements Reconfiguration {
 
     private final static Logger log = LoggerFactory.getLogger(ViewAssembly.class);
 
-    protected volatile BlockingQueue<ByteString> ds;
-    protected final Map<Digest, Member>          nextAssembly;
-    protected final Digest                       nextViewId;
-    protected final Transitions                  transitions;
-    protected final ViewContext                  view;
+    protected final BlockingQueue<ByteString> ds;
+    protected final Map<Digest, Member>       nextAssembly;
+    protected final Digest                    nextViewId;
+    protected final Transitions               transitions;
+    protected final ViewContext               view;
 
     private volatile Thread               blockingThread;
     private final SliceIterator<Terminal> committee;
@@ -145,7 +150,7 @@ public class ViewAssembly implements Reconfiguration {
                                                             return view.generateValidation(p.vm);
                                                         }).toList()))
                              .build().toByteString());
-            for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
+            for (int i = 0; i < 6; i++) {
                 ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
@@ -184,11 +189,15 @@ public class ViewAssembly implements Reconfiguration {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicReference<Runnable> reiterate = new AtomicReference<>();
         AtomicInteger countDown = new AtomicInteger(3); // 3 rounds of attempts
+        AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
         reiterate.set(() -> committee.iterate((term, m) -> {
+            if (proposals.containsKey(m.getId())) {
+                return null;
+            }
             log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member());
             return term.join(request);
         }, (futureSailor, term, m) -> consider(futureSailor, term, m, proceed),
-                                              () -> completeSlice(proceed, reiterate, countDown)));
+                                              () -> completeSlice(retryDelay, proceed, reiterate, countDown)));
         reiterate.get().run();
     }
 
@@ -209,7 +218,7 @@ public class ViewAssembly implements Reconfiguration {
                                                                                 .toList())
                                                         .build())
                              .build().toByteString());
-            for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
+            for (int i = 0; i < 6; i++) {
                 ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
@@ -277,7 +286,8 @@ public class ViewAssembly implements Reconfiguration {
                   certifier.getId(), params().member());
     }
 
-    private void completeSlice(AtomicBoolean proceed, AtomicReference<Runnable> reiterate, AtomicInteger countDown) {
+    private void completeSlice(AtomicReference<Duration> retryDelay, AtomicBoolean proceed,
+                               AtomicReference<Runnable> reiterate, AtomicInteger countDown) {
         final var count = proposals.size();
         if (count == nextAssembly.size()) {
             proceed.set(false);
@@ -286,31 +296,35 @@ public class ViewAssembly implements Reconfiguration {
             return;
         }
 
-        if (countDown.decrementAndGet() >= 0) {
-            log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} on: {}", nextViewId, count,
-                      nextAssembly.size(), params().member());
-            proceed.set(true);
-            reiterate.get().run();
-            return;
+        final var delay = retryDelay.get();
+        if (delay.compareTo(params().producer().maxGossipDelay()) < 0) {
+            retryDelay.accumulateAndGet(Duration.ofMillis(100), (a, b) -> a.plus(b));
         }
 
         if (count > params().toleranceLevel()) {
+            if (countDown.decrementAndGet() >= 0) {
+                log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} on: {}", nextViewId,
+                          proposals.keySet().stream().toList(), nextAssembly.size(), params().member());
+                proceed.set(true);
+                params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);
+                return;
+            }
             proceed.set(false);
             log.trace("Proposal assembled: {} gathered: {} out of: {} on: {}", nextViewId, count, nextAssembly.size(),
                       params().member());
             transitions.gathered();
             return;
         }
-        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying on: {}", nextViewId, count,
-                  params().toleranceLevel(), params().member());
+
+        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying on: {}", nextViewId,
+                  proposals.keySet().stream().toList(), params().toleranceLevel() + 1, params().member());
         proceed.set(true);
-        reiterate.get().run();
+        params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private boolean consider(Optional<ListenableFuture<ViewMember>> futureSailor, Terminal term, Member m,
                              AtomicBoolean proceed) {
         if (futureSailor.isEmpty()) {
-            log.debug("No join reply from: {} on: {}", term.getMember().getId(), params().member().getId());
             return proceed.get();
         }
         ViewMember member;
@@ -321,8 +335,13 @@ public class ViewAssembly implements Reconfiguration {
             log.debug("Error join response from: {} on: {}", term.getMember().getId(), params().member().getId(), e);
             return proceed.get();
         } catch (ExecutionException e) {
-            log.debug("Error join response from: {} on: {}", term.getMember().getId(), params().member().getId(),
-                      e.getCause());
+            var cause = e.getCause();
+            if (cause instanceof StatusRuntimeException sre) {
+                if (!sre.getStatus().getCode().equals(Status.UNAVAILABLE.getCode())) {
+                    log.debug("Error join response from: {} on: {}", term.getMember().getId(),
+                              params().member().getId(), sre);
+                }
+            }
             return proceed.get();
         }
         if (member.equals(ViewMember.getDefaultInstance())) {
@@ -348,10 +367,11 @@ public class ViewAssembly implements Reconfiguration {
                 if (!started.get()) {
                     return ByteString.EMPTY;
                 }
+                log.trace("Requesting data: {} on: {}", ds.size(), params().member());
                 try {
                     blockingThread = Thread.currentThread();
-                    final var current = ds;
-                    final var take = current.take();
+                    final var take = ds.take();
+                    log.trace("Receiving data on: {}", params().member());
                     return take;
                 } catch (InterruptedException e) {
                     return ByteString.EMPTY;

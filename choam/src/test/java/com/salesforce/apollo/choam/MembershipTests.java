@@ -13,12 +13,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -55,16 +55,17 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class MembershipTests {
     private class Transactioneer {
-        private final static Random      entropy   = new Random();
-        private static final ByteMessage tx        = ByteMessage.newBuilder()
-                                                                .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                .build();
-        private final AtomicInteger      completed = new AtomicInteger();
-        private final AtomicInteger      failed    = new AtomicInteger();
-        private final int                max;
-        private final AtomicBoolean      proceed;
-        private final Session            session;
-        private final Duration           timeout;
+        private final static Random entropy = new Random();
+
+        private final AtomicInteger completed = new AtomicInteger();
+        private final AtomicInteger failed    = new AtomicInteger();
+        private final int           max;
+        private final AtomicBoolean proceed;
+        private final Session       session;
+        private final Duration      timeout;
+        private final ByteMessage   tx        = ByteMessage.newBuilder()
+                                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                           .build();
 
         Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max) {
             this.proceed = proceed;
@@ -87,16 +88,14 @@ public class MembershipTests {
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
-                    }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+                    }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                 } else {
                     if (completed.incrementAndGet() < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(session.submit(tx, timeout));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                        try {
+                            decorate(session.submit(tx, timeout));
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
             });
@@ -109,7 +108,7 @@ public class MembershipTests {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -136,24 +135,26 @@ public class MembershipTests {
         scheduler = null;
     }
 
-//    @Test
+    @Test
     public void genesisBootstrap() throws Exception {
         initialize(2000, 5);
-        SigningMember testSubject = members.get(0);
+        SigningMember testSubject = members.get(4);
+        System.out.println("Test subject: " + testSubject);
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId()))
                .forEach(r -> r.getValue().start());
         choams.values().forEach(ch -> ch.start());
         final int expected = 23;
 
         Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
+                                                           .filter(s -> s >= expected).count() == choams.size() - 1);
+        assertEquals(choams.size() - 1,
+                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
         final Duration timeout = Duration.ofSeconds(5);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
-        var transactioneers = new CopyOnWriteArrayList<Transactioneer>();
+        var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
         for (int i = 0; i < clientCount; i++) {
@@ -162,7 +163,7 @@ public class MembershipTests {
                   .forEach(e -> transactioneers.add(e));
         }
 
-        transactioneers.parallelStream().forEach(e -> e.start());
+        transactioneers.stream().forEach(e -> e.start());
         final boolean success;
         try {
             success = Utils.waitForCondition(10_000, 1_000,
@@ -172,14 +173,15 @@ public class MembershipTests {
             proceed.set(false);
         }
         assertTrue(success,
-                   "Only completed: " + transactioneers.stream().map(e -> e.completed.get()).sorted().toList());
+                   "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() >= max).count());
     }
 
     public void initialize(int checkpointBlockSize, int cardinality) {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.33, cardinality);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, cardinality,
+                                    3);
         scheduler = Executors.newScheduledThreadPool(cardinality);
 
         AtomicInteger sd = new AtomicInteger();
@@ -189,7 +191,7 @@ public class MembershipTests {
             return thread;
         });
         AtomicInteger d = new AtomicInteger();
-        Executor dispatcher = Executors.newFixedThreadPool(cardinality, r -> {
+        Executor dispatcher = Executors.newCachedThreadPool(r -> {
             Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
@@ -217,12 +219,13 @@ public class MembershipTests {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(250)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(50))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
                                                               .build())
-                               .setTxnPermits(2_000).setCheckpointBlockSize(checkpointBlockSize)
+                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)
                                .setCheckpointer(checkpointer);
+        params.getProducer().ethereal().setFpr(0.00000125);
 
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -240,13 +243,13 @@ public class MembershipTests {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
+                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
+                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.completeAsync(() -> new Object(), clients);
                     }

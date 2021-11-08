@@ -23,18 +23,6 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.choam.Producer" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-    <logger name="com.salesforce.apollo.choam.support" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
     
     <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
@@ -59,7 +47,7 @@
         <appender-ref ref="STDOUT" />
     </logger> 
     
-    <logger name="com.salesforce.apollo.comm.SliceIterator" level="info"
+    <logger name="com.salesforce.apollo.comm" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
