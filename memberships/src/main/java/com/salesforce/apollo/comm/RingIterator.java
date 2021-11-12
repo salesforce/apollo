@@ -65,7 +65,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                                      BiFunction<Comm, Integer, ListenableFuture<T>> round, Runnable failedMajority,
                                      PredicateHandler<T, Comm> handler, Runnable onComplete, AtomicInteger tally) {
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
-        final int current = lastRingIndex;
+        final int current = lastRingIndex();
         int ringCount = context.getRingCount();
         boolean finalIteration = current % ringCount >= ringCount - 1;
         int majority = context.majority();

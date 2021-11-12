@@ -31,34 +31,47 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class RingCommunications<Comm extends Link> {
-    record linkAndRing<T> (T link, int ring) {}
-
     public enum Direction {
         PREDECESSOR {
             @Override
-            public Member retrieve(Ring<Member> ring, Digest hash, Member member) {
-                return hash == null ? ring.predecessor(member) : ring.predecessor(hash);
+            public Member retrieve(Ring<Member> ring, Digest hash) {
+                return ring.predecessor(hash);
+            }
+
+            @Override
+            public Member retrieve(Ring<Member> ring, Member member) {
+                return ring.predecessor(member);
             }
         },
         SUCCESSOR {
             @Override
-            public Member retrieve(Ring<Member> ring, Digest hash, Member member) {
-                return hash == null ? ring.successor(member) : ring.successor(hash);
+            public Member retrieve(Ring<Member> ring, Digest hash) {
+                return ring.successor(hash);
+            }
+
+            @Override
+            public Member retrieve(Ring<Member> ring, Member member) {
+                return ring.successor(member);
             }
         };
 
-        public abstract Member retrieve(Ring<Member> ring, Digest hash, Member member);
+        public abstract Member retrieve(Ring<Member> ring, Digest hash);
+
+        public abstract Member retrieve(Ring<Member> ring, Member member);
     }
+
+    record linkAndRing<T> (T link, int ring) {}
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
-    final CommonCommunications<Comm, ?> comm;
-    final Context<Member>               context;
-    final Direction                     direction;
-    final Executor                      executor;
-    volatile int                        lastRingIndex = 0;
-    final SigningMember                 member;
-    final List<Integer>                 traversalOrder;
+    final Context<Member> context;
+    final Executor        executor;
+    final SigningMember   member;
+
+    private final CommonCommunications<Comm, ?> comm;
+    private final Direction                     direction;
+    private volatile int                        lastRingIndex = 0;
+    private final List<Integer>                 traversalOrder;
 
     public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                               Executor executor) {
@@ -107,15 +120,20 @@ public class RingCommunications<Comm extends Link> {
         return "RingCommunications [" + context.getId() + ":" + member.getId() + ":" + getLastRing() + "]";
     }
 
+    int lastRingIndex() {
+        final var c = lastRingIndex;
+        return c;
+    }
+
     linkAndRing<Comm> nextRing(Digest digest) {
         linkAndRing<Comm> link = null;
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
+        if (current == 0) {
+            Collections.shuffle(traversalOrder);
+        }
         for (int i = 0; i < rings; i++) {
-            if (current == 0) {
-                Collections.shuffle(traversalOrder);
-            }
             link = linkFor(digest, current);
             if (link != null) {
                 break;
@@ -150,9 +168,9 @@ public class RingCommunications<Comm extends Link> {
     private linkAndRing<Comm> linkFor(Digest digest, int index) {
         int r = traversalOrder.get(index);
         Ring<Member> ring = context.ring(r);
-        Member successor = direction.retrieve(ring, digest, member);
+        Member successor = digest == null ? direction.retrieve(ring, member) : direction.retrieve(ring, digest);
         if (successor == null) {
-            log.debug("No successor to: {} on ring: {} members: {}", digest, r, ring.size());
+            log.debug("No successor to: {} on ring: {} members: {}", digest == null ? member : digest, r, ring.size());
             return null;
         }
         try {
