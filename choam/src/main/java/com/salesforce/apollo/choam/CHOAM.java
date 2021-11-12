@@ -20,12 +20,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -127,11 +127,12 @@ public class CHOAM {
             }
             HashedCertifiedBlock anchor = pending.poll();
             if (anchor != null) {
-                log.info("Recovering from anchor: {} on: {}", anchor.hash, params.member());
+                log.info("Regenerating from anchor: {} on: {}", anchor.hash, params.member());
                 recover(anchor);
                 return;
             }
-            log.debug("No anchor to recover from on: {}", params.member());
+            log.debug("No anchor to regenerate, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                      params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 awaitRegeneration();
@@ -142,11 +143,12 @@ public class CHOAM {
         public void awaitSynchronization() {
             HashedCertifiedBlock anchor = pending.poll();
             if (anchor != null) {
-                log.info("Recovering from anchor: {} on: {}", anchor.hash, params.member());
+                log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member());
                 recover(anchor);
                 return;
             }
-            log.debug("No anchor to recover from on: {}", params.member());
+            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                      params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 synchronizationFailed();
@@ -169,9 +171,13 @@ public class CHOAM {
         }
 
         private void synchronizationFailed() {
-            if (current.get().isMember()) {
+            log.debug("Synchronization failed, no anchor to recover from on: {}", params.member());
+            final var c = current.get();
+            if (c.isMember()) {
                 transitions.regenerate();
             } else {
+                log.debug("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
+                          params.member());
                 transitions.synchronizationFailed();
             }
         }
@@ -540,7 +546,7 @@ public class CHOAM {
     private final AtomicReference<nextView>                             next                  = new AtomicReference<>();
     private final AtomicReference<Digest>                               nextViewId            = new AtomicReference<>();
     private final Parameters                                            params;
-    private final PriorityQueue<HashedCertifiedBlock>                   pending               = new PriorityQueue<>();
+    private final PriorityBlockingQueue<HashedCertifiedBlock>           pending               = new PriorityBlockingQueue<>();
     private final RoundScheduler                                        roundScheduler;
     private final Session                                               session;
     private final AtomicBoolean                                         started               = new AtomicBoolean();
@@ -590,7 +596,8 @@ public class CHOAM {
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
-        roundScheduler = new RoundScheduler(params.context().getRingCount());
+        roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
+                                            params.context().timeToLive());
         combine.register(i -> roundScheduler.tick(i));
         current.set(new Formation());
         session = new Session(params, service());
@@ -661,7 +668,7 @@ public class CHOAM {
         final Committee c = current.get();
         c.accept(next);
         log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                  params.member());
+                 params.member());
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
@@ -957,7 +964,10 @@ public class CHOAM {
 
     private void recover(HashedCertifiedBlock anchor) {
         if (futureSynchronization != null) {
-            futureSynchronization.get().cancel(true);
+            final var c = futureSynchronization.get();
+            if (c != null) {
+                c.cancel(true);
+            }
             futureSynchronization.set(null);
         }
         futureBootstrap.set(bootstrapper(anchor).synchronize().whenComplete((s, t) -> {

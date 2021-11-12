@@ -41,6 +41,7 @@ public class RoundScheduler extends AtomicInteger {
             if (label != null) {
                 timers.remove(label);
             }
+            log.info("Cancelling: {} target: {} on: {}", label, deadline, RoundScheduler.this.label);
             return remove;
         }
 
@@ -80,10 +81,13 @@ public class RoundScheduler extends AtomicInteger {
 
     private final int                          roundDuration;
     private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
+    private final AtomicInteger                tick      = new AtomicInteger();
     private final Map<String, Timer>           timers    = new HashMap<>();
+    private final String                       label;
 
-    public RoundScheduler(int roundDuration) {
+    public RoundScheduler(String label, int roundDuration) {
         this.roundDuration = roundDuration;
+        this.label = label;
     }
 
     public void cancel(String label) {
@@ -101,35 +105,41 @@ public class RoundScheduler extends AtomicInteger {
         return schedule(null, action, delayRounds);
     }
 
-    public Timer schedule(String label, Runnable action, int delayRounds) {
-        Timer timer = new Timer(label, get() + delayRounds, action);
+    public Timer schedule(String timerLabel, Runnable action, int delayRounds) {
+        final var current = get();
+        final var target = current + delayRounds;
+        Timer timer = new Timer(timerLabel, target, action);
         if (delayRounds == 0) {
             return timer;
         }
-        if (label != null) {
-            Timer prev = timers.put(label, timer);
+        if (timerLabel != null) {
+            Timer prev = timers.put(timerLabel, timer);
             if (prev != null) {
                 prev.cancel();
             }
         }
         scheduled.add(timer);
+        log.info("Scheduling: {} target: {} current: {} on: {}", timerLabel, target, current, label);
         return timer;
     }
 
-    public void tick(int i) {
-        if (i % roundDuration != 0) {
+    public void tick(int r) {
+        var t = tick.incrementAndGet();
+        if (t % roundDuration != 0) {
             return;
         }
         int current = incrementAndGet();
+//        log.info("Round: {} on: {}", current, label);
         List<Timer> drained = new ArrayList<>();
         while (!scheduled.isEmpty() && scheduled.peek() != null && scheduled.peek().deadline <= current) {
             drained.add(scheduled.poll());
         }
         drained.forEach(e -> {
+            log.info("Firing: {} target: {} current: {} on: {}", e.label, e.deadline, current, label);
             try {
                 e.fire();
             } catch (Throwable ex) {
-                log.error("Exception in timer action", ex);
+                log.error("Exception in timer: {} action on: {}", e.label, label, ex);
             }
         });
     }

@@ -244,7 +244,7 @@ public class Bootstrapper {
     }
 
     private void computeGenesis(Map<Digest, Initial> votes) {
-        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.toleranceLevel(),
+        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.toleranceLevel() + 1,
                  params.member());
         Multiset<HashedCertifiedBlock> tally = TreeMultiset.create();
         Map<Digest, Initial> valid = votes.entrySet().stream().filter(e -> e.getValue().hasGenesis()) // Has a genesis
@@ -254,11 +254,19 @@ public class Bootstrapper {
                                                                                                                  // known
                                                                                                                  // genesis...
                                           .filter(e -> {
-                                              if (!e.getValue().hasCheckpoint() && lastCheckpoint <= 0) {
+                                              if (e.getValue().hasGenesis()) {
+                                                  if (lastCheckpoint > 0) {
+                                                      log.info("Rejecting genesis: {} last checkpoint: {} > 0 on: {}",
+                                                               e.getKey(), lastCheckpoint, params.member());
+                                                      return false;
+                                                  }
+                                                  log.info("Accepting genesis: {} on: {}", e.getKey(), params.member());
                                                   return true;
                                               }
-                                              if (!e.getValue().hasCheckpointView()) {
-                                                  return false; // if we have a checkpoint, we must have a view
+                                              if (!e.getValue().hasCheckpoint()) {
+                                                  log.info("Rejecting: {} has no checkpoint. last checkpoint: {} > 0 on: {}",
+                                                           e.getKey(), lastCheckpoint, params.member());
+                                                  return false;
                                               }
 
                                               long checkpointViewHeight = HashedBlock.height(e.getValue()
@@ -268,6 +276,7 @@ public class Bootstrapper {
                                                                                    .getBlock().getHeader()
                                                                                    .getLastReconfig();
                                               // checkpoint's view should match
+                                              log.info("Accepting checkpoint: {} on: {}", e.getKey(), params.member());
                                               return checkpointViewHeight == recordedCheckpointViewHeight;
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
@@ -278,7 +287,7 @@ public class Bootstrapper {
         if (genesis == null) {
             Pair<HashedCertifiedBlock, Integer> winner = null;
 
-            log.info("Tally: {} required: {} on: {}", tally, params.toleranceLevel(), params.member());
+            log.info("Tally: {} required: {} on: {}", tally, params.toleranceLevel() + 1, params.member());
             for (HashedCertifiedBlock cb : tally) {
                 int count = tally.count(cb);
                 if (count > threshold) {
@@ -354,8 +363,9 @@ public class Bootstrapper {
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder().setContext(params.context().getId().toDigeste())
                                    .setHeight(anchor.height()).build();
+        final var randomCut = randomCut(params.digestAlgorithm());
         new RingIterator<>(params.context(), params.member(), comms,
-                           params.dispatcher()).iterate(randomCut(params.digestAlgorithm()),
+                           params.dispatcher()).iterate(randomCut,
                                                         (link, ring) -> synchronize(s, link),
                                                         (tally, futureSailor, link, ring) -> synchronize(futureSailor,
                                                                                                          votes, link),

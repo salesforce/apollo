@@ -137,12 +137,12 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        initialize(2000, 5);
-        SigningMember testSubject = members.get(4);
+        SigningMember testSubject = initialize(2000, 5);
         System.out.println("Test subject: " + testSubject);
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId()))
                .forEach(r -> r.getValue().start());
-        choams.values().forEach(ch -> ch.start());
+        choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId()))
+              .forEach(ch -> ch.getValue().start());
         final int expected = 23;
 
         Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
@@ -174,9 +174,13 @@ public class MembershipTests {
         }
         assertTrue(success,
                    "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() >= max).count());
+
+        routers.get(testSubject.getId()).start();
+        choams.get(testSubject.getId()).start();
+        Thread.sleep(60_000);
     }
 
-    public void initialize(int checkpointBlockSize, int cardinality) {
+    public SigningMember initialize(int checkpointBlockSize, int cardinality) {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
@@ -230,6 +234,7 @@ public class MembershipTests {
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
+        SigningMember testSubject = members.get(cardinality - 1);
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
                                                    m -> new LocalRouter(m,
@@ -256,9 +261,15 @@ public class MembershipTests {
                 }
             };
             params.getProducer().ethereal().setSigner(m);
+            if (m.equals(testSubject)) {
+                params.setSynchronizationCycles(10);
+            } else {
+                params.setSynchronizationCycles(3);
+            }
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
                                    .build(),
                              MVStore.open(null));
         }));
+        return testSubject;
     }
 }

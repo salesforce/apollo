@@ -84,6 +84,10 @@ public enum Merchantile implements Transitions {
         public void cancelTimer() {
             context().cancelTimer(Combine.AWAIT_SYNC);
         }
+        @Override
+        public Transitions combine() {
+            return null; // Just queue up any blocks
+        }
 
         @Override
         public Transitions regenerate() {
