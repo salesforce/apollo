@@ -256,16 +256,17 @@ public class Bootstrapper {
                                           .filter(e -> {
                                               if (e.getValue().hasGenesis()) {
                                                   if (lastCheckpoint > 0) {
-                                                      log.info("Rejecting genesis: {} last checkpoint: {} > 0 on: {}",
-                                                               e.getKey(), lastCheckpoint, params.member());
+                                                      log.trace("Rejecting genesis: {} last checkpoint: {} > 0 on: {}",
+                                                                e.getKey(), lastCheckpoint, params.member());
                                                       return false;
                                                   }
-                                                  log.info("Accepting genesis: {} on: {}", e.getKey(), params.member());
+                                                  log.trace("Accepting genesis: {} on: {}", e.getKey(),
+                                                            params.member());
                                                   return true;
                                               }
                                               if (!e.getValue().hasCheckpoint()) {
-                                                  log.info("Rejecting: {} has no checkpoint. last checkpoint: {} > 0 on: {}",
-                                                           e.getKey(), lastCheckpoint, params.member());
+                                                  log.trace("Rejecting: {} has no checkpoint. last checkpoint: {} > 0 on: {}",
+                                                            e.getKey(), lastCheckpoint, params.member());
                                                   return false;
                                               }
 
@@ -276,7 +277,7 @@ public class Bootstrapper {
                                                                                    .getBlock().getHeader()
                                                                                    .getLastReconfig();
                                               // checkpoint's view should match
-                                              log.info("Accepting checkpoint: {} on: {}", e.getKey(), params.member());
+                                              log.trace("Accepting checkpoint: {} on: {}", e.getKey(), params.member());
                                               return checkpointViewHeight == recordedCheckpointViewHeight;
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
@@ -298,7 +299,7 @@ public class Bootstrapper {
             }
 
             if (winner == null) {
-                log.info("No winner on: {}", params.member());
+                log.debug("No winner on: {}", params.member());
                 scheduleSample();
                 return;
             }
@@ -365,8 +366,7 @@ public class Bootstrapper {
                                    .setHeight(anchor.height()).build();
         final var randomCut = randomCut(params.digestAlgorithm());
         new RingIterator<>(params.context(), params.member(), comms,
-                           params.dispatcher()).iterate(randomCut,
-                                                        (link, ring) -> synchronize(s, link),
+                           params.dispatcher()).iterate(randomCut, (link, ring) -> synchronize(s, link),
                                                         (tally, futureSailor, link, ring) -> synchronize(futureSailor,
                                                                                                          votes, link),
                                                         () -> computeGenesis(votes));
@@ -379,7 +379,7 @@ public class Bootstrapper {
             return;
         }
         log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", start, anchorTo,
-                 params.synchronizeDuration().toMillis(), params.member());
+                  params.synchronizeDuration().toMillis(), params.member());
         params.scheduler().schedule(() -> {
             try {
                 anchor(start, anchorTo);
