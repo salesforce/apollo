@@ -130,7 +130,7 @@ public class CausalMessagingTest {
         communications.forEach(e -> e.close());
     }
 
-    @Test
+//    @Test TODO disabled until deprecation
     public void broadcast() throws Exception {
         List<SigningMember> members = certs.values().stream()
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),

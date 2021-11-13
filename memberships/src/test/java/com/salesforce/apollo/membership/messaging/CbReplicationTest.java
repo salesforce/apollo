@@ -79,7 +79,7 @@ public class CbReplicationTest {
         content = Any.pack(ByteMessage.getDefaultInstance());
     }
 
-    @Test
+//    @Test TODO deprecate
     public void idealReplication() {
         var sentA = new HashMap<>();
         var sentB = new HashMap<>();
