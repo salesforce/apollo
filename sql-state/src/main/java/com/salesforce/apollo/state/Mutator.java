@@ -23,9 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -68,8 +65,8 @@ import com.salesfoce.apollo.state.proto.EXECUTION;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.consortium.Consortium;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.state.SqlStateMachine.CallResult;
 
 /**
@@ -82,9 +79,8 @@ public class Mutator {
     public static class BatchBuilder {
 
         public class Completion<Result> {
-            @SuppressWarnings("unchecked")
-            public BatchBuilder andThen(BiConsumer<Result, Throwable> processor) {
-                completions.add((CompletableFuture<Object>) new CompletableFuture<Result>().whenComplete(processor));
+            public BatchBuilder andThen(@SuppressWarnings("rawtypes") CompletableFuture processor) {
+                completions.add(processor);
                 return BatchBuilder.this;
             }
 
@@ -94,12 +90,13 @@ public class Mutator {
             }
         }
 
-        private final BatchedTransaction.Builder           batch       = BatchedTransaction.newBuilder();
-        private final ArrayList<CompletableFuture<Object>> completions = new ArrayList<>();
-        private final Consortium                           node;
+        private final BatchedTransaction.Builder   batch       = BatchedTransaction.newBuilder();
+        @SuppressWarnings("rawtypes")
+        private final ArrayList<CompletableFuture> completions = new ArrayList<>();
+        private final Session                      session;
 
-        public BatchBuilder(Consortium node) {
-            this.node = node;
+        public BatchBuilder(Session session) {
+            this.session = session;
         }
 
         public Completion<int[]> execute(BatchUpdate update) {
@@ -122,8 +119,10 @@ public class Mutator {
             return new Completion<>();
         }
 
-        public Digest submit(BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
-            return node.submit(onSubmit, (r, t) -> process(r, t), build(), timeout);
+        @SuppressWarnings("unchecked")
+        public <T> CompletableFuture<T> submit(Duration timeout) throws InvalidTransaction {
+            return (CompletableFuture<T>) session.submit(build(), timeout)
+                                                 .whenComplete((BiConsumer<Object, Throwable>) (r, t) -> process(r, t));
         }
 
         private Message build() {
@@ -139,8 +138,9 @@ public class Mutator {
             @SuppressWarnings("unchecked")
             List<Object> results = (List<Object>) r;
             assert results.size() == completions.size() : "Results: " + results.size() + " does not match Completions: "
-                    + completions.size();
+            + completions.size();
             for (int i = 0; i < results.size(); i++) {
+                @SuppressWarnings("unchecked")
                 CompletableFuture<Object> futureSailor = completions.get(i);
                 if (futureSailor != null) {
                     futureSailor.complete(results.get(i));
@@ -223,10 +223,8 @@ public class Mutator {
     }
 
     public static BatchUpdate batchOf(String sql, List<List<Object>> batch) {
-        return batch(sql,
-                     batch.stream()
-                          .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
-                          .collect(Collectors.toList()));
+        return batch(sql, batch.stream().map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
+                               .collect(Collectors.toList()));
     }
 
     public static Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Object... arguments) {
@@ -253,13 +251,8 @@ public class Mutator {
 
     public static Script callScript(String className, String method, String source, Value... args) {
         Data data = Data.create(NULL_HANDLER, 1024, false);
-        return Script.newBuilder()
-                     .setClassName(className)
-                     .setMethod(method)
-                     .setSource(source)
-                     .addAllArgs(Arrays.asList(args)
-                                       .stream()
-                                       .map(v -> serialized(data, v))
+        return Script.newBuilder().setClassName(className).setMethod(method).setSource(source)
+                     .addAllArgs(Arrays.asList(args).stream().map(v -> serialized(data, v))
                                        .collect(Collectors.toList()))
                      .build();
     }
@@ -385,213 +378,33 @@ public class Mutator {
         return statement(EXECUTION.EXECUTE, sql, args);
     }
 
-    private final Consortium node;
+    private final Session session;
 
-    public Mutator(Consortium node) {
-        this.node = node;
+    public Mutator(Session node) {
+        this.session = node;
     }
 
     public BatchBuilder batch() {
-        return new BatchBuilder(node);
+        return new BatchBuilder(session);
     }
 
-    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor, BiConsumer<Digest, Throwable> onSubmit,
-                          Duration timeout) {
-        return node.submit(onSubmit, processor, batch, timeout);
+    public CompletableFuture<int[]> execute(Batch batch, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setBatch(batch).build(), timeout);
     }
 
-    public Digest execute(Batch batch, BiConsumer<int[], Throwable> processor,
-                          Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), processor, batch, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
+    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setBatchUpdate(batchUpdate).build(), timeout);
     }
 
-    public Digest execute(Batch batch, Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), null, batch, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
+    public CompletableFuture<CallResult> execute(Call call, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setCall(call).build(), timeout);
     }
 
-    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor,
-                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
-        return node.submit(onSubmit, processor, batchUpdate, timeout);
+    public <T> CompletableFuture<T> execute(Script script, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setScript(script).build(), timeout);
     }
 
-    public Digest execute(BatchUpdate batchUpdate, BiConsumer<int[], Throwable> processor,
-                          Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), processor, batchUpdate, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public Digest execute(BatchUpdate batchUpdate, Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), defaultSubmit(submitted), batchUpdate, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor,
-                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
-        return node.submit(onSubmit, processor, call, timeout);
-    }
-
-    public Digest execute(Call call, BiConsumer<CallResult, Throwable> processor,
-                          Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), processor, call, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public <T> Digest execute(Call call, Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), null, call, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor, BiConsumer<Digest, Throwable> onSubmit,
-                              Duration timeout) {
-        return node.submit(onSubmit, processor, script, timeout);
-    }
-
-    public <T> Digest execute(Script script, BiConsumer<T, Throwable> processor,
-                              Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), processor, script, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public Digest execute(Script script, Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), null, script, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor,
-                          BiConsumer<Digest, Throwable> onSubmit, Duration timeout) {
-        return node.submit(onSubmit, processor, statement, timeout);
-    }
-
-    public Digest execute(Statement statement, BiConsumer<List<ResultSet>, Throwable> processor,
-                          Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), processor, statement, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    public Digest execute(Statement statement, Duration timeout) throws TimeoutException {
-        CompletableFuture<Digest> submitted = new CompletableFuture<>();
-        node.submit(defaultSubmit(submitted), null, statement, timeout);
-        try {
-            return submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e);
-            throw toe;
-        } catch (ExecutionException e) {
-            TimeoutException toe = new TimeoutException("Execution error");
-            toe.initCause(e.getCause());
-            throw toe;
-        }
-    }
-
-    private BiConsumer<Digest, Throwable> defaultSubmit(CompletableFuture<Digest> submitted) {
-        return (b, t) -> {
-            if (t != null) {
-                submitted.completeExceptionally(t);
-                return;
-            }
-            submitted.complete(b);
-        };
+    public CompletableFuture<List<ResultSet>> execute(Statement statement, Duration timeout) throws InvalidTransaction {
+        return session.submit(Txn.newBuilder().setStatement(statement).build(), timeout);
     }
 }

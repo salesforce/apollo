@@ -20,10 +20,8 @@ import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 
-import com.google.protobuf.Any;
-import com.salesfoce.apollo.consortium.proto.ExecutedTransaction;
-import com.salesfoce.apollo.consortium.proto.Transaction;
-import com.salesforce.apollo.crypto.Digest;
+import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Utils;
 
@@ -36,28 +34,18 @@ public class ScriptTest {
     @Test
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
-                new File("target/chkpoints"));
+                                                      new File("target/chkpoints"));
         machine.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
         machine.initializeEvents();
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
-        Transaction transaction = Transaction.newBuilder()
-                                             .setTxn(Any.pack(callScript("test.DbAccess", "call",
-                                                                         Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java")))))
-                                             .build();
-        Digest hashBytes = DigestAlgorithm.DEFAULT.digest(transaction.toByteString());
-        ExecutedTransaction txn = ExecutedTransaction.newBuilder()
-                                                     .setTransaction(transaction)
-                                                     .setHash(hashBytes.toDigeste())
-                                                     .build();
+        Txn txn = Txn.newBuilder()
+                     .setScript(callScript("test.DbAccess", "call",
+                                           Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
+                     .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(hashBytes, txn, (result, err) -> {
-            if (err != null) {
-                throw new IllegalStateException(err);
-            }
-            completion.complete(result);
-        });
+        machine.getExecutor().execute(Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

@@ -53,16 +53,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.consortium.proto.CertifiedBlock;
+import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
+import com.salesforce.apollo.choam.CHOAM;
+import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.ViewContext;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
-import com.salesforce.apollo.consortium.Consortium;
-import com.salesforce.apollo.consortium.Parameters;
-import com.salesforce.apollo.consortium.ViewContext;
-import com.salesforce.apollo.consortium.fsm.CollaboratorFsm;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -101,7 +100,7 @@ public class ConsortiumTest {
     private Builder                            builder        = ServerConnectionCache.newBuilder().setTarget(30);
     private File                               checkpointDirBase;
     private Map<Digest, Router>                communications = new ConcurrentHashMap<>();
-    private final Map<Member, Consortium>      consortium     = new ConcurrentHashMap<>();
+    private final Map<Member, CHOAM>      choams     = new ConcurrentHashMap<>();
     private List<SigningMember>                members;
     private final Map<Member, SqlStateMachine> updaters       = new ConcurrentHashMap<>();
 
@@ -109,8 +108,8 @@ public class ConsortiumTest {
     public void after() {
         updaters.values().forEach(up -> up.close());
         updaters.clear();
-        consortium.values().forEach(e -> e.stop());
-        consortium.clear();
+        choams.values().forEach(e -> e.stop());
+        choams.clear();
         communications.values().forEach(e -> e.close());
         communications.clear();
     }
@@ -175,7 +174,7 @@ public class ConsortiumTest {
             if (decided.add(hash)) {
                 cPipeline.execute(() -> {
                     CountDownLatch executed = new CountDownLatch(testCardinality);
-                    consortium.values().forEach(m -> {
+                    choams.values().forEach(m -> {
                         blockPool.execute(() -> {
                             m.process(c);
                             executed.countDown();
@@ -195,26 +194,26 @@ public class ConsortiumTest {
 
         Set<Consortium> blueRibbon = new HashSet<>();
         ViewContext.viewFor(GENESIS_VIEW_ID, view).allMembers().forEach(e -> {
-            blueRibbon.add(consortium.get(e));
+            blueRibbon.add(choams.get(e));
         });
 
         communications.values().forEach(r -> r.start());
 
-        System.out.println("starting consortium");
-        consortium.values().forEach(e -> e.start());
+        System.out.println("starting choams");
+        choams.values().forEach(e -> e.start());
 
         System.out.println("awaiting genesis processing");
 
         assertTrue(processed.get().await(30, TimeUnit.SECONDS),
                    "Did not converge, end state of true clients gone bad: "
-                           + consortium.values()
+                           + choams.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
                                        .map(c -> c.fsm.getCurrentState())
                                        .filter(b -> b != CollaboratorFsm.CLIENT)
                                        .collect(Collectors.toSet())
                            + " : "
-                           + consortium.values()
+                           + choams.values()
                                        .stream()
                                        .filter(c -> !blueRibbon.contains(c))
                                        .filter(c -> c.fsm.getCurrentState() != CollaboratorFsm.CLIENT)
@@ -229,7 +228,7 @@ public class ConsortiumTest {
 
         System.out.println("Submitting transaction");
         Digest hash;
-        Consortium client = consortium.values()
+        Consortium client = choams.values()
                                       .stream()
                                       .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                       .get(0);
@@ -276,7 +275,7 @@ public class ConsortiumTest {
             }
             BatchUpdate update = batchOf("update books set qty = ? where id = ?", batch);
             AtomicReference<Digest> key = new AtomicReference<>();
-            Consortium c = consortium.values()
+            Consortium c = choams.values()
                                      .stream()
                                      .collect(new ReservoirSampler<Consortium>(null, 1, entropy))
                                      .get(0);
@@ -354,6 +353,6 @@ public class ConsortiumTest {
                                                     .setCheckpointer(up.getCheckpointer())
                                                     .build());
             return c;
-        }).peek(c -> view.activate(c.getMember())).forEach(e -> consortium.put(e.getMember(), e));
+        }).peek(c -> view.activate(c.getMember())).forEach(e -> choams.put(e.getMember(), e));
     }
 }

@@ -78,23 +78,10 @@ public class Session {
         final Transaction txn = Transaction.newBuilder().setSource(params.member().getId().toDigeste()).setNonce(n)
                                            .setContent(transaction.toByteString()).setSignature(signature.toSig())
                                            .build();
-        return submit(txn, timeout, false);
-    }
-
-    /**
-     * Submit a transaction.
-     * 
-     * @param transaction - the Transaction to submit
-     * @param timeout     - non null timeout of the transaction
-     * @return onCompletion - the future result of the submitted transaction
-     * @throws InvalidTransaction - if the transaction is invalid in any way
-     */
-    public <T> CompletableFuture<T> submit(Transaction transaction, Duration timeout,
-                                           boolean join) throws InvalidTransaction {
-        if (!transaction.hasSource() || !transaction.hasSignature()) {
+        if (!txn.hasSource() || !txn.hasSignature()) {
             throw new InvalidTransaction();
         }
-        var hash = CHOAM.hashOf(transaction, params.digestAlgorithm());
+        var hash = CHOAM.hashOf(txn, params.digestAlgorithm());
         var result = new CompletableFuture<T>();
         if (timeout == null) {
             timeout = params.submitTimeout();
@@ -103,7 +90,7 @@ public class Session {
         var futureTimeout = params.scheduler()
                                   .schedule(() -> result.completeExceptionally(new TimeoutException("Transaction timeout")),
                                             timeout.toMillis(), TimeUnit.MILLISECONDS);
-        var stxn = new SubmittedTransaction(hash, transaction, result);
+        var stxn = new SubmittedTransaction(hash, txn, result);
         submit(stxn);
         return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
