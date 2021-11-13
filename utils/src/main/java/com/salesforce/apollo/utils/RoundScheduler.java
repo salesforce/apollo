@@ -41,7 +41,7 @@ public class RoundScheduler extends AtomicInteger {
             if (label != null) {
                 timers.remove(label);
             }
-            log.info("Cancelling: {} target: {} on: {}", label, deadline, RoundScheduler.this.label);
+            log.trace("Cancelling: {} target: {} on: {}", label, deadline, RoundScheduler.this.label);
             return remove;
         }
 
@@ -119,7 +119,7 @@ public class RoundScheduler extends AtomicInteger {
             }
         }
         scheduled.add(timer);
-        log.info("Scheduling: {} target: {} current: {} on: {}", timerLabel, target, current, label);
+        log.trace("Scheduling: {} target: {} current: {} on: {}", timerLabel, target, current, label);
         return timer;
     }
 
@@ -135,7 +135,7 @@ public class RoundScheduler extends AtomicInteger {
             drained.add(scheduled.poll());
         }
         drained.forEach(e -> {
-            log.info("Firing: {} target: {} current: {} on: {}", e.label, e.deadline, current, label);
+            log.trace("Firing: {} target: {} current: {} on: {}", e.label, e.deadline, current, label);
             try {
                 e.fire();
             } catch (Throwable ex) {

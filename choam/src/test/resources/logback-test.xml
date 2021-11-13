@@ -19,7 +19,11 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -30,6 +34,11 @@
     </logger>
     
     <logger name="com.salesforce.apollo.ethereal" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    
+    <logger name="com.salesforce.apollo.utils.RoundScheduler" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 

@@ -120,6 +120,16 @@ public class CHOAM {
     public class Combiner implements Combine {
 
         @Override
+        public void anchor() {
+            HashedCertifiedBlock anchor = pending.poll();
+            if (anchor != null) {
+                log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member());
+                transitions.bootstrap(anchor);
+                return;
+            }
+        }
+
+        @Override
         public void awaitRegeneration() {
             final HashedCertifiedBlock g = genesis.get();
             if (g != null) {
@@ -166,14 +176,20 @@ public class CHOAM {
         }
 
         @Override
+        public void recover(HashedCertifiedBlock anchor) {
+            CHOAM.this.recover(anchor);
+        }
+
+        @Override
         public void regenerate() {
             current.get().regenerate();
         }
 
         private void synchronizationFailed() {
-            log.debug("Synchronization failed, no anchor to recover from on: {}", params.member());
             final var c = current.get();
             if (c.isMember()) {
+                log.debug("Synchronization failed and initial member, regenerating: {} on: {}",
+                          c.getClass().getSimpleName(), params.member());
                 transitions.regenerate();
             } else {
                 log.debug("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
@@ -181,7 +197,6 @@ public class CHOAM {
                 transitions.synchronizationFailed();
             }
         }
-
     }
 
     public class Trampoline implements Concierge {
@@ -1112,9 +1127,9 @@ public class CHOAM {
             current1 = store.getCertifiedBlock(height(current1.getBlock()) + 1);
         }
         synchronizing.set(false);
-        log.info("Synchronized, resuming view on: {}",
-                 state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, params.member());
-        log.info("Processing deferred blocks: {} on: {}", pending.size(), params.member());
+        log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
+                 state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
+                 params.member());
         combine();
     }
 

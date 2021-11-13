@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam.fsm;
 
 import com.chiralbehaviors.tron.FsmExecutor;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
 /**
  * @author hal.hildebrand
@@ -16,6 +17,10 @@ public interface Combine {
 
     interface Transitions extends FsmExecutor<Combine, Combine.Transitions> {
         default Transitions beginCheckpoint() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions bootstrap(HashedCertifiedBlock anchor) {
             throw fsm().invalidTransitionOn();
         }
 
@@ -54,6 +59,8 @@ public interface Combine {
 
     static final String AWAIT_SYNC = "AWAIT_SYNC";
 
+    void anchor();
+
     void awaitRegeneration();
 
     void awaitSynchronization();
@@ -61,6 +68,8 @@ public interface Combine {
     void cancelTimer(String timer);
 
     void combine();
+
+    void recover(HashedCertifiedBlock anchor);
 
     void regenerate();
 }

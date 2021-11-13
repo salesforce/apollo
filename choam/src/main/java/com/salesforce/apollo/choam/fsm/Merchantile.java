@@ -9,6 +9,7 @@ package com.salesforce.apollo.choam.fsm;
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.Exit;
 import com.salesforce.apollo.choam.fsm.Combine.Transitions;
+import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 
 /**
  * @author hal.hildebrand
@@ -43,6 +44,11 @@ public enum Merchantile implements Transitions {
         @Override
         public Transitions combine() {
             return null; // Just queue up any blocks
+        }
+
+        @Override
+        public Transitions synchronizing() {
+            return SYNCHRONIZING;
         }
     },
     CHECKPOINTING {
@@ -80,13 +86,21 @@ public enum Merchantile implements Transitions {
 
     },
     PROTOCOL_FAILURE, RECOVERING {
+        @Override
+        public Transitions bootstrap(HashedCertifiedBlock anchor) { 
+            context().recover(anchor);
+            return BOOTSTRAPPING;
+        }
+
         @Exit
         public void cancelTimer() {
             context().cancelTimer(Combine.AWAIT_SYNC);
         }
+
         @Override
         public Transitions combine() {
-            return null; // Just queue up any blocks
+            context().anchor();
+            return null;
         }
 
         @Override
@@ -102,11 +116,6 @@ public enum Merchantile implements Transitions {
         @Entry
         public void synchronizeContext() {
             context().awaitSynchronization();
-        }
-
-        @Override
-        public Transitions synchronizing() {
-            return SYNCHRONIZING;
         }
     },
     REGENERATING {

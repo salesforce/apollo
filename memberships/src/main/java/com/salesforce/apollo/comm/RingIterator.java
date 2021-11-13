@@ -7,7 +7,9 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -57,14 +59,17 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
+        internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, new HashSet<>());
 
     }
 
     private <T> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, ListenableFuture<T>> round, Runnable failedMajority,
-                                     PredicateHandler<T, Comm> handler, Runnable onComplete, AtomicInteger tally) {
-        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
+                                     PredicateHandler<T, Comm> handler, Runnable onComplete, AtomicInteger tally,
+                                     Set<Member> traversed) {
+
+        Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                                 traversed);
         final int current = lastRingIndex();
         int ringCount = context.getRingCount();
         boolean finalIteration = current % ringCount >= ringCount - 1;
@@ -72,7 +77,11 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
 
         Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
                                                      proceed, finalIteration, onComplete);
-        final var next = nextRing(digest);
+
+        final var next = nextRing(digest, m -> traversed.add(m));
+        if (finalIteration) {
+            traversed.clear();
+        }
         try (Comm link = next.link()) {
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,

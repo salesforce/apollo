@@ -105,7 +105,7 @@ public class Bootstrapper {
     }
 
     public CompletableFuture<SynchronizedState> synchronize() {
-        sample();
+        scheduleSample();
         return sync;
     }
 
@@ -458,7 +458,6 @@ public class Bootstrapper {
 
     private ListenableFuture<Initial> synchronize(Synchronize s, Terminal link) {
         if (params.member().equals(link.getMember())) {
-            log.trace("Ignoring self sampling on: {}", link.getMember(), params.member());
             return null;
         }
         log.debug("Attempting synchronization with: {} on: {}", link.getMember(), params.member());

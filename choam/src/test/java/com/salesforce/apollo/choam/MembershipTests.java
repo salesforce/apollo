@@ -121,14 +121,7 @@ public class MembershipTests {
 
     @AfterEach
     public void after() throws Exception {
-        if (choams != null) {
-            choams.values().forEach(e -> e.stop());
-            choams = null;
-        }
-        if (routers != null) {
-            routers.values().forEach(e -> e.close());
-            routers = null;
-        }
+        shutdown();
         members = null;
         transactions = null;
         blocks = null;
@@ -164,7 +157,7 @@ public class MembershipTests {
         }
 
         transactioneers.stream().forEach(e -> e.start());
-        final boolean success;
+        boolean success;
         try {
             success = Utils.waitForCondition(10_000, 1_000,
                                              () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
@@ -177,7 +170,12 @@ public class MembershipTests {
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        Thread.sleep(60_000);
+        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId())
+                                                             .size() == blocks.get(members.get(0).getId()).size());
+        shutdown();
+        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).size() + " expected: "
+        + blocks.get(members.get(0).getId()).size());
+
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) {
@@ -244,11 +242,12 @@ public class MembershipTests {
                                                                         routerExec)));
         Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            blocks.put(m.getId(), new ArrayList<>());
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
+                    blocks.get(m.getId()).add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -262,7 +261,7 @@ public class MembershipTests {
             };
             params.getProducer().ethereal().setSigner(m);
             if (m.equals(testSubject)) {
-                params.setSynchronizationCycles(10);
+                params.setSynchronizationCycles(100);
             } else {
                 params.setSynchronizationCycles(3);
             }
@@ -271,5 +270,16 @@ public class MembershipTests {
                              MVStore.open(null));
         }));
         return testSubject;
+    }
+
+    private void shutdown() {
+        if (choams != null) {
+            choams.values().forEach(e -> e.stop());
+            choams = null;
+        }
+        if (routers != null) {
+            routers.values().forEach(e -> e.close());
+            routers = null;
+        }
     }
 }
