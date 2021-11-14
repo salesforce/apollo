@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.salesforce.apollo.utils.ExponentialBackoff.RetryFailed;
 
 /**
@@ -31,6 +33,115 @@ import com.salesforce.apollo.utils.ExponentialBackoff.RetryFailed;
 public class ExponentialBackoffTest {
 
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+    @Test
+    public void asyncSuccessfulAfterThreeAttempts() throws Exception {
+        final AtomicInteger attempts = new AtomicInteger(0);
+        final AtomicInteger exceptions = new AtomicInteger(0);
+        CompletableFuture<String> futureSailor = new CompletableFuture<>();
+
+        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(5000).setMaxAttempts(5)
+                          .setExceptionHandler(e -> exceptions.incrementAndGet()).executeAsync(() -> {
+                              attempts.incrementAndGet();
+                              final boolean shouldThrow = attempts.get() < 3;
+                              SettableFuture<String> f = SettableFuture.create();
+                              if (shouldThrow) {
+                                  System.out.println("Throwing exception");
+                                  f.setException(new RuntimeException("Fake exception"));
+                              }
+                              f.set("Fake result");
+                              return f;
+                          }, futureSailor, executor);
+
+        String result = futureSailor.get(1, TimeUnit.SECONDS);
+
+        assertThat(attempts.get(), is(equalTo(3)));
+        assertThat(exceptions.get(), is(equalTo(2)));
+        assertThat(result, is(equalTo("Fake result")));
+    }
+
+    @Test
+    public void asyncTestInfiniteAttempts() throws Exception {
+        final AtomicInteger attempts = new AtomicInteger(0);
+        final AtomicInteger exceptions = new AtomicInteger(0);
+        final Callable<ListenableFuture<String>> task = () -> {
+            attempts.incrementAndGet();
+            // Just to ensure that we exceed the default max
+            // attempts
+            final boolean shouldThrow = attempts.get() < ExponentialBackoff.DEFAULT_MAX_ATTEMPTS + 1;
+            SettableFuture<String> f = SettableFuture.create();
+            if (shouldThrow) {
+                System.out.println("Throwing exception");
+                f.setException(new RuntimeException("Fake exception"));
+            } else {
+                f.set("Fake result");
+            }
+            return f;
+        };
+        CompletableFuture<String> futureSailor = new CompletableFuture<>();
+
+        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(10).setInfiniteAttempts()
+                          .setExceptionHandler(e -> exceptions.incrementAndGet())
+                          .executeAsync(task, futureSailor, executor);
+
+        String result = futureSailor.get(1, TimeUnit.SECONDS);
+
+        assertThat(attempts.get(), is(equalTo(ExponentialBackoff.DEFAULT_MAX_ATTEMPTS + 1)));
+        assertThat(exceptions.get(), is(equalTo(ExponentialBackoff.DEFAULT_MAX_ATTEMPTS)));
+        assertThat(result, is(equalTo("Fake result")));
+    }
+
+    @Test
+    public void asyncTestNullFuture() throws Exception {
+        CompletableFuture<String> futureSailor = new CompletableFuture<>();
+        ExponentialBackoff.<String>newBuilder().setBase(100).setCap(5000).setMaxAttempts(5).setJitter()
+                          .setExceptionHandler(Throwable::printStackTrace).executeAsync(() -> {
+                              return null;
+                          }, futureSailor, executor);
+
+        String result = futureSailor.get(1, TimeUnit.SECONDS);
+
+        assertThat(result, is(equalTo(null)));
+    }
+
+    @Test
+    public void asyncTestSuccessfulExecution() throws Exception {
+        CompletableFuture<String> futureSailor = new CompletableFuture<>();
+        ExponentialBackoff.<String>newBuilder().setBase(100).setCap(5000).setMaxAttempts(5).setJitter()
+                          .setExceptionHandler(Throwable::printStackTrace).executeAsync(() -> {
+                              SettableFuture<String> f = SettableFuture.create();
+                              f.set("Do something");
+                              return f;
+                          }, futureSailor, executor);
+
+        String result = futureSailor.get(1, TimeUnit.SECONDS);
+
+        assertThat(result, is(equalTo("Do something")));
+    }
+
+    @Test
+    public void asyncTestThatMaxAttemptsAreExceeded() throws Throwable {
+        CompletableFuture<Long> futureSailor = new CompletableFuture<>();
+        ExponentialBackoff.<Long>newBuilder().setMaxAttempts(3).setBase(1)
+                          .setExceptionHandler(e -> System.out.println(e.getMessage())).executeAsync(() -> {
+                              SettableFuture<Long> f = SettableFuture.create();
+                              f.setException(new RuntimeException("Fake exception"));
+                              return f;
+                          }, futureSailor, executor);
+
+        try {
+            futureSailor.get(1, TimeUnit.SECONDS);
+            fail("should have completed exceptionally");
+        } catch (InterruptedException e) {
+            throw e;
+        } catch (ExecutionException e) {
+            if (!(e.getCause() instanceof RetryFailed)) {
+                throw e.getCause();
+            }
+        } catch (TimeoutException e) {
+            throw e;
+        }
+    }
 
     @Test
     public void overflowIsHandledCorrectly() {

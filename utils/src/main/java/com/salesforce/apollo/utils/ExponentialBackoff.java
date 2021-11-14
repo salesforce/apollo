@@ -15,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import com.google.common.util.concurrent.ListenableFuture;
+
 /**
  * @author hal.hildebrand
  *
@@ -40,6 +42,11 @@ public class ExponentialBackoff<T> {
 
         public void execute(Callable<T> task, CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
             build().execute(task, futureSailor, scheduler);
+        }
+
+        public void executeAsync(Callable<ListenableFuture<T>> task, CompletableFuture<T> futureSailor,
+                                 ScheduledExecutorService scheduler) {
+            build().executeAsync(task, futureSailor, scheduler);
         }
 
         public Builder<T> retryIf(final Predicate<T> retryIf) {
@@ -135,6 +142,15 @@ public class ExponentialBackoff<T> {
         }
     }
 
+    public void executeAsync(Callable<ListenableFuture<T>> task, CompletableFuture<T> futureSailor,
+                             ScheduledExecutorService scheduler) {
+        if (infinite) {
+            executeAsync(attempt -> true, 0, futureSailor, task, scheduler);
+        } else {
+            executeAsync(attempt -> attempt < maxAttempts, 0, futureSailor, task, scheduler);
+        }
+    }
+
     private void execute(final Predicate<Long> predicate, final long attempt, final CompletableFuture<T> futureSailor,
                          Callable<T> task, final ScheduledExecutorService scheduler) {
         if (!predicate.test(attempt)) {
@@ -146,8 +162,8 @@ public class ExponentialBackoff<T> {
             final T result = task.call();
             if (!retryIf.test(result)) {
                 futureSailor.complete(result);
+                return;
             }
-            return;
         } catch (final Exception e) {
             exceptionHandler.accept(e);
         }
@@ -156,5 +172,49 @@ public class ExponentialBackoff<T> {
                                      : getWaitTime(cap, base, nextAttempt);
         scheduler.schedule(() -> execute(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
                            TimeUnit.MILLISECONDS);
+    }
+
+    private void executeAsync(final Predicate<Long> predicate, final long attempt,
+                              final CompletableFuture<T> futureSailor, Callable<ListenableFuture<T>> task,
+                              final ScheduledExecutorService scheduler) {
+        if (!predicate.test(attempt)) {
+            futureSailor.completeExceptionally(new RetryFailed("Exceeded maximum attempts"));
+            return;
+        }
+
+        final var nextAttempt = attempt + 1;
+        final long waitTime = jitter ? getWaitTimeWithJitter(cap, base, nextAttempt)
+                                     : getWaitTime(cap, base, nextAttempt);
+        final ListenableFuture<T> r;
+
+        try {
+            r = task.call();
+        } catch (Exception e) {
+            exceptionHandler.accept(e);
+            scheduler.schedule(() -> executeAsync(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
+                               TimeUnit.MILLISECONDS);
+            return;
+        }
+
+        if (r == null) {
+            if (!retryIf.test(null)) {
+                futureSailor.complete(null);
+                return;
+            }
+        }
+
+        r.addListener(() -> {
+            try {
+                T result = r.get();
+                if (!retryIf.test(result)) {
+                    futureSailor.complete(result);
+                    return;
+                }
+            } catch (final Exception e) {
+                exceptionHandler.accept(e);
+            }
+            scheduler.schedule(() -> executeAsync(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
+                               TimeUnit.MILLISECONDS);
+        }, scheduler);
     }
 }
