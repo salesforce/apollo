@@ -30,6 +30,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -41,8 +42,11 @@ import org.slf4j.LoggerFactory;
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
@@ -58,8 +62,6 @@ import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -77,13 +79,13 @@ import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock.NullBlock;
-import com.salesforce.apollo.choam.support.ServiceUnavailable;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
@@ -95,6 +97,9 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
+
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 
 /**
  * Combine Honnete Ober Advancer Mercantiles.
@@ -222,8 +227,9 @@ public class CHOAM {
         }
 
         @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.submit(request, from);
+        public Empty submit(SubmitTransaction request, Digest from) {
+            CHOAM.this.submit(request, from);
+            return Empty.getDefaultInstance();
         }
 
         @Override
@@ -269,10 +275,10 @@ public class CHOAM {
         }
 
         @Override
-        public SubmitResult submit(SubmitTransaction request) {
+        public void submit(SubmitTransaction request) {
             log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
                       params().member());
-            return producer.submit(request.getTransaction());
+            producer.submit(request.getTransaction());
         }
     }
 
@@ -329,21 +335,29 @@ public class CHOAM {
         }
 
         @Override
-        public ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
+        public ListenableFuture<Status> submitTxn(Transaction transaction) {
             Member target = servers.next();
             try (var link = comm.apply(target, params.member())) {
                 if (link == null) {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
-                    return null;
+                    SettableFuture<Status> f = SettableFuture.create();
+                    f.set(Status.UNAVAILABLE.withDescription("No link to server"));
+                    return f;
                 }
                 log.debug("Submitting received txn: {} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                 return link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
                                                     .setTransaction(transaction).build());
+            } catch (StatusRuntimeException e) {
+                SettableFuture<Status> f = SettableFuture.create();
+                f.set(e.getStatus());
+                return f;
             } catch (Throwable e) {
                 log.error("Failed submitting txn: {} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(), e);
-                return null;
+                SettableFuture<Status> f = SettableFuture.create();
+                f.set(Status.INTERNAL.withCause(e).withDescription("Failed submitting txn"));
+                return f;
             }
         }
 
@@ -545,10 +559,21 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    private final Map<Long, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
+    public static List<Transaction> toGenesisData(List<Message> initializationData) {
+        return toGenesisData(initializationData, DigestAlgorithm.DEFAULT, SignatureAlgorithm.DEFAULT);
+    }
 
-    private final AtomicReference<HashedCertifiedBlock> checkpoint = new AtomicReference<>();
+    public static List<Transaction> toGenesisData(List<Message> initializationData, DigestAlgorithm digestAlgo,
+                                                  SignatureAlgorithm sigAlgo) {
+        var source = digestAlgo.getOrigin();
+        SignerImpl signer = new SignerImpl(0, sigAlgo.generateKeyPair().getPrivate());
+        AtomicInteger nonce = new AtomicInteger();
+        return initializationData.stream().map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer))
+                                 .toList();
+    }
 
+    private final Map<Long, CheckpointState>                            cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
@@ -830,25 +855,20 @@ public class CHOAM {
 
     private void execute(List<Transaction> execs) {
         final var h = head.get();
-        try {
-            log.trace("Executing transactions for block: {} height: {}  on: {}", h.hash, h.height(), params.member());
-            params.processor().beginBlock(h.height(), h.hash);
-            execs.forEach(exec -> {
-                Digest hash = hashOf(exec, params.digestAlgorithm());
-                var stxn = session.complete(hash);
-                log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, h.hash, h.height(),
-                          stxn == null ? "null" : "present", params.member());
-                try {
-                    params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
-                } catch (Throwable t) {
-                    log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash,
-                              h.height(), params.member());
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            log.trace("Rejected transaction executions for block: {} height: {}  on: {}", h.hash, h.height(),
-                      params.member());
-        }
+        log.trace("Executing transactions for block: {} height: {}  on: {}", h.hash, h.height(), params.member());
+        params.processor().beginBlock(h.height(), h.hash);
+        execs.forEach(exec -> {
+            Digest hash = hashOf(exec, params.digestAlgorithm());
+            var stxn = session.complete(hash);
+            log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, h.hash, h.height(),
+                      stxn == null ? "null" : "present", params.member());
+            try {
+                params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
+            } catch (Throwable t) {
+                log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
+                          params.member());
+            }
+        });
     }
 
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
@@ -1039,31 +1059,39 @@ public class CHOAM {
         checkpoint();
     }
 
-    private Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service() {
+    private Function<SubmittedTransaction, ListenableFuture<Status>> service() {
         return stx -> {
             log.debug("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
+            SettableFuture<Status> f = SettableFuture.create();
             final var c = current.get();
             if (c == null) {
-                throw new ServiceUnavailable();
+                f.set(Status.UNAVAILABLE.withDescription("No committee to submit txn"));
+                return f;
             }
-            return c.submitTxn(stx.transaction());
+            try {
+                return c.submitTxn(stx.transaction());
+            } catch (StatusRuntimeException e) {
+                f.set(e.getStatus());
+                return f;
+            }
         };
     }
 
     /** Submit a transaction from a client */
-    private SubmitResult submit(SubmitTransaction request, Digest from) {
+    private void submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
             log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
-            return SubmitResult.newBuilder().setOutcome(Outcome.NOT_A_MEMBER).build();
+            Status.FAILED_PRECONDITION.withDescription("Invalid transaction submission from non member")
+                                      .asRuntimeException();
         }
         final var c = current.get();
         if (c == null) {
             log.warn("No committee to submit txn from: {} on: {}", from, params.member());
-            return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
+            throw Status.UNAVAILABLE.withDescription("No committee to submit txn").asRuntimeException();
         }
         log.debug("Submiting received txn: {} from: {} on: {}",
                   hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
-        return c.submit(request);
+        c.submit(request);
     }
 
     private Initial sync(Synchronize request, Digest from) {

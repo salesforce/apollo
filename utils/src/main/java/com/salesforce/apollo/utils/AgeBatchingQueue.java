@@ -184,7 +184,7 @@ public class AgeBatchingQueue<T> {
                     return true;
                 } else {
                     oldBatchesQueueFull.set(true);
-                    LOGGER.info("[Reaping source: {}] Old batches queue for: {} is full. Not reaping the batch till we get space.",
+                    LOGGER.debug("[Reaping source: {}] Old batches queue for: {} is full. Not reaping the batch till we get space.",
                                 operatorName, label);
                 }
             } finally {

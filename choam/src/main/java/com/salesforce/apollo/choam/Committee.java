@@ -21,8 +21,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -34,6 +32,8 @@ import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+
+import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
@@ -94,14 +94,14 @@ public interface Committee {
         throw new IllegalStateException("Should not be called on this implementation");
     }
 
-    default SubmitResult submit(SubmitTransaction request) {
-        log().trace("Cannot submit txn inactive committee on: {}", params().member());
-        return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
+    default void submit(SubmitTransaction request) {
+        log().trace("Cannot submit txn, inactive committee on: {}", params().member());
+        throw Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee").asRuntimeException();
     }
 
-    default ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
-        log().trace("Cannot submit txn inactive committee on: {}", params().member());
-        return null;
+    default ListenableFuture<Status> submitTxn(Transaction transaction) {
+        log().trace("Cannot submit txn, inactive committee on: {}", params().member());
+        throw Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee").asRuntimeException();
     }
 
     boolean validate(HashedCertifiedBlock hb);

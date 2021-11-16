@@ -14,13 +14,14 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+
+import io.grpc.Status;
 
 /**
  * Terminal RPC endpoint for CHOAM
@@ -32,25 +33,6 @@ public interface Terminal extends Link {
 
     static Terminal getLocalLoopback(SigningMember member, Concierge service) {
         return new Terminal() {
-
-            @Override
-            public Member getMember() {
-                return member;
-            }
-
-            @Override
-            public ListenableFuture<ViewMember> join(JoinRequest join) {
-                SettableFuture<ViewMember> f = SettableFuture.create();
-                f.set(service.join(join, member.getId()));
-                return f;
-            }
-
-            @Override
-            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
-                SettableFuture<SubmitResult> f = SettableFuture.create();
-                f.set(service.submit(request, member.getId()));
-                return f;
-            }
 
             @Override
             public void close() {
@@ -72,6 +54,26 @@ public interface Terminal extends Link {
             }
 
             @Override
+            public Member getMember() {
+                return member;
+            }
+
+            @Override
+            public ListenableFuture<ViewMember> join(JoinRequest join) {
+                SettableFuture<ViewMember> f = SettableFuture.create();
+                f.set(service.join(join, member.getId()));
+                return f;
+            }
+
+            @Override
+            public ListenableFuture<Status> submit(SubmitTransaction request) {
+                SettableFuture<Status> f = SettableFuture.create();
+                service.submit(request, member.getId());
+                f.set(Status.OK);
+                return f;
+            }
+
+            @Override
             public ListenableFuture<Initial> sync(Synchronize sync) {
                 return null;
             }
@@ -88,7 +90,7 @@ public interface Terminal extends Link {
 
     ListenableFuture<ViewMember> join(JoinRequest join);
 
-    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
+    ListenableFuture<Status> submit(SubmitTransaction request);
 
     ListenableFuture<Initial> sync(Synchronize sync);
 }

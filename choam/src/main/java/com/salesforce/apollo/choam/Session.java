@@ -6,14 +6,11 @@
  */
 package com.salesforce.apollo.choam;
 
-import static java.util.concurrent.CompletableFuture.supplyAsync;
-
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,31 +21,58 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.RateLimiter;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Message;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
-import com.salesforce.apollo.choam.support.TransationFailed;
+import com.salesforce.apollo.choam.support.TransactionFailed;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Verifier;
+
+import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Session {
+
     private final static Logger log = LoggerFactory.getLogger(Session.class);
 
-    private final Parameters                                                     params;
-    private final Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service;
-    private AtomicInteger                                                        nonce = new AtomicInteger();
+    public static Transaction transactionOf(Digest source, int nonce, Message message, Signer signer) {
+        ByteBuffer buff = ByteBuffer.allocate(4);
+        buff.putInt(nonce);
+        buff.flip();
+        final var digeste = source.toDigeste();
+        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
+                              message.toByteString().asReadOnlyByteBuffer());
+        return Transaction.newBuilder().setSource(digeste).setNonce(nonce).setContent(message.toByteString())
+                          .setSignature(sig.toSig()).build();
+    }
 
-    private final Map<Digest, SubmittedTransaction> submitted = new ConcurrentHashMap<>();
+    public static boolean verify(Transaction transaction, Verifier verifier) {
+        ByteBuffer buff = ByteBuffer.allocate(4);
+        buff.putInt(transaction.getNonce());
+        buff.flip();
+        return verifier.verify(JohnHancock.of(transaction.getSignature()),
+                               transaction.getSource().toByteString().asReadOnlyByteBuffer(),
+                               transaction.getContent().asReadOnlyByteBuffer());
+    }
 
-    public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service) {
+    private AtomicInteger                                                  nonce     = new AtomicInteger();
+    private final Parameters                                               params;
+    private final RateLimiter                                              submitRateLimiter;
+    private final Function<SubmittedTransaction, ListenableFuture<Status>> service;
+    private final Map<Digest, SubmittedTransaction>                        submitted = new ConcurrentHashMap<>();
+
+    public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<Status>> service) {
         this.params = params;
         this.service = service;
+        submitRateLimiter = RateLimiter.create(params.txnPermits(), Duration.ofSeconds(1));
     }
 
     /**
@@ -56,7 +80,7 @@ public class Session {
      */
     public void cancelAll() {
         submitted.values().forEach(stx -> stx.onCompletion()
-                                             .completeExceptionally(new TransationFailed("Transaction cancelled")));
+                                             .completeExceptionally(new TransactionFailed("Transaction cancelled")));
     }
 
     /**
@@ -70,14 +94,8 @@ public class Session {
      */
     public <T> CompletableFuture<T> submit(Message transaction, Duration timeout) throws InvalidTransaction {
         final int n = nonce.getAndIncrement();
-        var buff = ByteBuffer.allocate(4);
-        buff.putInt(n);
-        buff.flip();
-        var signature = params.member().sign(params.member().getId().toByteBuffer(), buff,
-                                             transaction.toByteString().asReadOnlyByteBuffer());
-        final Transaction txn = Transaction.newBuilder().setSource(params.member().getId().toDigeste()).setNonce(n)
-                                           .setContent(transaction.toByteString()).setSignature(signature.toSig())
-                                           .build();
+
+        final var txn = transactionOf(params.member().getId(), n, transaction, params.member());
         if (!txn.hasSource() || !txn.hasSignature()) {
             throw new InvalidTransaction();
         }
@@ -86,12 +104,13 @@ public class Session {
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
-        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
-        var futureTimeout = params.scheduler()
-                                  .schedule(() -> result.completeExceptionally(new TimeoutException("Transaction timeout")),
-                                            timeout.toMillis(), TimeUnit.MILLISECONDS);
         var stxn = new SubmittedTransaction(hash, txn, result);
         submit(stxn);
+        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+        var futureTimeout = params.scheduler().schedule(() -> {
+            log.debug("Timeout of txn: {} on: {}", hash, params.member());
+            result.completeExceptionally(new TimeoutException("Transaction timeout"));
+        }, timeout.toMillis(), TimeUnit.MILLISECONDS);
         return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
@@ -104,20 +123,18 @@ public class Session {
 
     SubmittedTransaction complete(Digest hash) {
         final SubmittedTransaction stxn = submitted.remove(hash);
-        if (stxn == null) {
-            log.trace("Completed, but not present: {} on: {}", hash, params.member());
-        } else {
-            log.debug("Completed, present: {} on: {}", hash, params.member());
+        if (stxn != null) {
+            log.trace("Completed: {} on: {}", hash, params.member());
         }
         return stxn;
     }
 
     private void complete(Digest hash, final Timer.Context timer, Throwable t) {
-        log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
         submitted.remove(hash);
         if (timer != null) {
             timer.close();
             if (t != null) {
+                log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
                 params.metrics().transactionComplete(t);
             }
         }
@@ -125,34 +142,37 @@ public class Session {
 
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
-        supplyAsync(() -> {
-            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
-            if (stx.onCompletion().isDone()) {
-                return true;
+        if (!submitRateLimiter.tryAcquire()) {
+            stx.onCompletion().completeExceptionally(Status.CANCELLED.withDescription("Client side rate limiting")
+                                                                     .asRuntimeException());
+            return;
+        }
+        CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
+            if (!stx.onCompletion().isDone()) {
+                return;
             }
-            SubmitResult submitResult;
-            try {
-                submitResult = service.apply(stx).get();
-            } catch (InterruptedException e) {
-                log.trace("Submission of: {} success: INTERRUPTED on: {}", stx.hash(), params.member());
-                return false;
-            } catch (ExecutionException e) {
-                log.trace("Submission of: {} success: FAILED on: {}", stx.hash(), params.member(), e.getCause());
-                return false;
-            }
-            if (submitResult == null) {
-                log.trace("Submission of: {} success: FAILED on: {}", stx.hash(), params.member());
-                return false;
-            }
-            log.trace("Submission of: {} success: {} on: {}", stx.hash(), submitResult.getOutcome(), params.member());
-            return submitResult.getOutcome() == Outcome.SUCCESS;
-        }, params.submitDispatcher()).whenComplete((r, t) -> {
-            log.trace("Completion of txn: {} submit: {} exceptionally: {} on: {}", stx.hash(), r, t, params.member());
             if (t != null) {
                 stx.onCompletion().completeExceptionally(t);
-            } else if (!r) {
-                stx.onCompletion().completeExceptionally(new TransationFailed("failed to complete transaction"));
+            }
+            if (r == null || !r.isOk()) {
+                stx.onCompletion().completeExceptionally(new TimeoutException("Cannot submit txn"));
             }
         });
+        final var clientBackoff = params.clientBackoff().retryIf(s -> {
+            if (stx.onCompletion().isDone() || s.isOk()) {
+                return false;
+            }
+            log.trace("Retrying: {} status: {} on: {}", stx.hash(), s, params.member());
+            return true;
+        }).build();
+        clientBackoff.executeAsync(() -> {
+            if (stx.onCompletion().isDone()) {
+                SettableFuture<Status> f = SettableFuture.create();
+                f.set(Status.OK);
+                return f;
+            }
+            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
+            return service.apply(stx);
+        }, params.submitDispatcher(), submitted, params.scheduler());
     }
 }

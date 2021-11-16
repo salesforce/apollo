@@ -13,7 +13,7 @@ import "ethereal.proto";
 package apollo.choam;
 
 service Terminal {
-    rpc submit (SubmitTransaction) returns (SubmitResult) {}
+    rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
 
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
@@ -33,20 +33,6 @@ message JoinRequest {
 message SubmitTransaction {
     utils.Digeste context = 1;
     Transaction transaction = 2;
-}
-
-message SubmitResult {
-    enum Outcome {
-        INVALID_ENUM = 0;
-        NOT_A_MEMBER = 1;
-        SUCCESS = 2;
-        FAILURE = 3; 
-        INACTIVE_COMMITTEE = 4;
-        BUFFER_FULL = 5;
-        NOT_A_VALIDATOR = 6;
-    }
-    
-    Outcome outcome = 1;
 }
 
 message Block {

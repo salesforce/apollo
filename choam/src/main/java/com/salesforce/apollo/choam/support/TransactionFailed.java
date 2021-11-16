@@ -10,18 +10,18 @@ package com.salesforce.apollo.choam.support;
  * @author hal.hildebrand
  *
  */
-public class TransationFailed extends Exception {
+public class TransactionFailed extends Exception {
 
     private static final long serialVersionUID = 1L;
 
-    public TransationFailed() {
+    public TransactionFailed() {
     }
 
-    public TransationFailed(String message, Throwable cause) {
+    public TransactionFailed(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public TransationFailed(String message) {
+    public TransactionFailed(String message) {
         super(message);
     }
 }

@@ -30,6 +30,9 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.utils.ExponentialBackoff;
+
+import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
@@ -44,7 +47,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          DigestAlgorithm digestAlgorithm, ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm,
                          int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
                          Duration synchronizeTimeout, Executor submitDispatcher, int toleranceLevel,
-                         BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits) {
+                         BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
+                         ExponentialBackoff.Builder<Status> clientBackoff) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -175,6 +179,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Function<Long, File>                   checkpointer          = c -> {
                                                                                  throw new IllegalStateException("No checkpointer defined");
                                                                              };
+        private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
+                                                                                                 .retryIf(s -> s.isOk());
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private Router                                 communications;
         private Context<Member>                        context;
@@ -210,7 +216,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   checkpointer, storeFile, checkpointBlockSize, dispatcher, restorer, digestAlgorithm,
                                   metrics, viewSigAlgorithm, synchronizationCycles, synchronizeDuration,
                                   regenerationCycles, synchronizeTimeout, submitDispatcher, toleranceLevel, bootstrap,
-                                  producer, txnPermits);
+                                  producer, txnPermits, clientBackoff);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -223,6 +229,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Function<Long, File> getCheckpointer() {
             return checkpointer;
+        }
+
+        public ExponentialBackoff.Builder<Status> getClientBackoff() {
+            return clientBackoff;
         }
 
         public ReliableBroadcaster.Parameters.Builder getCombineParams() {
@@ -337,6 +347,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setCheckpointer(Function<Long, File> checkpointer) {
             this.checkpointer = checkpointer;
+            return this;
+        }
+
+        public Builder setClientBackoff(ExponentialBackoff.Builder<Status> clientBackoff) {
+            this.clientBackoff = clientBackoff;
             return this;
         }
 

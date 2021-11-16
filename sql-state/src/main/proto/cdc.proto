@@ -59,5 +59,6 @@ message Txn {
         Batch batch = 3;
         BatchUpdate batchUpdate = 4;
         Script script = 5;
+        BatchedTransaction batched = 6;
     }
 }

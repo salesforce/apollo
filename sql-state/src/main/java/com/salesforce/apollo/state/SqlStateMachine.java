@@ -641,6 +641,7 @@ public class SqlStateMachine {
             case BATCHUPDATE -> SqlStateMachine.this.acceptBatchUpdate(tx.getBatchUpdate());
             case STATEMENT -> SqlStateMachine.this.acceptPreparedStatement(tx.getStatement());
             case SCRIPT -> SqlStateMachine.this.acceptScript(tx.getScript());
+            case BATCHED -> acceptBatchTransaction(tx.getBatched());
             default -> null;
             };
             SqlStateMachine.this.complete(onCompletion, results);
@@ -663,6 +664,7 @@ public class SqlStateMachine {
             case CALL -> acceptCall(txn.getCall());
             case SCRIPT -> acceptScript(txn.getScript());
             case STATEMENT -> acceptPreparedStatement(txn.getStatement());
+            case BATCHED -> acceptBatchTransaction(txn.getBatched());
             default -> null;
             };
         } catch (Throwable th) {
@@ -670,7 +672,7 @@ public class SqlStateMachine {
         }
     }
 
-    private List<Object> executeBatchTransaction(BatchedTransaction txns) throws Exception {
+    private List<Object> acceptBatchTransaction(BatchedTransaction txns) throws Exception {
         List<Object> results = new ArrayList<Object>();
         for (int i = 0; i < txns.getTransactionsCount(); i++) {
             try {

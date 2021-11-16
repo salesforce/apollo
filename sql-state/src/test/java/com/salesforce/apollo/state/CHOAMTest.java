@@ -4,16 +4,19 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.choam;
+package com.salesforce.apollo.state;
 
+import static com.salesforce.apollo.state.Mutator.batch;
+import static com.salesforce.apollo.state.Mutator.batchOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -42,8 +45,12 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -59,7 +66,12 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class TestCHOAM {
+public class CHOAMTest {
+    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
+                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                                                                                                              .build()));
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+
     private class Transactioneer {
         private final static Random entropy = new Random();
 
@@ -74,16 +86,13 @@ public class TestCHOAM {
         private final ScheduledExecutorService scheduler;
         private final Duration                 timeout;
         private final Counter                  timeouts;
-        private final ByteMessage              tx        = ByteMessage.newBuilder()
-                                                                      .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                      .build();
 
-        Transactioneer(Session session, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
-                       AtomicInteger lineTotal, int max, CountDownLatch countdown,
-                       ScheduledExecutorService txScheduler) {
+        public Transactioneer(CHOAM c, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
+                              AtomicInteger lineTotal, int max, CountDownLatch countdown,
+                              ScheduledExecutorService txScheduler) {
             this.latency = latency;
             this.proceed = proceed;
-            this.session = session;
+            this.session = c.getSession();
             this.timeout = timeout;
             this.lineTotal = lineTotal;
             this.timeouts = timeouts;
@@ -106,11 +115,11 @@ public class TestCHOAM {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout), tc);
+                                decorate(session.submit(update(entropy), timeout), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(250), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                     }
                 } else {
                     time.close();
@@ -125,11 +134,11 @@ public class TestCHOAM {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout), tc);
+                                decorate(session.submit(update(entropy), timeout), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                     } else if (complete == max) {
                         countdown.countDown();
                     }
@@ -141,7 +150,7 @@ public class TestCHOAM {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(tx, timeout), time);
+                    decorate(session.submit(update(entropy), timeout), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -260,92 +269,70 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        final int expected = 88 + (30 * 2);
-        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
-    }
-
-    @Test
     public void submitMultiplTxn() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        final int expected = 10;
-
-        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
-
         final Duration timeout = Duration.ofSeconds(15);
-
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
+        final int waitFor = 5;
         final int clientCount = 50;
         final int max = 10;
-        final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
+        final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
 
+        routers.values().forEach(r -> r.start());
+        choams.values().forEach(ch -> ch.start());
+
+        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                           .filter(s -> s >= waitFor).count() == choams.size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= waitFor).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).size());
+
+        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout);
+        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+
         for (int i = 0; i < clientCount; i++) {
-            choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, timeouts, latency, proceed,
-                                                                 lineTotal, max, countdown, txScheduler))
+            choams.values().stream().map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max,
+                                                                 countdown, txScheduler))
                   .forEach(e -> transactioneers.add(e));
         }
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            countdown.await(300, TimeUnit.SECONDS);
+            countdown.await(120, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
-            after();
-            System.out.println();
-            System.out.println();
-            System.out.println("# of clients: " + transactioneers.size());
-            ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build().report();
         }
+        System.out.println();
+        System.out.println();
+        System.out.println();
+
+        System.out.println("# of clients: " + choams.size() * clientCount);
+        ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build().report();
     }
 
-    @Test
-    public void submitTxn() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        final int expected = 23;
-        var session = choams.get(members.get(0).getId()).getSession();
+    private Txn initialInsert() {
+        return Txn.newBuilder()
+                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                  .build();
+    }
 
-        Utils.waitForCondition(120_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
-        final ByteMessage tx = ByteMessage.newBuilder()
-                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                          .build();
-        CompletableFuture<?> result = session.submit(tx, null);
-        while (true) {
-            final var r = result;
-            Utils.waitForCondition(1_000, () -> r.isDone());
-            if (result.isDone()) {
-                if (result.isCompletedExceptionally()) {
-                    result.exceptionally(t -> {
-                        System.out.println("Failed with: " + t.toString());
-                        return null;
-                    });
-                    result = session.submit(tx, null);
-                } else {
-                    System.out.println("Success!!!!");
-                    var completion = result.get();
-                    assertNotNull(completion);
-                    break;
-                }
+    private Txn update(Random entropy) {
+
+        List<List<Object>> batch = new ArrayList<>();
+        for (int rep = 0; rep < 10; rep++) {
+            for (int id = 1; id < 6; id++) {
+                batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
             }
         }
+        return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 }

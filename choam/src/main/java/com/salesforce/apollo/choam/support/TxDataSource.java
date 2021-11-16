@@ -68,6 +68,7 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
+        log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size());
     }
 
     @Override
@@ -113,7 +114,7 @@ public class TxDataSource implements DataSource {
         final var data = builder.build();
         final var bs = data.toByteString();
 
-        log.trace("Unit data: {} txns {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
+        log.trace("Unit data txns: {} validations: {} totalling: {} bytes  on: {}", data.getTransactionsCount(),
                   data.getValidationsCount(), bs.size(), member);
         return bs;
     }
@@ -122,7 +123,18 @@ public class TxDataSource implements DataSource {
         return processing.size();
     }
 
+    public int getRemaining() {
+        return processing.size();
+    }
+
+    public int getRemainingValidations() {
+        return validations.size();
+    }
+
     public boolean offer(Transaction txn) {
+        if (closed.get() || validationsOnly.get()) {
+            return false;
+        }
         return processing.offer(txn);
     }
 

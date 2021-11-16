@@ -25,8 +25,6 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitResult.Outcome;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
@@ -46,6 +44,8 @@ import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
 import com.salesforce.apollo.membership.Member;
+
+import io.grpc.Status;
 
 /**
  * An "Earner"
@@ -156,7 +156,7 @@ public class Producer {
         final Builder ep = producerParams.ethereal();
 
         // Number of rounds we can provide data for
-        final int maxElements = ((ep.getEpochLength() - 4) * ep.getNumberOfEpochs() - 1);
+        final int maxElements = ((ep.getEpochLength() - 7) * (ep.getNumberOfEpochs() - 1));
 
         reconfigurationEpoch = ep.getNumberOfEpochs() - 1;
 
@@ -219,23 +219,15 @@ public class Producer {
         ds.close();
     }
 
-    public SubmitResult submit(Transaction transaction) {
-        log.trace("Submit received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
-                  params().member());
-        if (!started.get()) {
-            log.trace("Failure, cannot submit received txn: {} on: {}",
-                      CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
-            return SubmitResult.newBuilder().setOutcome(Outcome.INACTIVE_COMMITTEE).build();
-        }
-
+    public void submit(Transaction transaction) {
         if (ds.offer(transaction)) {
             log.debug("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                       params().member());
-            return SubmitResult.newBuilder().setOutcome(Outcome.SUCCESS).build();
         } else {
-            log.debug("Failure, cannot submit received txn: {} on: {}",
+            log.debug("Transaction buffer full, cannot submit received txn: {} on: {}",
                       CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
-            return SubmitResult.newBuilder().setOutcome(Outcome.FAILURE).build();
+            throw Status.UNAVAILABLE.withDescription("Transaction buffer full on: " + params().member().getId())
+                                    .asRuntimeException();
         }
     }
 
