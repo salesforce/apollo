@@ -221,7 +221,7 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(200).setCheckpointer(checkpointer);
+                               .setTxnPermits(10_000).setCheckpointBlockSize(1).setCheckpointer(checkpointer);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
@@ -289,7 +289,7 @@ public class TestCHOAM {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 50;
+        final int clientCount = 5000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);

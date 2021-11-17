@@ -58,5 +58,5 @@ for this deterministic implementation is an incorrect license and so another mec
 
 ## Checkpointing and Bootstrapping
 Checkpoints are implemented with H2's _SCRIPT_ command which dumps the current database state in a form that will recreate the state of the database.  This is, of course, compressed and becomes the checkpointed state
-used in Consortium for bootstrapping nodes.  Currently, no facilities are implemented for incremental backup, but it should be straightforward to implement an incremental scheme.  For the future ;)
+used in CHOAM for bootstrapping nodes.  Currently, no facilities are implemented for incremental backup, but it should be straightforward to implement an incremental scheme.  For the future ;)
 

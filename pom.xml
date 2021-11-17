@@ -9,12 +9,10 @@
 	<name>Apollo: Umbrella App</name>
 
 	<modules>
-		<module>avalanche</module>
 		<module>fireflies</module>
 		<module>protocols</module>
 		<module>sql-state</module>
 		<module>memberships</module>
-		<module>consortium</module>
 		<module>tron</module>
 		<module>stereotomy</module>
 		<module>utils</module>

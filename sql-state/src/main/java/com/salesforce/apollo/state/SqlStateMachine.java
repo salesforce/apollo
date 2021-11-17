@@ -119,6 +119,11 @@ public class SqlStateMachine {
 
     public class TxnExec implements TransactionExecutor {
         @Override
+        public void beginBlock(long height, Digest hash) {
+            SqlStateMachine.this.beginBlock(height, hash);
+        }
+
+        @Override
         public void execute(Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
@@ -141,8 +146,11 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void beginBlock(long height, Digest hash) {
-            SqlStateMachine.this.beginBlock(height, hash);
+        public void genesis(List<Transaction> initialization) {
+            initializeEvents();
+            for (Transaction txn : initialization) {
+                execute(txn, null);
+            }
         }
     }
 
@@ -371,6 +379,18 @@ public class SqlStateMachine {
             }
             return exec.executeBatch();
         }
+    }
+
+    private List<Object> acceptBatchTransaction(BatchedTransaction txns) throws Exception {
+        List<Object> results = new ArrayList<Object>();
+        for (int i = 0; i < txns.getTransactionsCount(); i++) {
+            try {
+                results.add(SqlStateMachine.this.execute(txns.getTransactions(i)));
+            } catch (Throwable e) {
+                throw new Mutator.BatchedTransactionException(i, e);
+            }
+        }
+        return results;
     }
 
     private int[] acceptBatchUpdate(BatchUpdate batchUpdate) throws SQLException {
@@ -631,6 +651,22 @@ public class SqlStateMachine {
         }
     }
 
+    private Object execute(Txn txn) throws Exception {
+        try {
+            return switch (txn.getExecutionCase()) {
+            case BATCH -> acceptBatch(txn.getBatch());
+            case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
+            case CALL -> acceptCall(txn.getCall());
+            case SCRIPT -> acceptScript(txn.getScript());
+            case STATEMENT -> acceptPreparedStatement(txn.getStatement());
+            case BATCHED -> acceptBatchTransaction(txn.getBatched());
+            default -> null;
+            };
+        } catch (Throwable th) {
+            return th;
+        }
+    }
+
     private void execute(Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
         SecureRandom prev = SqlStateMachine.secureRandom.get();
         SqlStateMachine.secureRandom.set(SqlStateMachine.this.entropy.get());
@@ -654,34 +690,6 @@ public class SqlStateMachine {
             SqlStateMachine.secureRandom.set(prev);
             SqlStateMachine.this.commit();
         }
-    }
-
-    private Object execute(Txn txn) throws Exception {
-        try {
-            return switch (txn.getExecutionCase()) {
-            case BATCH -> acceptBatch(txn.getBatch());
-            case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
-            case CALL -> acceptCall(txn.getCall());
-            case SCRIPT -> acceptScript(txn.getScript());
-            case STATEMENT -> acceptPreparedStatement(txn.getStatement());
-            case BATCHED -> acceptBatchTransaction(txn.getBatched());
-            default -> null;
-            };
-        } catch (Throwable th) {
-            return th;
-        }
-    }
-
-    private List<Object> acceptBatchTransaction(BatchedTransaction txns) throws Exception {
-        List<Object> results = new ArrayList<Object>();
-        for (int i = 0; i < txns.getTransactionsCount(); i++) {
-            try {
-                results.add(SqlStateMachine.this.execute(txns.getTransactions(i)));
-            } catch (Throwable e) {
-                throw new Mutator.BatchedTransactionException(i, e);
-            }
-        }
-        return results;
     }
 
     private Session getSession() {

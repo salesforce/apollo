@@ -244,6 +244,9 @@ public class CHOAM {
 
         @SuppressWarnings("rawtypes")
         void execute(Transaction tx, CompletableFuture onComplete);
+
+        default void genesis(List<Transaction> initialization) {
+        }
     }
 
     /** a member of the current committee */
@@ -733,7 +736,7 @@ public class CHOAM {
         HashedBlock lb = head.get();
         File state = params.checkpointer().apply(lb.height());
         if (state == null) {
-            log.error("Cannot create checkpoint");
+            log.error("Cannot create checkpoint on: {}", params.member());
             transitions.fail();
             return null;
         }
@@ -752,6 +755,7 @@ public class CHOAM {
         MVMap<Integer, byte[]> stored = store.putCheckpoint(height(block), state, cp);
         state.delete();
         cachedCheckpoints.put(head.get().height(), new CheckpointState(cp, stored));
+        log.info("Created checkpoint: {} height: {} on: {}", head.get().hash, head.get().height(), params.member());
         transitions.finishCheckpoint();
         return block;
     }
@@ -913,6 +917,16 @@ public class CHOAM {
         return blocks.build();
     }
 
+    private void genesisInitialization(final HashedBlock h, final List<Transaction> initialization) {
+        log.trace("Executing genesis initialization block: {} on: {}", h.hash, params.member());
+        try {
+            params.processor().genesis(initialization);
+            ;
+        } catch (Throwable t) {
+            log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member());
+        }
+    }
+
     private boolean isNext(HashedBlock next) {
         final var h = head.get();
         if (next != null && next.height() == h.height() + 1) {
@@ -964,7 +978,9 @@ public class CHOAM {
         case GENESIS:
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
-            execute(h.block.getGenesis().getInitializeList());
+            log.trace("Executing genesis transactions for block: {}  on: {}", h.hash, params.member());
+            params.processor().beginBlock(h.height(), h.hash);
+            genesisInitialization(h, h.block.getGenesis().getInitializeList());
             transitions.regenerated();
         case EXECUTIONS:
             execute(h.block.getExecutions().getExecutionsList());
@@ -1056,7 +1072,6 @@ public class CHOAM {
         cachedCheckpoints.put(block.height(), checkpoint);
         params.restorer().accept(block.height(), checkpoint);
         restore();
-        checkpoint();
     }
 
     private Function<SubmittedTransaction, ListenableFuture<Status>> service() {

@@ -24,6 +24,7 @@ import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  * @since 220
  */
 public class MessagingClient implements Messaging, Link {

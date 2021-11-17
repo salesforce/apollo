@@ -21,7 +21,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
@@ -38,6 +37,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public class CbReplicationTest {

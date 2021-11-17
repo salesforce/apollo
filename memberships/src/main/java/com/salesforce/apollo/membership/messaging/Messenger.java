@@ -47,6 +47,8 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
+ * 
+ * @deprecated Will soon be eliminated
  *
  */
 public class Messenger {

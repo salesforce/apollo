@@ -46,6 +46,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public class CausalMemberOrderTest {

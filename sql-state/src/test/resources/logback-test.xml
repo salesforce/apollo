@@ -12,7 +12,12 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender>  
+    </appender> 
+
+    <logger name="com.salesforce.apollo.state" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
 
     <logger name="com.salesforce.apollo.choam" level="info"
         additivity="false">

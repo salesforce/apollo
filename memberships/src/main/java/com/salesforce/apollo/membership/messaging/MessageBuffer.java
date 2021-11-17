@@ -37,6 +37,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  * @since 220
  */
 public class MessageBuffer {

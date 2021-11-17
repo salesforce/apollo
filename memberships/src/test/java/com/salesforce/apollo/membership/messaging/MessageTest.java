@@ -29,7 +29,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -51,6 +50,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public class MessageTest {
@@ -131,7 +131,7 @@ public class MessageTest {
         communications.forEach(e -> e.close());
     }
 
-    @Test
+//    @Test deprecated
     public void broadcast() throws Exception {
         List<SigningMember> members = certs.values()
                                            .stream()

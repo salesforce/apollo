@@ -13,12 +13,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,13 +47,12 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -58,6 +62,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -67,11 +72,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
-                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                                                                                              .build()));
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-
     private class Transactioneer {
         private final static Random entropy = new Random();
 
@@ -82,8 +82,8 @@ public class CHOAMTest {
         private final AtomicInteger            lineTotal;
         private final int                      max;
         private final AtomicBoolean            proceed;
-        private final Session                  session;
         private final ScheduledExecutorService scheduler;
+        private final Session                  session;
         private final Duration                 timeout;
         private final Counter                  timeouts;
 
@@ -158,14 +158,20 @@ public class CHOAMTest {
         }
     }
 
-    private static final int CARDINALITY = 5;
+    private static final int               CARDINALITY     = 5;
+    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
+                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                                                                                                              .build()));
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private Map<Digest, List<Digest>>      blocks;
-    private Map<Digest, CHOAM>             choams;
-    private List<SigningMember>            members;
-    private Map<Digest, Router>            routers;
-    private ScheduledExecutorService       scheduler;
-    private Map<Digest, List<Transaction>> transactions;
+    private File                               baseDir;
+    private Map<Digest, List<Digest>>          blocks;
+    private File                               checkpointDirBase;
+    private Map<Digest, CHOAM>                 choams;
+    private List<SigningMember>                members;
+    private Map<Digest, Router>                routers;
+    private ScheduledExecutorService           scheduler;
+    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() throws Exception {
@@ -177,12 +183,18 @@ public class CHOAMTest {
             choams.values().forEach(e -> e.stop());
             choams = null;
         }
+        updaters.values().forEach(up -> up.close());
+        updaters.clear();
         members = null;
     }
 
     @BeforeEach
     public void before() {
-        transactions = new ConcurrentHashMap<>();
+        checkpointDirBase = new File("target/ct-chkpoints");
+        Utils.clean(checkpointDirBase);
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        Utils.clean(baseDir);
+        baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
@@ -223,10 +235,10 @@ public class CHOAMTest {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
+                               .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
@@ -245,32 +257,13 @@ public class CHOAMTest {
                                                                                              .setMetrics(params.getMetrics()),
                                                                         routerExec)));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            final TransactionExecutor processor = new TransactionExecutor() {
-
-                @Override
-                public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
-                }
-
-                @SuppressWarnings({ "unchecked", "rawtypes" })
-                @Override
-                public void execute(Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
-                    if (f != null) {
-                        f.complete(new Object());
-                    }
-                }
-            };
-            params.getProducer().ethereal().setSigner(m);
-            return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
-                                   .build(),
-                             MVStore.open(null));
+            return createCHOAM(entropy, params, m);
         }));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        final Duration timeout = Duration.ofSeconds(15);
+        final Duration timeout = Duration.ofSeconds(3);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
@@ -278,11 +271,12 @@ public class CHOAMTest {
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
-        final int clientCount = 50;
+        final int clientCount = 3000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
 
+        System.out.println("Warm up");
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
@@ -299,20 +293,73 @@ public class CHOAMTest {
                                                                  countdown, txScheduler))
                   .forEach(e -> transactioneers.add(e));
         }
-
+        System.out.println("Starting txns");
+        long then = System.currentTimeMillis();
         transactioneers.stream().forEach(e -> e.start());
         try {
             countdown.await(120, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
         }
+        long now = System.currentTimeMillis() - then;
+
         System.out.println();
         System.out.println();
         System.out.println();
 
+        double perSecond = now / 1000.0;
+        System.out.println("Statements per second: " + (latency.getCount() * 5) / perSecond);
+        System.out.println("Transactions per second: " + (latency.getCount()) / perSecond);
+
+        Connection connection = updaters.get(members.get(0)).newConnection();
+        Statement statement = connection.createStatement();
+        ResultSet results = statement.executeQuery("select ID, from books");
+        ResultSetMetaData rsmd = results.getMetaData();
+        int columnsNumber = rsmd.getColumnCount();
+        while (results.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                if (i > 1)
+                    System.out.print(",  ");
+                Object columnValue = results.getObject(i);
+                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+            }
+            System.out.println("");
+        }
+
         System.out.println("# of clients: " + choams.size() * clientCount);
         ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build().report();
+    }
+
+    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m) {
+        String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
+        System.out.println("DB URL: " + url);
+        SqlStateMachine up = new SqlStateMachine(url, new Properties(),
+                                                 new File(checkpointDirBase, m.getId().toString()));
+        updaters.put(m, up);
+
+        params.getProducer().ethereal().setSigner(m);
+        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId()))
+                               .setProcessor(new TransactionExecutor() {
+
+                                   @Override
+                                   public void beginBlock(long height, Digest hash) {
+                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
+                                       up.getExecutor().beginBlock(height, hash);
+                                   }
+
+                                   @Override
+                                   public void execute(Transaction tx,
+                                                       @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                                       up.getExecutor().execute(tx, onComplete);
+                                   }
+
+                                   @Override
+                                   public void genesis(List<Transaction> initialization) {
+                                       up.getExecutor().genesis(initialization);
+                                   }
+                               }).build(),
+                         MVStore.open(null));
     }
 
     private Txn initialInsert() {

@@ -19,7 +19,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
@@ -77,7 +76,7 @@ public class CausalBufferTest {
         content = Any.pack(ByteMessage.getDefaultInstance());
     }
 
-    @Test
+//    @Test CBC deprecated
     public void smokeIt() {
         StampedMessage aEvent, bEvent;
         var comparator = bufferA.getComparator();

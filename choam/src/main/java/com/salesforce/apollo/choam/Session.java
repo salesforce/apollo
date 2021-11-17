@@ -72,7 +72,7 @@ public class Session {
     public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<Status>> service) {
         this.params = params;
         this.service = service;
-        submitRateLimiter = RateLimiter.create(params.txnPermits(), Duration.ofSeconds(1));
+        submitRateLimiter = RateLimiter.create(params.txnPermits(), Duration.ofMillis(0));
     }
 
     /**
@@ -142,11 +142,6 @@ public class Session {
 
     private void submit(SubmittedTransaction stx) {
         submitted.put(stx.hash(), stx);
-        if (!submitRateLimiter.tryAcquire()) {
-            stx.onCompletion().completeExceptionally(Status.CANCELLED.withDescription("Client side rate limiting")
-                                                                     .asRuntimeException());
-            return;
-        }
         CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
             if (!stx.onCompletion().isDone()) {
                 return;
@@ -169,6 +164,11 @@ public class Session {
             if (stx.onCompletion().isDone()) {
                 SettableFuture<Status> f = SettableFuture.create();
                 f.set(Status.OK);
+                return f;
+            }
+            if (!submitRateLimiter.tryAcquire()) {
+                SettableFuture<Status> f = SettableFuture.create();
+                f.set(Status.CANCELLED.withDescription("Client side rate limiting"));
                 return f;
             }
             log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());

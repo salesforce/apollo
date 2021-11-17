@@ -171,9 +171,8 @@ public class MembershipTests {
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
         success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId())
-                                                             .size() == blocks.get(members.get(0).getId()).size());
-        shutdown();
-        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).size() + " expected: "
+                                                             .size() >= blocks.get(members.get(0).getId()).size());
+        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).size() + " expected >= "
         + blocks.get(members.get(0).getId()).size());
 
     }
