@@ -8,14 +8,8 @@ package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
 import static com.salesforce.apollo.state.Mutator.batchOf;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,6 +21,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -41,19 +36,17 @@ import java.util.stream.IntStream;
 import org.h2.mvstore.MVStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.Counter;
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
-import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -70,8 +63,8 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class MembershipTests {
-    private class Transactioneer {
+abstract public class AbstractLifecycleTest {
+    class Transactioneer {
         private final static Random entropy = new Random();
 
         private final AtomicInteger            completed = new AtomicInteger();
@@ -157,22 +150,27 @@ public class MembershipTests {
         }
     }
 
-    private static final int               CARDINALITY     = 5;
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
-                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                                                                                              .build()));
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    protected static final int                   CARDINALITY     = 5;
+    private static final List<Transaction>       GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
+                                                                                                                    .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                                                                                                                    .build()));
+    private static final Digest                  GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private File                               baseDir;
-    private Map<Digest, List<Digest>>          blocks;
-    private File                               checkpointDirBase;
-    private CompletableFuture<Boolean>         checkpointOccurred;
-    private Map<Digest, CHOAM>                 choams;
-    private List<SigningMember>                members;
-    private final Map<Member, Parameters>      parameters = new HashMap<>();
-    private Map<Digest, Router>                routers;
-    private ScheduledExecutorService           scheduler;
-    private final Map<Member, SqlStateMachine> updaters   = new HashMap<>();
+    protected Map<Digest, List<Digest>>          blocks;
+    protected CompletableFuture<Boolean>         checkpointOccurred;
+    protected Map<Digest, CHOAM>                 choams;
+    protected List<SigningMember>                members;
+    protected Map<Digest, Router>                routers;
+    protected final Map<Member, SqlStateMachine> updaters        = new HashMap<>();
+
+    private File                                 baseDir;
+    private File                                 checkpointDirBase;
+    private final Map<Member, Parameters>        parameters      = new HashMap<>();
+    private ScheduledExecutorService             scheduler;
+
+    public AbstractLifecycleTest() {
+        super();
+    }
 
     @AfterEach
     public void after() throws Exception {
@@ -238,150 +236,29 @@ public class MembershipTests {
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m)));
     }
 
-    @Test
-    public void checkpointBootstrap() throws Exception {
-        final SigningMember testSubject = members.get(CARDINALITY - 1);
-        final Duration timeout = Duration.ofSeconds(3);
-        AtomicBoolean proceed = new AtomicBoolean(true);
-        MetricRegistry reg = new MetricRegistry();
-        Timer latency = reg.timer("Transaction latency");
-        Counter timeouts = reg.counter("Transaction timeouts");
-        AtomicInteger lineTotal = new AtomicInteger();
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 5;
-        final int clientCount = 10;
-        final int max = 15;
-        final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
-
-        routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-               .forEach(r -> r.start());
-        choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-              .forEach(ch -> ch.start());
-
-        Utils.waitForCondition(15_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                          .filter(s -> s >= waitFor).count() == choams.size() - 1);
-        assertEquals(choams.size() - 1,
-                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= waitFor).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
-
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-
-        for (int i = 0; i < clientCount; i++) {
-            choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                               txScheduler))
-                  .forEach(e -> transactioneers.add(e));
-        }
-        System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
-        System.out.println("Starting txns");
-        transactioneers.stream().forEach(e -> e.start());
-        checkpointOccurred.whenComplete((s, t) -> {
-            System.out.println("Starting late joining node");
-            choams.get(testSubject.getId()).start();
-            routers.get(testSubject.getId()).start();
-        });
-
-        try {
-            countdown.await(120, TimeUnit.SECONDS);
-            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS));
-        } finally {
-            proceed.set(false);
-        }
-
-        System.out.println();
-        System.out.println();
-        System.out.println("Checking replica consistency");
-
-        Connection connection = updaters.get(members.get(0)).newConnection();
-        Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, from books");
-        ResultSetMetaData rsmd = results.getMetaData();
-        int columnsNumber = rsmd.getColumnCount();
-        while (results.next()) {
-            for (int i = 1; i <= columnsNumber; i++) {
-                if (i > 1)
-                    System.out.print(",  ");
-                Object columnValue = results.getObject(i);
-                System.out.print(columnValue + " " + rsmd.getColumnName(i));
-            }
-            System.out.println("");
-        }
+    protected Txn initialInsert() {
+        return Txn.newBuilder()
+                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                  .build();
     }
 
-    @Test
-    public void genesisBootstrap() throws Exception {
-        final SigningMember testSubject = members.get(CARDINALITY - 1);
-        final Duration timeout = Duration.ofSeconds(3);
-        AtomicBoolean proceed = new AtomicBoolean(true);
-        MetricRegistry reg = new MetricRegistry();
-        Timer latency = reg.timer("Transaction latency");
-        Counter timeouts = reg.counter("Transaction timeouts");
-        AtomicInteger lineTotal = new AtomicInteger();
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 5;
-        final int clientCount = 10;
-        final int max = 10;
-        final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
+    protected Txn update(Random entropy) {
 
-        routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-               .forEach(r -> r.start());
-        choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-              .forEach(ch -> ch.start());
-
-        Utils.waitForCondition(15_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                          .filter(s -> s >= waitFor).count() == choams.size() - 1);
-        assertEquals(choams.size() - 1,
-                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= waitFor).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
-
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-
-        for (int i = 0; i < clientCount; i++) {
-            choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                               txScheduler))
-                  .forEach(e -> transactioneers.add(e));
-        }
-        System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
-        System.out.println("Starting txns");
-        transactioneers.stream().forEach(e -> e.start());
-        Thread.sleep(5_000);
-        System.out.println("Starting late joining node");
-        choams.get(testSubject.getId()).start();
-        routers.get(testSubject.getId()).start();
-
-        try {
-            countdown.await(120, TimeUnit.SECONDS);
-        } finally {
-            proceed.set(false);
-        }
-
-        System.out.println();
-        System.out.println();
-        System.out.println("Checking replica consistency");
-
-        Connection connection = updaters.get(members.get(0)).newConnection();
-        Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, from books");
-        ResultSetMetaData rsmd = results.getMetaData();
-        int columnsNumber = rsmd.getColumnCount();
-        while (results.next()) {
-            for (int i = 1; i <= columnsNumber; i++) {
-                if (i > 1)
-                    System.out.print(",  ");
-                Object columnValue = results.getObject(i);
-                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+        List<List<Object>> batch = new ArrayList<>();
+        for (int rep = 0; rep < 10; rep++) {
+            for (int id = 1; id < 6; id++) {
+                batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
             }
-            System.out.println("");
         }
+        return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m) {
-        blocks.put(m.getId(), new ArrayList<Digest>());
+        blocks.put(m.getId(), new CopyOnWriteArrayList<Digest>());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -392,16 +269,6 @@ public class MembershipTests {
         return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setCheckpointer(wrap(up))
                                .setRestorer(up.getBootstrapper()).setProcessor(wrap(m, up)).build(),
                          MVStore.open(null));
-    }
-
-    private Txn initialInsert() {
-        return Txn.newBuilder()
-                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                  .build();
     }
 
     private Builder parameters(Context<Member> context, Executor submitDispatcher, Executor dispatcher) {
@@ -417,17 +284,6 @@ public class MembershipTests {
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
         return params;
-    }
-
-    private Txn update(Random entropy) {
-
-        List<List<Object>> batch = new ArrayList<>();
-        for (int rep = 0; rep < 10; rep++) {
-            for (int id = 1; id < 6; id++) {
-                batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
-            }
-        }
-        return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
     private TransactionExecutor wrap(SigningMember m, SqlStateMachine up) {
@@ -458,4 +314,5 @@ public class MembershipTests {
             return check;
         };
     }
+
 }
