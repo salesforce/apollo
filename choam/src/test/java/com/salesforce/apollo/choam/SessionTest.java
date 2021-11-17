@@ -22,7 +22,6 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
