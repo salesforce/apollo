@@ -48,7 +48,7 @@ Note that the  _install_  maven goal is **required**, as this installs the modul
 
 ## Flappers Ahead!
 
-I still have some extremely annoying flappers in the full build cycle.  My profuse apologies. My aim is a clean, reproducable build for your consideration, and rest assured I am striving to achieve this.  Sadly, there are some still unfixable flappers that seem to only occur when running the full Maven build from the command line.  Again, I apologize and recommend resuming (mvn -rf <module>) from the failed modules.  Hopefully these flappers will be squashed with alacraty and order restored across the land ;)
+I still have a tiny handful of extremely annoying flappers in the full build cycle.  My profuse apologies. My aim is a clean, reproducable build for your consideration, and rest assured I am striving to achieve this.  Sadly, there are some still unfixable flappers that seem to only occur when running the full Maven build from the command line.  Again, I apologize and recommend resuming (mvn -rf <module>) from the failed modules.  Hopefully these flappers will be squashed with alacraty and order restored across the land ;)
 
 ## !! Unfortunate Platform Dependency !!
 I develop on an M1 MBP, and there is (currently) no grpc compiler for this platform.  Consequently, the grpc compiler is hard wired for intel.  Apologies.  This will be fixed to be platform independent when this required artifact appears from Google, or I figure out how to special case the M1 platform with the Maven OS config stuff.
