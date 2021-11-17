@@ -11,9 +11,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Dag.Decoded;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * @author hal.hildebrand
@@ -31,7 +32,7 @@ public interface DagFactory {
             dag.addCheck(Checks.noSelfForkingEvidence());
             dag.addCheck(Checks.forkerMuting());
 
-            return new DagAdder(dag, new AdderImpl(dag, cnf));
+            return new DagAdder(dag, new DagFactory.TestAdder(dag));
         }
     }
 
@@ -43,7 +44,7 @@ public interface DagFactory {
         }
 
         @Override
-        public Map<Digest, Correctness> addPreunits(short source, List<PreUnit> preunits) {
+        public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
             var errors = new HashMap<Digest, Correctness>();
             var hashes = new ArrayList<Digest>();
             var failed = new ArrayList<Boolean>();
@@ -80,6 +81,10 @@ public interface DagFactory {
 
         @Override
         public void close() {
+        }
+
+        @Override
+        public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
         }
     }
 

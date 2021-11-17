@@ -23,7 +23,14 @@ import com.salesforce.apollo.utils.bloomFilters.Hash;
  *
  */
 public class Digest implements Comparable<Digest> {
-    public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]);
+    public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]) {
+
+        @Override
+        public String toString() { 
+            return "[NONE]";
+        }
+        
+    };
 
     public static Digest combine(DigestAlgorithm algo, Digest[] digests) {
         return algo.digest(Stream.of(digests).map(e -> e != null ? e : algo.getOrigin())
@@ -138,20 +145,19 @@ public class Digest implements Comparable<Digest> {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof Digest)) {
-            return false;
-        }
-        Digest other = (Digest) obj;
-        if (algorithm != other.algorithm) {
-            return false;
-        }
-
-        for (int i = 0; i < hash.length; i++) {
-            if (hash[i] != other.hash[i]) {
+        if (obj instanceof Digest other) {
+            if (algorithm != other.algorithm) {
                 return false;
             }
+
+            for (int i = 0; i < hash.length; i++) {
+                if (hash[i] != other.hash[i]) {
+                    return false;
+                }
+            }
+            return true;
         }
-        return true;
+        return false;
     }
 
     public DigestAlgorithm getAlgorithm() {
@@ -160,6 +166,9 @@ public class Digest implements Comparable<Digest> {
 
     public byte[] getBytes() {
         byte[] bytes = new byte[algorithm.digestLength()];
+        if (bytes.length == 0) {
+            return bytes;
+        }
         ByteBuffer buff = ByteBuffer.wrap(bytes);
         for (int i = 0; i < hash.length; i++) {
             buff.putLong(hash[i]);
@@ -221,6 +230,10 @@ public class Digest implements Comparable<Digest> {
         return new Digest(getAlgorithm(), d.getBytes());
     }
 
+    public Digest prefix(String prefix) {
+        return prefix(prefix.getBytes());
+    }
+
     public ByteBuffer toByteBuffer() {
         return ByteBuffer.wrap(getBytes());
     }
@@ -235,7 +248,8 @@ public class Digest implements Comparable<Digest> {
 
     @Override
     public String toString() {
-        return "[" + Hex.toHexString(getBytes()).substring(0, 12) + ":" + algorithm.digestCode() + "]";
+        String hexString = Hex.toHexString(getBytes());
+        return "[" + hexString.substring(0, Math.min(hexString.length(), 12)) + ":" + algorithm.digestCode() + "]";
     }
 
     public Digest xor(Digest b) {

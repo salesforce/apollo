@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.choam.proto";
+option java_outer_classname = "ChoamProto";
+option objc_class_prefix = "Chp";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "util.proto";
+import "ethereal.proto";
+
+package apollo.choam;
+
+service Terminal {
+    rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
+
+    /* reconfiguration */
+    rpc join (JoinRequest) returns (ViewMember) {}
+
+    /* bootstrapping */
+    rpc sync(Synchronize) returns (Initial) {}
+    rpc fetchBlocks(BlockReplication) returns (Blocks) {}
+    rpc fetchViewChain(BlockReplication) returns (Blocks) {}
+    rpc fetch(CheckpointReplication) returns (CheckpointSegments) {}
+}
+
+message JoinRequest {
+    utils.Digeste context = 1;
+    utils.Digeste nextView = 2;
+}
+
+message SubmitTransaction {
+    utils.Digeste context = 1;
+    Transaction transaction = 2;
+}
+
+message Block {
+    Header header = 1;
+    oneof body {
+        Genesis genesis = 2;
+        Reconfigure reconfigure = 3;
+        Checkpoint checkpoint = 4;
+        Executions executions = 5;
+        Assemble assemble = 6;
+    }
+}
+
+message Header {
+    int64 height = 1; 
+    int64 lastCheckpoint = 2;
+    int64 lastReconfig = 3;
+    utils.Digeste lastCheckpointHash = 4;
+    utils.Digeste lastReconfigHash = 5;
+    utils.Digeste previous = 6;
+    utils.Digeste bodyHash = 7;
+}
+
+message Genesis { 
+    Reconfigure initialView = 1;
+    repeated Transaction initialize = 2;
+}
+
+message Reconfigure {
+    utils.Digeste id = 1;
+    int32 checkpointTarget = 2;
+    int32 numberOfEpochs = 3;
+    int32 epochLength = 4;
+    repeated ViewMember view = 5;
+    repeated Join joins = 6;
+}
+
+message Checkpoint { 
+    int64 byteSize = 1;
+    int32 segmentSize = 2;
+    utils.Digeste stateHash = 3;
+    repeated utils.Digeste segments = 4;
+}
+
+message Executions {
+    repeated Join joins = 1;
+    repeated Transaction executions = 2;
+}
+
+message Assemble {
+    utils.Digeste nextView = 1;
+}
+
+message Transaction { 
+    utils.Digeste source = 1;
+    int32 nonce = 2;
+    bytes content = 3;
+    utils.Sig signature = 4; 
+}
+
+message UnitData {
+    repeated Validate validations = 1;
+    repeated Transaction transactions = 2;
+}
+
+message Join {
+    utils.Digeste view = 1;
+    ViewMember member = 2;
+    repeated Certification endorsements = 3;
+}
+
+message ViewMember {
+    utils.Digeste id = 1;
+    utils.PubKey consensusKey = 2;
+    utils.Sig signature = 3;
+}
+
+message Certification {
+    utils.Digeste id = 1;
+    utils.Sig signature = 2;
+}
+
+message Certifications {
+    repeated Certification certs = 1;
+}
+
+message CertifiedBlock {
+    Block block = 1;
+    repeated Certification certifications = 2;
+}
+
+message ByteTransaction {
+    bytes content = 1;
+}
+
+message CheckpointProcessing {
+    int64 checkpoint = 1;
+}
+
+message Validate {  
+    utils.Digeste hash = 1;
+    Certification witness = 2;
+}
+
+message Reassemble {
+    oneof assembly {
+        ViewMembers viewMembers = 1; 
+        Validations validations = 2;
+    }
+}
+
+message ViewMembers {
+    repeated ViewMember members = 1;
+}
+
+message Joins {
+    repeated Join joins = 1;
+}
+
+message Validations {
+    repeated Validate validations = 1;
+}
+
+message Synchronize {
+    utils.Digeste context = 1;
+    utils.Digeste from = 2;
+    int64 height = 3;
+}
+
+message Initial {
+    CertifiedBlock genesis = 1;
+    CertifiedBlock checkpoint = 2;
+    CertifiedBlock checkpointView = 3;
+    repeated CertifiedBlock viewChain = 4;
+}
+
+message BlockReplication {
+    utils.Digeste context = 1;
+    int64 from = 2;
+    int64 to = 3;
+    utils.Biff blocksBff = 4;
+}
+
+message Blocks {
+    repeated CertifiedBlock blocks = 1;
+}
+
+message CheckpointReplication {
+    utils.Digeste context = 1;
+    int64 checkpoint = 2;
+    utils.Biff checkpointSegments = 3;
+}
+
+message CheckpointSegments {
+    repeated Slice segments = 1;
+    repeated utils.Digeste blocks = 2;
+}
+
+message Slice {
+    int32 index = 1;
+    bytes block = 2;
+}
+
+
+service Gossip {
+    rpc gossip (Have) returns (Update) {}
+}
+
+message Have {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    utils.Biff validations = 3;
+    utils.Biff joins = 4;
+}
+
+message Update {
+    repeated Validate validations = 1;
+    repeated ViewMember joins = 2;
+}

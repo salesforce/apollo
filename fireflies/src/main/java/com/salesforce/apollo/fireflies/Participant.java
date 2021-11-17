@@ -7,6 +7,7 @@
 package com.salesforce.apollo.fireflies;
 
 import java.io.InputStream;
+import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -38,6 +39,8 @@ import com.salesforce.apollo.membership.Member;
 public class Participant implements Member {
     private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
+    protected final DigestAlgorithm hashAlgorithm;
+
     /**
      * The member's latest note
      */
@@ -65,14 +68,8 @@ public class Participant implements Member {
 
     private final Member wrapped;
 
-    protected final DigestAlgorithm hashAlgorithm;
-
-    public Participant(Member wrapped, FirefliesParameters parameters) {
-        this(wrapped, null, null, parameters);
-    }
-
     public Participant(Member wrapped, byte[] derEncodedCertificate, Digest certificateHash,
-            FirefliesParameters parameters) {
+                       FirefliesParameters parameters) {
         assert wrapped != null;
         this.wrapped = wrapped;
         this.hashAlgorithm = parameters.hashAlgorithm;
@@ -97,6 +94,10 @@ public class Participant implements Member {
             }
             this.certificateHash = DigestAlgorithm.DEFAULT.digest(derEncodedCertificate);
         }
+    }
+
+    public Participant(Member wrapped, FirefliesParameters parameters) {
+        this(wrapped, null, null, parameters);
     }
 
     @Override
@@ -124,6 +125,11 @@ public class Participant implements Member {
     @Override
     public Digest getId() {
         return wrapped.getId();
+    }
+
+    @Override
+    public PublicKey getPublicKey() {
+        return wrapped.getPublicKey();
     }
 
     @Override
@@ -202,22 +208,16 @@ public class Participant implements Member {
     }
 
     List<Accusation> getEncodedAccusations(int rings) {
-        return IntStream.range(0, rings)
-                        .mapToObj(i -> getEncodedAccusation(i))
-                        .filter(e -> e != null)
-                        .map(e -> e.getWrapped())
-                        .collect(Collectors.toList());
+        return IntStream.range(0, rings).mapToObj(i -> getEncodedAccusation(i)).filter(e -> e != null)
+                        .map(e -> e.getWrapped()).collect(Collectors.toList());
     }
 
     EncodedCertificate getEncodedCertificate() {
         NoteWrapper current = note;
         return current == null ? null
-                : EncodedCertificate.newBuilder()
-                                    .setId(getId().toDigeste())
-                                    .setEpoch(current.getEpoch())
-                                    .setHash(certificateHash.toDigeste())
-                                    .setContent(ByteString.copyFrom(derEncodedCertificate))
-                                    .build();
+                               : EncodedCertificate.newBuilder().setId(getId().toDigeste()).setEpoch(current.getEpoch())
+                                                   .setHash(certificateHash.toDigeste())
+                                                   .setContent(ByteString.copyFrom(derEncodedCertificate)).build();
     }
 
     long getEpoch() {

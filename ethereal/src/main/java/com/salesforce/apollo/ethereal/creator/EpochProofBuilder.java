@@ -6,19 +6,18 @@
  */
 package com.salesforce.apollo.ethereal.creator;
 
-import static com.salesforce.apollo.ethereal.creator.EpochProofBuilder.decodeShare;
-
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.EpochProof.Builder;
 import com.salesfoce.apollo.ethereal.proto.Proof;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.PreUnit;
@@ -26,14 +25,13 @@ import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.WeakThresholdKey;
 
 /**
- * proof is a message required to verify if the epoch has finished. It consists
- * of id and hash of the last timing unit of the epoch. This message is signed
- * with a threshold signature.
+ * the epoch proof is a message required to verify if the epoch has finished. It
+ * consists of id and hash of the last timing unit of the epoch. This message is
+ * signed with a threshold signature.
  * 
  * @author hal.hildebrand
  *
  */
-@SuppressWarnings("unused")
 public interface EpochProofBuilder {
 
     /**
@@ -41,31 +39,43 @@ public interface EpochProofBuilder {
      *
      */
     public record Share(short owner, JohnHancock signature) {
-        static Share from(EpochProof proof) {
-            // TODO Auto-generated method stub
-            return null;
+        public static Share from(EpochProof proof) {
+            try {
+                return new Share((short) proof.getOwner(), JohnHancock.from(proof.getSignature()));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
         }
     }
 
-    record sharesDB(Config conf, Map<Proof, Map<Short, Share>> data) {
-        // Add puts the share that signs msg to the storage. If there are enough shares
-        // (for that msg),
-        // they are combined and the resulting signature is returned. Otherwise, returns
-        // nil.
+    record sharesDB(Config conf, ConcurrentMap<Digest, ConcurrentMap<Short, Share>> data) {
+        /**
+         * Add puts the share that signs msg to the storage. If there are enough shares
+         * (for that msg), they are combined and the resulting signature is returned.
+         * Otherwise, returns nil.
+         */
         JohnHancock add(DecodedShare decoded) {
-            var shares = data.get(decoded.proof.getMsg());
-            if (shares == null) {
-                shares = new HashMap<>();
-                data.put(decoded.proof.getMsg(), shares);
-            }
+            Digest key = new Digest(decoded.proof.getMsg().getHash());
+            var shares = data.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+            log.trace("WTK current: {} threshold: {} on: {}", shares.size(), conf.WTKey().threshold(), conf.pid());
             if (decoded.share != null) {
                 shares.put(decoded.share.owner(), decoded.share);
+                log.trace("share: {} added: {} from: {} on: {}", key, shares.size(), decoded.share.owner(), conf.pid());
                 if (shares.size() >= conf.WTKey().threshold()) {
                     JohnHancock sig = conf.WTKey().combineShares(shares.values());
                     if (sig != null) {
+                        log.trace("WTK threshold reached on: {}", conf.pid());
                         return sig;
+                    } else {
+                        log.trace("WTK threshold reached, but combined shares failed to produce signature on: {}",
+                                  conf.pid());
                     }
+                } else {
+                    log.trace("WTK share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
+                              conf.pid());
                 }
+            } else {
+                log.trace("WTK no shares decoded: {} on: {}", shares.size(), conf.pid());
             }
             return null;
         }
@@ -73,54 +83,57 @@ public interface EpochProofBuilder {
 
     record epochProofImpl(Config conf, int epoch, sharesDB shares) implements EpochProofBuilder {
 
-        // extracts threshold signature shares from finishing units.
-        // If there are enough shares to combine, it produces the signature and
-        // converts it to core.Data. Otherwise, nil is returned.
+        /**
+         * extracts threshold signature shares from finishing units. If there are enough
+         * shares to combine, it produces the signature and converts it to Any.
+         * Otherwise, null is returned.
+         */
         @Override
-        public Any tryBuilding(Unit u) {
+        public ByteString tryBuilding(Unit u) {
             // ignore regular units and finishing units with empty data
-            if (u.level() < conf.orderStartLevel() + conf.epochLength()
-            || (u.data() == null || u.data().getSerializedSize() == 0)) {
+            if (u.level() <= conf.lastLevel() || (u.data() == null || u.data().isEmpty())) {
                 return null;
             }
             var share = decodeShare(u.data());
             if (share == null) {
-                log.warn("Cannot decode share data: {}", u.data());
+                log.debug("WTK cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
                 return null;
             }
-            if (conf.useWTK() && !conf.WTKey().verifyShare(share)) {
-                log.warn("Cannot verify share data: {}", u.data());
+            if (!conf.WTKey().verifyShare(share)) {
+                log.warn("WTK cannot verify share: {} data: {} on: {}", u, u.data(), conf.pid());
                 return null;
             }
-            if (conf.useWTK()) {
-                var sig = shares.add(share);
-                if (sig != null) {
-                    return encodeSignature(sig, share.proof);
-                }
-                return null;
+            var sig = shares.add(share);
+            if (sig != null) {
+                log.debug("WTK signature generated: {} on: {}", u, conf.pid());
+                return encodeSignature(sig, share.proof);
             }
-            return encodeSignature(null, share.proof);
+            log.debug("WTK signature generation failed: {} on: {}", u, conf.pid());
+            return null;
         }
 
-        private Any encodeSignature(JohnHancock sig, EpochProof proof) {
-            return Any.pack(proof);
+        private ByteString encodeSignature(JohnHancock sig, EpochProof proof) {
+            return proof.toByteString();
         }
 
         @Override
         public boolean verify(Unit unit) {
-            return conf.useWTK() ? false : true;
+            if (epoch + 1 != unit.epoch()) {
+                return false;
+            }
+            return epochProof(unit, conf.WTKey());
         }
 
         @Override
-        public Any buildShare(Unit lastTimingUnit) {
+        public ByteString buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
-            if (conf.useWTK()) {
-                Share share = conf.WTKey().createShare(proof);
-                if (share != null) {
-                    return encodeShare(share, proof);
-                }
+            Share share = conf.WTKey().createShare(proof, conf.pid());
+            log.debug("WTK share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof,
+                      share, conf.pid());
+            if (share != null) {
+                return encodeShare(share, proof);
             }
-            return encodeShare(null, proof);
+            return ByteString.EMPTY;
         }
 
     }
@@ -133,9 +146,9 @@ public interface EpochProofBuilder {
      * decodeShare reads signature share and the signed message from Data contained
      * in some unit.
      */
-    static DecodedShare decodeShare(Any data) {
+    static DecodedShare decodeShare(ByteString data) {
         try {
-            EpochProof proof = data.unpack(EpochProof.class);
+            EpochProof proof = EpochProof.parseFrom(data);
             return new DecodedShare(Share.from(proof), proof);
         } catch (InvalidProtocolBufferException e) {
             return null;
@@ -155,7 +168,7 @@ public interface EpochProofBuilder {
         }
         EpochProof decoded;
         try {
-            decoded = pu.data().unpack(EpochProof.class);
+            decoded = EpochProof.parseFrom(pu.data());
         } catch (InvalidProtocolBufferException e) {
             return false;
         }
@@ -163,7 +176,7 @@ public interface EpochProofBuilder {
         if (epoch + 1 != pu.epoch()) {
             return false;
         }
-        return wtk == null ? true : wtk.verifySignature(new JohnHancock(decoded.getSignature()), decoded.getMsg());
+        return wtk == null ? true : wtk.verifySignature(decoded);
     }
 
     private static Proof encodeProof(Unit lastTimingUnit) {
@@ -174,17 +187,17 @@ public interface EpochProofBuilder {
      * converts signature share and the signed message into Data that can be put
      * into unit.
      */
-    private static Any encodeShare(Share share, Proof proof) {
+    private static ByteString encodeShare(Share share, Proof proof) {
         Builder builder = EpochProof.newBuilder();
         if (share != null) {
-            builder.setSignature(share.signature().toSig());
+            builder.setOwner(share.owner).setSignature(share.signature().toSig());
         }
-        return Any.pack(builder.setMsg(proof).build());
+        return builder.setMsg(proof).build().toByteString();
     }
 
-    Any buildShare(Unit timingUnit);
+    ByteString buildShare(Unit timingUnit);
 
-    Any tryBuilding(Unit unit);
+    ByteString tryBuilding(Unit unit);
 
     boolean verify(Unit unit);
 

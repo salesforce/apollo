@@ -7,17 +7,18 @@
 package com.salesforce.apollo.ethereal;
 
 import java.time.Clock;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
-import com.salesforce.apollo.ethereal.Ethereal.Committee;
-import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
+import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.ethereal.Adder.Correctness;
+import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 
 /**
  * Configuration for an Ethereal instantiation.
@@ -28,8 +29,15 @@ import com.salesforce.apollo.ethereal.Ethereal.Committee.Default;
 public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiConsumer<Unit, Dag>> checks, WeakThresholdKey WTKey, Executor executor, int byzantine,
-                     Committee committee, Clock clock, boolean useWTK) {
+                     List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
+                     Clock clock, double bias, Verifier[] verifiers, double fpr) {
+
+    public static Builder deterministic() {
+        Builder b = new Builder();
+        b.requiredByLinear();
+        b.addConsensusConfig();
+        return b;
+    }
 
     public static Config empty() {
         return Builder.empty().build();
@@ -43,33 +51,31 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         return new Builder(config);
     }
 
-    public static class Builder {
+    public static class Builder implements Cloneable {
         public static Builder empty() {
             return new Builder().requiredByLinear();
         }
 
-        private int                         byzantine       = -1;
-        private boolean                     canSkipLevel    = false;
-        private List<BiConsumer<Unit, Dag>> checks;
-        private Clock                       clock           = Clock.systemUTC();
-        private Committee                   committee       = new Default(Collections.emptyMap());
-        private int                         commonVoteDeterministicPrefix;
-        private short                       crpFixedPrefix;
-        private DigestAlgorithm             digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int                         epochLength     = 1;
-        private Executor                    executor        = r -> r.run();
-        private int                         firstDecidedRound;
-        private int                         lastLevel;
-        private short                       nProc;
-        private int                         numberOfEpochs  = 1;
-        private int                         orderStartLevel = 6;
-        private double                      pByz            = 0.33;
-        private short                       pid;
-        private Signer                      signer          = new MockSigner();
-        private boolean                     useWTK          = false;
-        private WeakThresholdKey            wtk;
-
-        private int zeroVotRoundForCommonVote;
+        private int                                      bias            = 3;
+        private boolean                                  canSkipLevel    = false;
+        private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
+        private Clock                                    clock           = Clock.systemUTC();
+        private short                                    crpFixedPrefix;
+        private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
+        private int                                      epochLength     = 30;
+        private Executor                                 executor        = r -> r.run();
+        private int                                      firstDecidedRound;
+        private double                                   fpr             = 0.125;
+        private int                                      lastLevel       = -1;
+        private short                                    nProc;
+        private int                                      numberOfEpochs  = 3;
+        private int                                      orderStartLevel = 6;
+        private double                                   pByz            = -1;
+        private short                                    pid;
+        private Signer                                   signer          = new MockSigner();
+        private Verifier[]                               verifiers;
+        private WeakThresholdKey                         wtk;
+        private int                                      zeroVoteRoundForCommonVote;
 
         public Builder() {
         }
@@ -77,7 +83,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         public Builder(Config config) {
             canSkipLevel = config.canSkipLevel;
             checks = config.checks;
-            commonVoteDeterministicPrefix = config.commonVoteDeterministicPrefix;
             crpFixedPrefix = config.crpFixedPrefix;
             digestAlgorithm = config.digestAlgorithm;
             epochLength = config.epochLength;
@@ -88,16 +93,21 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             orderStartLevel = config.orderStartLevel;
             pid = config.pid;
             signer = config.signer;
-            zeroVotRoundForCommonVote = config.zeroVoteRoundForCommonVote;
+            zeroVoteRoundForCommonVote = config.zeroVoteRoundForCommonVote;
         }
 
         public Builder addConsensusConfig() {
-            canSkipLevel = true;
+            canSkipLevel = false;
             orderStartLevel = 0;
             crpFixedPrefix = 4;
             numberOfEpochs = 3;
             epochLength = 30;
-            checks = Checks.ConsensusChecks;
+            checks.addAll(Checks.ConsensusChecks);
+            return this;
+        }
+
+        public Builder addLastLevel() {
+            lastLevel = epochLength + orderStartLevel - 1;
             return this;
         }
 
@@ -107,45 +117,47 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             crpFixedPrefix = 0;
             epochLength = 1;
             numberOfEpochs = 1;
-            checks = Checks.SetupChecks;
+            checks.addAll(Checks.SetupChecks);
             return this;
         }
 
         public Config build() {
-            if (byzantine <= -1) {
-                byzantine = (int) ((nProc) * pByz);
+            if (pByz <= -1) {
+                pByz = 1.0 / (double) bias;
             }
+            final var minimalQuorum = Dag.minimalQuorum(nProc, bias);
             if (wtk == null) {
-                useWTK = false;
+                wtk = new NoOpWeakThresholdKey(minimalQuorum + 1);
             }
-            lastLevel = epochLength + orderStartLevel;
-            Objects.requireNonNull(committee, "Committee cannot be null");
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-
-            return new Config(nProc, epochLength, pid, zeroVotRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, checks, wtk, executor, byzantine, committee, clock, useWTK);
+            if (lastLevel <= 0) {
+                addLastLevel();
+            }
+            return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
+                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs,
+                              checks, wtk, executor, clock, bias, verifiers, fpr);
         }
 
-        public int getByzantine() {
-            return byzantine;
+        @Override
+        public Builder clone() {
+            try {
+                return (Builder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException(e);
+            }
         }
 
-        public List<BiConsumer<Unit, Dag>> getChecks() {
+        public int getBias() {
+            return bias;
+        }
+
+        public List<BiFunction<Unit, Dag, Correctness>> getChecks() {
             return checks;
         }
 
         public Clock getClock() {
             return clock;
-        }
-
-        public Committee getCommittee() {
-            return committee;
-        }
-
-        public int getCommonVoteDeterministicPrefix() {
-            return commonVoteDeterministicPrefix;
         }
 
         public short getCrpFixedPrefix() {
@@ -166,6 +178,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public int getFirstDecidedRound() {
             return firstDecidedRound;
+        }
+
+        public double getFpr() {
+            return fpr;
         }
 
         public int getLastLevel() {
@@ -196,31 +212,30 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return signer;
         }
 
+        public Verifier[] getVerifiers() {
+            return verifiers;
+        }
+
         public WeakThresholdKey getWtk() {
             return wtk;
         }
 
         public int getZeroVotRoundForCommonVote() {
-            return zeroVotRoundForCommonVote;
+            return zeroVoteRoundForCommonVote;
         }
 
         public boolean isCanSkipLevel() {
             return canSkipLevel;
         }
 
-        public boolean isUseWTK() {
-            return useWTK;
-        }
-
         public Builder requiredByLinear() {
             firstDecidedRound = 3;
-            commonVoteDeterministicPrefix = 10;
-            zeroVotRoundForCommonVote = 3;
+            zeroVoteRoundForCommonVote = 3;
             return this;
         }
 
-        public Builder setByzantine(int byzantine) {
-            this.byzantine = byzantine;
+        public Builder setBias(int bias) {
+            this.bias = bias;
             return this;
         }
 
@@ -229,23 +244,13 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return this;
         }
 
-        public Builder setChecks(List<BiConsumer<Unit, Dag>> checks) {
+        public Builder setChecks(List<BiFunction<Unit, Dag, Correctness>> checks) {
             this.checks = checks;
             return this;
         }
 
         public Builder setClock(Clock clock) {
             this.clock = clock;
-            return this;
-        }
-
-        public Builder setCommittee(Committee committee) {
-            this.committee = committee;
-            return this;
-        }
-
-        public Builder setCommonVoteDeterministicPrefix(int commonVoteDeterministicPrefix) {
-            this.commonVoteDeterministicPrefix = commonVoteDeterministicPrefix;
             return this;
         }
 
@@ -271,6 +276,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setFirstDecidedRound(int firstDecidedRound) {
             this.firstDecidedRound = firstDecidedRound;
+            return this;
+        }
+
+        public Builder setFpr(double fpr) {
+            this.fpr = fpr;
             return this;
         }
 
@@ -309,8 +319,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return this;
         }
 
-        public Builder setUseWTK(boolean useWTK) {
-            this.useWTK = useWTK;
+        public Builder setVerifiers(Verifier[] verifiers) {
+            this.verifiers = verifiers;
             return this;
         }
 
@@ -319,8 +329,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return this;
         }
 
-        public Builder setZeroVotRoundForCommonVote(int zeroVotRoundForCommonVote) {
-            this.zeroVotRoundForCommonVote = zeroVotRoundForCommonVote;
+        public Builder setZeroVoteRoundForCommonVote(int zeroVoteRoundForCommonVote) {
+            this.zeroVoteRoundForCommonVote = zeroVoteRoundForCommonVote;
             return this;
         }
     }

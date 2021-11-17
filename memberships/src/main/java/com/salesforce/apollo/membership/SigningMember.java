@@ -18,13 +18,14 @@ import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface SigningMember extends Member, ServerContextSupplier, ClientContextSupplier {
+public interface SigningMember extends Member, Signer, ServerContextSupplier, ClientContextSupplier {
 
     @Override
     default Digest getMemberId(X509Certificate key) {

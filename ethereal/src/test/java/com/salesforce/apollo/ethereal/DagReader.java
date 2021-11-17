@@ -14,13 +14,14 @@ import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
+import com.salesforce.apollo.ethereal.creator.CreatorTest;
 
 /**
  * @author hal.hildebrand
@@ -38,7 +39,6 @@ public class DagReader {
         scanner.nextLine();
         DagAdder da = df.createDag(n);
         var preUnitHashes = new HashMap<String, Digest>();
-        JohnHancock signature = new JohnHancock(SignatureAlgorithm.DEFAULT, new byte[0]);
         var rsData = new byte[0];
         while (scanner.hasNextLine()) {
             String line = scanner.nextLine();
@@ -81,8 +81,9 @@ public class DagReader {
                 }
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
-                                Any.getDefaultInstance(), rsData, signature, DigestAlgorithm.DEFAULT);
-            var errors = da.adder().addPreunits(pu.creator(), Collections.singletonList(pu));
+                                ByteString.copyFromUtf8(" "), rsData, DigestAlgorithm.DEFAULT);
+            var errors = da.adder().addPreunits(Collections.singletonList(pu));
+            log.info("insert: {}", pu);
             if (errors != null) {
                 log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
             } else {
@@ -92,16 +93,16 @@ public class DagReader {
         return da;
     }
 
-    private static PreUnit newPreUnit(short puCreator, Crown crown, Any defaultInstance, byte[] rsData,
-                                      JohnHancock signature, DigestAlgorithm default1) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, defaultInstance, rsData, signature, default1);
+    private static PreUnit newPreUnit(short puCreator, Crown crown, ByteString data, byte[] rsData,
+                                      DigestAlgorithm algo) {
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, algo, CreatorTest.DEFAULT_SIGNER);
         return newsie;
     }
 
-    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, Any defaultInstance,
-                                               byte[] rsData, JohnHancock signature, DigestAlgorithm default1) {
-        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature,
-                           PreUnit.computeHash(default1, puCreator, crown, defaultInstance, rsData), crown,
-                           defaultInstance, rsData);
+    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
+                                               DigestAlgorithm algo, Signer signer) {
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData);
+        return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
+                           rsData, signature);
     }
 }

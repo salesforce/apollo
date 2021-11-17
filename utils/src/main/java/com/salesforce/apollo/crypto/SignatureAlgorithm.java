@@ -88,28 +88,6 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public Signature forSigning(PrivateKey privateKey) {
-            try {
-                var sig = Signature.getInstance(this.signatureInstanceName(), ProviderUtils.getProviderBC());
-                sig.initSign(privateKey);
-                return sig;
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Unable to create signature for signing", e);
-            }
-        }
-
-        @Override
-        public Signature forVerification(PublicKey publicKey) {
-            try {
-                var sig = Signature.getInstance(signatureInstanceName(), ProviderUtils.getProviderBC());
-                sig.initVerify(publicKey);
-                return sig;
-            } catch (GeneralSecurityException e) {
-                throw new IllegalArgumentException("Unable to create signature for verification", e);
-            }
-        }
-
-        @Override
         public KeyPair generateKeyPair() {
             return keyPairGenerator.generateKeyPair();
         }
@@ -236,16 +214,6 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public Signature forSigning(PrivateKey privateKey) {
-            return ops.forSigning(privateKey);
-        }
-
-        @Override
-        public Signature forVerification(PublicKey publicKey) {
-            return ops.forVerification(publicKey);
-        }
-
-        @Override
         public KeyPair generateKeyPair() {
             return ops.generateKeyPair();
         }
@@ -330,16 +298,6 @@ public enum SignatureAlgorithm {
         }
 
         @Override
-        public Signature forSigning(PrivateKey privateKey) {
-            return ops.forSigning(privateKey);
-        }
-
-        @Override
-        public Signature forVerification(PublicKey publicKey) {
-            return ops.forVerification(publicKey);
-        }
-
-        @Override
         public KeyPair generateKeyPair() {
             return ops.generateKeyPair();
         }
@@ -408,8 +366,7 @@ public enum SignatureAlgorithm {
 
     public static final SignatureAlgorithm DEFAULT = ED_25519;
 
-    private static final String ECDSA_ALGORITHM_NAME = "EC";
-
+    private static final String ECDSA_ALGORITHM_NAME             = "EC";
     private static final String ECDSA_SIGNATURE_ALGORITHM_SUFFIX = "withECDSA";
     @SuppressWarnings("unused")
     private static final String EDDSA_ALGORITHM_NAME             = "EdDSA";
@@ -481,10 +438,6 @@ public enum SignatureAlgorithm {
     abstract public String curveName();
 
     abstract public byte[] encode(PublicKey publicKey);
-
-    abstract public Signature forSigning(PrivateKey privateKey);
-
-    abstract public Signature forVerification(PublicKey publicKey);
 
     abstract public KeyPair generateKeyPair();
 

@@ -77,7 +77,7 @@ public class GhostTest {
         communications.forEach(e -> e.close());
     }
 
-    @Test
+//    @Test deprecate Ghost
     public void lookupBind() throws Exception {
         List<SigningMember> members = certs.values().stream()
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),

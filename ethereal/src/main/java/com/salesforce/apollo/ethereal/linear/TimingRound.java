@@ -18,11 +18,15 @@ import com.salesforce.apollo.ethereal.Unit;
  * @author hal.hildebrand
  *
  */
-public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm digestAlgorithm) {
-    /** returns all units ordered in this timing round. **/
-    public List<Unit> orderedUnits() {
+public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
+    /**
+     * returns all units ordered in this timing round.
+     * 
+     * @param digestAlgorithm
+     **/
+    public List<Unit> orderedUnits(DigestAlgorithm digestAlgorithm) {
         var layers = getAntichainLayers(currentTU, lastTUs);
-        var sortedUnits = mergeLayers(layers);
+        var sortedUnits = mergeLayers(layers, digestAlgorithm);
         return sortedUnits;
     }
 
@@ -86,7 +90,7 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs, DigestAlgorithm di
         }
     }
 
-    private List<Unit> mergeLayers(List<List<Unit>> layers) {
+    private List<Unit> mergeLayers(List<List<Unit>> layers, DigestAlgorithm digestAlgorithm) {
         Digest totalXOR = digestAlgorithm.getOrigin();
         for (int i = 0; i < layers.size(); i++) {
             for (var u : layers.get(i)) {

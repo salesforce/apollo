@@ -6,12 +6,39 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import com.google.protobuf.Any;
+import java.util.concurrent.BlockingQueue;
+
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Message;
 
 /**
  * @author hal.hildebrand
  *
  */
 public interface DataSource {
-    Any getData();
+    class BlockingDataSourceQueue implements DataSource{
+        private final BlockingQueue<ByteString> queue;
+
+        public BlockingDataSourceQueue(BlockingQueue<ByteString> queue) {
+            this.queue = queue;
+        }
+
+        @Override
+        public ByteString getData() { 
+            try {
+                return queue.take();
+            } catch (InterruptedException e) {
+                return null;
+            }
+        }
+        
+        public boolean offer(Message message) {
+            return offer(message.toByteString());
+        }
+        
+        public boolean offer(ByteString message) {
+            return queue.offer(message );
+        }
+    }
+    ByteString getData();
 }

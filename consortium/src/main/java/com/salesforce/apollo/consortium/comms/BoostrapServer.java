@@ -25,7 +25,6 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class BoostrapServer extends BoostrapImplBase {
-    @SuppressWarnings("unused")
     private ClientIdentity                       identity;
     @SuppressWarnings("unused")
     private final ConsortiumMetrics              metrics;

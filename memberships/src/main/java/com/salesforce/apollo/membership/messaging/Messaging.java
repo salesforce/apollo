@@ -18,6 +18,7 @@ import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public interface Messaging extends Link {

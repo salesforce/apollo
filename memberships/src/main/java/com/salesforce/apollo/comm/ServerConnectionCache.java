@@ -220,7 +220,7 @@ public class ServerConnectionCache {
     private final int                                    target;
 
     public ServerConnectionCache(ServerConnectionFactory factory, int target, Duration minIdle, Clock clock,
-            ServerConnectionCacheMetrics metrics) {
+                                 ServerConnectionCacheMetrics metrics) {
         this.factory = factory;
         this.target = target;
         this.minIdle = minIdle;

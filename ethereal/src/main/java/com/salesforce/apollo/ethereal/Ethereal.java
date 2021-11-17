@@ -6,25 +6,21 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.time.Clock;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Exchanger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.ethereal.Data.PreBlock;
+import com.google.protobuf.ByteString;
 import com.salesforce.apollo.ethereal.random.beacon.Beacon;
 import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.random.coin.Coin;
-import com.salesforce.apollo.utils.SimpleChannel;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -48,26 +44,38 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class Ethereal {
-    public interface Committee {
-        class Default implements Committee {
-            private final Map<Short, Verifier> verifiers;
 
-            public Default(Map<Short, Verifier> verifiers) {
-                this.verifiers = new HashMap<>(verifiers);
-            }
-
-            @Override
-            public Verifier getVerifier(short pid) {
-                return verifiers.get(pid);
-            }
+    public record Controller(Runnable starte, Runnable stope, Orderer orderer) {
+        public void start() {
+            starte.run();
         }
 
-        Verifier getVerifier(short pid);
+        public void stop() {
+            stope.run();
+        }
     }
 
-    public record Controller(Runnable start, Runnable stop) {};
+    public record PreBlock(List<ByteString> data, byte[] randomBytes) {}
 
-    private static final Logger log     = LoggerFactory.getLogger(Ethereal.class);
+    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);;
+
+    /**
+     * return a preblock from a slice of units containing a timing round. It assumes
+     * that the timing unit is the last unit in the slice, and that random source
+     * data of the timing unit starts with random bytes from the previous level.
+     */
+    public static PreBlock toPreBlock(List<Unit> round) {
+        var data = new ArrayList<ByteString>();
+        for (Unit u : round) {
+            if (!u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
+                data.add(u.data());
+            }
+        }
+        var randomBytes = round.get(round.size() - 1).randomSourceData();
+        return data.isEmpty() ? null : new PreBlock(data, randomBytes);
+    }
+
+    private Config              config;
     private final AtomicBoolean started = new AtomicBoolean();
 
     /**
@@ -81,59 +89,66 @@ public class Ethereal {
      * key for subsequent randomness, to be revealed when appropriate in the
      * protocol phases.
      * 
-     * @param setupConfig   - configuration for random beacon setup phase
-     * @param config        - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
+     * @param setupConfig    - configuration for random beacon setup phase
+     * @param config         - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param onClose        - run when the consensus has produced all units for
+     *                       epochs
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param roundScheduler
+     * @param newEpochAction
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
     public Controller abftRandomBeacon(Config setupConfig, Config config, DataSource ds,
-                                       SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
-                                       Consumer<Orderer> connector) {
+                                       Consumer<PreBlock> preblockSink, Runnable onClose,
+                                       Consumer<Integer> newEpochAction) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
+        this.config = config;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
         Controller setup = setup(setupConfig, wtkChan);
-        Controller consensus = consensus(config, wtkChan, ds, preblockSink, synchronizer, connector);
+        Controller consensus = consensus(config, wtkChan, ds, preblockSink, onClose, newEpochAction);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
         return new Controller(() -> {
-            setup.start.run();
-            consensus.start.run();
+            setup.starte.run();
+            consensus.starte.run();
         }, () -> {
-            setup.stop.run();
-            consensus.stop.run();
-        });
+            setup.stope.run();
+            consensus.stope.run();
+        }, null);
     }
 
     /**
      * Deterministic consensus processing entry point for Ethereal. Does not
      * strongly guarantee liveness, but does guarantee correctness.
      * 
-     * @param config        - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
+     * @param config         - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param roundScheduler
+     * @param newEpochAction
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller deterministic(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                    SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
-        if (!started.compareAndSet(false, true)) {
+    public Controller deterministic(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+                                    Consumer<Integer> newEpochAction) {
+        if (started.get()) {
             return null;
         }
-        Controller consensus = deterministicConsensus(config, ds, preblockSink, synchronizer, connector);
+        this.config = config;
+        Controller consensus = deterministicConsensus(config, ds, blocker, newEpochAction);
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
-        return new Controller(() -> config.executor().execute(consensus.start),
-                              () -> config.executor().execute(consensus.stop));
+        return new Controller(consensus.starte, consensus.stope, consensus.orderer);
+    }
+
+    public Config getConfig() {
+        return config;
     }
 
     /**
@@ -141,45 +156,51 @@ public class Ethereal {
      * for the ABFT random beacon, rather relying on a fixed seeded WeakThresholdKey
      * is used for the main consensus.
      * 
-     * @param conf          - the Config
-     * @param ds            - the DataSource to use to build Units
-     * @param prebblockSink - the channel to send assembled PreBlocks as output
-     * @param synchronizer  - the channel that broadcasts PreUnits to other members
-     * @param connector     - the Consumer of the created Orderer for this system
+     * @param conf           - the Config
+     * @param ds             - the DataSource to use to build Units
+     * @param onClose        - run when the consensus has produced all units for
+     *                       epochs
+     * @param prebblockSink  - the channel to send assembled PreBlocks as output
+     * @param roundScheduler
+     * @param connector      - the Consumer of the created Orderer for this system
      * @return the Controller for starting/stopping this instance, or NULL if
      *         already started.
      */
-    public Controller weakBeacon(Config conf, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                 SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+    public Controller weakBeacon(Config conf, DataSource ds, Consumer<PreBlock> preblockSink, Runnable onClose) {
         if (!started.compareAndSet(false, true)) {
             return null;
         }
+        this.config = conf;
         Exchanger<WeakThresholdKey> wtkChan = new Exchanger<>();
-        var consensus = consensus(conf, wtkChan, ds, preblockSink, synchronizer, connector);
+        var consensus = consensus(conf, wtkChan, ds, preblockSink, onClose, null);
         return new Controller(() -> {
-            consensus.start.run();
+            consensus.starte.run();
             try {
                 wtkChan.exchange(WeakThresholdKey.seededWTK(conf.nProc(), conf.pid(), 2137, null));
             } catch (InterruptedException e) {
                 throw new IllegalStateException(e);
             }
-        }, consensus.stop);
+        }, consensus.starte, null);
     }
 
     private Controller consensus(Config config, Exchanger<WeakThresholdKey> wtkChan, DataSource ds,
-                                 SimpleChannel<PreBlock> preblockSink, SimpleChannel<PreUnit> synchronizer,
-                                 Consumer<Orderer> connector) {
+                                 Consumer<PreBlock> preblockSink, Runnable onClose, Consumer<Integer> newEpochAction) {
         Consumer<List<Unit>> makePreblock = units -> {
-            preblockSink.submit(Data.toPreBlock(units));
+            PreBlock preBlock = toPreBlock(units);
+            if (preBlock != null) {
+                log.debug("Emitting pre block: {} on: {}");
+                preblockSink.accept(preBlock);
+            }
             var timingUnit = units.get(units.size() - 1);
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 // we have just sent the last preblock of the last epoch, it's safe to quit
-                preblockSink.close();
+                if (onClose != null) {
+                    Utils.wrapped(onClose, log).run();
+                }
             }
         };
 
         AtomicReference<Orderer> ord = new AtomicReference<>();
-
         var started = new AtomicBoolean();
         Runnable start = () -> {
             config.executor().execute(() -> {
@@ -192,64 +213,61 @@ public class Ethereal {
                     }
                     logWTK(wtkey);
                     var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              Clock.systemUTC());
+                                              newEpochAction, Coin.newFactory(config.pid(), wtkey));
                     ord.set(orderer);
-                    orderer.start(Coin.newFactory(config.pid(), wtkey), synchronizer);
-                    connector.accept(orderer);
+                    orderer.start();
                 } finally {
                     started.set(true);
                 }
             });
         };
         Runnable stop = () -> {
-            if (!Utils.waitForCondition(2_000, () -> started.get())) {
-                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
+            if (!Utils.waitForCondition(10, () -> started.get())) {
+                log.trace("Waited 10ms for start and unsuccessful, proceeding");
             }
             Orderer orderer = ord.get();
             if (orderer != null) {
                 orderer.stop();
             }
         };
-        return new Controller(start, stop);
+        return new Controller(start, stop, null);
     }
 
-    private Controller deterministicConsensus(Config config, DataSource ds, SimpleChannel<PreBlock> preblockSink,
-                                              SimpleChannel<PreUnit> synchronizer, Consumer<Orderer> connector) {
+    private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+                                              Consumer<Integer> newEpochAction) {
         Consumer<List<Unit>> makePreblock = units -> {
-            preblockSink.submit(Data.toPreBlock(units));
+            log.trace("Make pre block: {} on: {}", units, config.pid());
+            PreBlock preBlock = toPreBlock(units);
             var timingUnit = units.get(units.size() - 1);
+            var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
-                log.info("Closing at last level: {} and epochs: {}", timingUnit.level(), timingUnit.epoch());
-                // we have just sent the last preblock of the last epoch, it's safe to quit
-                preblockSink.close();
+                log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                         config.pid());
+                last = true;
+            }
+            if (preBlock != null) {
+                log.debug("Emitting pre block: {} on: {}", units, config.pid());
+                try {
+                    blocker.accept(preBlock, last);
+                } catch (Throwable t) {
+                    log.error("Error consuming pre block: {} on: {}", units, config.pid(), t);
+                }
             }
         };
 
-        AtomicReference<Orderer> ord = new AtomicReference<>();
+        var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory());
 
-        AtomicBoolean started = new AtomicBoolean();
         Runnable start = () -> {
-            config.executor().execute(() -> {
-                try {
-                    var orderer = new Orderer(Config.builderFrom(config).build(), ds, makePreblock, Clock.systemUTC());
-                    ord.set(orderer);
-                    orderer.start(new DsrFactory(), synchronizer);
-                    connector.accept(orderer);
-                } finally {
-                    started.set(true);
-                }
-            });
+            log.debug("Starting Ethereal on: {}", config.pid());
+            started.set(true);
+            orderer.start();
         };
         Runnable stop = () -> {
-            if (!Utils.waitForCondition(2_000, () -> started.get())) {
-                log.error("Waited 2 seconds for start and unsuccessful, proceeding");
-            }
-            Orderer orderer = ord.get();
-            if (orderer != null) {
-                orderer.stop();
-            }
+            log.debug("Stopping Ethereal on: {}", config.pid());
+            started.set(false);
+            orderer.stop();
         };
-        return new Controller(start, stop);
+        return new Controller(start, stop, orderer);
     }
 
     private void logWTK(WeakThresholdKey wtkey) {
@@ -275,8 +293,7 @@ public class Ethereal {
             }
         };
 
-        SimpleChannel<PreUnit> syn = new SimpleChannel<>(1000);
-        var ord = new Orderer(conf, null, extractHead, Clock.systemUTC());
-        return new Controller(() -> ord.start(rsf, syn), () -> ord.stop());
+        var ord = new Orderer(conf, null, extractHead, null, rsf);
+        return new Controller(() -> ord.start(), () -> ord.stop(), null);
     }
 }

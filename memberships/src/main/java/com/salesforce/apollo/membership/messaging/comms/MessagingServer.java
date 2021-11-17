@@ -21,6 +21,7 @@ import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public class MessagingServer extends MessagingImplBase {

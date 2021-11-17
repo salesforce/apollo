@@ -29,6 +29,7 @@ import com.salesforce.apollo.membership.messaging.Messenger.MessageHandler.Msg;
 
 /**
  * @author hal.hildebrand
+ * @deprecated Will soon be eliminated
  *
  */
 public class MemberOrder {

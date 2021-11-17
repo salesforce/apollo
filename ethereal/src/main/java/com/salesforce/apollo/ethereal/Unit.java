@@ -9,11 +9,14 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
@@ -30,10 +33,13 @@ public interface Unit extends PreUnit {
 
         @Override
         public boolean equals(Object obj) {
-            if (obj instanceof unitInDag uid) {
-                return (unit.equals(uid));
+            if (this == obj) {
+                return true;
             }
-            return unit.equals(obj);
+            if (obj instanceof PreUnit uid) {
+                return hash().equals(uid.hash());
+            }
+            return false;
         }
 
         @Override
@@ -42,7 +48,7 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public Any data() {
+        public ByteString data() {
             return unit.data();
         }
 
@@ -64,11 +70,6 @@ public interface Unit extends PreUnit {
         @Override
         public byte[] randomSourceData() {
             return unit.randomSourceData();
-        }
-
-        @Override
-        public JohnHancock signature() {
-            return unit.signature();
         }
 
         @Override
@@ -123,9 +124,29 @@ public interface Unit extends PreUnit {
         public String shortString() {
             return creator() + ":" + level() + ":" + epoch();
         }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return unit.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return unit.toPreUnit_s();
+        }
+
+        @Override
+        public JohnHancock signature() {
+            return unit.signature();
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return unit.verify(verifiers);
+        }
     }
 
-    static int levelFromParents(Unit[] parents) {
+    static int levelFromParents(Unit[] parents, double bias) {
         var nProc = (short) parents.length;
         var level = 0;
         var onLevel = (short) 0;
@@ -140,7 +161,7 @@ public interface Unit extends PreUnit {
                 level = p.level();
             }
         }
-        if (onLevel >= minimalQuorum(nProc)) {
+        if (onLevel >= minimalQuorum(nProc, bias)) {
             level++;
         }
 
@@ -189,6 +210,32 @@ public interface Unit extends PreUnit {
         }
 
         return maximal.toArray(new Unit[maximal.size()]);
+    }
+
+    static List<Unit> topologicalSort(List<Unit> units) {
+        List<Unit> result = new ArrayList<>();
+        return buildReverseDfsOrder(units, result);
+    }
+
+    private static List<Unit> buildReverseDfsOrder(List<Unit> units, List<Unit> result) {
+        var notVisited = new HashMap<Digest, Boolean>();
+        for (var unit : units) {
+            notVisited.put(unit.hash(), true);
+        }
+        for (var unit : units) {
+            result = reverseDfsOrder(unit, notVisited, result);
+        }
+        return result;
+    }
+
+    private static List<Unit> reverseDfsOrder(Unit unit, HashMap<Digest, Boolean> notVisited, List<Unit> result) {
+        if (notVisited.put(unit.hash(), false)) {
+            for (var parent : unit.parents()) {
+                result = reverseDfsOrder(parent, notVisited, result);
+            }
+            result.add(unit);
+        }
+        return result;
     }
 
     /** Is the receiver above the specified unit? */

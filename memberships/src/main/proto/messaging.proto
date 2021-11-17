@@ -68,3 +68,18 @@ message CausalMessages {
 message ByteMessage {
     bytes contents = 1;
 }
+
+service RBC {
+    rpc gossip (MessageBff) returns (Reconcile) {}
+}
+
+message Reconcile { 
+    repeated  AgedMessage updates = 1;
+}
+message AgedMessage {
+    int32 age = 1;
+    int32 nonce = 2;
+    bytes content = 3;
+    utils.Digeste source = 4;
+    utils.Sig signature = 5;
+}

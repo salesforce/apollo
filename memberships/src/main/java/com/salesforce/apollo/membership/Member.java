@@ -20,13 +20,14 @@ import java.util.Map;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface Member extends Comparable<Member> {
+public interface Member extends Comparable<Member>, Verifier {
 
     static Digest getMemberIdentifier(X509Certificate cert) {
         String dn = cert.getSubjectX500Principal().getName();

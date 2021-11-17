@@ -15,7 +15,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  * @author hal.hildebrand
  *
  */
-public class HashedCertifiedBlock {
+public class HashedCertifiedBlock implements Comparable<HashedCertifiedBlock> {
     public final CertifiedBlock block;
     public final Digest         hash;
 
@@ -26,6 +26,11 @@ public class HashedCertifiedBlock {
     private HashedCertifiedBlock(Digest hash, CertifiedBlock block) {
         this.hash = hash;
         this.block = block;
+    }
+
+    @Override
+    public int compareTo(HashedCertifiedBlock o) {
+        return hash.compareTo(o.hash);
     }
 
     @Override

@@ -92,41 +92,56 @@ public class Context<T extends Member> {
 
     private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
-    /**
-     * @return the minimum t such that the probability of more than t out of 2t+1
-     *         monitors are correct with probability e/size given the uniform
-     *         probability pByz that a monitor is Byzantine.
-     */
     public static int minMajority(double pByz, int cardinality) {
-        return minMajority(pByz, cardinality, 0.99);
+        return minMajority(pByz, cardinality, 0.99, 2);
+    }
+
+    public static int minMajority(double pByz, int card, double epsilon) {
+        return minMajority(pByz, card, epsilon, 2);
     }
 
     /**
-     * @return the minimum t such that the probability of more than t out of 2t+1
-     *         monitors are correct with probability e/size given the uniform
+     * @return the minimum t such that the probability of more than t out of bias *
+     *         t+1 monitors are correct with probability e/size given the uniform
      *         probability pByz that a monitor is Byzantine.
      */
-    public static int minMajority(double pByz, int cardinality, double epsilon) {
+    public static int minMajority(double pByz, int cardinality, double epsilon, int bias) {
         if (epsilon > 1.0 || epsilon <= 0.0) {
             throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
         }
         double e = epsilon / cardinality;
-        for (int t = 1; t <= cardinality; t++) {
-            double pf = 1.0 - Util.binomialc(t, 2 * t + 1, pByz);
+        for (int t = 1; t <= ((cardinality - 1) / bias); t++) {
+            double pf = 1.0 - Util.binomialc(t, (bias * t) + 1, pByz);
             if (e >= pf) {
-                return t;
+                if (cardinality >= (bias * t) + 1) {
+                    return t;
+                } else {
+                    throw new IllegalArgumentException("Cardinality: " + cardinality
+                    + " cannot support required tolerance: " + t);
+                }
             }
         }
         throw new IllegalArgumentException("Cannot compute number of rings from pByz=" + pByz + " cardinality: "
-                + cardinality + " epsilon: " + epsilon);
+        + cardinality + " epsilon: " + epsilon);
+    }
+
+    /**
+     * @return the minimum t such that the probability of more than t out of 2t+1
+     *         monitors are correct with probability e/size given the uniform
+     *         probability pByz that a monitor is Byzantine.
+     */
+    public static int minMajority(int bias, double pByz, int cardinality) {
+        return minMajority(pByz, cardinality, 0.99, bias);
     }
 
     private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
+    private final int                          bias;
     private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
     private final Digest                       id;
     private Logger                             log                 = LoggerFactory.getLogger(Context.class);
     private final List<MembershipListener<T>>  membershipListeners = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<Digest, T> offline             = new ConcurrentHashMap<>();
+    private final double                       pByz;
     private final Ring<T>[]                    rings;
 
     public Context(Digest id) {
@@ -145,7 +160,7 @@ public class Context<T extends Member> {
      * @param cardinality
      */
     public Context(Digest id, double pByz, int cardinality) {
-        this(id, minMajority(pByz, cardinality) * 2 + 1);
+        this(pByz, 2, id, minMajority(pByz, cardinality) * 2 + 1);
     }
 
     /**
@@ -160,17 +175,31 @@ public class Context<T extends Member> {
      * @param cardinality
      * @param epsilon
      */
-    public Context(Digest id, double pByz, int cardinality, double epsilon) {
-        this(id, minMajority(pByz, cardinality, epsilon) * 2 + 1);
+    public Context(Digest id, double pByz, int cardinality, double epsilon, int bias) {
+        this(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
+    }
+
+    public Context(Digest id, double pByz, int cardinality, int bias) {
+        this(pByz, bias, id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
+    }
+
+    public Context(Digest id, int r) {
+        this(0.0, 2, id, r);
     }
 
     @SuppressWarnings("unchecked")
-    public Context(Digest id, int r) {
+    public Context(double pbyz, int bias, Digest id, int r) {
+        this.pByz = pbyz;
         this.id = id;
         this.rings = new Ring[r];
+        this.bias = bias;
         for (int i = 0; i < r; i++) {
             rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
         }
+    }
+
+    public void activate(Collection<T> activeMembers) {
+        activeMembers.forEach(m -> activate(m));
     }
 
     /**
@@ -265,6 +294,10 @@ public class Context<T extends Member> {
         return active.get(memberID);
     }
 
+    public int getBias() {
+        return bias;
+    }
+
     public Digest getId() {
         return id;
     }
@@ -279,6 +312,10 @@ public class Context<T extends Member> {
 
     public Collection<T> getOffline() {
         return offline.values();
+    }
+
+    public double getProbabilityByzantine() {
+        return pByz;
     }
 
     public int getRingCount() {

@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal.linear;
 
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -16,7 +17,6 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.utils.SimpleChannel;
 
 /**
  * ExtenderService is a component working on a dag that extends a partial order
@@ -31,42 +31,20 @@ import com.salesforce.apollo.utils.SimpleChannel;
 public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
-    private final Extender                   ordering;
-    private final SimpleChannel<List<Unit>>  output;
-    private final SimpleChannel<TimingRound> timingRounds;
-    private final SimpleChannel<Boolean>     trigger;
+    private final Extender             ordering;
+    private final Consumer<List<Unit>> output;
+    private final Config               config;
+    private final Semaphore            exclusive = new Semaphore(1);
 
-    public ExtenderService(Dag dag, RandomSource rs, Config config, SimpleChannel<List<Unit>> output) {
+    public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
         ordering = new Extender(dag, rs, config);
-        this.output = output;
-        trigger = new SimpleChannel<>(100);
-        timingRounds = new SimpleChannel<>(config.epochLength());
-
-        trigger.consumeEach(timingUnitDecider());
-        timingRounds.consumeEach(roundSorter());
+        this.output = orderedUnits;
+        this.config = config;
     }
 
     public void chooseNextTimingUnits() {
-        log.info("Signaling to see if we can produce a block");
-        trigger.submit(true);
-    }
-
-    public void close() {
-        trigger.close();
-        timingRounds.close();
-    }
-
-    /**
-     * Picks information about newly picked timing unit from the timingRounds
-     * channel, finds all units belonging to their timing round and establishes
-     * linear order on them. Sends slices of ordered units to output.
-     */
-    private Consumer<TimingRound> roundSorter() {
-        return round -> {
-            var units = round.orderedUnits();
-            log.info("Output of: {} preBlock: {}", round, units);
-            output.submit(units);
-        };
+        log.trace("Signaling to see if we can produce a block on: {}", config.pid());
+        timingUnitDecider();
     }
 
     /**
@@ -74,14 +52,20 @@ public class ExtenderService {
      * timingRounds channel, finds all units belonging to their timing round and
      * establishes linear order on them. Sends slices of ordered units to output.
      */
-    private Consumer<Boolean> timingUnitDecider() {
-        return t -> {
+    private void timingUnitDecider() {
+        exclusive.acquireUninterruptibly();
+        try {
             var round = ordering.nextRound();
+            log.trace("Starting timing round: {} on: {}", round, config.pid());
             while (round != null) {
-                log.info("Producing round: {}", round);
-                timingRounds.submit(round);
+                log.debug("Producing timing round: {} on: {}", round, config.pid());
+                var units = round.orderedUnits(config.digestAlgorithm());
+                log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
+                output.accept(units);
                 round = ordering.nextRound();
             }
-        };
+        } finally {
+            exclusive.release();
+        }
     }
 }

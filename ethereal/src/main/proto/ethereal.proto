@@ -10,9 +10,25 @@ import "util.proto";
 
 package ethereal;
 
+service Gossiper {
+    rpc gossip (Gossip) returns (Update) {}
+}
+
+message Gossip {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    utils.Biff have = 3;
+}
+
+message Update {
+    repeated PreUnit_s missing = 1;
+    repeated PreUnit_s waiting = 2;
+}
+
 message EpochProof {
     Proof msg = 1;
-    utils.Sig signature = 2;
+    int32 owner = 2;
+    utils.Sig signature = 3;
 }
 
 message Proof {
@@ -20,6 +36,31 @@ message Proof {
     utils.Digeste hash = 2;
 }
 
+message PreUnit_s {
+    int64 id = 1;
+    Crown_s crown = 2;
+    bytes data = 3;
+    bytes rsData = 4;
+    utils.Sig signature = 5;
+}
+
+message Crown_s {
+    repeated int32 heights = 1;
+    utils.Digeste controlHash = 2;
+}
+
+message ChRbcMessage {
+    oneof t {
+        PreUnit_s propose = 1;
+        UnitReference prevote = 2;
+        UnitReference commit = 3;
+    }
+}
+
+message UnitReference {
+    int64 uid = 1;
+    utils.Digeste hash = 2;
+}
 
 message ByteMessage {
     bytes contents = 1;

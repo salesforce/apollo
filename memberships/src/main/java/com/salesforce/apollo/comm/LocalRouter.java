@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Map;
@@ -19,6 +20,13 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
+import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
+import com.netflix.concurrency.limits.grpc.client.GrpcClientRequestContext;
+import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
+import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
+import com.netflix.concurrency.limits.limit.VegasLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -42,6 +50,8 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.inprocess.InternalInProcessChannelBuilder;
+import io.grpc.internal.ManagedChannelImplBuilder;
 import io.grpc.util.MutableHandlerRegistry;
 
 /**
@@ -69,10 +79,28 @@ public class LocalRouter extends Router {
                     };
                 }
             };
-            return InProcessChannelBuilder.forName(qb64(to.getId()))
-                                          .directExecutor()
-                                          .intercept(clientInterceptor)
-                                          .build();
+            Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().limit(VegasLimit.newBuilder()
+                                                                                                       .maxConcurrency(10_000)
+                                                                                                       .initialLimit(10_000)
+                                                                                                       .build())
+                                                                                      .blockOnLimit(false).build();
+            final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
+                                                                           .intercept(clientInterceptor,
+                                                                                      new ConcurrencyLimitClientInterceptor(limiter));
+            disableTrash(builder);
+            InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
+            return builder.build();
+        }
+
+        private void disableTrash(final InProcessChannelBuilder builder) {
+            try {
+                final Method method = InProcessChannelBuilder.class.getDeclaredMethod("delegate");
+                method.setAccessible(true);
+                ManagedChannelImplBuilder delegate = (ManagedChannelImplBuilder) method.invoke(builder);
+                delegate.setTracingEnabled(false);
+            } catch (Throwable e) {
+                log.error("Can't disable trash", e);
+            }
         }
     }
 
@@ -104,8 +132,9 @@ public class LocalRouter extends Router {
                                                                                           Metadata.ASCII_STRING_MARSHALLER);
     public static final Context.Key<Member>  CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
     public static final ThreadIdentity       LOCAL_IDENTITY             = new ThreadIdentity();
-    private static final Logger              log                        = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
+
+    private static final Logger              log           = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<Digest, Member> serverMembers = new ConcurrentHashMap<>();
 
     private final Member member;
     private final Server server;
@@ -115,51 +144,32 @@ public class LocalRouter extends Router {
     }
 
     public LocalRouter(Member member, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
-            Executor executor) {
+                       Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
         this.member = member;
         serverMembers.put(member.getId(), member);
 
-        server = InProcessServerBuilder.forName(qb64(member.getId()))
-                                       .executor(executor)
-                                       .intercept(new ServerInterceptor() {
-
-                                           @Override
-                                           public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
-                                                                                                        final Metadata requestHeaders,
-                                                                                                        ServerCallHandler<ReqT, RespT> next) {
-                                               String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
-                                               if (id == null) {
-                                                   log.error("No member id in call headers: {}", requestHeaders.keys());
-                                                   throw new IllegalStateException("No member ID in call");
-                                               }
-                                               Member member = serverMembers.get(digest(id));
-                                               if (member == null) {
-                                                   call.close(Status.INTERNAL.withCause(new NullPointerException(
-                                                           "Member is null"))
-                                                                             .withDescription("Member is null for id: "
-                                                                                     + id),
-                                                              null);
-                                                   return new ServerCall.Listener<ReqT>() {
-                                                   };
-                                               }
-                                               Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
-                                               return Contexts.interceptCall(ctx, call, requestHeaders, next);
-                                           }
-
-                                       })
-                                       .fallbackHandlerRegistry(registry)
-                                       .build();
+        ConcurrencyLimitServerInterceptor limiter;
+        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(VegasLimit.newBuilder()
+                                                                                                              .maxConcurrency(10_000)
+                                                                                                              .initialLimit(10_000)
+                                                                                                              .build())
+                                                                                             .build())
+                                                   .build();
+        final var name = qb64(member.getId());
+        server = InProcessServerBuilder.forName(name).executor(executor).intercept(interceptor()).intercept(limiter)
+                                       .fallbackHandlerRegistry(registry).build();
+        log.info("Created server: {} on: {}", name, member);
     }
 
     @Override
     public void close() {
-        server.shutdownNow();
+        server.shutdown();
         try {
             server.awaitTermination();
         } catch (InterruptedException e) {
             throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                    e);
+                                            e);
         }
         super.close();
         serverMembers.remove(member.getId());
@@ -172,6 +182,9 @@ public class LocalRouter extends Router {
 
     @Override
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         try {
             serverMembers.put(member.getId(), member);
             server.start();
@@ -179,6 +192,33 @@ public class LocalRouter extends Router {
             log.error("Cannot start in process server for: " + member, e);
         }
         log.info("Starting server for: " + member);
+    }
+
+    private ServerInterceptor interceptor() {
+        return new ServerInterceptor() {
+
+            @Override
+            public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<ReqT, RespT> call,
+                                                                         final Metadata requestHeaders,
+                                                                         ServerCallHandler<ReqT, RespT> next) {
+                String id = requestHeaders.get(AUTHORIZATION_METADATA_KEY);
+                if (id == null) {
+                    log.error("No member id in call headers: {}", requestHeaders.keys());
+                    throw new IllegalStateException("No member ID in call");
+                }
+                Member member = serverMembers.get(digest(id));
+                if (member == null) {
+                    call.close(Status.INTERNAL.withCause(new NullPointerException("Member is null"))
+                                              .withDescription("Member is null for id: " + id),
+                               null);
+                    return new ServerCall.Listener<ReqT>() {
+                    };
+                }
+                Context ctx = Context.current().withValue(CLIENT_ID_CONTEXT_KEY, member);
+                return Contexts.interceptCall(ctx, call, requestHeaders, next);
+            }
+
+        };
     }
 
 }

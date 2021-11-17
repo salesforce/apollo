@@ -51,7 +51,7 @@ public class RoutableService<Service> {
         }
         Service service = services.get(context);
         if (service == null) {
-            log.trace("No service  {} for context {}", context);
+            log.trace("No service for context {}", context);
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
             try {
                 responseObserver.onCompleted();

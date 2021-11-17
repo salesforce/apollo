@@ -12,14 +12,19 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender>  
+    </appender> 
 
-    <logger name="com.salesforce.apollo.avalanche" level="info"
+    <logger name="com.salesforce.apollo.state" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>
+    </logger>  
 
-    <logger name="com.salesforce.apollo.consortium" level="INFO"
+    <logger name="com.salesforce.apollo.choam" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -30,6 +35,11 @@
     </logger>
 
     <logger name="com.salesforce.apollo.state" level="INFO"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    
+    <logger name="com.salesforce.apollo.comm" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

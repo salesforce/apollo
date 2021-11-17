@@ -36,27 +36,27 @@ public interface Signer {
 
         @Override
         public JohnHancock sign(byte[]... bytes) {
-            return new JohnHancock(algorithm(), new byte[0]);
+            return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
 
         @Override
         public JohnHancock sign(ByteBuffer... buffs) {
-            return new JohnHancock(algorithm(), new byte[0]);
+            return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
 
         @Override
         public JohnHancock sign(ByteString... message) {
-            return new JohnHancock(algorithm(), new byte[0]);
+            return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
 
         @Override
         public JohnHancock sign(InputStream message) {
-            return new JohnHancock(algorithm(), new byte[0]);
+            return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
 
         @Override
         public JohnHancock sign(List<ByteBuffer> buffers) {
-            return new JohnHancock(algorithm(), new byte[0]);
+            return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
     }
 

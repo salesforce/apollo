@@ -11,14 +11,19 @@ import static com.salesforce.apollo.ethereal.Crown.crownFromParents;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.PreUnit_s.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
@@ -30,12 +35,18 @@ public interface PreUnit {
 
         @Override
         public boolean equals(Object obj) {
-            return p.equals(obj);
+            if (this == obj) {
+                return true;
+            }
+            if (obj instanceof PreUnit pu) {
+                return hash().equals(pu.hash());
+            }
+            return false;
         }
 
         @Override
         public int hashCode() {
-            return p.hashCode();
+            return hash().hashCode();
         }
 
         @Override
@@ -44,7 +55,7 @@ public interface PreUnit {
         }
 
         @Override
-        public Any data() {
+        public ByteString data() {
             return p.data();
         }
 
@@ -69,13 +80,15 @@ public interface PreUnit {
         }
 
         @Override
-        public JohnHancock signature() {
-            return p.signature();
+        public Crown view() {
+            return p.view();
         }
 
         @Override
-        public Crown view() {
-            return p.view();
+        public Unit from(Unit[] parents, double bias) {
+            freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
+            u.computeFloor();
+            return u;
         }
 
         @Override
@@ -125,10 +138,30 @@ public interface PreUnit {
         public String shortString() {
             return p.shortString();
         }
+
+        @Override
+        public JohnHancock signature() {
+            return p.signature();
+        }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return p.toPreUnit();
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            return p.toPreUnit_s();
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            return p.verify(verifiers);
+        }
     }
 
-    public record preUnit(short creator, int epoch, int height, JohnHancock signature, Digest hash, Crown crown,
-                          Any data, byte[] rsData)
+    public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
+                          byte[] rsData, JohnHancock signature)
                          implements PreUnit {
 
         @Override
@@ -141,15 +174,28 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (!(obj instanceof Unit u)) {
-                return false;
+            if (obj instanceof PreUnit u) {
+                return hash.equals(u.hash());
             }
-            return hash.equals(u.hash());
+            return false;
         }
 
         @Override
         public byte[] randomSourceData() {
             return rsData;
+        }
+
+        @Override
+        public PreUnit_s toPreUnit_s() {
+            Builder builder = PreUnit_s.newBuilder().setSignature(signature.toSig()).setId(id())
+                                       .setCrown(crown.toCrown_s());
+            if (data != null) {
+                builder.setData(data);
+            }
+            if (rsData != null) {
+                builder.setRsData(ByteString.copyFrom(rsData));
+            }
+            return builder.build();
         }
 
         @Override
@@ -159,18 +205,72 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "preUnit[" + shortString() + "]";
+            return "pu[" + shortString() + "]";
         }
 
         @Override
         public String shortString() {
             return creator() + ":" + height() + ":" + epoch();
         }
+
+        @Override
+        public PreUnit toPreUnit() {
+            return this;
+        }
+
+        @Override
+        public boolean verify(Verifier[] verifiers) {
+            if (creator >= verifiers.length) {
+                return false;
+            }
+            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData));
+        }
     }
 
-    public record DecodedId(int height, short creator, int epoch) {}
+    public record DecodedId(int height, short creator, int epoch) {
+        @Override
+        public String toString() {
+            return "[" + creator + ":" + height + ":" + epoch + "]";
+        }
+    }
 
-    static Digest computeHash(DigestAlgorithm algo, long id, Crown crown, Any data, byte[] rsData) {
+    public static PreUnit from(PreUnit_s pu, DigestAlgorithm algo) {
+        var decoded = decode(pu.getId());
+        byte[] rsData = pu.getRsData().size() > 0 ? pu.getRsData().toByteArray() : null;
+
+        Crown crown = Crown.from(pu.getCrown());
+        ByteString data = pu.getData();
+        final var signature = JohnHancock.from(pu.getSignature());
+        return new preUnit(decoded.creator, decoded.epoch, decoded.height, signature.toDigest(algo), crown, data,
+                           rsData, signature);
+    }
+
+    public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
+        pus.sort(new Comparator<PreUnit>() {
+            @Override
+            public int compare(PreUnit pu1, PreUnit pu2) {
+                var comp = Integer.compare(pu1.epoch(), pu2.epoch());
+                if (comp < 0 || comp > 0) {
+                    return comp;
+                }
+                comp = Integer.compare(pu1.height(), pu2.height());
+                if (comp < 0 || comp > 0) {
+                    return comp;
+                }
+                return Short.compare(pu1.creator(), pu2.creator());
+            }
+        });
+        return pus;
+    }
+
+    static DecodedId decode(long id) {
+        var height = (int) (id & ((1 << 16) - 1));
+        id >>= 16;
+        var creator = (short) (id & ((1 << 16) - 1));
+        return new DecodedId(height, creator, (int) (id >> 16));
+    }
+
+    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] rsData) {
         var buffers = new ArrayList<ByteBuffer>();
         ByteBuffer idBuff = ByteBuffer.allocate(8);
         idBuff.putLong(id);
@@ -178,7 +278,7 @@ public interface PreUnit {
 
         buffers.add(idBuff);
         if (data != null) {
-            buffers.addAll(data.toByteString().asReadOnlyByteBufferList());
+            buffers.addAll(data.asReadOnlyByteBufferList());
         }
         if (rsData != null) {
             buffers.add(ByteBuffer.wrap(rsData));
@@ -191,15 +291,7 @@ public interface PreUnit {
             buffers.add(heightBuff);
         }
         buffers.add(crown.controlHash().toByteBuffer());
-
-        return algo.digest(buffers);
-    }
-
-    static DecodedId decode(long id) {
-        var height = (int) (id & ((1 << 16) - 1));
-        id >>= 16;
-        var creator = (short) (id & ((1 << 16) - 1));
-        return new DecodedId(height, creator, (int) (id >> 16));
+        return buffers;
     }
 
     static long id(int height, short creator, int epoch) {
@@ -209,36 +301,40 @@ public interface PreUnit {
         return result;
     }
 
-    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, Any data, byte[] rsBytes,
-                            Signer signer, DigestAlgorithm algo) {
+    static Unit newFreeUnit(short creator, int epoch, Unit[] parents, int level, ByteString data, byte[] rsBytes,
+                            DigestAlgorithm algo, Signer signer) {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
-        var hash = computeHash(algo, id, crown, data, rsBytes);
-        var signature = signer.sign(hash.toByteBuffer());
-        var u = new freeUnit(new preUnit(creator, epoch, height, signature, hash, crown, data, rsBytes), parents, level,
-                             new HashMap<>());
+        var signature = sign(signer, id, crown, data, rsBytes);
+        var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, rsBytes,
+                                         signature),
+                             parents, level, new HashMap<>());
         u.computeFloor();
         return u;
 
     }
 
+    static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData) {
+        return signer.sign(forSigning(id, crown, data, rsData));
+    }
+
     short creator();
 
-    Any data();
+    ByteString data();
 
     default boolean dealing() {
         return height() == 0;
     }
 
     int epoch();
+//
+//    default boolean equals(PreUnit v) {
+//        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
+//    } 
 
-    default boolean equals(PreUnit v) {
-        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
-    }
-
-    default Unit from(Unit[] parents) {
-        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents), new HashMap<>());
+    default Unit from(Unit[] parents, double bias) {
+        freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
         u.computeFloor();
         return u;
     }
@@ -257,9 +353,19 @@ public interface PreUnit {
 
     byte[] randomSourceData();
 
+    default int round(Config conf) {
+        return height() + (conf.epochLength() * epoch());
+    }
+
     String shortString();
 
     JohnHancock signature();
+
+    PreUnit toPreUnit();
+
+    PreUnit_s toPreUnit_s();
+
+    boolean verify(Verifier[] verifiers);
 
     Crown view();
 }

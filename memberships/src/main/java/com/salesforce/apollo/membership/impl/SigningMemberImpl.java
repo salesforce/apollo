@@ -15,15 +15,15 @@ import java.security.cert.X509Certificate;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * A signiner member of a view. This is a local member to the process that can
@@ -42,12 +42,17 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
      */
     public SigningMemberImpl(CertificateWithPrivateKey cert) {
         this(Member.getMemberIdentifier(cert.getX509Certificate()), cert.getX509Certificate(), cert.getPrivateKey(),
-                new SignerImpl(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
+             new SignerImpl(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
     }
 
     public SigningMemberImpl(Digest id, X509Certificate cert, PrivateKey certKey, Signer signer, PublicKey signerKey) {
         super(id, cert, signerKey);
         this.signer = signer;
+    }
+
+    @Override
+    public SignatureAlgorithm algorithm() {
+        return signer.algorithm();
     }
 
     @Override
@@ -60,6 +65,11 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
     public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
         return MtlsServer.forServer(clientAuth, alias, certificate, certKey, validator);
+    }
+
+    @Override
+    public int keyIndex() {
+        return signer.keyIndex();
     }
 
     @Override

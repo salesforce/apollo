@@ -26,13 +26,14 @@ import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContext;
 
 /**
  * The representation of the "current" member - the subject - of a View.
@@ -77,6 +78,11 @@ public class Node extends Participant implements SigningMember {
     }
 
     @Override
+    public SignatureAlgorithm algorithm() {
+        return wrapped.algorithm();
+    }
+
+    @Override
     public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
         return wrapped.forClient(clientAuth, alias, validator, provider, tlsVersion);
@@ -93,6 +99,11 @@ public class Node extends Participant implements SigningMember {
      */
     public FirefliesParameters getParameters() {
         return parameters;
+    }
+
+    @Override
+    public int keyIndex() {
+        return wrapped.keyIndex();
     }
 
     public JohnHancock sign(byte[] message) {
@@ -115,12 +126,8 @@ public class Node extends Participant implements SigningMember {
 
     AccusationWrapper accuse(Participant m, int ringNumber) {
         Builder builder = Accusation.newBuilder();
-        Accusation accusation = builder.setEpoch(m.getEpoch())
-                                       .setRingNumber(ringNumber)
-                                       .setAccuser(getId().toDigeste())
-                                       .setAccused(m.getId().toDigeste())
-                                       .setSignature(sign(builder))
-                                       .build();
+        Accusation accusation = builder.setEpoch(m.getEpoch()).setRingNumber(ringNumber).setAccuser(getId().toDigeste())
+                                       .setAccused(m.getId().toDigeste()).setSignature(sign(builder)).build();
         return new AccusationWrapper(hashAlgorithm.digest(accusation.toByteString()), accusation);
     }
 
@@ -185,11 +192,8 @@ public class Node extends Participant implements SigningMember {
      */
     void nextNote(long newEpoch) {
         Note.Builder builder = Note.newBuilder();
-        Note n = builder.setId(getId().toDigeste())
-                        .setEpoch(newEpoch)
-                        .setMask(ByteString.copyFrom(nextMask().toByteArray()))
-                        .setSignature(sign(builder))
-                        .build();
+        Note n = builder.setId(getId().toDigeste()).setEpoch(newEpoch)
+                        .setMask(ByteString.copyFrom(nextMask().toByteArray())).setSignature(sign(builder)).build();
         note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
     }
 

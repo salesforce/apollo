@@ -19,6 +19,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DagFactory;
 import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
@@ -88,7 +89,7 @@ public class ExtenderTest {
         for (int level = 0; level < 8; level++) {
             TimingRound timingRound = ordering.nextRound();
             assertNotNull(timingRound, "failed at level:  " + level);
-            var thisRound = timingRound.orderedUnits();
+            var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT);
             assertNotNull(thisRound);
             timingRounds.add(thisRound);
         }
