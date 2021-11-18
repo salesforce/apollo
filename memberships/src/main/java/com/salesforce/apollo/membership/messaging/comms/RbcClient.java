@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.membership.messaging.comms;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.messaging.proto.MessageBff;
@@ -27,25 +24,23 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcast;
  */
 public class RbcClient implements ReliableBroadcast {
 
-    public static CreateClientCommunications<ReliableBroadcast> getCreate(RouterMetrics metrics, Executor exeucutor) {
+    public static CreateClientCommunications<ReliableBroadcast> getCreate(RouterMetrics metrics) {
         return (t, f, c) -> {
-            return new RbcClient(c, t, metrics, exeucutor);
+            return new RbcClient(c, t, metrics);
         };
 
     }
 
     private final ManagedServerConnection channel;
     private final RBCFutureStub           client;
-    private final Executor                executor;
     private final Member                  member;
     private final RouterMetrics           metrics;
 
-    public RbcClient(ManagedServerConnection channel, Member member, RouterMetrics metrics, Executor executor) {
+    public RbcClient(ManagedServerConnection channel, Member member, RouterMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = RBCGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
-        this.executor = executor;
     }
 
     @Override
@@ -65,23 +60,7 @@ public class RbcClient implements ReliableBroadcast {
             timer = metrics.outboundGossipTimer().time();
         }
         try {
-            ListenableFuture<Reconcile> result = client.gossip(request);
-            result.addListener(() -> {
-                if (metrics != null) {
-                    Reconcile messages;
-                    try {
-                        messages = result.get();
-                        metrics.inboundBandwidth().mark(messages.getSerializedSize());
-                        metrics.gossipResponse().update(messages.getSerializedSize());
-                    } catch (InterruptedException | ExecutionException e) {
-                        // purposefully ignored
-                    }
-                    metrics.outboundGossip().update(request.getSerializedSize());
-                    metrics.outboundBandwidth().mark(request.getSerializedSize());
-                    metrics.outboundGossipRate().mark();
-                }
-            }, executor);
-            return result;
+            return client.gossip(request);
         } finally {
             if (timer != null) {
                 timer.stop();

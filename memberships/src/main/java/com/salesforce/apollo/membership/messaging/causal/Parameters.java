@@ -14,6 +14,11 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.MessagingMetrics;
 
+/**
+ * @deprecated
+ * @author hal.hildebrand
+ *
+ */
 public class Parameters {
     public static class Builder {
         private int              bufferSize        = 500;

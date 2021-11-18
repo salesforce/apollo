@@ -106,7 +106,7 @@ public class ViewAssembly implements Reconfiguration {
         nextAssembly = Committee.viewMembersOf(nextViewId, params().context()).stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
-                                                new ArrayList<>(nextAssembly.values()), comms, params().dispatcher());
+                                                new ArrayList<>(nextAssembly.values()), comms);
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
         Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().activeMembers().size());
@@ -131,7 +131,7 @@ public class ViewAssembly implements Reconfiguration {
                                                   epoch -> transitions.nextEpoch(epoch));
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
-                                          params().dispatcher(), params().metrics());
+                                          params().metrics());
 
         log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());

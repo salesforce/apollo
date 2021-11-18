@@ -203,23 +203,21 @@ public class Ethereal {
         AtomicReference<Orderer> ord = new AtomicReference<>();
         var started = new AtomicBoolean();
         Runnable start = () -> {
-            config.executor().execute(() -> {
+            try {
+                WeakThresholdKey wtkey;
                 try {
-                    WeakThresholdKey wtkey;
-                    try {
-                        wtkey = wtkChan.exchange(null);
-                    } catch (InterruptedException e) {
-                        throw new IllegalStateException("Unable to exchange wtk", e);
-                    }
-                    logWTK(wtkey);
-                    var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
-                                              newEpochAction, Coin.newFactory(config.pid(), wtkey));
-                    ord.set(orderer);
-                    orderer.start();
-                } finally {
-                    started.set(true);
+                    wtkey = wtkChan.exchange(null);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException("Unable to exchange wtk", e);
                 }
-            });
+                logWTK(wtkey);
+                var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
+                                          newEpochAction, Coin.newFactory(config.pid(), wtkey));
+                ord.set(orderer);
+                orderer.start();
+            } finally {
+                started.set(true);
+            }
         };
         Runnable stop = () -> {
             if (!Utils.waitForCondition(10, () -> started.get())) {
@@ -242,7 +240,7 @@ public class Ethereal {
             var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
-                         config.pid());
+                          config.pid());
                 last = true;
             }
             if (preBlock != null) {

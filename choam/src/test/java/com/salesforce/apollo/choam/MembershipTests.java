@@ -57,21 +57,24 @@ public class MembershipTests {
     private class Transactioneer {
         private final static Random entropy = new Random();
 
-        private final AtomicInteger completed = new AtomicInteger();
-        private final AtomicInteger failed    = new AtomicInteger();
-        private final int           max;
-        private final AtomicBoolean proceed;
-        private final Session       session;
-        private final Duration      timeout;
-        private final ByteMessage   tx        = ByteMessage.newBuilder()
-                                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                           .build();
+        private final AtomicInteger            completed = new AtomicInteger();
+        private final AtomicInteger            failed    = new AtomicInteger();
+        private final int                      max;
+        private final AtomicBoolean            proceed;
+        private final ScheduledExecutorService scheduler;
+        private final Session                  session;
+        private final Duration                 timeout;
+        private final ByteMessage              tx        = ByteMessage.newBuilder()
+                                                                      .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                      .build();
 
-        Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max) {
+        Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max,
+                       ScheduledExecutorService scheduler) {
             this.proceed = proceed;
             this.session = session;
             this.timeout = timeout;
             this.max = max;
+            this.scheduler = scheduler;
         }
 
         void decorate(CompletableFuture<?> fs) {
@@ -84,7 +87,7 @@ public class MembershipTests {
                     failed.incrementAndGet();
                     scheduler.schedule(() -> {
                         try {
-                            decorate(session.submit(tx, timeout));
+                            decorate(session.submit(tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -92,7 +95,7 @@ public class MembershipTests {
                 } else {
                     if (completed.incrementAndGet() < max) {
                         try {
-                            decorate(session.submit(tx, timeout));
+                            decorate(session.submit(tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -104,7 +107,7 @@ public class MembershipTests {
         void start() {
             scheduler.schedule(() -> {
                 try {
-                    decorate(session.submit(tx, timeout));
+                    decorate(session.submit(tx, timeout, scheduler));
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -116,7 +119,6 @@ public class MembershipTests {
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private Map<Digest, Router>            routers;
-    private ScheduledExecutorService       scheduler;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -125,7 +127,6 @@ public class MembershipTests {
         members = null;
         transactions = null;
         blocks = null;
-        scheduler = null;
     }
 
     @Test
@@ -145,6 +146,7 @@ public class MembershipTests {
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
         final Duration timeout = Duration.ofSeconds(5);
+        final var scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         var transactioneers = new ArrayList<Transactioneer>();
@@ -152,7 +154,7 @@ public class MembershipTests {
         final int max = 1;
         for (int i = 0; i < clientCount; i++) {
             choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler))
                   .forEach(e -> transactioneers.add(e));
         }
 
@@ -183,20 +185,8 @@ public class MembershipTests {
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, cardinality,
                                     3);
-        scheduler = Executors.newScheduledThreadPool(cardinality);
+        var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        AtomicInteger sd = new AtomicInteger();
-        Executor submitDispatcher = Executors.newFixedThreadPool(cardinality, r -> {
-            Thread thread = new Thread(r, "Submit Dispatcher [" + sd.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
-        AtomicInteger d = new AtomicInteger();
-        Executor dispatcher = Executors.newCachedThreadPool(r -> {
-            Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         AtomicInteger exec = new AtomicInteger();
         Executor routerExec = Executors.newFixedThreadPool(cardinality, r -> {
             Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
@@ -221,7 +211,6 @@ public class MembershipTests {
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
-                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)

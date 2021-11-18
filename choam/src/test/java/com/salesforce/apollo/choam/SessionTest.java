@@ -51,7 +51,7 @@ public class SessionTest {
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
-        Parameters params = Parameters.newBuilder().setScheduler(exec).setContext(context)
+        Parameters params = Parameters.newBuilder().setContext(context)
                                       .setMember(new SigningMemberImpl(Utils.getMember(0))).build();
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
@@ -74,7 +74,7 @@ public class SessionTest {
         Session session = new Session(params, service);
         final String content = "Give me food or give me slack or kill me";
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
-        var result = session.submit(tx, null);
+        var result = session.submit(tx, null, exec);
         assertEquals(1, session.submitted());
         assertEquals(content, result.get(1, TimeUnit.SECONDS));
         assertEquals(0, session.submitted());
@@ -84,7 +84,7 @@ public class SessionTest {
     public void scalingTest() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
-        Parameters params = Parameters.newBuilder().setScheduler(exec).setContext(context)
+        Parameters params = Parameters.newBuilder().setContext(context)
                                       .setMember(new SigningMemberImpl(Utils.getMember(0))).setTxnPermits(100_000_000)
                                       .build();
 
@@ -118,7 +118,7 @@ public class SessionTest {
             Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
             CompletableFuture<Object> result;
             try {
-                result = session.submit(tx, null).whenComplete((r, t) -> {
+                result = session.submit(tx, null, exec).whenComplete((r, t) -> {
                     if (t != null) {
                         if (t instanceof CompletionException ce) {
                             reg.counter(t.getCause().getClass().getSimpleName()).inc();

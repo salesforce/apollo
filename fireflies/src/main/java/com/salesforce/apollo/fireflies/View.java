@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -292,13 +291,13 @@ public class View {
 
             long interval = d.toMillis();
             int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
-            futureGossip = scheduler.schedule(() -> fjPool.execute(() -> {
+            futureGossip = scheduler.schedule(() -> {
                 try {
                     oneRound(d, scheduler);
                 } catch (Throwable e) {
                     log.error("unexpected error during gossip round", e);
                 }
-            }), initialDelay, TimeUnit.MILLISECONDS);
+            }, initialDelay, TimeUnit.MILLISECONDS);
             log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), initialDelay, seedList);
         }
 
@@ -407,8 +406,6 @@ public class View {
      */
     private final int diameter;
 
-    private final ForkJoinPool fjPool;
-
     private final FireflyMetrics metrics;
 
     /**
@@ -447,17 +444,12 @@ public class View {
     private final ConcurrentMap<Digest, Participant> view = new ConcurrentHashMap<>();
 
     public View(Digest id, Node node, Router communications, FireflyMetrics metrics) {
-        this(id, node, communications, metrics, ForkJoinPool.commonPool());
-    }
-
-    public View(Digest id, Node node, Router communications, FireflyMetrics metrics, ForkJoinPool fjPool) {
         this.metrics = metrics;
         this.node = node;
-        this.fjPool = fjPool;
         this.comm = communications.create(node, id, service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
-                                          getCreate(metrics, fjPool), Fireflies.getLocalLoopback(node));
+                                          getCreate(metrics), Fireflies.getLocalLoopback(node));
         context = new Context<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
@@ -935,7 +927,7 @@ public class View {
                     completion.run();
                 }
             }
-        }, fjPool);
+        }, r -> r.run());
     }
 
     /**
@@ -1061,21 +1053,19 @@ public class View {
                 }
 
                 roundListeners.forEach(l -> {
-                    fjPool.execute(() -> {
-                        try {
-                            l.run();
-                        } catch (Throwable e) {
-                            log.error("error sending round() to listener: " + l, e);
-                        }
-                    });
+                    try {
+                        l.run();
+                    } catch (Throwable e) {
+                        log.error("error sending round() to listener: " + l, e);
+                    }
                 });
-                scheduler.schedule(() -> fjPool.execute(() -> {
+                scheduler.schedule(() -> {
                     try {
                         oneRound(d, scheduler);
                     } catch (Throwable e) {
                         log.error("unexpected error during gossip round", e);
                     }
-                }), d.toMillis(), TimeUnit.MILLISECONDS);
+                }, d.toMillis(), TimeUnit.MILLISECONDS);
             });
         } catch (Throwable e) {
             log.error("unexpected error during gossip round", e);

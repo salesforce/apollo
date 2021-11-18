@@ -35,6 +35,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
+ * @deprecated
  *
  */
 public class CausalBufferTest {

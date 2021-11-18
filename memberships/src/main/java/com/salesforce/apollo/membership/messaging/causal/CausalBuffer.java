@@ -50,6 +50,7 @@ import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
  * @author hal.hildebrand
+ * @deprecated
  *
  */
 public class CausalBuffer {

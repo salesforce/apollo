@@ -78,7 +78,6 @@ public class ViewAssemblyTest {
 
         final var executor = Executors.newCachedThreadPool();
         Parameters.Builder params = Parameters.newBuilder().setScheduler(Executors.newScheduledThreadPool(cardinality))
-                                              .setDispatcher(executor)
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())

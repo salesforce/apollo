@@ -7,16 +7,16 @@
 package com.salesforce.apollo.state;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
@@ -49,20 +50,26 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final int clientCount = 10;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
+        final int target = 300;
 
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
                .forEach(r -> r.start());
         choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
               .forEach(ch -> ch.start());
+        Thread.sleep(1000);
 
-        Utils.waitForCondition(15_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                          .filter(s -> s >= waitFor).count() == choams.size() - 1);
-        assertEquals(choams.size() - 1,
-                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= waitFor).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        var success = Utils.waitForCondition(15_000, 100,
+                                             () -> members.stream().map(m -> updaters.get(m))
+                                                          .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                                          .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
+                                                          .count() == members.size() - 1);
+        assertTrue(success,
+                   "Results: "
+                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout);
+        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
+                                                                                   txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
@@ -74,10 +81,12 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
+
         Thread.sleep(5_000);
         System.out.println("Starting late joining node");
         choams.get(testSubject.getId()).start();
         routers.get(testSubject.getId()).start();
+        Thread.sleep(1000);
 
         try {
             countdown.await(120, TimeUnit.SECONDS);
@@ -85,23 +94,44 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
             proceed.set(false);
         }
 
+        success = Utils.waitForCondition(30_000, 100,
+                                         () -> members.stream().map(m -> updaters.get(m))
+                                                      .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                                      .mapToLong(cb -> cb.height()).filter(l -> l >= target)
+                                                      .count() == members.size());
+        assertTrue(success,
+                   "Results: "
+                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+
         System.out.println();
         System.out.println();
+        System.out.println();
+
+        record row(float price, int quantity) {}
+
         System.out.println("Checking replica consistency");
 
-        Connection connection = updaters.get(members.get(0)).newConnection();
-        Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, from books");
-        ResultSetMetaData rsmd = results.getMetaData();
-        int columnsNumber = rsmd.getColumnCount();
-        while (results.next()) {
-            for (int i = 1; i <= columnsNumber; i++) {
-                if (i > 1)
-                    System.out.print(",  ");
-                Object columnValue = results.getObject(i);
-                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
+
+        for (Member m : members) {
+            Connection connection = updaters.get(m).newConnection();
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+            while (results.next()) {
+                manifested.computeIfAbsent(m, k -> new HashMap<>())
+                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
             }
-            System.out.println("");
+            connection.close();
+        }
+
+        Map<Integer, row> standard = manifested.get(members.get(0));
+        for (Member m : members) {
+            var candidate = manifested.get(m);
+            for (var entry : standard.entrySet()) {
+                assertTrue(candidate.containsKey(entry.getKey()));
+                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            }
         }
     }
 }

@@ -10,7 +10,6 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -29,8 +28,8 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Executor executor,
-                     Clock clock, double bias, Verifier[] verifiers, double fpr) {
+                     List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Clock clock, double bias,
+                     Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -63,7 +62,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private short                                    crpFixedPrefix;
         private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int                                      epochLength     = 30;
-        private Executor                                 executor        = r -> r.run();
         private int                                      firstDecidedRound;
         private double                                   fpr             = 0.125;
         private int                                      lastLevel       = -1;
@@ -136,7 +134,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
                               10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs,
-                              checks, wtk, executor, clock, bias, verifiers, fpr);
+                              checks, wtk, clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -170,10 +168,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public int getEpochLength() {
             return epochLength;
-        }
-
-        public Executor getExecutor() {
-            return executor;
         }
 
         public int getFirstDecidedRound() {
@@ -266,11 +260,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setEpochLength(int epochLength) {
             this.epochLength = epochLength;
-            return this;
-        }
-
-        public Builder setExecutor(Executor executor) {
-            this.executor = executor;
             return this;
         }
 

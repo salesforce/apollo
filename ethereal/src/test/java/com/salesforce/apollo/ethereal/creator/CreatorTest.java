@@ -13,7 +13,6 @@ import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -119,9 +118,9 @@ public class CreatorTest {
         short nProc = 4;
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        var cnf = Config.Builder.empty().setSigner(DEFAULT_SIGNER).setExecutor(ForkJoinPool.commonPool())
-                                .setnProc(nProc).setSigner(new SignerImpl(0, keyPair.getPrivate()))
-                                .setNumberOfEpochs(epoch + 1).build();
+        var cnf = Config.Builder.empty().setSigner(DEFAULT_SIGNER).setnProc(nProc)
+                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
+                                .build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -165,8 +164,8 @@ public class CreatorTest {
     @Test
     public void shouldBuildUnitsForEachConsecutiveLevel() throws Exception {
         short nProc = 4;
-        var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
+        var cnf = Config.Builder.empty().setCanSkipLevel(false).setnProc(nProc).setSigner(DEFAULT_SIGNER)
+                                .setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -212,8 +211,8 @@ public class CreatorTest {
     @Test
     public void shouldBuildUnitsOnHighestPossibleLevel() throws Exception {
         short nProc = 4;
-        var cnf = Config.Builder.empty().setCanSkipLevel(true).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
+        var cnf = Config.Builder.empty().setCanSkipLevel(true).setnProc(nProc).setSigner(DEFAULT_SIGNER)
+                                .setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -262,8 +261,7 @@ public class CreatorTest {
     @Test
     public void shouldCreatUnitOnNextLevel() throws Exception {
         short nProc = 4;
-        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
+        var cnf = Config.Builder.empty().setnProc(nProc).setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);
@@ -305,8 +303,7 @@ public class CreatorTest {
     public void valdFromFutureShouldProduceUnitOfThatEpoch() throws Exception {
         short nProc = 4;
         var epoch = 7;
-        var cnf = Config.Builder.empty().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(epoch).build();
+        var cnf = Config.Builder.empty().setnProc(nProc).setSigner(DEFAULT_SIGNER).setNumberOfEpochs(epoch).build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
@@ -361,8 +358,8 @@ public class CreatorTest {
     @Test
     public void withoutEnoughUnitsOnALevelShouldNotCreateNewUnits() throws Exception {
         short nProc = 4;
-        var cnf = Config.Builder.empty().setCanSkipLevel(false).setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
-                                .setSigner(DEFAULT_SIGNER).setNumberOfEpochs(2).build();
+        var cnf = Config.Builder.empty().setCanSkipLevel(false).setnProc(nProc).setSigner(DEFAULT_SIGNER)
+                                .setNumberOfEpochs(2).build();
         var unitRec = new ArrayBlockingQueue<Unit>(200);
         Consumer<Unit> send = u -> unitRec.add(u);
         var creator = newCreator(cnf, send);

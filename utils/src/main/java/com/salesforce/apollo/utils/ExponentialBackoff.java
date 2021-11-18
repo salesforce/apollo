@@ -47,7 +47,7 @@ public class ExponentialBackoff<T> {
 
         public void executeAsync(Callable<ListenableFuture<T>> task, Executor executor,
                                  CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
-            build().executeAsync(task, executor, futureSailor, scheduler);
+            build().executeAsync(task, futureSailor, scheduler);
         }
 
         public Builder<T> retryIf(final Predicate<T> retryIf) {
@@ -143,12 +143,12 @@ public class ExponentialBackoff<T> {
         }
     }
 
-    public void executeAsync(Callable<ListenableFuture<T>> task, Executor executor, CompletableFuture<T> futureSailor,
+    public void executeAsync(Callable<ListenableFuture<T>> task, CompletableFuture<T> futureSailor,
                              ScheduledExecutorService scheduler) {
         if (infinite) {
-            executeAsync(0, task, executor, futureSailor, attempt -> true, scheduler);
+            executeAsync(0, task, futureSailor, attempt -> true, scheduler);
         } else {
-            executeAsync(0, task, executor, futureSailor, attempt -> attempt < maxAttempts, scheduler);
+            executeAsync(0, task, futureSailor, attempt -> attempt < maxAttempts, scheduler);
         }
     }
 
@@ -175,7 +175,7 @@ public class ExponentialBackoff<T> {
                            TimeUnit.MILLISECONDS);
     }
 
-    private void executeAsync(final long attempt, Callable<ListenableFuture<T>> task, Executor executor,
+    private void executeAsync(final long attempt, Callable<ListenableFuture<T>> task,
                               final CompletableFuture<T> futureSailor, final Predicate<Long> predicate,
                               final ScheduledExecutorService scheduler) {
         if (!predicate.test(attempt)) {
@@ -192,8 +192,8 @@ public class ExponentialBackoff<T> {
             r = task.call();
         } catch (Exception e) {
             exceptionHandler.accept(e);
-            scheduler.schedule(() -> executeAsync(nextAttempt, task, executor, futureSailor, predicate, scheduler),
-                               waitTime, TimeUnit.MILLISECONDS);
+            scheduler.schedule(() -> executeAsync(nextAttempt, task, futureSailor, predicate, scheduler), waitTime,
+                               TimeUnit.MILLISECONDS);
             return;
         }
 
@@ -214,8 +214,8 @@ public class ExponentialBackoff<T> {
             } catch (final Exception e) {
                 exceptionHandler.accept(e);
             }
-            scheduler.schedule(() -> executeAsync(nextAttempt, task, executor, futureSailor, predicate, scheduler),
-                               waitTime, TimeUnit.MILLISECONDS);
-        }, executor);
+            scheduler.schedule(() -> executeAsync(nextAttempt, task, futureSailor, predicate, scheduler), waitTime,
+                               TimeUnit.MILLISECONDS);
+        }, run -> run.run());
     }
 }

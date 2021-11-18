@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies.communications;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -34,8 +33,8 @@ import com.salesforce.apollo.fireflies.Participant;
  */
 public class FfClient implements Fireflies {
 
-    public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics, Executor executor) {
-        return (t, f, c) -> new FfClient(c, (Participant) t, metrics, executor);
+    public static CreateClientCommunications<Fireflies> getCreate(FireflyMetrics metrics) {
+        return (t, f, c) -> new FfClient(c, (Participant) t, metrics);
 
     }
 
@@ -43,15 +42,13 @@ public class FfClient implements Fireflies {
     private final FirefliesFutureStub     client;
     private final Participant             member;
     private final FireflyMetrics          metrics;
-    private final Executor                executor;
 
-    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics, Executor executor) {
+    public FfClient(ManagedServerConnection channel, Participant member, FireflyMetrics metrics) {
         this.member = member;
         assert !(member instanceof Node) : "whoops : " + member;
         this.channel = channel;
         this.client = FirefliesGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
-        this.executor = executor;
     }
 
     @Override
@@ -71,12 +68,8 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundGossipTimer().time();
         }
         try {
-            SayWhat sw = SayWhat.newBuilder()
-                                .setContext(context.toDigeste())
-                                .setNote(note)
-                                .setRing(ring)
-                                .setGossip(digests)
-                                .build();
+            SayWhat sw = SayWhat.newBuilder().setContext(context.toDigeste()).setNote(note).setRing(ring)
+                                .setGossip(digests).build();
             ListenableFuture<Gossip> result = client.gossip(sw);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(sw.getSerializedSize());
@@ -95,7 +88,7 @@ public class FfClient implements Fireflies {
                     metrics.inboundBandwidth().mark(gossip.getSerializedSize());
                     metrics.gossipResponse().update(gossip.getSerializedSize());
                 }
-            }, executor);
+            }, r -> r.run());
             return result;
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

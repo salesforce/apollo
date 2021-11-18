@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -24,7 +23,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -36,14 +34,13 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private volatile boolean majorityFailed  = false;
     private volatile boolean majoritySucceed = false;
 
-    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                        Executor executor) {
-        super(context, member, comm, executor);
+    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
+        super(context, member, comm);
     }
 
     public RingIterator(Direction direction, Context<Member> context, SigningMember member,
-                        CommonCommunications<Comm, ?> comm, Executor executor) {
-        super(direction, context, member, comm, executor);
+                        CommonCommunications<Comm, ?> comm) {
+        super(direction, context, member, comm);
     }
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
@@ -99,9 +96,9 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                 allowed.accept(allow);
                 return;
             }
-            futureSailor.addListener(Utils.wrapped(() -> {
-                allowed.accept(handler.handle(tally, Optional.of(futureSailor), link, current));
-            }, log), executor);
+            futureSailor.addListener(() -> allowed.accept(handler.handle(tally, Optional.of(futureSailor), link,
+                                                                         current)),
+                                     r -> r.run());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }

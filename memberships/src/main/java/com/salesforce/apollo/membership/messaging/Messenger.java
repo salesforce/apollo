@@ -204,7 +204,7 @@ public class Messenger {
                                           r -> new MessagingServer(
                                                   communications.getClientIdentityProvider(), parameters.metrics, r),
                                           getCreate(parameters.metrics, executor), Messaging.getLocalLoopback(member));
-        gossiper = new RingCommunications<>(this.context, member, this.comm, executor);
+        gossiper = new RingCommunications<>(this.context, member, this.comm);
     }
 
     public void clearBuffer() {

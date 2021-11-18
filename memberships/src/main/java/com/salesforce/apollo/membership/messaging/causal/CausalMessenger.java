@@ -100,7 +100,7 @@ public class CausalMessenger {
                                                                          parameters.metrics, r),
                                           getCreate(parameters.metrics, params.executor),
                                           CausalMessaging.getLocalLoopback(params.member));
-        gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
+        gossiper = new RingCommunications<>(params.context, params.member, this.comm);
         buffer = new CausalBuffer(parameters, mail -> deliver(mail));
     }
 
