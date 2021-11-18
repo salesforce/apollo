@@ -50,7 +50,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final int clientCount = 10;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final int target = 300;
+        final int target = 100;
 
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
                .forEach(r -> r.start());

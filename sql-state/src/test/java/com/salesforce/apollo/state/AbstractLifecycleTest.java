@@ -230,6 +230,7 @@ abstract public class AbstractLifecycleTest {
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
+        final SigningMember testSubject = members.get(CARDINALITY - 1);
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
                                                    m -> new LocalRouter(m,
@@ -237,7 +238,9 @@ abstract public class AbstractLifecycleTest {
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),
                                                                         routerExec)));
-        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m)));
+        choams = members.stream()
+                        .collect(Collectors.toMap(m -> m.getId(),
+                                                  m -> createChoam(entropy, params, m, m.equals(testSubject))));
     }
 
     protected Txn initialInsert() {
@@ -261,7 +264,7 @@ abstract public class AbstractLifecycleTest {
         return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
-    private CHOAM createChoam(Random entropy, Builder params, SigningMember m) {
+    private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject) {
         blocks.put(m.getId(), new CopyOnWriteArrayList<Digest>());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
@@ -271,14 +274,15 @@ abstract public class AbstractLifecycleTest {
 
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setCheckpointer(wrap(up))
-                               .setRestorer(up.getBootstrapper()).setProcessor(wrap(m, up)).build(),
+                               .setSynchronizationCycles(testSubject ? 100 : 1).setRestorer(up.getBootstrapper())
+                               .setProcessor(wrap(m, up)).build(),
                          MVStore.open(null));
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
-        var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
-                               .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
-                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
+        var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
+                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
+                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
