@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -94,9 +95,9 @@ public interface Committee {
         throw new IllegalStateException("Should not be called on this implementation");
     }
 
-    default void submit(SubmitTransaction request) {
+    default SubmitResult submit(SubmitTransaction request) {
         log().trace("Cannot submit txn, inactive committee on: {}", params().member());
-        throw Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee").asRuntimeException();
+        return SubmitResult.newBuilder().setSuccess(false).setStatus("Cannot submit txn, inactive committee").build();
     }
 
     default ListenableFuture<Status> submitTxn(Transaction transaction) {

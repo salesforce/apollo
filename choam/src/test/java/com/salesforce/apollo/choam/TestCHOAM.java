@@ -202,9 +202,9 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(1).setCheckpointer(checkpointer);
@@ -267,7 +267,7 @@ public class TestCHOAM {
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
-        final Duration timeout = Duration.ofSeconds(15);
+        final Duration timeout = Duration.ofSeconds(3);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();

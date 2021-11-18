@@ -25,6 +25,7 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Join;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
@@ -44,8 +45,6 @@ import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
 import com.salesforce.apollo.membership.Member;
-
-import io.grpc.Status;
 
 /**
  * An "Earner"
@@ -219,15 +218,16 @@ public class Producer {
         ds.close();
     }
 
-    public void submit(Transaction transaction) {
+    public SubmitResult submit(Transaction transaction) {
         if (ds.offer(transaction)) {
             log.debug("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                       params().member());
+            return SubmitResult.newBuilder().setSuccess(true).setStatus("OK").build();
         } else {
             log.debug("Transaction buffer full, cannot submit received txn: {} on: {}",
                       CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
-            throw Status.UNAVAILABLE.withDescription("Transaction buffer full on: " + params().member().getId())
-                                    .asRuntimeException();
+            return SubmitResult.newBuilder().setSuccess(false)
+                               .setStatus("Transaction buffer full on: " + params().member().getId()).build();
         }
     }
 

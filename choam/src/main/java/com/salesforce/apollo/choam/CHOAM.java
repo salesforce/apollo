@@ -44,7 +44,6 @@ import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Assemble;
@@ -62,6 +61,7 @@ import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -227,9 +227,8 @@ public class CHOAM {
         }
 
         @Override
-        public Empty submit(SubmitTransaction request, Digest from) {
-            CHOAM.this.submit(request, from);
-            return Empty.getDefaultInstance();
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
         }
 
         @Override
@@ -278,10 +277,10 @@ public class CHOAM {
         }
 
         @Override
-        public void submit(SubmitTransaction request) {
+        public SubmitResult submit(SubmitTransaction request) {
             log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
                       params().member());
-            producer.submit(request.getTransaction());
+            return producer.submit(request.getTransaction());
         }
     }
 
@@ -1092,21 +1091,25 @@ public class CHOAM {
         };
     }
 
-    /** Submit a transaction from a client */
-    private void submit(SubmitTransaction request, Digest from) {
+    /**
+     * Submit a transaction from a client
+     * 
+     * @return
+     */
+    private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
             log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
-            Status.FAILED_PRECONDITION.withDescription("Invalid transaction submission from non member")
-                                      .asRuntimeException();
+            return SubmitResult.newBuilder().setSuccess(false)
+                               .setStatus("Invalid transaction submission from non member").build();
         }
         final var c = current.get();
         if (c == null) {
             log.warn("No committee to submit txn from: {} on: {}", from, params.member());
-            throw Status.UNAVAILABLE.withDescription("No committee to submit txn").asRuntimeException();
+            return SubmitResult.newBuilder().setSuccess(false).setStatus("No committee to submit txn").build();
         }
         log.debug("Submiting received txn: {} from: {} on: {}",
                   hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
-        c.submit(request);
+        return c.submit(request);
     }
 
     private Initial sync(Synchronize request, Digest from) {

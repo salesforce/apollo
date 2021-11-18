@@ -9,13 +9,13 @@ package com.salesforce.apollo.choam.comm;
 import java.time.Duration;
 
 import com.google.common.util.concurrent.RateLimiter;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
@@ -25,7 +25,6 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
@@ -91,10 +90,11 @@ public class TerminalServer extends TerminalImplBase {
     }
 
     @Override
-    public void submit(SubmitTransaction request, StreamObserver<Empty> responseObserver) {
+    public void submit(SubmitTransaction request, StreamObserver<SubmitResult> responseObserver) {
         router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
             if (!submitRateLimiter.tryAcquire()) {
-                responseObserver.onError(Status.UNAVAILABLE.withDescription("Rate exceeded").asRuntimeException());
+                responseObserver.onNext(SubmitResult.newBuilder().setSuccess(false).build());
+                responseObserver.onCompleted();
                 return;
             }
             Digest from = identity.getFrom();

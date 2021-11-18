@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -32,7 +32,7 @@ public interface Concierge {
 
     ViewMember join(JoinRequest request, Digest from);
 
-    Empty submit(SubmitTransaction request, Digest from);
+    SubmitResult submit(SubmitTransaction request, Digest from);
 
     Initial sync(Synchronize request, Digest from);
 

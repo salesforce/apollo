@@ -242,7 +242,7 @@ public class CHOAMTest {
                                .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(200).setCheckpointer(checkpointer);
