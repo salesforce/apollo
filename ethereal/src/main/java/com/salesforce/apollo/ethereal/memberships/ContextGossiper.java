@@ -11,7 +11,6 @@ import static com.salesforce.apollo.ethereal.memberships.GossiperClient.getCreat
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -70,20 +69,19 @@ public class ContextGossiper {
     private final AtomicBoolean                                       started = new AtomicBoolean();
 
     public ContextGossiper(Controller controller, Context<Member> context, SigningMember member, Router communications,
-                           Executor executor, RouterMetrics metrics) {
-        this(new Gossiper(controller), context, member, communications, executor, metrics);
+                           RouterMetrics metrics) {
+        this(new Gossiper(controller), context, member, communications,  metrics);
     }
 
-    public ContextGossiper(Gossiper gossiper, Context<Member> context, SigningMember member, Router communications,
-                           Executor executor, RouterMetrics metrics) {
+    public ContextGossiper(Gossiper gossiper, Context<Member> context, SigningMember member, Router communications, RouterMetrics metrics) {
         this.context = context;
         this.gossiper = gossiper;
         this.member = member;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
-                                     getCreate(metrics, executor), Scuttlebutte.getLocalLoopback(member));
+                                     getCreate(metrics), Scuttlebutte.getLocalLoopback(member));
         final var cast = (Context<Member>) context;
-        ring = new RingCommunications<Scuttlebutte>(cast, member, this.comm, executor);
+        ring = new RingCommunications<Scuttlebutte>(cast, member, this.comm);
     }
 
     public Context<Member> getContext() {

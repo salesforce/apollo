@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -141,8 +140,7 @@ public class RbcTest {
         parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-        Executor commExec = Executors.newCachedThreadPool();
+        Executor commExec = Executors.newFixedThreadPool(5);
 
         messengers = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(node,
@@ -150,11 +148,11 @@ public class RbcTest {
                                                 commExec);
             communications.add(comms);
             comms.start();
-            return new ReliableBroadcaster(parameters.setMember(node).setExecutor(ForkJoinPool.commonPool()).build(),
-                                           comms);
+            return new ReliableBroadcaster(parameters.setMember(node).build(), comms);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
         messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();

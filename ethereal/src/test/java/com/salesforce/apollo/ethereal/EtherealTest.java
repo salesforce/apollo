@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -88,7 +87,7 @@ public class EtherealTest {
         List<Controller> controllers = new ArrayList<>();
         List<ContextGossiper> gossipers = new ArrayList<>();
         List<Router> comms = new ArrayList<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc * 10);
 
         List<SigningMember> members = IntStream.range(0, nProc)
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
@@ -98,7 +97,7 @@ public class EtherealTest {
         for (Member m : members) {
             context.activate(m);
         }
-        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+        var builder = Config.deterministic().setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         var executor = Executors.newCachedThreadPool();
 
@@ -136,7 +135,7 @@ public class EtherealTest {
             }
             Router com = new LocalRouter(members.get(i), ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, executor, null));
+            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, null));
         }
         try {
             controllers.forEach(e -> e.start());
@@ -203,7 +202,7 @@ public class EtherealTest {
         final var verifiers = cpks.stream()
                                   .map(c -> (Verifier) new DefaultVerifier(c.getX509Certificate().getPublicKey()))
                                   .toList();
-        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+        var builder = Config.deterministic().setnProc(nProc)
                             .setVerifiers(verifiers.toArray(new Verifier[verifiers.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
@@ -308,7 +307,7 @@ public class EtherealTest {
         final var verifiers = cpks.stream()
                                   .map(c -> (Verifier) new DefaultVerifier(c.getX509Certificate().getPublicKey()))
                                   .toList();
-        var builder = Config.deterministic().setExecutor(ForkJoinPool.commonPool()).setnProc(nProc)
+        var builder = Config.deterministic().setnProc(nProc)
                             .setVerifiers(verifiers.toArray(new Verifier[verifiers.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();

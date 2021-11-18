@@ -142,11 +142,11 @@ public class CHOAM {
             }
             HashedCertifiedBlock anchor = pending.poll();
             if (anchor != null) {
-                log.info("Regenerating from anchor: {} on: {}", anchor.hash, params.member());
-                recover(anchor);
+                log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member());
+                transitions.bootstrap(anchor);
                 return;
             }
-            log.debug("No anchor to regenerate, waiting: {} cycles on: {}", params.synchronizationCycles(),
+            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
                       params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
@@ -159,7 +159,7 @@ public class CHOAM {
             HashedCertifiedBlock anchor = pending.poll();
             if (anchor != null) {
                 log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member());
-                recover(anchor);
+                transitions.bootstrap(anchor);
                 return;
             }
             log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
@@ -663,7 +663,7 @@ public class CHOAM {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        log.info("CHOAM startup tolerance level: {} on: {}", params.toleranceLevel(), params.member());
+        log.info("CHOAM startup, tolerance level: {} on: {}", params.toleranceLevel(), params.member());
         combine.start(params.producer().gossipDuration(), params.scheduler());
         transitions.fsm().enterStartState();
         transitions.start();

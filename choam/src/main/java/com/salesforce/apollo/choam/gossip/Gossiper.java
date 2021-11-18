@@ -15,7 +15,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -93,7 +92,7 @@ public class Gossiper {
     private final Consumer<Integer>                           roundListener;
 
     public Gossiper(Context<Member> context, SigningMember member, Predicate<Validate> acceptValidate,
-                    Predicate<ViewMember> acceptJoin, Router communications, Executor executor, RouterMetrics metrics,
+                    Predicate<ViewMember> acceptJoin, Router communications, RouterMetrics metrics,
                     DigestAlgorithm algo, Consumer<Integer> roundListener) {
         this.context = context;
         this.member = member;
@@ -101,9 +100,9 @@ public class Gossiper {
         this.roundListener = roundListener;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
                                      r -> new GossipServer(communications.getClientIdentityProvider(), metrics, r),
-                                     getCreate(metrics, executor), Gossip.getLocalLoopback(member));
+                                     getCreate(metrics), Gossip.getLocalLoopback(member));
         final var cast = (Context<Member>) context;
-        ring = new RingCommunications<Gossip>(cast, member, this.comm, executor);
+        ring = new RingCommunications<Gossip>(cast, member, this.comm);
         this.acceptValidate = acceptValidate;
         this.acceptJoin = acceptJoin;
     }

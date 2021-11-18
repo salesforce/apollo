@@ -20,7 +20,6 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -71,21 +70,20 @@ public class ReliableBroadcaster {
     public record Msg(Digest source, ByteString content, Digest hash) {}
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
-                             Executor executor, SigningMember member, RouterMetrics metrics, double falsePositiveRate,
+                             SigningMember member, RouterMetrics metrics, double falsePositiveRate,
                              int deliveredCacheSize) {
         public static class Builder implements Cloneable {
             private int             bufferSize         = 500;
             private Context<Member> context;
             private int             deliveredCacheSize = 10_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private Executor        executor           = ForkJoinPool.commonPool();
             private double          falsePositiveRate  = 0.125;
             private int             maxMessages        = 100;
             private SigningMember   member;
             private RouterMetrics   metrics;
 
             public Parameters build() {
-                return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, executor, member, metrics,
+                return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, member, metrics,
                                       falsePositiveRate, deliveredCacheSize);
             }
 
@@ -112,10 +110,6 @@ public class ReliableBroadcaster {
 
             public DigestAlgorithm getDigestAlgorithm() {
                 return digestAlgorithm;
-            }
-
-            public Executor getExecutor() {
-                return executor;
             }
 
             public double getFalsePositiveRate() {
@@ -151,11 +145,6 @@ public class ReliableBroadcaster {
 
             public Parameters.Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
                 this.digestAlgorithm = digestAlgorithm;
-                return this;
-            }
-
-            public Builder setExecutor(Executor executor) {
-                this.executor = executor;
                 return this;
             }
 
@@ -342,7 +331,7 @@ public class ReliableBroadcaster {
             if ((size() < highWaterMark) || !garbageCollecting.tryAcquire()) {
                 return;
             }
-            params.executor.execute(Utils.wrapped(() -> {
+            ForkJoinPool.commonPool().execute(Utils.wrapped(() -> {
                 try {
                     int startSize = state.size();
                     if (startSize < highWaterMark) {
@@ -412,9 +401,9 @@ public class ReliableBroadcaster {
         this.comm = communications.create(params.member, params.context.getId(), new Service(),
                                           r -> new RbcServer(communications.getClientIdentityProvider(),
                                                              parameters.metrics, r),
-                                          getCreate(parameters.metrics, params.executor),
+                                          getCreate(parameters.metrics),
                                           ReliableBroadcast.getLocalLoopback(params.member));
-        gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.executor);
+        gossiper = new RingCommunications<>(params.context, params.member, this.comm);
     }
 
     public void clearBuffer() {

@@ -47,7 +47,6 @@ import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Slice;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
-import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -153,7 +152,7 @@ public class CheckpointAssemblerTest {
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.00125,
-                                                           DigestAlgorithm.DEFAULT, Router.createFjPool());
+                                                           DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10));

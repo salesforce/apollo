@@ -181,7 +181,7 @@ public class Producer {
         controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                                   epoch -> newEpoch(epoch));
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
-                                          params().dispatcher(), params().metrics());
+                                          params().metrics());
         reconfigurationCountdown = new AtomicInteger(3);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }

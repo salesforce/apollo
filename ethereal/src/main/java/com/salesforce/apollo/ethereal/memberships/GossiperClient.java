@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal.memberships;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -26,25 +25,23 @@ import com.salesforce.apollo.membership.Member;
  */
 public class GossiperClient implements Scuttlebutte {
 
-    public static CreateClientCommunications<Scuttlebutte> getCreate(RouterMetrics metrics, Executor exeucutor) {
+    public static CreateClientCommunications<Scuttlebutte> getCreate(RouterMetrics metrics) {
         return (t, f, c) -> {
-            return new GossiperClient(c, t, metrics, exeucutor);
+            return new GossiperClient(c, t, metrics);
         };
 
     }
 
     private final ManagedServerConnection channel;
     private final GossiperFutureStub      client;
-    private final Executor                executor;
     private final Member                  member;
     private final RouterMetrics           metrics;
 
-    public GossiperClient(ManagedServerConnection channel, Member member, RouterMetrics metrics, Executor executor) {
+    public GossiperClient(ManagedServerConnection channel, Member member, RouterMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = GossiperGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
-        this.executor = executor;
     }
 
     @Override
@@ -79,7 +76,7 @@ public class GossiperClient implements Scuttlebutte {
                     metrics.outboundBandwidth().mark(request.getSerializedSize());
                     metrics.outboundGossipRate().mark();
                 }
-            }, executor);
+            }, r -> r.run());
             return result;
         } finally {
             if (timer != null) {

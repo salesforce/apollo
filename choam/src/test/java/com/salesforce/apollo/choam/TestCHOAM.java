@@ -106,7 +106,7 @@ public class TestCHOAM {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout), tc);
+                                decorate(session.submit(tx, timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -125,7 +125,7 @@ public class TestCHOAM {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout), tc);
+                                decorate(session.submit(tx, timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -141,7 +141,7 @@ public class TestCHOAM {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(tx, timeout), time);
+                    decorate(session.submit(tx, timeout, scheduler), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -155,7 +155,6 @@ public class TestCHOAM {
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private Map<Digest, Router>            routers;
-    private ScheduledExecutorService       scheduler;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -178,22 +177,10 @@ public class TestCHOAM {
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
                                     3);
-        scheduler = Executors.newScheduledThreadPool(3 * CARDINALITY);
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        AtomicInteger sd = new AtomicInteger();
-        Executor submitDispatcher = Executors.newFixedThreadPool(CARDINALITY, r -> {
-            Thread thread = new Thread(r, "Submit Dispatcher [" + sd.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
-        AtomicInteger d = new AtomicInteger();
-        Executor dispatcher = Executors.newCachedThreadPool(r -> {
-            Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         AtomicInteger exec = new AtomicInteger();
-        Executor routerExec = Executors.newCachedThreadPool(r -> {
+        Executor routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
@@ -216,7 +203,6 @@ public class TestCHOAM {
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
-                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
@@ -292,7 +278,7 @@ public class TestCHOAM {
         final int clientCount = 5000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
+        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         for (int i = 0; i < clientCount; i++) {
             choams.values().stream().map(c -> new Transactioneer(c.getSession(), timeout, timeouts, latency, proceed,
@@ -316,6 +302,7 @@ public class TestCHOAM {
 
     @Test
     public void submitTxn() throws Exception {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         final int expected = 23;
@@ -328,7 +315,7 @@ public class TestCHOAM {
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(tx, null);
+        CompletableFuture<?> result = session.submit(tx, null, scheduler);
         while (true) {
             final var r = result;
             Utils.waitForCondition(1_000, () -> r.isDone());
@@ -338,7 +325,7 @@ public class TestCHOAM {
                         System.out.println("Failed with: " + t.toString());
                         return null;
                     });
-                    result = session.submit(tx, null);
+                    result = session.submit(tx, null, scheduler);
                 } else {
                     System.out.println("Success!!!!");
                     var completion = result.get();

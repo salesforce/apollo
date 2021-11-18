@@ -107,6 +107,8 @@ public class SqlStateMachine {
         }
     }
 
+    public record CurrentBlock(Digest hash, long height) {}
+
     public static class Event {
         public final JsonNode body;
         public final String   discriminator;
@@ -217,13 +219,14 @@ public class SqlStateMachine {
 
     private final LoadingCache<String, CallableStatement> callCache;
     private final File                                    checkpointDirectory;
-    private final ScriptCompiler                          compiler   = new ScriptCompiler();
+    private final ScriptCompiler                          compiler     = new ScriptCompiler();
     private final JdbcConnection                          connection;
-    private final AtomicReference<SecureRandom>           entropy    = new AtomicReference<>();
-    private final TxnExec                                 executor   = new TxnExec();
+    private final AtomicReference<CurrentBlock>           currentBlock = new AtomicReference<>();
+    private final AtomicReference<SecureRandom>           entropy      = new AtomicReference<>();
+    private final TxnExec                                 executor     = new TxnExec();
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
-    private final EventTrampoline                         trampoline = new EventTrampoline();
+    private final EventTrampoline                         trampoline   = new EventTrampoline();
     private final String                                  url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
@@ -334,6 +337,10 @@ public class SqlStateMachine {
                 return null;
             }
         };
+    }
+
+    public CurrentBlock getCurrentBlock() {
+        return currentBlock.get();
     }
 
     public TxnExec getExecutor() {
@@ -584,6 +591,7 @@ public class SqlStateMachine {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
+        currentBlock.set(new CurrentBlock(hash, height));
     }
 
     private void commit() {

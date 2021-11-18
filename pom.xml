@@ -16,8 +16,6 @@
 		<module>tron</module>
 		<module>stereotomy</module>
 		<module>utils</module>
-		<module>stereotomy-services</module>
-		<module>ghost</module>
 		<module>ethereal</module>
 		<module>choam</module>
 	</modules>
@@ -103,22 +101,12 @@
 				<groupId>io.github.hakky54</groupId>
 				<artifactId>sslcontext-kickstart-for-netty</artifactId>
 				<version>7.0.2</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>avalanche</artifactId>
-				<version>${project.version}</version>
-			</dependency>
+			</dependency> 
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>fireflies</artifactId>
 				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>ghost</artifactId>
-				<version>${project.version}</version>
-			</dependency>
+			</dependency> 
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>protocols</artifactId>
@@ -138,12 +126,7 @@
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>consortium</artifactId>
-				<version>${project.version}</version>
-			</dependency>
+			</dependency> 
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>sql-state</artifactId>
@@ -156,19 +139,14 @@
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>stereotomy-services</artifactId>
+				<artifactId>utils</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
-				<artifactId>utils</artifactId>
+				<artifactId>choam</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-            <dependency>
-                <groupId>com.salesforce.apollo</groupId>
-                <artifactId>choam</artifactId>
-                <version>${project.version}</version>
-            </dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -343,9 +321,8 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<forkCount>2</forkCount>
-					<reuseForks>true</reuseForks>
-					<argLine>-Xms1G</argLine>
+					<forkCount>4</forkCount>
+					<reuseForks>false</reuseForks>
 				</configuration>
 			</plugin>
 			<plugin>

@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -22,7 +21,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -37,19 +35,17 @@ public class SliceIterator<Comm extends Link> {
     private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
     private final CommonCommunications<Comm, ?> comm;
     private AtomicInteger                       current = new AtomicInteger(0);
-    private final Executor                      executor;
     private final String                        label;
     private final SigningMember                 member;
     private final List<? extends Member>        slice;
 
     public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
-                         CommonCommunications<Comm, ?> comm, Executor executor) {
-        assert member != null && slice != null && comm != null && executor != null;
+                         CommonCommunications<Comm, ?> comm) {
+        assert member != null && slice != null && comm != null;
         this.label = label;
         this.member = member;
         this.slice = slice;
         this.comm = comm;
-        this.executor = executor;
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
@@ -85,9 +81,9 @@ public class SliceIterator<Comm extends Link> {
                 allowed.accept(allow);
                 return;
             }
-            futureSailor.addListener(Utils.wrapped(() -> {
-                allowed.accept(handler.handle(Optional.of(futureSailor), link, slice.get(current.get())));
-            }, log), executor);
+            futureSailor.addListener(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
+                                                                         slice.get(current.get()))),
+                                     r -> r.run());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -131,7 +127,7 @@ public class SliceIterator<Comm extends Link> {
             }
         } else if (allow) {
             log.trace("Proceeding for: {} on: {}", label, member);
-            executor.execute(Utils.wrapped(proceed, log));
+            proceed.run();
         } else {
             log.trace("Termination for: {} on: {}", label, member);
         }

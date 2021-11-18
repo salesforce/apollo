@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
@@ -66,7 +65,6 @@ public class RingCommunications<Comm extends Link> {
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
     final Context<Member> context;
-    final Executor        executor;
     final SigningMember   member;
 
     private final CommonCommunications<Comm, ?> comm;
@@ -74,17 +72,15 @@ public class RingCommunications<Comm extends Link> {
     private volatile int                        lastRingIndex = 0;
     private final List<Integer>                 traversalOrder;
 
-    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                              Executor executor) {
-        this(Direction.SUCCESSOR, context, member, comm, executor);
+    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
+        this(Direction.SUCCESSOR, context, member, comm);
     }
 
     public RingCommunications(Direction direction, Context<Member> context, SigningMember member,
-                              CommonCommunications<Comm, ?> comm, Executor executor) {
-        assert executor != null && direction != null && context != null && member != null && comm != null;
+                              CommonCommunications<Comm, ?> comm) {
+        assert direction != null && context != null && member != null && comm != null;
         this.direction = direction;
         this.context = context;
-        this.executor = executor;
         this.member = member;
         this.comm = comm;
         traversalOrder = new ArrayList<>();
@@ -175,7 +171,7 @@ public class RingCommunications<Comm extends Link> {
             } else {
                 futureSailor.addListener(Utils.wrapped(() -> {
                     handler.handle(Optional.of(futureSailor), link, ring);
-                }, log), executor);
+                }, log), r -> r.run());
             }
         }
     }

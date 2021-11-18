@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -51,7 +50,6 @@ public class CheckpointAssembler {
     private final CommonCommunications<Terminal, Concierge> comms;
     private final Context<Member>                           context;
     private final DigestAlgorithm                           digestAlgorithm;
-    private final Executor                                  executor;
     private final double                                    fpr;
     private final List<Digest>                              hashes    = new ArrayList<>();
     private final long                                      height;
@@ -60,7 +58,7 @@ public class CheckpointAssembler {
 
     public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
                                CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
-                               double falsePositiveRate, DigestAlgorithm digestAlgorithm, Executor executor) {
+                               double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
         this.height = height;
         this.member = member;
         this.checkpoint = checkpoint;
@@ -70,7 +68,6 @@ public class CheckpointAssembler {
         this.digestAlgorithm = digestAlgorithm;
         state = store.createCheckpoint(height);
         checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
-        this.executor = executor;
     }
 
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
@@ -120,7 +117,7 @@ public class CheckpointAssembler {
             return;
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
-        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, executor);
+        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),

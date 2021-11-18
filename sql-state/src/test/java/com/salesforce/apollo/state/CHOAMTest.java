@@ -9,18 +9,19 @@ package com.salesforce.apollo.state;
 import static com.salesforce.apollo.state.Mutator.batch;
 import static com.salesforce.apollo.state.Mutator.batchOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -28,7 +29,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -115,7 +116,7 @@ public class CHOAMTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout), tc);
+                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -134,7 +135,7 @@ public class CHOAMTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout), tc);
+                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -150,7 +151,7 @@ public class CHOAMTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(update(entropy), timeout), time);
+                    decorate(session.submit(update(entropy), timeout, scheduler), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -170,8 +171,10 @@ public class CHOAMTest {
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
     private Map<Digest, Router>                routers;
-    private ScheduledExecutorService           scheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private ScheduledExecutorService           scheduler;
+    private ExecutorService                    routerExec;
+    private ScheduledExecutorService           txScheduler;
 
     @AfterEach
     public void after() throws Exception {
@@ -186,39 +189,40 @@ public class CHOAMTest {
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         members = null;
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
+        }
+        if (routerExec != null) {
+            routerExec.shutdownNow();
+            routerExec = null;
+        }
+        if (txScheduler != null) {
+            txScheduler.shutdownNow();
+            txScheduler = null;
+        }
     }
 
     @BeforeEach
     public void before() {
-        checkpointDirBase = new File("target/ct-chkpoints");
+        checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase);
-        baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
                                     3);
-        scheduler = Executors.newScheduledThreadPool(3 * CARDINALITY);
+        scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        AtomicInteger sd = new AtomicInteger();
-        Executor submitDispatcher = Executors.newFixedThreadPool(CARDINALITY, r -> {
-            Thread thread = new Thread(r, "Submit Dispatcher [" + sd.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
-        AtomicInteger d = new AtomicInteger();
-        Executor dispatcher = Executors.newCachedThreadPool(r -> {
-            Thread thread = new Thread(r, "Dispatcher [" + d.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         AtomicInteger exec = new AtomicInteger();
-        Executor routerExec = Executors.newCachedThreadPool(r -> {
+        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
         });
+        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         Function<Long, File> checkpointer = h -> {
             File cp;
@@ -237,7 +241,6 @@ public class CHOAMTest {
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
-                               .setSubmitDispatcher(submitDispatcher).setDispatcher(dispatcher)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
@@ -274,18 +277,24 @@ public class CHOAMTest {
         final int clientCount = 3000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(100);
+        final int target = 300;
 
         System.out.println("Warm up");
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= waitFor).count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= waitFor).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        var success = Utils.waitForCondition(60_000,
+                                             () -> members.stream().map(m -> updaters.get(m))
+                                                          .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                                          .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
+                                                          .count() == members.size());
+        assertTrue(success,
+                   "Results: "
+                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout);
+        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
+                                                                                   txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
@@ -294,36 +303,51 @@ public class CHOAMTest {
                   .forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
-        long then = System.currentTimeMillis();
         transactioneers.stream().forEach(e -> e.start());
         try {
             countdown.await(120, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
         }
-        long now = System.currentTimeMillis() - then;
+
+        success = Utils.waitForCondition(60_000,
+                                         () -> members.stream().map(m -> updaters.get(m))
+                                                      .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                                      .mapToLong(cb -> cb.height()).filter(l -> l >= target)
+                                                      .count() == members.size());
+        assertTrue(success,
+                   "Results: "
+                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
 
         System.out.println();
         System.out.println();
         System.out.println();
 
-        double perSecond = now / 1000.0;
-        System.out.println("Statements per second: " + (latency.getCount() * 5) / perSecond);
-        System.out.println("Transactions per second: " + (latency.getCount()) / perSecond);
+        record row(float price, int quantity) {}
 
-        Connection connection = updaters.get(members.get(0)).newConnection();
-        Statement statement = connection.createStatement();
-        ResultSet results = statement.executeQuery("select ID, from books");
-        ResultSetMetaData rsmd = results.getMetaData();
-        int columnsNumber = rsmd.getColumnCount();
-        while (results.next()) {
-            for (int i = 1; i <= columnsNumber; i++) {
-                if (i > 1)
-                    System.out.print(",  ");
-                Object columnValue = results.getObject(i);
-                System.out.print(columnValue + " " + rsmd.getColumnName(i));
+        System.out.println("Validating consistency");
+
+        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
+
+        for (Member m : members) {
+            Connection connection = updaters.get(m).newConnection();
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+            while (results.next()) {
+                manifested.computeIfAbsent(m, k -> new HashMap<>())
+                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
             }
-            System.out.println("");
+            connection.close();
+        }
+
+        Map<Integer, row> standard = manifested.get(members.get(0));
+        for (Member m : members) {
+            var candidate = manifested.get(m);
+            for (var entry : standard.entrySet()) {
+                assertTrue(candidate.containsKey(entry.getKey()));
+                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            }
         }
 
         System.out.println("# of clients: " + choams.size() * clientCount);

@@ -21,9 +21,6 @@ Apollo also requires [Maven](https://maven.apache.org/) 3.6.3 and above.
 * SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, Stored Procedures, functions.
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
     * Consensus on causal ordering of transactions with a moderate dynamic range of nodes.
-* Ghost- a Merkle directed acyclic graph (DAG) used for storing block data
-    * An immutable, content-based, single hop Distributed Hash Table (DHT) in which the "key" of data stored is the hash of that data (meaning you look up data with the key).
-    * Leverages the underlying Fireflies rings for consistent hash rings and single hop routing.
 
 
 ## Not A Coin Platform(tm)

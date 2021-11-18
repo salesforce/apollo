@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -88,11 +89,13 @@ public class Session {
      * 
      * @param transaction - the Message to submit as a transaction
      * @param timeout     - non null timeout of the transaction
+     * @param scheduler
      * @return onCompletion - the future result of the submitted transaction
      * @throws InvalidTransaction - if the submitted transaction is invalid in any
      *                            way
      */
-    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout) throws InvalidTransaction {
+    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout,
+                                           ScheduledExecutorService scheduler) throws InvalidTransaction {
         final int n = nonce.getAndIncrement();
 
         final var txn = transactionOf(params.member().getId(), n, transaction, params.member());
@@ -105,9 +108,9 @@ public class Session {
             timeout = params.submitTimeout();
         }
         var stxn = new SubmittedTransaction(hash, txn, result);
-        submit(stxn);
+        submit(stxn, scheduler);
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
-        var futureTimeout = params.scheduler().schedule(() -> {
+        var futureTimeout = scheduler.schedule(() -> {
             log.debug("Timeout of txn: {} on: {}", hash, params.member());
             result.completeExceptionally(new TimeoutException("Transaction timeout"));
         }, timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -140,7 +143,7 @@ public class Session {
         }
     }
 
-    private void submit(SubmittedTransaction stx) {
+    private void submit(SubmittedTransaction stx, ScheduledExecutorService scheduler) {
         submitted.put(stx.hash(), stx);
         CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
             if (!stx.onCompletion().isDone()) {
@@ -173,6 +176,6 @@ public class Session {
             }
             log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
             return service.apply(stx);
-        }, params.submitDispatcher(), submitted, params.scheduler());
+        }, submitted, scheduler);
     }
 }
