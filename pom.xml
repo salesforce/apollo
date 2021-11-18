@@ -16,7 +16,6 @@
 		<module>tron</module>
 		<module>stereotomy</module>
 		<module>utils</module>
-		<module>stereotomy-services</module>
 		<module>ethereal</module>
 		<module>choam</module>
 	</modules>
@@ -322,7 +321,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<forkCount>1</forkCount>
+					<forkCount>4</forkCount>
 					<reuseForks>false</reuseForks>
 				</configuration>
 			</plugin>
