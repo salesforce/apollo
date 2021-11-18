@@ -205,9 +205,9 @@ public class CHOAMTest {
 
     @BeforeEach
     public void before() {
-        checkpointDirBase = new File("target/ct-chkpoints");
+        checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase);
-        baseDir = new File(System.getProperty("user.dir"), "target/cluster");
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
