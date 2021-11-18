@@ -203,7 +203,7 @@ public class TestCHOAM {
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
@@ -262,7 +262,7 @@ public class TestCHOAM {
         choams.values().forEach(ch -> ch.start());
         final int expected = 10;
 
-        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+        Utils.waitForCondition(30_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                            .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
@@ -308,7 +308,7 @@ public class TestCHOAM {
         final int expected = 23;
         var session = choams.get(members.get(0).getId()).getSession();
 
-        Utils.waitForCondition(120_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+        Utils.waitForCondition(30_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                            .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());

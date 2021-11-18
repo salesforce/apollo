@@ -139,7 +139,7 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         final int expected = 23;
 
-        Utils.waitForCondition(300_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
+        Utils.waitForCondition(10_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
                                                            .filter(s -> s >= expected).count() == choams.size() - 1);
         assertEquals(choams.size() - 1,
                      blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
@@ -208,10 +208,12 @@ public class MembershipTests {
             return cp;
         };
 
-        var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
+        var params = Parameters.newBuilder().setContext(context)
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(1))
+                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)
                                .setCheckpointer(checkpointer);
