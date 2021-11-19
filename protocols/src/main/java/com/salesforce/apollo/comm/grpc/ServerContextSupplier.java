@@ -12,8 +12,9 @@ import java.security.cert.X509Certificate;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+ 
 
 /**
  * @author hal.hildebrand

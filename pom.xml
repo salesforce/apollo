@@ -22,18 +22,13 @@
 
 	<properties>
 		<dropwizard.version>2.0.10</dropwizard.version>
-		<avro.version>1.10.0</avro.version>
 		<h2.version>1.4.200</h2.version>
 		<jooq.version>3.14.8</jooq.version>
 		<bc.version>1.69</bc.version>
-		<logback.version>1.2.3</logback.version>
-		<asm.version>8.0.1</asm.version>
-		<antlr.version>4.8-1</antlr.version>
-		<grpc.version>1.41.0</grpc.version>
+		<logback.version>1.2.7</logback.version>
+		<grpc.version>1.42.1</grpc.version>
 		<protobuf.version>3.19.1</protobuf.version>
 		<liquibase.version>4.3.1</liquibase.version>
-		<graalvm.version>20.3.0</graalvm.version>
-		<resilience4jVersion>1.7.1</resilience4jVersion>
 
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -49,12 +44,12 @@
 			<dependency>
 				<groupId>com.google.guava</groupId>
 				<artifactId>guava</artifactId>
-				<version>30.1.1-jre</version>
+				<version>31.0.1-jre</version>
 			</dependency>
 			<dependency>
 				<groupId>org.slf4j</groupId>
 				<artifactId>slf4j-api</artifactId>
-				<version>1.7.30</version>
+				<version>1.7.32</version>
 			</dependency>
 			<dependency>
 				<groupId>io.grpc</groupId>
@@ -89,24 +84,19 @@
 			</dependency>
 			<dependency>
 				<groupId>io.grpc</groupId>
-				<artifactId>grpc-netty</artifactId>
+				<artifactId>grpc-netty-shaded</artifactId>
 				<version>${grpc.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.netty</groupId>
-				<artifactId>netty-all</artifactId>
-				<version>4.1.52.Final</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.hakky54</groupId>
 				<artifactId>sslcontext-kickstart-for-netty</artifactId>
 				<version>7.0.2</version>
-			</dependency> 
+			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>fireflies</artifactId>
 				<version>${project.version}</version>
-			</dependency> 
+			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>protocols</artifactId>
@@ -126,7 +116,7 @@
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>tron</artifactId>
 				<version>${project.version}</version>
-			</dependency> 
+			</dependency>
 			<dependency>
 				<groupId>com.salesforce.apollo</groupId>
 				<artifactId>sql-state</artifactId>
@@ -182,7 +172,7 @@
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bctls-fips</artifactId>
-				<version>1.0.11.4</version>
+				<version>1.0.12.2</version>
 			</dependency>
 			<dependency>
 				<groupId>org.bouncycastle</groupId>
@@ -242,7 +232,19 @@
 			</dependency>
 
 			<!-- Test dependencies only below this line! -->
-
+ 
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>5.6.3</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>5.6.3</version>
+                <scope>test</scope>
+            </dependency>
 			<dependency>
 				<groupId>ch.qos.logback</groupId>
 				<artifactId>logback-classic</artifactId>
@@ -251,24 +253,12 @@
 			<dependency>
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-core</artifactId>
-				<version>3.11.2</version>
-			</dependency>
-			<dependency>
-				<groupId>org.junit.jupiter</groupId>
-				<artifactId>junit-jupiter-engine</artifactId>
-				<version>5.6.2</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.junit.jupiter</groupId>
-				<artifactId>junit-jupiter-params</artifactId>
-				<version>5.6.2</version>
-				<scope>test</scope>
+				<version>4.0.0</version>
 			</dependency>
 			<dependency>
 				<groupId>guru.nidi</groupId>
 				<artifactId>graphviz-java-all-j2v8</artifactId>
-				<version>0.18.0</version>
+				<version>0.18.1</version>
 			</dependency>
 			<dependency>
 				<groupId>org.hamcrest</groupId>
@@ -374,13 +364,13 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-site-plugin</artifactId>
-					<version>3.7.1</version>
+					<version>3.9.1</version>
 				</plugin>
 
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-project-info-reports-plugin</artifactId>
-					<version>3.0.0</version>
+					<version>3.1.2</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -390,7 +380,7 @@
 				<plugin>
 					<groupId>org.codehaus.mojo</groupId>
 					<artifactId>versions-maven-plugin</artifactId>
-					<version>2.5</version>
+					<version>2.8.1</version>
 				</plugin>
 				<plugin>
 					<groupId>org.jooq</groupId>
@@ -405,12 +395,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-jar-plugin</artifactId>
-					<version>3.1.1</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.avro</groupId>
-					<artifactId>avro-maven-plugin</artifactId>
-					<version>${avro.version}</version>
+					<version>3.2.0</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -420,12 +405,12 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
-					<version>3.8.0</version>
+					<version>3.8.1</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-source-plugin</artifactId>
-					<version>3.2.0</version>
+					<version>3.2.1</version>
 					<configuration>
 						<attach>false</attach>
 					</configuration>
@@ -433,7 +418,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-shade-plugin</artifactId>
-					<version>3.0.0</version>
+					<version>3.2.4</version>
 					<configuration>
 						<createDependencyReducedPom>true</createDependencyReducedPom>
 						<filters>
