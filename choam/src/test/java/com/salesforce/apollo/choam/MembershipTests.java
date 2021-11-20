@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -140,10 +141,10 @@ public class MembershipTests {
         final int expected = 23;
 
         Utils.waitForCondition(10_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size() - 1);
+                                                        .filter(s -> s >= expected).count() == choams.size() - 1);
         assertEquals(choams.size() - 1,
                      blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+                     "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
         final Duration timeout = Duration.ofSeconds(5);
         final var scheduler = Executors.newScheduledThreadPool(20);
@@ -185,7 +186,7 @@ public class MembershipTests {
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, cardinality,
                                     3);
-        var scheduler = Executors.newScheduledThreadPool(cardinality);
+        var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
         AtomicInteger exec = new AtomicInteger();
         Executor routerExec = Executors.newFixedThreadPool(cardinality, r -> {
@@ -232,7 +233,7 @@ public class MembershipTests {
                                                                         routerExec)));
         Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            blocks.put(m.getId(), new ArrayList<>());
+            blocks.put(m.getId(), new CopyOnWriteArrayList<>());
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -226,13 +227,13 @@ public class TestCHOAM {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
+                    blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
+                    transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());
                     }
@@ -263,7 +264,7 @@ public class TestCHOAM {
         final int expected = 10;
 
         Utils.waitForCondition(30_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
+                                                          .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
 
@@ -309,7 +310,7 @@ public class TestCHOAM {
         var session = choams.get(members.get(0).getId()).getSession();
 
         Utils.waitForCondition(30_000, 1_000, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                           .filter(s -> s >= expected).count() == choams.size());
+                                                          .filter(s -> s >= expected).count() == choams.size());
         assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
                      "Failed: " + blocks.get(members.get(0).getId()).size());
         final ByteMessage tx = ByteMessage.newBuilder()

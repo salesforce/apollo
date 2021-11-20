@@ -74,10 +74,10 @@ public class Bootstrapper {
 
     private final HashedCertifiedBlock                      anchor;
     private final CompletableFuture<Boolean>                anchorSynchronized    = new CompletableFuture<>();
-    private HashedCertifiedBlock                            checkpoint;
-    private CompletableFuture<CheckpointState>              checkpointAssembled;
-    private CheckpointState                                 checkpointState;
-    private HashedCertifiedBlock                            checkpointView;
+    private volatile HashedCertifiedBlock                   checkpoint;
+    private volatile CompletableFuture<CheckpointState>     checkpointAssembled;
+    private volatile CheckpointState                        checkpointState;
+    private volatile HashedCertifiedBlock                   checkpointView;
     private final CommonCommunications<Terminal, Concierge> comms;
     private volatile HashedCertifiedBlock                   genesis;
     private final long                                      lastCheckpoint;

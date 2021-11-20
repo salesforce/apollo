@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
@@ -171,7 +172,7 @@ public class RingCommunications<Comm extends Link> {
             } else {
                 futureSailor.addListener(Utils.wrapped(() -> {
                     handler.handle(Optional.of(futureSailor), link, ring);
-                }, log), r -> r.run());
+                }, log), ForkJoinPool.commonPool());
             }
         }
     }

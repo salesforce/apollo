@@ -277,7 +277,6 @@ public class CHOAMTest {
         final int clientCount = 3000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
-        final int target = 300;
 
         System.out.println("Warm up");
         routers.values().forEach(r -> r.start());
@@ -291,7 +290,7 @@ public class CHOAMTest {
         assertTrue(success,
                    "Results: "
                    + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= waitFor).toList());
 
         final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
                                                                                    txScheduler);
@@ -309,6 +308,7 @@ public class CHOAMTest {
         } finally {
             proceed.set(false);
         }
+        final long target = updaters.get(members.get(0)).getCurrentBlock().height() + 100;
 
         success = Utils.waitForCondition(60_000,
                                          () -> members.stream().map(m -> updaters.get(m))

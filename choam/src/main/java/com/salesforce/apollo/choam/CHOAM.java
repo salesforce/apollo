@@ -645,6 +645,10 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
+    public Combine.Transitions getCurrentState() {
+        return transitions.fsm().getCurrentState();
+    }
+
     public Session getSession() {
         return session;
     }
@@ -677,7 +681,33 @@ public class CHOAM {
         executions.shutdown();
     }
 
-    protected boolean checkJoin(JoinRequest request, Digest from) {
+    private void accept(HashedCertifiedBlock next) {
+        head.set(next);
+        store.put(next);
+        final Committee c = current.get();
+        c.accept(next);
+        log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
+                 params.member());
+    }
+
+    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
+        return new Bootstrapper(anchor, params, store, comm);
+    }
+
+    private void cancelSynchronization() {
+        final ScheduledFuture<?> fs = futureSynchronization.get();
+        if (fs != null) {
+            fs.cancel(true);
+            futureSynchronization.set(null);
+        }
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap.set(null);
+        }
+    }
+
+    private boolean checkJoin(JoinRequest request, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
             log.debug("Request to join from non member: {} on: {}", from, params.member());
@@ -702,32 +732,6 @@ public class CHOAM {
             return false;
         }
         return true;
-    }
-
-    private void accept(HashedCertifiedBlock next) {
-        head.set(next);
-        store.put(next);
-        final Committee c = current.get();
-        c.accept(next);
-        log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                 params.member());
-    }
-
-    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        return new Bootstrapper(anchor, params, store, comm);
-    }
-
-    private void cancelSynchronization() {
-        final ScheduledFuture<?> fs = futureSynchronization.get();
-        if (fs != null) {
-            fs.cancel(true);
-            futureSynchronization.set(null);
-        }
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap.set(null);
-        }
     }
 
     private Block checkpoint() {
@@ -920,7 +924,6 @@ public class CHOAM {
         log.trace("Executing genesis initialization block: {} on: {}", h.hash, params.member());
         try {
             params.processor().genesis(initialization);
-            ;
         } catch (Throwable t) {
             log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member());
         }

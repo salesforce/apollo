@@ -12,7 +12,6 @@ import java.util.Random;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.utils.bloomFilters.IBF.Decode;
 import com.salesforce.apollo.utils.bloomFilters.IBF.IntIBF;
@@ -71,7 +70,7 @@ public class BenchmarkTest {
         Collections.sort(s2_diff);
     }
 
-    @Test
+//    @Test  
     public void bench() {
 
         StrataEstimator<Integer> se1 = new IntStrataEstimator(seed);

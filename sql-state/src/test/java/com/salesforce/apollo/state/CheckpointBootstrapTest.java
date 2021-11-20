@@ -50,7 +50,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         final int clientCount = 10;
         final int max = 15;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final int target = 300;
 
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
                .forEach(r -> r.start());
@@ -63,10 +62,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                                           .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                           .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
                                                           .count() == members.size() - 1);
-        assertTrue(success,
-                   "Results: "
-                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+        assertTrue(success, "Results: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
         final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
                                                                                    txScheduler);
@@ -94,16 +90,14 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
             proceed.set(false);
         }
 
-        Thread.sleep(1000);
-        success = Utils.waitForCondition(15_000, 100,
+        final long target = updaters.get(members.get(0)).getCurrentBlock().height() + 100;
+
+        success = Utils.waitForCondition(60_000, 100,
                                          () -> members.stream().map(m -> updaters.get(m))
                                                       .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                       .mapToLong(cb -> cb.height()).filter(l -> l >= target)
                                                       .count() == members.size());
-        assertTrue(success,
-                   "Results: "
-                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+        assertTrue(success, "Results: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
         System.out.println();
         System.out.println();

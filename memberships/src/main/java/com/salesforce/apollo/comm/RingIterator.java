@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -98,7 +99,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             }
             futureSailor.addListener(() -> allowed.accept(handler.handle(tally, Optional.of(futureSailor), link,
                                                                          current)),
-                                     r -> r.run());
+                                     ForkJoinPool.commonPool());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
