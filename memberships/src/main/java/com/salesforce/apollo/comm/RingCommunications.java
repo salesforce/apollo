@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
@@ -67,23 +67,26 @@ public class RingCommunications<Comm extends Link> {
 
     final Context<Member> context;
     final SigningMember   member;
+    final Executor        exec;
 
     private final CommonCommunications<Comm, ?> comm;
     private final Direction                     direction;
     private volatile int                        lastRingIndex = 0;
     private final List<Integer>                 traversalOrder;
 
-    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
-        this(Direction.SUCCESSOR, context, member, comm);
+    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
+                              Executor exec) {
+        this(Direction.SUCCESSOR, context, member, comm, exec);
     }
 
     public RingCommunications(Direction direction, Context<Member> context, SigningMember member,
-                              CommonCommunications<Comm, ?> comm) {
+                              CommonCommunications<Comm, ?> comm, Executor exec) {
         assert direction != null && context != null && member != null && comm != null;
         this.direction = direction;
         this.context = context;
         this.member = member;
         this.comm = comm;
+        this.exec = exec;
         traversalOrder = new ArrayList<>();
         for (int i = 0; i < context.getRingCount(); i++) {
             traversalOrder.add(i);
@@ -100,7 +103,7 @@ public class RingCommunications<Comm extends Link> {
     }
 
     public <T> void execute(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            Handler<T, Comm> handler, Predicate<Member> test) {
+                            Handler<T, Comm> handler, Predicate<Member> test, Executor exec) {
         final var next = nextRing(digest, test);
         try (Comm link = next.link) {
             execute(round, handler, link, next.ring);
@@ -166,14 +169,16 @@ public class RingCommunications<Comm extends Link> {
         if (link == null) {
             handler.handle(Optional.empty(), link, ring);
         } else {
-            ListenableFuture<T> futureSailor = round.apply(link, ring);
-            if (futureSailor == null) {
-                handler.handle(Optional.empty(), link, ring);
-            } else {
-                futureSailor.addListener(Utils.wrapped(() -> {
-                    handler.handle(Optional.of(futureSailor), link, ring);
-                }, log), ForkJoinPool.commonPool());
-            }
+            exec.execute(() -> {
+                ListenableFuture<T> futureSailor = round.apply(link, ring);
+                if (futureSailor == null) {
+                    handler.handle(Optional.empty(), link, ring);
+                } else {
+                    futureSailor.addListener(Utils.wrapped(() -> {
+                        handler.handle(Optional.of(futureSailor), link, ring);
+                    }, log), exec);
+                }
+            });
         }
     }
 

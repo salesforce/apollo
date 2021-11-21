@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,15 +86,21 @@ public class Gossiper {
     private final SigningMember                               member;
     private final Lock                                        mtx             = new ReentrantLock();
     private final RingCommunications<Gossip>                  ring;
+    private final AtomicInteger                               round           = new AtomicInteger();
+    private final Consumer<Integer>                           roundListener;
     private final AtomicBoolean                               started         = new AtomicBoolean();
     private final List<BloomFilter<Digest>>                   validationBiffs = new ArrayList<>();
     private final ConcurrentMap<Digest, Validate>             validations     = new ConcurrentHashMap<>();
-    private final AtomicInteger                               round           = new AtomicInteger();
-    private final Consumer<Integer>                           roundListener;
 
     public Gossiper(Context<Member> context, SigningMember member, Predicate<Validate> acceptValidate,
                     Predicate<ViewMember> acceptJoin, Router communications, RouterMetrics metrics,
                     DigestAlgorithm algo, Consumer<Integer> roundListener) {
+        this(context, member, acceptValidate, acceptJoin, communications, metrics, algo, roundListener, r -> r.run());
+    }
+
+    public Gossiper(Context<Member> context, SigningMember member, Predicate<Validate> acceptValidate,
+                    Predicate<ViewMember> acceptJoin, Router communications, RouterMetrics metrics,
+                    DigestAlgorithm algo, Consumer<Integer> roundListener, Executor exec) {
         this.context = context;
         this.member = member;
         this.algo = algo;
@@ -102,7 +109,7 @@ public class Gossiper {
                                      r -> new GossipServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossip.getLocalLoopback(member));
         final var cast = (Context<Member>) context;
-        ring = new RingCommunications<Gossip>(cast, member, this.comm);
+        ring = new RingCommunications<Gossip>(cast, member, this.comm, null);
         this.acceptValidate = acceptValidate;
         this.acceptJoin = acceptJoin;
     }

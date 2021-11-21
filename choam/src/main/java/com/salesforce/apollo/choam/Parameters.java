@@ -10,6 +10,8 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -45,7 +47,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
                          int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff) {
+                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -182,6 +184,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Router                                 communications;
         private Context<Member>                        context;
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private Executor                               exec                  = ForkJoinPool.commonPool();
         private List<Transaction>                      genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
@@ -210,7 +213,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
                                   checkpointer, storeFile, checkpointBlockSize, restorer, digestAlgorithm, metrics,
                                   viewSigAlgorithm, synchronizationCycles, synchronizeDuration, regenerationCycles,
-                                  synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff);
+                                  synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff,
+                                  exec);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -243,6 +247,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
+        }
+
+        public Executor getExec() {
+            return exec;
         }
 
         public List<Transaction> getGenesisData() {
@@ -359,6 +367,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
+            return this;
+        }
+
+        public Builder setExec(Executor exec) {
+            this.exec = exec;
             return this;
         }
 

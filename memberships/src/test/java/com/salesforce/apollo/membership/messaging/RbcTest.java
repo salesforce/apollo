@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -102,7 +103,8 @@ public class RbcTest {
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(100)
                                                                                  .setFalsePositiveRate(0.0125)
-                                                                                 .setBufferSize(500);
+                                                                                 .setBufferSize(500)
+                                                                                 .setExec(ForkJoinPool.commonPool());
 
     @BeforeAll
     public static void beforeClass() {

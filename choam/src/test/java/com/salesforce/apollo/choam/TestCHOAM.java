@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -71,8 +72,8 @@ public class TestCHOAM {
         private final AtomicInteger            lineTotal;
         private final int                      max;
         private final AtomicBoolean            proceed;
-        private final Session                  session;
         private final ScheduledExecutorService scheduler;
+        private final Session                  session;
         private final Duration                 timeout;
         private final Counter                  timeouts;
         private final ByteMessage              tx        = ByteMessage.newBuilder()
@@ -107,7 +108,7 @@ public class TestCHOAM {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -126,7 +127,7 @@ public class TestCHOAM {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(tx, timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler), tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -142,7 +143,7 @@ public class TestCHOAM {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(tx, timeout, scheduler), time);
+                    decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -152,10 +153,12 @@ public class TestCHOAM {
 
     private static final int CARDINALITY = 5;
 
-    private Map<Digest, List<Digest>>      blocks;
-    private Map<Digest, CHOAM>             choams;
-    private List<SigningMember>            members;
-    private Map<Digest, Router>            routers;
+    private Map<Digest, List<Digest>> blocks;
+    private Map<Digest, CHOAM>        choams;
+    private List<SigningMember>       members;
+    private Map<Digest, Router>       routers;
+    private int                       toleranceLevel;
+
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -176,8 +179,8 @@ public class TestCHOAM {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
-                                    3);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        toleranceLevel = context.toleranceLevel();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger exec = new AtomicInteger();
@@ -241,7 +244,7 @@ public class TestCHOAM {
             };
             params.getProducer().ethereal().setSigner(m);
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
-                                   .build(),
+                                   .setExec(Router.createFjPool()).build(),
                              MVStore.open(null));
         }));
     }
@@ -316,7 +319,7 @@ public class TestCHOAM {
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(tx, null, scheduler);
+        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, null, scheduler);
         while (true) {
             final var r = result;
             Utils.waitForCondition(1_000, () -> r.isDone());
@@ -326,7 +329,7 @@ public class TestCHOAM {
                         System.out.println("Failed with: " + t.toString());
                         return null;
                     });
-                    result = session.submit(tx, null, scheduler);
+                    result = session.submit(ForkJoinPool.commonPool(), tx, null, scheduler);
                 } else {
                     System.out.println("Success!!!!");
                     var completion = result.get();

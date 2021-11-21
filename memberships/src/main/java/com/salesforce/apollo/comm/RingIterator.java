@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -35,13 +35,14 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private volatile boolean majorityFailed  = false;
     private volatile boolean majoritySucceed = false;
 
-    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm) {
-        super(context, member, comm);
+    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
+                        Executor exec) {
+        super(context, member, comm, exec);
     }
 
     public RingIterator(Direction direction, Context<Member> context, SigningMember member,
-                        CommonCommunications<Comm, ?> comm) {
-        super(direction, context, member, comm);
+                        CommonCommunications<Comm, ?> comm, Executor exec) {
+        super(direction, context, member, comm, exec);
     }
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
@@ -57,7 +58,8 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
                             Runnable failedMajority, PredicateHandler<T, Comm> handler, Runnable onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
-        internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally, new HashSet<>());
+        exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
+                                           new HashSet<>()));
 
     }
 
@@ -99,7 +101,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             }
             futureSailor.addListener(() -> allowed.accept(handler.handle(tally, Optional.of(futureSailor), link,
                                                                          current)),
-                                     ForkJoinPool.commonPool());
+                                     exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -134,7 +136,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             }
         } else if (allow) {
             log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-            proceed.run();
+            exec.execute(proceed);
         } else {
             log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
         }

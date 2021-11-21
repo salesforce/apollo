@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,15 +58,15 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .forEach(ch -> ch.start());
         Thread.sleep(1000);
 
-        var success = Utils.waitForCondition(15_000, 100,
+        var success = Utils.waitForCondition(30_000, 100,
                                              () -> members.stream().map(m -> updaters.get(m))
                                                           .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                           .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
-                                                          .count() == members.size() - 1);
-        assertTrue(success, "Results: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
+                                                          .count() > toleranceLevel);
+        assertTrue(success, "States: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
-                                                                                   txScheduler);
+        final var initial = choams.get(members.get(0).getId()).getSession()
+                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {

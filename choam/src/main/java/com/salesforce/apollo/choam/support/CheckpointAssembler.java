@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
@@ -70,12 +71,13 @@ public class CheckpointAssembler {
         checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
     }
 
-    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration) {
+    public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration,
+                                                       Executor exec) {
         if (checkpoint.getSegmentsCount() == 0) {
             log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
-            gossip(scheduler, duration);
+            gossip(scheduler, duration, exec);
         }
         return assembled;
     }
@@ -112,15 +114,15 @@ public class CheckpointAssembler {
         return true;
     }
 
-    private void gossip(ScheduledExecutorService scheduler, Duration duration) {
+    private void gossip(ScheduledExecutorService scheduler, Duration duration, Executor exec) {
         if (assembled.isDone()) {
             return;
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
-        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms);
+        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, exec);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
-                       () -> scheduler.schedule(() -> gossip(scheduler, duration), duration.toMillis(),
+                       () -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
                                                 TimeUnit.MILLISECONDS));
 
     }

@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -121,9 +122,9 @@ public class Mutator {
         }
 
         @SuppressWarnings("unchecked")
-        public <T> CompletableFuture<T> submit(Duration timeout,
+        public <T> CompletableFuture<T> submit(Executor exec, Duration timeout,
                                                ScheduledExecutorService scheduler) throws InvalidTransaction {
-            return (CompletableFuture<T>) session.submit(build(), timeout, scheduler)
+            return (CompletableFuture<T>) session.submit(exec, build(), timeout, scheduler)
                                                  .whenComplete((BiConsumer<Object, Throwable>) (r, t) -> process(r, t));
         }
 
@@ -390,28 +391,28 @@ public class Mutator {
         return new BatchBuilder(session);
     }
 
-    public CompletableFuture<int[]> execute(Batch batch, Duration timeout,
+    public CompletableFuture<int[]> execute(Executor exec, Batch batch, Duration timeout,
                                             ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setBatch(batch).build(), timeout, scheduler);
+        return session.submit(exec, Txn.newBuilder().setBatch(batch).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<int[]> execute(BatchUpdate batchUpdate, Duration timeout,
+    public CompletableFuture<int[]> execute(Executor exec, BatchUpdate batchUpdate, Duration timeout,
                                             ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setBatchUpdate(batchUpdate).build(), timeout, scheduler);
+        return session.submit(exec, Txn.newBuilder().setBatchUpdate(batchUpdate).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<CallResult> execute(Call call, Duration timeout,
+    public CompletableFuture<CallResult> execute(Executor exec, Call call, Duration timeout,
                                                  ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setCall(call).build(), timeout, scheduler);
+        return session.submit(exec, Txn.newBuilder().setCall(call).build(), timeout, scheduler);
     }
 
-    public <T> CompletableFuture<T> execute(Script script, Duration timeout,
+    public <T> CompletableFuture<T> execute(Executor exec, Script script, Duration timeout,
                                             ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setScript(script).build(), timeout, scheduler);
+        return session.submit(exec, Txn.newBuilder().setScript(script).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<List<ResultSet>> execute(Statement statement, Duration timeout,
+    public CompletableFuture<List<ResultSet>> execute(Executor exec, Statement statement, Duration timeout,
                                                       ScheduledExecutorService scheduler) throws InvalidTransaction {
-        return session.submit(Txn.newBuilder().setStatement(statement).build(), timeout, scheduler);
+        return session.submit(exec, Txn.newBuilder().setStatement(statement).build(), timeout, scheduler);
     }
 }

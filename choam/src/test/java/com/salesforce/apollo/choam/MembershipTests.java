@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -22,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -88,7 +88,7 @@ public class MembershipTests {
                     failed.incrementAndGet();
                     scheduler.schedule(() -> {
                         try {
-                            decorate(session.submit(tx, timeout, scheduler));
+                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -96,7 +96,7 @@ public class MembershipTests {
                 } else {
                     if (completed.incrementAndGet() < max) {
                         try {
-                            decorate(session.submit(tx, timeout, scheduler));
+                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -108,7 +108,7 @@ public class MembershipTests {
         void start() {
             scheduler.schedule(() -> {
                 try {
-                    decorate(session.submit(tx, timeout, scheduler));
+                    decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -120,6 +120,7 @@ public class MembershipTests {
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private Map<Digest, Router>            routers;
+    private int                            toleranceLevel;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -140,11 +141,10 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         final int expected = 23;
 
-        Utils.waitForCondition(10_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                        .filter(s -> s >= expected).count() == choams.size() - 1);
-        assertEquals(choams.size() - 1,
-                     blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
+        Utils.waitForCondition(30_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
+                                                        .filter(s -> s >= expected).count() > toleranceLevel);
+        assertTrue(blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count() > toleranceLevel,
+                   "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
         final Duration timeout = Duration.ofSeconds(5);
         final var scheduler = Executors.newScheduledThreadPool(20);
@@ -162,7 +162,7 @@ public class MembershipTests {
         transactioneers.stream().forEach(e -> e.start());
         boolean success;
         try {
-            success = Utils.waitForCondition(10_000, 1_000,
+            success = Utils.waitForCondition(30_000, 1_000,
                                              () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
                                                                   .count() == transactioneers.size());
         } finally {
@@ -184,8 +184,9 @@ public class MembershipTests {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, cardinality,
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality,
                                     3);
+        toleranceLevel = context.toleranceLevel();
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
         AtomicInteger exec = new AtomicInteger();
@@ -213,12 +214,11 @@ public class MembershipTests {
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)
                                .setCheckpointer(checkpointer);
-        params.getProducer().ethereal().setFpr(0.00000125);
 
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -257,7 +257,7 @@ public class MembershipTests {
                 params.setSynchronizationCycles(3);
             }
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
-                                   .build(),
+                                   .setExec(Router.createFjPool()).build(),
                              MVStore.open(null));
         }));
         return testSubject;

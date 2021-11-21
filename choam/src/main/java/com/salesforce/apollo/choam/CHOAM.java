@@ -146,8 +146,8 @@ public class CHOAM {
                 transitions.bootstrap(anchor);
                 return;
             }
-            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
-                      params.member());
+            log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                     params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 awaitRegeneration();
@@ -162,8 +162,8 @@ public class CHOAM {
                 transitions.bootstrap(anchor);
                 return;
             }
-            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
-                      params.member());
+            log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                     params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 synchronizationFailed();
@@ -193,12 +193,12 @@ public class CHOAM {
         private void synchronizationFailed() {
             final var c = current.get();
             if (c.isMember()) {
-                log.debug("Synchronization failed and initial member, regenerating: {} on: {}",
-                          c.getClass().getSimpleName(), params.member());
+                log.info("Synchronization failed and initial member, regenerating: {} on: {}",
+                         c.getClass().getSimpleName(), params.member());
                 transitions.regenerate();
             } else {
-                log.debug("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
-                          params.member());
+                log.info("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
+                         params.member());
                 transitions.synchronizationFailed();
             }
         }
@@ -679,6 +679,10 @@ public class CHOAM {
         session.cancelAll();
         linear.shutdown();
         executions.shutdown();
+        final var c = current.get();
+        if (c != null) {
+            c.complete();
+        }
     }
 
     private void accept(HashedCertifiedBlock next) {
@@ -687,7 +691,7 @@ public class CHOAM {
         final Committee c = current.get();
         c.accept(next);
         log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                 params.member());
+                  params.member());
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -135,7 +136,8 @@ public class EtherealTest {
             }
             Router com = new LocalRouter(members.get(i), ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, null));
+            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
+                                              null));
         }
         try {
             controllers.forEach(e -> e.start());

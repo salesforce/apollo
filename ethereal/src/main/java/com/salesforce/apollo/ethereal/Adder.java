@@ -10,7 +10,6 @@ import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Dag.AmbiguousParents;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
