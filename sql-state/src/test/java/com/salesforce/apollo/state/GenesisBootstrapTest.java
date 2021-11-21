@@ -91,7 +91,9 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
             proceed.set(false);
         }
 
-        final long target = updaters.get(members.get(0)).getCurrentBlock().height() + 100;
+        final long target = members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                                   .filter(cb -> cb != null).mapToLong(cb -> cb.height()).max().getAsLong()
+        + 30;
 
         success = Utils.waitForCondition(30_000, 100,
                                          () -> members.stream().map(m -> updaters.get(m))
