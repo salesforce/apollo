@@ -32,8 +32,8 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
 
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 
 /**
  * The representation of the "current" member - the subject - of a View.

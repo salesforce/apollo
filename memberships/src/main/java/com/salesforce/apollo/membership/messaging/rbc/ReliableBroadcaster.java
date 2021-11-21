@@ -20,6 +20,7 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -71,12 +72,13 @@ public class ReliableBroadcaster {
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
                              SigningMember member, RouterMetrics metrics, double falsePositiveRate,
-                             int deliveredCacheSize) {
+                             int deliveredCacheSize, Executor exec) {
         public static class Builder implements Cloneable {
             private int             bufferSize         = 500;
             private Context<Member> context;
-            private int             deliveredCacheSize = 10_000;
+            private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
+            private Executor        exec               = r -> r.run();
             private double          falsePositiveRate  = 0.125;
             private int             maxMessages        = 100;
             private SigningMember   member;
@@ -84,7 +86,7 @@ public class ReliableBroadcaster {
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, member, metrics,
-                                      falsePositiveRate, deliveredCacheSize);
+                                      falsePositiveRate, deliveredCacheSize, exec);
             }
 
             @Override
@@ -110,6 +112,10 @@ public class ReliableBroadcaster {
 
             public DigestAlgorithm getDigestAlgorithm() {
                 return digestAlgorithm;
+            }
+
+            public Executor getExec() {
+                return exec;
             }
 
             public double getFalsePositiveRate() {
@@ -145,6 +151,11 @@ public class ReliableBroadcaster {
 
             public Parameters.Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
                 this.digestAlgorithm = digestAlgorithm;
+                return this;
+            }
+
+            public Builder setExec(Executor exec) {
+                this.exec = exec;
                 return this;
             }
 
@@ -403,7 +414,7 @@ public class ReliableBroadcaster {
                                                              parameters.metrics, r),
                                           getCreate(parameters.metrics),
                                           ReliableBroadcast.getLocalLoopback(params.member));
-        gossiper = new RingCommunications<>(params.context, params.member, this.comm);
+        gossiper = new RingCommunications<>(params.context, params.member, this.comm, params.exec);
     }
 
     public void clearBuffer() {
@@ -468,6 +479,10 @@ public class ReliableBroadcaster {
     }
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
+        start(ForkJoinPool.commonPool(), duration, scheduler);
+    }
+
+    public void start(Executor exec, Duration duration, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -475,7 +490,7 @@ public class ReliableBroadcaster {
                                                          .nextInt((int) Math.max(1, duration.toMillis() * 2)));
         log.info("Starting Reliable Broadcaster[{}] for {}", params.context.getId(), params.member);
         comm.register(params.context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(exec, duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -517,8 +532,8 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link, int ring,
-                        Duration duration, ScheduledExecutorService scheduler) {
+    private void handle(Executor exec, Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link,
+                        int ring, Duration duration, ScheduledExecutorService scheduler) {
         try {
             if (futureSailor.isEmpty()) {
                 return;
@@ -536,7 +551,8 @@ public class ReliableBroadcaster {
             buffer.receive(gossip.getUpdatesList());
         } finally {
             if (started.get()) {
-                scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
+                scheduler.schedule(() -> oneRound(exec, duration, scheduler), duration.toMillis(),
+                                   TimeUnit.MILLISECONDS);
                 buffer.tick();
                 int gossipRound = buffer.round();
                 roundListeners.values().forEach(l -> {
@@ -550,12 +566,14 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
+    private void oneRound(Executor exec, Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
         }
 
-        gossiper.execute((link, ring) -> gossipRound(link, ring),
-                         (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler));
+        exec.execute(() -> {
+            gossiper.execute((link, ring) -> gossipRound(link, ring),
+                             (futureSailor, link, ring) -> handle(exec, futureSailor, link, ring, duration, scheduler));
+        });
     }
 }

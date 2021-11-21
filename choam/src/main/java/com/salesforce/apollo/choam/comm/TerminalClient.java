@@ -114,7 +114,11 @@ public class TerminalClient implements Terminal {
             public Status get() throws InterruptedException, ExecutionException {
                 try {
                     final var result = submit.get();
-                    return result != null ? Status.OK : null;
+                    if (result.getSuccess()) {
+                        return Status.OK;
+                    } else {
+                        return Status.UNAVAILABLE.withDescription(result.getStatus());
+                    }
                 } catch (ExecutionException e) {
                     final var cause = e.getCause();
                     if (cause instanceof StatusRuntimeException sre) {

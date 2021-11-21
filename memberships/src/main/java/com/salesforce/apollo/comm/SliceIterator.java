@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -73,7 +74,7 @@ public class SliceIterator<Comm extends Link> {
                 return;
             }
             log.trace("Iteration on: {} index: {} to: {} on: {}", label, current.get(), link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, slice.get(current.get()));
+            ListenableFuture<T> futureSailor = round.apply(link, link.getMember());
             if (futureSailor == null) {
                 log.trace("No asynchronous response  on: {} index: {} from: {} on: {}", label, current.get(),
                           link.getMember(), member);
@@ -83,7 +84,7 @@ public class SliceIterator<Comm extends Link> {
             }
             futureSailor.addListener(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
                                                                          slice.get(current.get()))),
-                                     r -> r.run());
+                                     ForkJoinPool.commonPool());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }

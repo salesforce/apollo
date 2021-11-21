@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -114,7 +115,7 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(pid);
             var controller = e.deterministic(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
                 if (pid == 0) {
-                    System.out.println("Preblock: " + level.incrementAndGet());
+                    System.out.println("block: " + level.incrementAndGet());
                 }
                 output.add(pb);
                 if (last) {
@@ -128,20 +129,21 @@ public class EtherealTest {
             ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
-            for (int d = 0; d < 500; d++) {
+            for (int d = 0; d < 5000; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
                                             .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
                                             .toByteString());
             }
             Router com = new LocalRouter(members.get(i), ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, null));
+            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
+                                              null));
         }
         try {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
-            gossipers.forEach(e -> e.start(Duration.ofMillis(1), scheduler));
-            finished.await(1360, TimeUnit.SECONDS);
+            gossipers.forEach(e -> e.start(Duration.ofMillis(5), scheduler));
+            finished.await(60, TimeUnit.SECONDS);
         } finally {
             comms.forEach(e -> e.close());
             gossipers.forEach(e -> e.stop());

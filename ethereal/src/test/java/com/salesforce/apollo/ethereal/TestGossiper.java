@@ -31,7 +31,7 @@ public class TestGossiper {
     private final AtomicInteger            round   = new AtomicInteger();
 
     public TestGossiper(List<Orderer> orderers) {
-        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler = Executors.newScheduledThreadPool(50);
         gossipers = orderers.stream().map(o -> new Gossiper(o)).collect(Collectors.toList());
         Collections.shuffle(gossipers);
     }
@@ -61,7 +61,7 @@ public class TestGossiper {
             gossipers.parallelStream().forEach(g -> {
                 try {
                     Thread.sleep(Utils.bitStreamEntropy().nextInt(5));
-                } catch (InterruptedException e) { 
+                } catch (InterruptedException e) {
                 }
                 var candidate = gossipers.get(thisRound);
                 if (candidate != g) {

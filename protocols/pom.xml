@@ -17,16 +17,12 @@
 			<artifactId>utils</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>io.netty</groupId>
-			<artifactId>netty-all</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>io.github.hakky54</groupId>
 			<artifactId>sslcontext-kickstart-for-netty</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>
-			<artifactId>grpc-netty</artifactId>
+			<artifactId>grpc-netty-shaded</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>

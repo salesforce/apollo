@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -116,7 +117,8 @@ public class CHOAMTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                         tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -135,7 +137,8 @@ public class CHOAMTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                         tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -151,7 +154,7 @@ public class CHOAMTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(update(entropy), timeout, scheduler), time);
+                    decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -170,11 +173,12 @@ public class CHOAMTest {
     private File                               checkpointDirBase;
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
-    private Map<Digest, Router>                routers;
-    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
-    private ScheduledExecutorService           scheduler;
     private ExecutorService                    routerExec;
+    private Map<Digest, Router>                routers;
+    private ScheduledExecutorService           scheduler;
+    private int                                toleranceLevel;
     private ScheduledExecutorService           txScheduler;
+    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 
     @AfterEach
     public void after() throws Exception {
@@ -212,8 +216,8 @@ public class CHOAMTest {
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
-                                    3);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         AtomicInteger exec = new AtomicInteger();
@@ -239,10 +243,11 @@ public class CHOAMTest {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(200).setCheckpointer(checkpointer);
@@ -277,7 +282,6 @@ public class CHOAMTest {
         final int clientCount = 3000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
-        final int target = 300;
 
         System.out.println("Warm up");
         routers.values().forEach(r -> r.start());
@@ -287,14 +291,14 @@ public class CHOAMTest {
                                              () -> members.stream().map(m -> updaters.get(m))
                                                           .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                           .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
-                                                          .count() == members.size());
+                                                          .count() > toleranceLevel);
         assertTrue(success,
                    "Results: "
                    + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= waitFor).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
-                                                                                   txScheduler);
+        final var initial = choams.get(members.get(0).getId()).getSession()
+                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
@@ -309,8 +313,9 @@ public class CHOAMTest {
         } finally {
             proceed.set(false);
         }
+        final long target = updaters.get(members.get(0)).getCurrentBlock().height() + 100;
 
-        success = Utils.waitForCondition(60_000,
+        success = Utils.waitForCondition(60_000, 1000,
                                          () -> members.stream().map(m -> updaters.get(m))
                                                       .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                       .mapToLong(cb -> cb.height()).filter(l -> l >= target)

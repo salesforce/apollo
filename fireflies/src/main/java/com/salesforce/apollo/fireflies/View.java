@@ -64,7 +64,7 @@ import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
-import io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
  * The View is the active representation view of all members - failed and live -

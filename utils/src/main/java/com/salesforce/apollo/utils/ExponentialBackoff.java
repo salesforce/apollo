@@ -47,7 +47,7 @@ public class ExponentialBackoff<T> {
 
         public void executeAsync(Callable<ListenableFuture<T>> task, Executor executor,
                                  CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
-            build().executeAsync(task, futureSailor, scheduler);
+            build().executeAsync(executor, task, futureSailor, scheduler);
         }
 
         public Builder<T> retryIf(final Predicate<T> retryIf) {
@@ -143,12 +143,12 @@ public class ExponentialBackoff<T> {
         }
     }
 
-    public void executeAsync(Callable<ListenableFuture<T>> task, CompletableFuture<T> futureSailor,
+    public void executeAsync(Executor exec, Callable<ListenableFuture<T>> task, CompletableFuture<T> futureSailor,
                              ScheduledExecutorService scheduler) {
         if (infinite) {
-            executeAsync(0, task, futureSailor, attempt -> true, scheduler);
+            executeAsync(exec, 0, task, futureSailor, attempt -> true, scheduler);
         } else {
-            executeAsync(0, task, futureSailor, attempt -> attempt < maxAttempts, scheduler);
+            executeAsync(exec, 0, task, futureSailor, attempt -> attempt < maxAttempts, scheduler);
         }
     }
 
@@ -175,7 +175,7 @@ public class ExponentialBackoff<T> {
                            TimeUnit.MILLISECONDS);
     }
 
-    private void executeAsync(final long attempt, Callable<ListenableFuture<T>> task,
+    private void executeAsync(final Executor exec, final long attempt, Callable<ListenableFuture<T>> task,
                               final CompletableFuture<T> futureSailor, final Predicate<Long> predicate,
                               final ScheduledExecutorService scheduler) {
         if (!predicate.test(attempt)) {
@@ -186,36 +186,37 @@ public class ExponentialBackoff<T> {
         final long waitTime = jitter ? getWaitTimeWithJitter(cap, base, nextAttempt)
                                      : getWaitTime(cap, base, nextAttempt);
 
-        final ListenableFuture<T> r;
-
-        try {
-            r = task.call();
-        } catch (Exception e) {
-            exceptionHandler.accept(e);
-            scheduler.schedule(() -> executeAsync(nextAttempt, task, futureSailor, predicate, scheduler), waitTime,
-                               TimeUnit.MILLISECONDS);
-            return;
-        }
-
-        if (r == null) {
-            if (!retryIf.test(null)) {
-                futureSailor.complete(null);
+        exec.execute(() -> {
+            final ListenableFuture<T> r;
+            try {
+                r = task.call();
+            } catch (Exception e) {
+                exceptionHandler.accept(e);
+                scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate, scheduler),
+                                   waitTime, TimeUnit.MILLISECONDS);
                 return;
             }
-        }
 
-        r.addListener(() -> {
-            try {
-                T result = r.get();
-                if (!retryIf.test(result)) {
-                    futureSailor.complete(result);
+            if (r == null) {
+                if (!retryIf.test(null)) {
+                    futureSailor.complete(null);
                     return;
                 }
-            } catch (final Exception e) {
-                exceptionHandler.accept(e);
             }
-            scheduler.schedule(() -> executeAsync(nextAttempt, task, futureSailor, predicate, scheduler), waitTime,
-                               TimeUnit.MILLISECONDS);
-        }, run -> run.run());
+
+            r.addListener(() -> {
+                try {
+                    T result = r.get();
+                    if (!retryIf.test(result)) {
+                        futureSailor.complete(result);
+                        return;
+                    }
+                } catch (final Exception e) {
+                    exceptionHandler.accept(e);
+                }
+                scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate, scheduler),
+                                   waitTime, TimeUnit.MILLISECONDS);
+            }, exec);
+        });
     }
 }

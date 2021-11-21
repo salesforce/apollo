@@ -44,7 +44,6 @@ import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Assemble;
@@ -62,6 +61,7 @@ import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -146,8 +146,8 @@ public class CHOAM {
                 transitions.bootstrap(anchor);
                 return;
             }
-            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
-                      params.member());
+            log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                     params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 awaitRegeneration();
@@ -162,8 +162,8 @@ public class CHOAM {
                 transitions.bootstrap(anchor);
                 return;
             }
-            log.debug("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
-                      params.member());
+            log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
+                     params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
                 synchronizationFailed();
@@ -193,12 +193,12 @@ public class CHOAM {
         private void synchronizationFailed() {
             final var c = current.get();
             if (c.isMember()) {
-                log.debug("Synchronization failed and initial member, regenerating: {} on: {}",
-                          c.getClass().getSimpleName(), params.member());
+                log.info("Synchronization failed and initial member, regenerating: {} on: {}",
+                         c.getClass().getSimpleName(), params.member());
                 transitions.regenerate();
             } else {
-                log.debug("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
-                          params.member());
+                log.info("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
+                         params.member());
                 transitions.synchronizationFailed();
             }
         }
@@ -227,9 +227,8 @@ public class CHOAM {
         }
 
         @Override
-        public Empty submit(SubmitTransaction request, Digest from) {
-            CHOAM.this.submit(request, from);
-            return Empty.getDefaultInstance();
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
         }
 
         @Override
@@ -278,10 +277,10 @@ public class CHOAM {
         }
 
         @Override
-        public void submit(SubmitTransaction request) {
+        public SubmitResult submit(SubmitTransaction request) {
             log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
                       params().member());
-            producer.submit(request.getTransaction());
+            return producer.submit(request.getTransaction());
         }
     }
 
@@ -646,6 +645,10 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
+    public Combine.Transitions getCurrentState() {
+        return transitions.fsm().getCurrentState();
+    }
+
     public Session getSession() {
         return session;
     }
@@ -676,9 +679,39 @@ public class CHOAM {
         session.cancelAll();
         linear.shutdown();
         executions.shutdown();
+        final var c = current.get();
+        if (c != null) {
+            c.complete();
+        }
     }
 
-    protected boolean checkJoin(JoinRequest request, Digest from) {
+    private void accept(HashedCertifiedBlock next) {
+        head.set(next);
+        store.put(next);
+        final Committee c = current.get();
+        c.accept(next);
+        log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
+                  params.member());
+    }
+
+    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
+        return new Bootstrapper(anchor, params, store, comm);
+    }
+
+    private void cancelSynchronization() {
+        final ScheduledFuture<?> fs = futureSynchronization.get();
+        if (fs != null) {
+            fs.cancel(true);
+            futureSynchronization.set(null);
+        }
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap.set(null);
+        }
+    }
+
+    private boolean checkJoin(JoinRequest request, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
             log.debug("Request to join from non member: {} on: {}", from, params.member());
@@ -703,32 +736,6 @@ public class CHOAM {
             return false;
         }
         return true;
-    }
-
-    private void accept(HashedCertifiedBlock next) {
-        head.set(next);
-        store.put(next);
-        final Committee c = current.get();
-        c.accept(next);
-        log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                 params.member());
-    }
-
-    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        return new Bootstrapper(anchor, params, store, comm);
-    }
-
-    private void cancelSynchronization() {
-        final ScheduledFuture<?> fs = futureSynchronization.get();
-        if (fs != null) {
-            fs.cancel(true);
-            futureSynchronization.set(null);
-        }
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap.set(null);
-        }
     }
 
     private Block checkpoint() {
@@ -921,7 +928,6 @@ public class CHOAM {
         log.trace("Executing genesis initialization block: {} on: {}", h.hash, params.member());
         try {
             params.processor().genesis(initialization);
-            ;
         } catch (Throwable t) {
             log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member());
         }
@@ -1092,21 +1098,25 @@ public class CHOAM {
         };
     }
 
-    /** Submit a transaction from a client */
-    private void submit(SubmitTransaction request, Digest from) {
+    /**
+     * Submit a transaction from a client
+     * 
+     * @return
+     */
+    private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
             log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
-            Status.FAILED_PRECONDITION.withDescription("Invalid transaction submission from non member")
-                                      .asRuntimeException();
+            return SubmitResult.newBuilder().setSuccess(false)
+                               .setStatus("Invalid transaction submission from non member").build();
         }
         final var c = current.get();
         if (c == null) {
             log.warn("No committee to submit txn from: {} on: {}", from, params.member());
-            throw Status.UNAVAILABLE.withDescription("No committee to submit txn").asRuntimeException();
+            return SubmitResult.newBuilder().setSuccess(false).setStatus("No committee to submit txn").build();
         }
         log.debug("Submiting received txn: {} from: {} on: {}",
                   hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
-        c.submit(request);
+        return c.submit(request);
     }
 
     private Initial sync(Synchronize request, Digest from) {

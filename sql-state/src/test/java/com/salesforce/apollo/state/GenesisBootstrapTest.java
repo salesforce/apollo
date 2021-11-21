@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,7 +51,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final int clientCount = 10;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
-        final int target = 100;
 
         routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
                .forEach(r -> r.start());
@@ -58,18 +58,15 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .forEach(ch -> ch.start());
         Thread.sleep(1000);
 
-        var success = Utils.waitForCondition(15_000, 100,
+        var success = Utils.waitForCondition(30_000, 100,
                                              () -> members.stream().map(m -> updaters.get(m))
                                                           .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
                                                           .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
-                                                          .count() == members.size() - 1);
-        assertTrue(success,
-                   "Results: "
-                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+                                                          .count() > toleranceLevel);
+        assertTrue(success, "States: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession().submit(initialInsert(), timeout,
-                                                                                   txScheduler);
+        final var initial = choams.get(members.get(0).getId()).getSession()
+                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
@@ -93,6 +90,8 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         } finally {
             proceed.set(false);
         }
+
+        final long target = updaters.get(members.get(0)).getCurrentBlock().height() + 100;
 
         success = Utils.waitForCondition(30_000, 100,
                                          () -> members.stream().map(m -> updaters.get(m))

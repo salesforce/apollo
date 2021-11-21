@@ -155,7 +155,7 @@ public class CheckpointAssemblerTest {
                                                            DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        assembled = boot.assemble(scheduler, Duration.ofMillis(10));
+        assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());
         CheckpointState assembledCs;
         try {
             assembledCs = assembled.get(300, TimeUnit.SECONDS);

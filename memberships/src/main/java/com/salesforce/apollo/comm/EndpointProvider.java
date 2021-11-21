@@ -11,7 +11,7 @@ import java.net.SocketAddress;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 
-import io.netty.handler.ssl.ClientAuth;
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
  * @author hal.hildebrand

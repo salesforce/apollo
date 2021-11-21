@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -90,11 +91,12 @@ public class Session {
      * @param transaction - the Message to submit as a transaction
      * @param timeout     - non null timeout of the transaction
      * @param scheduler
+     * @param exec
      * @return onCompletion - the future result of the submitted transaction
      * @throws InvalidTransaction - if the submitted transaction is invalid in any
      *                            way
      */
-    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout,
+    public <T> CompletableFuture<T> submit(Executor exec, Message transaction, Duration timeout,
                                            ScheduledExecutorService scheduler) throws InvalidTransaction {
         final int n = nonce.getAndIncrement();
 
@@ -108,7 +110,7 @@ public class Session {
             timeout = params.submitTimeout();
         }
         var stxn = new SubmittedTransaction(hash, txn, result);
-        submit(stxn, scheduler);
+        submit(exec, stxn, scheduler);
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
         var futureTimeout = scheduler.schedule(() -> {
             log.debug("Timeout of txn: {} on: {}", hash, params.member());
@@ -143,7 +145,7 @@ public class Session {
         }
     }
 
-    private void submit(SubmittedTransaction stx, ScheduledExecutorService scheduler) {
+    private void submit(Executor exec, SubmittedTransaction stx, ScheduledExecutorService scheduler) {
         submitted.put(stx.hash(), stx);
         CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
             if (!stx.onCompletion().isDone()) {
@@ -163,7 +165,7 @@ public class Session {
             log.trace("Retrying: {} status: {} on: {}", stx.hash(), s, params.member());
             return true;
         }).build();
-        clientBackoff.executeAsync(() -> {
+        clientBackoff.executeAsync(exec, () -> {
             if (stx.onCompletion().isDone()) {
                 SettableFuture<Status> f = SettableFuture.create();
                 f.set(Status.OK);

@@ -13,7 +13,7 @@ import "ethereal.proto";
 package apollo.choam;
 
 service Terminal {
-    rpc submit (SubmitTransaction) returns (google.protobuf.Empty) {}
+    rpc submit (SubmitTransaction) returns (SubmitResult) {}
 
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
@@ -33,6 +33,11 @@ message JoinRequest {
 message SubmitTransaction {
     utils.Digeste context = 1;
     Transaction transaction = 2;
+}
+
+message SubmitResult {
+    bool success = 1;
+    string status = 2;
 }
 
 message Block {

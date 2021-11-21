@@ -25,6 +25,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -107,7 +108,8 @@ abstract public class AbstractLifecycleTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                         tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -126,7 +128,8 @@ abstract public class AbstractLifecycleTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(update(entropy), timeout, scheduler), tc);
+                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                         tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -142,7 +145,7 @@ abstract public class AbstractLifecycleTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(update(entropy), timeout, scheduler), time);
+                    decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler), time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -165,6 +168,7 @@ abstract public class AbstractLifecycleTest {
 
     ExecutorService          routerExec;
     ScheduledExecutorService scheduler;
+    int                      toleranceLevel;
     ScheduledExecutorService txScheduler;
 
     private File                          baseDir;
@@ -213,8 +217,8 @@ abstract public class AbstractLifecycleTest {
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()), 0.2, CARDINALITY,
-                                    3);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger exec = new AtomicInteger();
@@ -275,14 +279,14 @@ abstract public class AbstractLifecycleTest {
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setCheckpointer(wrap(up))
                                .setSynchronizationCycles(testSubject ? 100 : 1).setRestorer(up.getBootstrapper())
-                               .setProcessor(wrap(m, up)).build(),
+                               .setExec(Router.createFjPool()).setProcessor(wrap(m, up)).build(),
                          MVStore.open(null));
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)

@@ -87,7 +87,7 @@ public class HashTest {
 
     private void intHashes(int k, int m) {
         ConcurrentHashMultiset<Integer> frequency = ConcurrentHashMultiset.create();
-        long seed = Utils.secureEntropy().nextLong();
+        long seed = 0x1638;
 
         IntStream.range(0, m * 2).parallel().forEach(i -> {
             SecureRandom entropy = Utils.secureEntropy();
@@ -98,7 +98,7 @@ public class HashTest {
         double missing = m - frequency.elementSet().size();
         double pc = ((missing / (double) m) * 100.0);
         assertTrue(pc < 0.5 | missing < 2.0,
-                   String.format("Missing: k: %s m: %s missing: %s : %s", k, m, (int) missing, pc));
+                   String.format("Missing: k: %s m: %s missing: %s : %s seed: %s", k, m, (int) missing, pc, seed));
         System.out.println(String.format("OK: k: %s m: %s missing: %s : %s", k, m, (int) missing, pc));
     }
 }
