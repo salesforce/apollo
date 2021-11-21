@@ -184,8 +184,7 @@ public class MembershipTests {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality,
-                                    3);
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
         toleranceLevel = context.toleranceLevel();
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
@@ -210,7 +209,7 @@ public class MembershipTests {
             return cp;
         };
 
-        var params = Parameters.newBuilder().setContext(context)
+        var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))

@@ -205,6 +205,7 @@ public class TestCHOAM {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))

@@ -243,9 +243,9 @@ public class CHOAMTest {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
-                               .setExec(Router.createFjPool()).setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setExec(Router.createFjPool())
+                               .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)

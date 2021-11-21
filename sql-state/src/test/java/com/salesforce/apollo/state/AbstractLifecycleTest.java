@@ -285,8 +285,8 @@ abstract public class AbstractLifecycleTest {
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
