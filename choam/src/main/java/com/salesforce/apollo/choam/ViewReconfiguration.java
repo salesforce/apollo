@@ -109,7 +109,7 @@ public class ViewReconfiguration extends ViewAssembly {
             assert ds.size() == 0 : "Existing data! size: " + ds.size();
             ds.put(Reassemble.newBuilder().setValidations(Validations.newBuilder().addValidations(validate).build())
                              .build().toByteString());
-            for (int i = 0; i < params().producer().ethereal().getEpochLength() * 2; i++) {
+            for (int i = 0; i < 8; i++) {
                 ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {

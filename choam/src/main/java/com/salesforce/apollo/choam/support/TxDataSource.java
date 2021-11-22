@@ -84,7 +84,7 @@ public class TxDataSource implements DataSource {
             try {
                 Validate validation = validations.poll(1, TimeUnit.SECONDS);
                 while (!closed.get() && validation == null) {
-                    validation = validations.poll(1, TimeUnit.SECONDS);
+                    validation = validations.poll(2, TimeUnit.MILLISECONDS);
                 }
                 if (closed.get()) {
                     return ByteString.EMPTY;
