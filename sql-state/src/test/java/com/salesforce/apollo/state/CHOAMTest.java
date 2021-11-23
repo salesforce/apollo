@@ -314,9 +314,9 @@ public class CHOAMTest {
             proceed.set(false);
         }
 
-        final long target = updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                    .mapToLong(cb -> cb.height()).max().getAsLong()
-        + 10;
+        final long target = members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                                   .filter(cb -> cb != null).mapToLong(cb -> cb.height()).max().getAsLong()
+        + 30;
 
         Utils.waitForCondition(60_000, 1000,
                                () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
