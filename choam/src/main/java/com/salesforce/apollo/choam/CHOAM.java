@@ -1182,7 +1182,11 @@ public class CHOAM {
         log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
                  params.member());
-        combine();
+        try {
+            linear.execute(() -> combine());
+        } catch (RejectedExecutionException e) {
+            // ignore
+        }
     }
 
     private void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {

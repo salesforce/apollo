@@ -156,6 +156,7 @@ public class SqlStateMachine {
             for (Transaction txn : initialization) {
                 execute(txn, null);
             }
+            log.debug("Genesis executed on: {}", url);
         }
     }
 
@@ -383,6 +384,7 @@ public class SqlStateMachine {
                 }
             }
         }
+        log.debug("Initialized state on: {}", url);
     }
 
     private int[] acceptBatch(Batch batch) throws SQLException {
@@ -603,6 +605,7 @@ public class SqlStateMachine {
     private void beginBlock(long height, Digest hash) {
         begin(height, hash);
         updateCurrentBlock(height, hash);
+        log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
     }
 
     private void commit() {
@@ -791,10 +794,12 @@ public class SqlStateMachine {
             exec.setString(2, QualifiedBase64.qb64(hash));
             exec.execute();
         } catch (SQLException e) {
-            throw new IllegalStateException("Cannot update the CURRENT BLOCK", e);
+            log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
+            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
         } finally {
             try {
                 exec.clearBatch();
+                ;
                 exec.clearParameters();
             } catch (SQLException e) {
                 // ignore
