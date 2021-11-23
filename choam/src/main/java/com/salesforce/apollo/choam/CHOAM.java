@@ -244,7 +244,7 @@ public class CHOAM {
         @SuppressWarnings("rawtypes")
         void execute(Transaction tx, CompletableFuture onComplete);
 
-        default void genesis(List<Transaction> initialization) {
+        default void genesis(long height, Digest hash, List<Transaction> initialization) {
         }
     }
 
@@ -927,9 +927,9 @@ public class CHOAM {
     private void genesisInitialization(final HashedBlock h, final List<Transaction> initialization) {
         log.trace("Executing genesis initialization block: {} on: {}", h.hash, params.member());
         try {
-            params.processor().genesis(initialization);
+            params.processor().genesis(h.height(), h.hash, initialization);
         } catch (Throwable t) {
-            log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member());
+            log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member(), t);
         }
     }
 
@@ -985,7 +985,6 @@ public class CHOAM {
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
             log.trace("Executing genesis transactions for block: {}  on: {}", h.hash, params.member());
-            params.processor().beginBlock(h.height(), h.hash);
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
             transitions.regenerated();
         case EXECUTIONS:

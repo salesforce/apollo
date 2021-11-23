@@ -370,8 +370,7 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId()))
-                               .setExec(Router.createFjPool())
+        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setExec(Router.createFjPool())
                                .setProcessor(new TransactionExecutor() {
 
                                    @Override
@@ -387,8 +386,8 @@ public class CHOAMTest {
                                    }
 
                                    @Override
-                                   public void genesis(List<Transaction> initialization) {
-                                       up.getExecutor().genesis(initialization);
+                                   public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                                       up.getExecutor().genesis(height, hash, initialization);
                                    }
                                }).build(),
                          MVStore.open(null));

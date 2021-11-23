@@ -312,8 +312,8 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void genesis(List<Transaction> initialization) {
-                up.getExecutor().genesis(initialization);
+            public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                up.getExecutor().genesis(height, hash, initialization);
             }
         };
     }

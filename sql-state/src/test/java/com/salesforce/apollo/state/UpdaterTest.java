@@ -5,8 +5,9 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.state;
-
+import static com.salesforce.apollo.crypto.QualifiedBase64.*;
 import static com.salesforce.apollo.state.Mutator.batch;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,6 +16,7 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Collections;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
@@ -33,8 +35,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
-        updater.initializeEvents();
+        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
 
@@ -66,8 +67,7 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
-        updater.initializeEvents();
+        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         SqlStateMachine.publish(connection, "test", json);
@@ -89,5 +89,30 @@ public class UpdaterTest {
         assertTrue(events.next());
 //        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
         assertFalse(events.next());
+    }
+
+    @Test
+    public void currentBlock() throws Exception {
+
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_curBlock", new Properties(),
+                                                      new File("target/chkpoints"));
+        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+
+        Connection connection = updater.newConnection();
+        Statement statement = connection.createStatement();
+        ResultSet cb = statement.executeQuery("select * from __APOLLO_INTERNAL__.CURRENT_BLOCK");
+
+        assertTrue(cb.next(), "Should exist");
+        assertEquals(0, cb.getLong(2));
+        assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
+        assertFalse(cb.next(), "Should be only 1 record");
+        
+        updater.getExecutor().beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
+        cb = statement.executeQuery("select * from __APOLLO_INTERNAL__.CURRENT_BLOCK");
+
+        assertTrue(cb.next(), "Should exist");
+        assertEquals(1, cb.getLong(2));
+        assertEquals(qb64(DigestAlgorithm.DEFAULT.getOrigin()), cb.getString(3));
+        assertFalse(cb.next(), "Should be only 1 record");
     }
 }
