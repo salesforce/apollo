@@ -33,13 +33,15 @@ Transactions are one of the following types, and are represented as Protobuffs d
 #### Statement
 The Statement  is the equivalent of the JDBC SQL prepared statement with or without arguments.
 #### Call
-The Call  is the transaction to execute SQL stored procedures.
+The Call  is the transaction to execute SQL stored procedure Calls.
 ### Batch
 A Batch of SQL statements with no arguments, executed in order
 ### BatchUpdate
 A Single prepared statement that is executed in batch with a list of arguments, one argument set per batch entry
 ### Script
 A Java function that accepts a SQL connection and may return results - basically an anonymous function
+### BatchedTransaction
+This is a batch of any of the above types, executed in order in a single transaction
 
 ## Stored Procedures, Functions and Triggers
 The model provides the definition and execution of user defined SQL stored procedures, functions and triggers.  These are currently limited to Java implementations, although more languages and WASM support is
@@ -53,8 +55,7 @@ However, things like TIME and RANDOM make that impossible.  So, the underlying H
 we provide the RANDOM function, we guarantee that the results of these RANDOM function invocations will be identical across all nodes.  Likewise with TIME and some other functions.  This
 is accomplished by slight modifications of the underlying H2 database, and the use of block hashes for seeding these functions.  This results in deterministic SQL execution across the system.
 
-Likewise, it's important in the Java stored procedures, functions and triggers to likewise deterministically execute.  However, this is currently not the case as the DJVM which was considered
-for this deterministic implementation is an incorrect license and so another mechanism will have to be engineered to enforce determinism.
+Likewise, it's important in the Java stored procedures, functions and triggers to deterministically execute.  This is not enforced at the moment.
 
 ## Checkpointing and Bootstrapping
 Checkpoints are implemented with H2's _SCRIPT_ command which dumps the current database state in a form that will recreate the state of the database.  This is, of course, compressed and becomes the checkpointed state

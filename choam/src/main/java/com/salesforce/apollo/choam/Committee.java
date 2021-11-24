@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
@@ -102,7 +103,9 @@ public interface Committee {
 
     default ListenableFuture<Status> submitTxn(Transaction transaction) {
         log().trace("Cannot submit txn, inactive committee on: {}", params().member());
-        throw Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee").asRuntimeException();
+        SettableFuture<Status> f = SettableFuture.create();
+        f.set(Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee on: " + params().member()));
+        return f;
     }
 
     boolean validate(HashedCertifiedBlock hb);
