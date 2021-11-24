@@ -279,14 +279,15 @@ abstract public class AbstractLifecycleTest {
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setCheckpointer(wrap(up))
                                .setSynchronizationCycles(testSubject ? 100 : 1).setRestorer(up.getBootstrapper())
-                               .setExec(Router.createFjPool()).setProcessor(wrap(m, up)).build(),
+                               .setProcessor(wrap(m, up)).build(),
                          MVStore.open(null));
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
-                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setGenesisData(GENESIS_DATA)
-                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
+                               .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
+                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
@@ -311,8 +312,8 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void genesis(List<Transaction> initialization) {
-                up.getExecutor().genesis(initialization);
+            public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                up.getExecutor().genesis(height, hash, initialization);
             }
         };
     }

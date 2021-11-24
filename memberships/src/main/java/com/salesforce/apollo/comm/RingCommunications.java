@@ -215,8 +215,12 @@ public class RingCommunications<Comm extends Link> {
         try {
             return new linkAndRing<>(comm.apply(successor, member), r);
         } catch (Throwable e) {
-            log.trace("error opening connection to {}: {}", successor.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
+            if (log.isDebugEnabled()) {
+                log.error("error opening connection to {}: {}", successor.getId(), e);
+            } else {
+                log.error("error opening connection to {}: {}", successor.getId(),
+                          (e.getCause() != null ? e.getCause() : e).getMessage());
+            }
         }
         return null;
     }

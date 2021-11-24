@@ -313,19 +313,19 @@ public class CHOAMTest {
         } finally {
             proceed.set(false);
         }
-        final long target = members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                                   .filter(cb -> cb != null).mapToLong(cb -> cb.height()).max().getAsLong()
-        + 30;
 
-        success = Utils.waitForCondition(60_000, 1000,
-                                         () -> members.stream().map(m -> updaters.get(m))
-                                                      .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                                      .mapToLong(cb -> cb.height()).filter(l -> l >= target)
-                                                      .count() == members.size());
-        assertTrue(success,
-                   "Results: "
-                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= target).toList());
+        final long target = updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                    .mapToLong(cb -> cb.height()).max().getAsLong()
+        + 10;
+
+        Utils.waitForCondition(60_000, 1000,
+                               () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                                            .filter(cb -> cb != null).mapToLong(cb -> cb.height())
+                                            .filter(l -> l >= target).count() == members.size());
+
+        System.out.println("target: " + target + " results: "
+        + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                 .map(cb -> cb.height()).toList());
 
         System.out.println();
         System.out.println();
@@ -370,7 +370,7 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId()))
+        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setExec(Router.createFjPool())
                                .setProcessor(new TransactionExecutor() {
 
                                    @Override
@@ -386,8 +386,8 @@ public class CHOAMTest {
                                    }
 
                                    @Override
-                                   public void genesis(List<Transaction> initialization) {
-                                       up.getExecutor().genesis(initialization);
+                                   public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                                       up.getExecutor().genesis(height, hash, initialization);
                                    }
                                }).build(),
                          MVStore.open(null));

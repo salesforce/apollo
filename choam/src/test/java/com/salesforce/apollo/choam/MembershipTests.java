@@ -210,6 +210,7 @@ public class MembershipTests {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setExec(Router.createFjPool())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
@@ -256,7 +257,7 @@ public class MembershipTests {
                 params.setSynchronizationCycles(3);
             }
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
-                                   .setExec(Router.createFjPool()).build(),
+                                   .build(),
                              MVStore.open(null));
         }));
         return testSubject;

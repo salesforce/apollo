@@ -91,16 +91,18 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
             proceed.set(false);
         }
 
-        final long target = members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                                   .filter(cb -> cb != null).mapToLong(cb -> cb.height()).max().getAsLong()
-        + 30;
+        final long target = updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                                    .mapToLong(cb -> cb.height()).max().getAsLong()
+        + 10;
 
-        success = Utils.waitForCondition(60_000, 100,
-                                         () -> members.stream().map(m -> updaters.get(m))
-                                                      .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                                      .mapToLong(cb -> cb.height()).filter(l -> l >= target)
-                                                      .count() == members.size());
-        assertTrue(success, "Results: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
+        Utils.waitForCondition(60_000, 100,
+                               () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                                            .filter(cb -> cb != null).mapToLong(cb -> cb.height())
+                                            .filter(l -> l >= target).count() == members.size());
+
+        System.out.println("target: " + target + " results: "
+        + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                 .map(cb -> cb.height()).toList());
 
         System.out.println();
         System.out.println();

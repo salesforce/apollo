@@ -156,8 +156,7 @@ public class TestCHOAM {
     private Map<Digest, List<Digest>> blocks;
     private Map<Digest, CHOAM>        choams;
     private List<SigningMember>       members;
-    private Map<Digest, Router>       routers;
-    private int                       toleranceLevel;
+    private Map<Digest, Router>       routers; 
 
     private Map<Digest, List<Transaction>> transactions;
 
@@ -179,8 +178,7 @@ public class TestCHOAM {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
-        toleranceLevel = context.toleranceLevel();
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3); 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger exec = new AtomicInteger();
@@ -205,7 +203,7 @@ public class TestCHOAM {
         };
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
@@ -245,7 +243,7 @@ public class TestCHOAM {
             };
             params.getProducer().ethereal().setSigner(m);
             return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
-                                   .setExec(Router.createFjPool()).build(),
+                                   .build(),
                              MVStore.open(null));
         }));
     }

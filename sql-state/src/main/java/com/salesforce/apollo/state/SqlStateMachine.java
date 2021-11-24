@@ -71,6 +71,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
 /**
@@ -148,11 +149,14 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void genesis(List<Transaction> initialization) {
-            initializeEvents();
+        public void genesis(long height, Digest hash, List<Transaction> initialization) {
+            begin(height, hash);
+            initializeState();
+            updateCurrentBlock(height, hash);
             for (Transaction txn : initialization) {
                 execute(txn, null);
             }
+            log.debug("Genesis executed on: {}", url);
         }
     }
 
@@ -182,17 +186,19 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH    = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
-                                                                                                           SqlStateMachine.class.getCanonicalName());
-    private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL           = "CREATE SCHEMA __APOLLO_INTERNAL__";
-    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE  = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH       = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
+                                                                                                              SqlStateMachine.class.getCanonicalName());
+    private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL              = "CREATE SCHEMA __APOLLO_INTERNAL__";
+    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK = "CREATE TABLE __APOLLO_INTERNAL__.CURRENT_BLOCK(_U INT, HEIGHT INT8, HASH VARCHAR(256))";
+    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE    = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
     private static final RowSetFactory             factory;
-    private static final Logger                    log                                     = LoggerFactory.getLogger(SqlStateMachine.class);
-    private static final ObjectMapper              MAPPER                                  = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                          = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2)";
-    private static final ThreadLocal<SecureRandom> secureRandom                            = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE  = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
+    private static final Logger                    log                                        = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper              MAPPER                                     = new ObjectMapper();
+    private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2)";
+    private static final ThreadLocal<SecureRandom> secureRandom                               = new ThreadLocal<>();
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
+    private static final String                    UPDATE_CURRENT_BLOCK                       = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
 
     static {
         try {
@@ -356,7 +362,7 @@ public class SqlStateMachine {
     }
 
     // Test accessible
-    void initializeEvents() {
+    void initializeState() {
         java.sql.Statement statement = null;
 
         SecureRandom prev = secureRandom.get();
@@ -364,10 +370,11 @@ public class SqlStateMachine {
         try {
             statement = connection.createStatement();
             statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
+            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK);
             statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
         } catch (SQLException e) {
-            throw new IllegalStateException("unable to create event publish function", e);
+            throw new IllegalStateException("unable to initialize db state", e);
         } finally {
             secureRandom.set(prev);
             if (statement != null) {
@@ -377,6 +384,7 @@ public class SqlStateMachine {
                 }
             }
         }
+        log.debug("Initialized state on: {}", url);
     }
 
     private int[] acceptBatch(Batch batch) throws SQLException {
@@ -582,7 +590,7 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void beginBlock(long height, Digest hash) {
+    private void begin(long height, Digest hash) {
         getSession().getRandom().setSeed(new DigestHasher(hash, height).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
@@ -592,6 +600,12 @@ public class SqlStateMachine {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
         currentBlock.set(new CurrentBlock(hash, height));
+    }
+
+    private void beginBlock(long height, Digest hash) {
+        begin(height, hash);
+        updateCurrentBlock(height, hash);
+        log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
     }
 
     private void commit() {
@@ -688,15 +702,15 @@ public class SqlStateMachine {
             case BATCHED -> acceptBatchTransaction(tx.getBatched());
             default -> null;
             };
-            SqlStateMachine.this.complete(onCompletion, results);
+            this.complete(onCompletion, results);
         } catch (JdbcSQLNonTransientConnectionException e) {
             // ignore
         } catch (Exception e) {
-            SqlStateMachine.this.rollback();
-            SqlStateMachine.this.exception(onCompletion, e);
+            rollback();
+            exception(onCompletion, e);
         } finally {
-            SqlStateMachine.secureRandom.set(prev);
-            SqlStateMachine.this.commit();
+            secureRandom.set(prev);
+            commit();
         }
     }
 
@@ -766,5 +780,31 @@ public class SqlStateMachine {
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
         }
+    }
+
+    private void updateCurrentBlock(long height, Digest hash) {
+        PreparedStatement exec;
+        try {
+            exec = psCache.get(UPDATE_CURRENT_BLOCK);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Unable to get prepared update statement: " + UPDATE_CURRENT_BLOCK, e);
+        }
+        try {
+            exec.setLong(1, height);
+            exec.setString(2, QualifiedBase64.qb64(hash));
+            exec.execute();
+        } catch (SQLException e) {
+            log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
+            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
+        } finally {
+            try {
+                exec.clearBatch();
+                ;
+                exec.clearParameters();
+            } catch (SQLException e) {
+                // ignore
+            }
+        }
+        commit();
     }
 }

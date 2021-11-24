@@ -15,6 +15,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,8 +36,7 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                                                       new File("target/chkpoints"));
-        machine.getExecutor().beginBlock(0, DigestAlgorithm.DEFAULT.getLast());
-        machine.initializeEvents();
+        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList()); 
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
