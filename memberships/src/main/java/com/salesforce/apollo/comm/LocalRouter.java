@@ -20,10 +20,9 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
 import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
-import com.netflix.concurrency.limits.grpc.client.GrpcClientRequestContext;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
 import com.netflix.concurrency.limits.limit.VegasLimit;
@@ -62,6 +61,12 @@ public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
+        private final Limit clientLimit;
+
+        public LocalServerConnectionFactory(Limit clientLimiter) {
+            this.clientLimit = clientLimiter;
+        }
+
         @Override
         public ManagedChannel connectTo(Member to, SigningMember from) {
             ClientInterceptor clientInterceptor = new ClientInterceptor() {
@@ -79,14 +84,11 @@ public class LocalRouter extends Router {
                     };
                 }
             };
-            Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().limit(VegasLimit.newBuilder()
-                                                                                                       .maxConcurrency(10_000)
-                                                                                                       .initialLimit(10_000)
-                                                                                                       .build())
-                                                                                      .blockOnLimit(false).build();
             final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
                                                                            .intercept(clientInterceptor,
-                                                                                      new ConcurrencyLimitClientInterceptor(limiter));
+                                                                                      new ConcurrencyLimitClientInterceptor(new GrpcClientLimiterBuilder().limit(clientLimit)
+                                                                                                                                                          .blockOnLimit(false)
+                                                                                                                                                          .build()));
             disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
@@ -136,30 +138,40 @@ public class LocalRouter extends Router {
     private static final Logger              log           = LoggerFactory.getLogger(LocalRouter.class);
     private static final Map<Digest, Member> serverMembers = new ConcurrentHashMap<>();
 
+    public static Limit defaultClientLimit() {
+        return VegasLimit.newBuilder().maxConcurrency(1_000).initialLimit(1_000).build();
+    }
+
+    public static Limit defaultServerLimit() {
+        return VegasLimit.newBuilder().maxConcurrency(5_000).initialLimit(5_000).build();
+    }
+
     private final Member member;
     private final Server server;
 
-    public LocalRouter(Member member, ServerConnectionCache.Builder builder, Executor executor) {
-        this(member, builder, new MutableHandlerRegistry(), executor);
+    public LocalRouter(Member member, Limit clientLimit, ServerConnectionCache.Builder builder, Limit serverLimit,
+                       Executor executor) {
+        this(member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
     }
 
-    public LocalRouter(Member member, ServerConnectionCache.Builder builder, MutableHandlerRegistry registry,
-                       Executor executor) {
-        super(builder.setFactory(new LocalServerConnectionFactory()).build(), registry);
+    public LocalRouter(Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
+                       MutableHandlerRegistry registry, Limit serverLimit, Executor executor) {
+        super(builder.setFactory(new LocalServerConnectionFactory(clientLimit)).build(), registry);
         this.member = member;
         serverMembers.put(member.getId(), member);
 
         ConcurrencyLimitServerInterceptor limiter;
-        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(VegasLimit.newBuilder()
-                                                                                                              .maxConcurrency(10_000)
-                                                                                                              .initialLimit(10_000)
-                                                                                                              .build())
+        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit)
                                                                                              .build())
                                                    .build();
         final var name = qb64(member.getId());
         server = InProcessServerBuilder.forName(name).executor(executor).intercept(interceptor()).intercept(limiter)
                                        .fallbackHandlerRegistry(registry).build();
         log.info("Created server: {} on: {}", name, member);
+    }
+
+    public LocalRouter(Member member, ServerConnectionCache.Builder builder, Executor executor) {
+        this(member, defaultClientLimit(), builder, new MutableHandlerRegistry(), defaultServerLimit(), executor);
     }
 
     @Override
