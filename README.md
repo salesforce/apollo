@@ -1,20 +1,17 @@
 # Apollo Delphinius
-The Apollo Delphinius project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication layer.  The consensus layer is supplied by a **GREEN** - i.e. non POW - and quiescent consensus protocol.
+The Apollo Delphinius project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication overlay.  The consensus layer is supplied by a green - i.e. non POW - async bft consensus protocol. At the top is a largely JDBC connectable replicated SQL store, supported by checkpointed CHOAM linear logs.
 
 ## Requirements
-Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.3 and above.  
+Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above.  
 
-## Protocols
+## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
-* Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Protocol](https://github.com/decentralized-identity/keri) (KERI).
-* MTLS network communication - Local communication simulation supported for trivial multiprocess simulation testing
+* Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
+* MTLS network communication - Local communication simulation supported for trivial multinode simulation for single process (IDE) testing
 * Group based protocol routing - multiple protocol instances per process
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
-    * Assumes byzantine members (and allows one to parameterize the system according to the probability of such).
-    * Creates an overlay network in which each member gossips with the successor of the member in a ring.
-    * The monitoring ring is capable of detecting member crashes (failures).
-    * Reliable group message flooding.
-* Reliable Broadcast - garbage collected group based reliable broadcast and sender total ordering
+* Reliable Broadcast - garbage collected, context based reliable broadcast
+* Multi instance GRPC service routing - Context keyed services and routing framework
 * CHOAM - dynamic committee based transaction ordering service producing linear logs - block chains
 * SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, Stored Procedures, functions.
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
@@ -29,7 +26,7 @@ Apollo isn't designed for coins, rather as essentially a distributed database.  
 Note that Apollo Delphinius is very much a _work in progress_.  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed ledger platform.  I am a strong believer in iterative development and believe it is the only way to create robust systems.
 
 ## Requirements
-Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.3+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
+Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
 
 Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
 
