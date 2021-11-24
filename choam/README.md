@@ -27,9 +27,8 @@ exactly once fashion.
 
 ## MVP Status
 
-Currently this module is MVP status.  It's stable and fast enough to do serious simulations and thus provide the foundation for the next phase of transaction ordering and CDC event generation.  However, critical features such as
-view reconfiguration, checkpointing, bootstrapping, etc are not currently provided.  There are also known issues with parameters that can cause endless view changes because the system cannot process transactions fast enough for the
-timeout parameters.  It's hoped this can be eliminated with feedback generated from state context actions, but perhaps it can simply be bounded with "good" parameter checks.  SMH ;)
+Currently this module is MVP status.  It's now very stable and fast enough to do serious simulations and thus provide the foundation for the next phase of transaction ordering and CDC event generation.  Critical features such as
+view reconfiguration, checkpointing, bootstrapping, etc are now currently provided.  The system is stable through a very wide range of parameters, and while may perform like crap, it will perform correctly.
 
 ## CHOAM
 
@@ -45,4 +44,4 @@ of the Tron state machines.  Currently the FSM model has 3 state maps, reprentin
 
 ## Messaging
 
-CHOAM uses a mixture of Broadcast as well as point to point messaging.  Client transactions are submitted to the current members of the group using Point to Point messaging.  Block generation by the committed is broadcast to ensure replication across the group in a byzantine tolerant fashion.
+CHOAM uses the ReliableBroadcast layer for distributing blocks produced to the entire group membership.  Client transactions are submitted to the current members of the group using Point to Point messaging.  Block production is accomplished with Gossip and is reused for view change consensus as well.
