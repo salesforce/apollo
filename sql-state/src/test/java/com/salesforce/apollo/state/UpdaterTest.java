@@ -5,10 +5,12 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.state;
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
+
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.state.Mutator.batch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -18,9 +20,12 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -69,14 +74,12 @@ public class UpdaterTest {
                                                       new File("target/chkpoints"));
         updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
-        Connection connection = updater.newConnection();
+        Connection connection = updater.connection();
         SqlStateMachine.publish(connection, "test", json);
-        connection.commit();
         Statement statement = connection.createStatement();
         ResultSet events = statement.executeQuery("select * from __APOLLO_INTERNAL__.TRAMPOLINE");
 
         assertTrue(events.next());
-//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
         assertFalse(events.next());
 
         CallableStatement call = connection.prepareCall("call __APOLLO_INTERNAL__.PUBLISH(?1, ?2)");
@@ -85,10 +88,18 @@ public class UpdaterTest {
         call.execute();
         events = statement.executeQuery("select * from __APOLLO_INTERNAL__.TRAMPOLINE");
         assertTrue(events.next());
-//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
         assertTrue(events.next());
-//        System.out.println(events.getInt(1) + " : " + events.getString(2) + " : " + events.getString(3));
         assertFalse(events.next());
+        AtomicReference<JsonNode> result = new AtomicReference<>();
+        AtomicInteger count = new AtomicInteger();
+        updater.register("test", node -> {
+            result.set(node);
+            count.incrementAndGet();
+        });
+        updater.commit();
+        assertNotNull(result.get());
+        assertEquals(2, count.get());
+        assertEquals("John", result.get().get("customer_name").asText());
     }
 
     @Test
@@ -106,7 +117,7 @@ public class UpdaterTest {
         assertEquals(0, cb.getLong(2));
         assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
         assertFalse(cb.next(), "Should be only 1 record");
-        
+
         updater.getExecutor().beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
         cb = statement.executeQuery("select * from __APOLLO_INTERNAL__.CURRENT_BLOCK");
 

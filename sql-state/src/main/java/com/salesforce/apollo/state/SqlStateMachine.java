@@ -22,15 +22,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
@@ -72,6 +73,7 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
 /**
@@ -161,20 +163,20 @@ public class SqlStateMachine {
     }
 
     private static class EventTrampoline {
-        private List<Event> pending = new CopyOnWriteArrayList<>();
+        private final Map<String, Consumer<JsonNode>> handlers = new HashMap<>();
+        private final List<Event>                     pending  = new ArrayList<>();
 
-        public void publish(Event event) {
-            pending.add(event);
+        private void deregister(String discriminator) {
+            handlers.remove(discriminator);
         }
 
-        @SuppressWarnings("unused")
-        private void evaluate(Map<String, BiConsumer<String, JsonNode>> handlers) {
+        private void evaluate() {
             try {
                 for (Event event : pending) {
-                    BiConsumer<String, JsonNode> handler = handlers.get(event.discriminator);
+                    Consumer<JsonNode> handler = handlers.get(event.discriminator);
                     if (handler != null) {
                         try {
-                            handler.accept(event.discriminator, event.body);
+                            handler.accept(event.body);
                         } catch (Throwable e) {
                             log.trace("handler failed for {}", e);
                         }
@@ -183,6 +185,14 @@ public class SqlStateMachine {
             } finally {
                 pending.clear();
             }
+        }
+
+        private void publish(Event event) {
+            pending.add(event);
+        }
+
+        private void register(String discriminator, Consumer<JsonNode> handler) {
+            handlers.put(discriminator, handler);
         }
     }
 
@@ -195,7 +205,7 @@ public class SqlStateMachine {
     private static final RowSetFactory             factory;
     private static final Logger                    log                                        = LoggerFactory.getLogger(SqlStateMachine.class);
     private static final ObjectMapper              MAPPER                                     = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2)";
+    private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                               = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
     private static final String                    UPDATE_CURRENT_BLOCK                       = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
@@ -276,6 +286,10 @@ public class SqlStateMachine {
         }
     }
 
+    public void deregister(String discriminator) {
+        trampoline.deregister(discriminator);
+    }
+
     public BiConsumer<Long, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
@@ -305,7 +319,7 @@ public class SqlStateMachine {
 
     public Function<Long, File> getCheckpointer() {
         return height -> {
-            String rndm = UUID.randomUUID().toString();
+            String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
             try (java.sql.Statement statement = connection.createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
@@ -359,6 +373,26 @@ public class SqlStateMachine {
         } catch (SQLException e) {
             throw new IllegalStateException("cannot get JDBC connection", e);
         }
+    }
+
+    public void register(String discriminator, Consumer<JsonNode> handler) {
+        trampoline.register(discriminator, handler);
+    }
+
+    // Test accessible
+    void commit() {
+        try {
+            publishEvents();
+            connection.commit();
+            trampoline.evaluate();
+        } catch (SQLException e) {
+            log.trace("unable to commit connection", e);
+        }
+    }
+
+    // Test accessible
+    JdbcConnection connection() {
+        return connection;
     }
 
     // Test accessible
@@ -606,15 +640,6 @@ public class SqlStateMachine {
         begin(height, hash);
         updateCurrentBlock(height, hash);
         log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
-    }
-
-    private void commit() {
-        try {
-            publishEvents();
-            connection.commit();
-        } catch (SQLException e) {
-            log.trace("unable to commit connection", e);
-        }
     }
 
     @SuppressWarnings("unchecked")
