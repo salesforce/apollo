@@ -12,10 +12,9 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
 * Reliable Broadcast - garbage collected, context based reliable broadcast
 * Multi instance GRPC service routing - Context keyed services and routing framework
-* CHOAM - dynamic committee based transaction ordering service producing linear logs - block chains
-* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, Stored Procedures, functions.
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
-    * Consensus on causal ordering of transactions with a moderate dynamic range of nodes.
+* CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - distributed ledgers.  Built on Ethereal.
+* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, Stored Procedures, functions.
 
 
 ## Not A Coin Platform(tm)
