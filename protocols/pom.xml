@@ -8,8 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>protocols</artifactId>
-	<name>Protocols</name>
-	<description>The combined Apollo protocol definitions</description>
+    <name>Protocols: MTLS GRPC and Limiting</name>
 
 	<dependencies>
 		<dependency>

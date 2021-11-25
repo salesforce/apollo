@@ -236,7 +236,9 @@ public class JdbcConnector implements Connection {
     }
 
     public void setReadOnly(boolean readOnly) throws SQLException {
-        throw new SQLException("This is a read only connection");
+        if (!readOnly) {
+            throw new SQLException("This is a read only connection");
+        }
     }
 
     public Savepoint setSavepoint() throws SQLException {

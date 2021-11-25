@@ -7,8 +7,8 @@
 		<artifactId>apollo.app</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
-	<artifactId>fireflies</artifactId>
-	<name>Fireflies</name>
+	<artifactId>fireflies</artifactId> 
+    <name>Fireflies: BFT Membership</name>
 	<description>Byzantine fault tolerant gossip communications discovery and overay</description>
 
 	<dependencies>

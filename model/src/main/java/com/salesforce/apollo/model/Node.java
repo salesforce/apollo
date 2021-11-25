@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.SigningMember;
 
 /**
  * @author hal.hildebrand
@@ -18,15 +19,15 @@ import com.salesforce.apollo.crypto.Digest;
 public class Node {
 
     private final Map<Digest, Subsystem> hosted = new HashMap<>();
-    private final Digest                 id;
+    private final SigningMember          member;
     private final Database               management;
 
-    public Node(Digest id, Database management) {
-        this.id = id;
+    public Node(SigningMember member, Database management) {
+        this.member = member;
         this.management = management;
     }
 
     public Digest getId() {
-        return id;
+        return member.getId();
     }
 }
