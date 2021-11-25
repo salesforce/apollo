@@ -6,34 +6,28 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.avalanche.Avalanche;
-import com.salesforce.apollo.membership.impl.CertWithKey;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Subsystem {
-    private final HashKey   id;
+    private final Digest    id;
     private final Subsystem parent;
-    private final CertWithKey credentials;
-    private final Database management;
-    private final Avalanche avalanche;
+    private final Database  management;
 
-    public Subsystem(HashKey id, Subsystem parent, CertWithKey credentials, Database management, Avalanche avalanche) {
+    public Subsystem(Digest id, Subsystem parent, Database management) {
         this.id = id;
         this.parent = parent;
-        this.credentials = credentials;
         this.management = management;
-        this.avalanche = avalanche;
     }
 
     public Subsystem getParent() {
         return parent;
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return id;
     }
 }

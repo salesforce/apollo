@@ -8,8 +8,8 @@ package com.salesforce.apollo.model;
 
 import java.sql.SQLException;
 
-import com.salesforce.apollo.consortium.Consortium;
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.choam.CHOAM;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 
@@ -21,11 +21,11 @@ import com.salesforce.apollo.state.SqlStateMachine;
  */
 public class Database {
 
-    private final Consortium      consortium;
+    private final CHOAM           choam;
     private final SqlStateMachine state;
 
-    public Database(Consortium consortium, SqlStateMachine state) {
-        this.consortium = consortium;
+    public Database(CHOAM consortium, SqlStateMachine state) {
+        this.choam = consortium;
         this.state = state;
     }
 
@@ -33,19 +33,19 @@ public class Database {
         return new JdbcConnector(state.newConnection());
     }
 
-    public HashKey getId() {
-        return consortium.getId();
+    public Digest getId() {
+        return choam.getId();
     }
 
     public Mutator getMutator() {
-        return new Mutator(consortium);
+        return new Mutator(choam.getSession());
     }
 
     public void start() {
-        consortium.start();
+        choam.start();
     }
 
     public void stop() {
-        consortium.stop();
+        choam.stop();
     }
 }

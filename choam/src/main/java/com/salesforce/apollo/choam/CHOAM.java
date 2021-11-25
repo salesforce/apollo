@@ -649,6 +649,10 @@ public class CHOAM {
         return transitions.fsm().getCurrentState();
     }
 
+    public Digest getId() {
+        return params.context().getId();
+    }
+
     public Session getSession() {
         return session;
     }

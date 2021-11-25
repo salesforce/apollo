@@ -18,6 +18,7 @@
 		<module>utils</module>
 		<module>ethereal</module>
 		<module>choam</module>
+		<module>model</module>
 	</modules>
 
 	<properties>

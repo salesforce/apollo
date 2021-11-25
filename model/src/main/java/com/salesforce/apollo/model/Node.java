@@ -9,7 +9,7 @@ package com.salesforce.apollo.model;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -17,16 +17,16 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class Node {
 
-    private final Map<HashKey, Subsystem> hosted = new HashMap<>();
-    private final HashKey                 id;
-    private final Database                management;
+    private final Map<Digest, Subsystem> hosted = new HashMap<>();
+    private final Digest                 id;
+    private final Database               management;
 
-    public Node(HashKey id, Database management) {
+    public Node(Digest id, Database management) {
         this.id = id;
         this.management = management;
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return id;
     }
 }

@@ -8,7 +8,7 @@ package com.salesforce.apollo.model;
 
 import java.net.InetAddress;
 
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.crypto.Digest;
 
 /**
  * @author hal.hildebrand
@@ -18,5 +18,5 @@ public interface NetworkEndpoint {
 
     InetAddress endpoint();
 
-    HashKey protocol();
+    Digest protocol();
 }
