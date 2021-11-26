@@ -66,6 +66,9 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.ChangeLog;
+import com.salesfoce.apollo.state.proto.Drop;
+import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
@@ -75,6 +78,14 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
+
+import liquibase.CatalogAndSchema;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.core.H2Database;
+import liquibase.exception.LiquibaseException;
+import liquibase.util.StringUtil;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
@@ -196,6 +207,14 @@ public class SqlStateMachine {
         }
     }
 
+    private record baseAndAccessor(Liquibase liquibase, MigrationAccessor ra) implements AutoCloseable {
+        @Override
+        public void close() throws LiquibaseException {
+            ra.close();
+            liquibase.close();
+        }
+    }
+
     private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH       = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
                                                                                                               SqlStateMachine.class.getCanonicalName());
     private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL              = "CREATE SCHEMA __APOLLO_INTERNAL__";
@@ -207,8 +226,10 @@ public class SqlStateMachine {
     private static final ObjectMapper              MAPPER                                     = new ObjectMapper();
     private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                               = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT_BLOCK                       = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+
+    private static final String SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
+
+    private static final String UPDATE_CURRENT_BLOCK = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
 
     static {
         try {
@@ -243,7 +264,8 @@ public class SqlStateMachine {
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
     private final EventTrampoline                         trampoline   = new EventTrampoline();
-    private final String                                  url;
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -532,6 +554,36 @@ public class SqlStateMachine {
         }
     }
 
+    private Boolean acceptMigration(Migration migration) throws SQLException {
+        try {
+            switch (migration.getCommandCase()) {
+            case CHANGELOGSYNC:
+                changeLogSync(migration.getChangelogSync());
+                break;
+            case CLEARCHECKSUMS:
+                clearCheckSums();
+                break;
+            case DROP:
+                dropAll(migration.getDrop());
+                break;
+            case ROLLBACK:
+                rollback(migration.getRollback());
+                break;
+            case TAG:
+                tag(migration.getTag());
+                break;
+            case UPDATE:
+                update(migration.getUpdate());
+                break;
+            default:
+                break;
+            }
+        } catch (Throwable e) {
+            throw new SQLException("Exception during migration", e);
+        }
+        return Boolean.TRUE;
+    }
+
     private List<ResultSet> acceptPreparedStatement(Statement statement) throws SQLException {
         List<ResultSet> results = new ArrayList<>();
         PreparedStatement exec;
@@ -642,6 +694,20 @@ public class SqlStateMachine {
         log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
     }
 
+    private void changeLogSync(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            l.liquibase.changeLogSync(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                      new LabelExpression(changeLog.getLabels()));
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to sync", e);
+        }
+    }
+
+    private Boolean clearCheckSums() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     private void complete(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Object results) {
         if (onCompletion == null) {
@@ -692,6 +758,23 @@ public class SqlStateMachine {
         });
     }
 
+    private void dropAll(Drop drop) throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+            if (StringUtil.trimToNull(drop.getSchemas()) != null) {
+                List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
+                List<CatalogAndSchema> schemas = new ArrayList<>();
+                for (String name : schemaNames) {
+                    schemas.add(new CatalogAndSchema(drop.getCatalog(), name));
+                }
+                liquibase.dropAll(schemas.toArray(new CatalogAndSchema[schemas.size()]));
+            } else {
+                liquibase.dropAll();
+            }
+        }
+    }
+
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
             onCompletion.completeExceptionally(e);
@@ -707,6 +790,7 @@ public class SqlStateMachine {
             case SCRIPT -> acceptScript(txn.getScript());
             case STATEMENT -> acceptPreparedStatement(txn.getStatement());
             case BATCHED -> acceptBatchTransaction(txn.getBatched());
+            case MIGRATION -> acceptMigration(txn.getMigration());
             default -> null;
             };
         } catch (Throwable th) {
@@ -725,6 +809,7 @@ public class SqlStateMachine {
             case STATEMENT -> SqlStateMachine.this.acceptPreparedStatement(tx.getStatement());
             case SCRIPT -> SqlStateMachine.this.acceptScript(tx.getScript());
             case BATCHED -> acceptBatchTransaction(tx.getBatched());
+            case MIGRATION -> acceptMigration(tx.getMigration());
             default -> null;
             };
             this.complete(onCompletion, results);
@@ -741,6 +826,13 @@ public class SqlStateMachine {
 
     private Session getSession() {
         return (Session) connection.getSession();
+    }
+
+    private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        final var ra = new MigrationAccessor(changeLog.getResources());
+        return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }
 
     private void publishEvents() {
@@ -799,11 +891,47 @@ public class SqlStateMachine {
         }
     }
 
+    private void rollback(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            if (changeLog.hasCount()) {
+                l.liquibase.rollback(changeLog.getCount(), new Contexts(changeLog.getContext()),
+                                     new LabelExpression(changeLog.getLabels()));
+            } else {
+                l.liquibase.rollback(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                     new LabelExpression(changeLog.getLabels()));
+            }
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to update", e);
+        }
+    }
+
     private void setArgument(PreparedStatement exec, int i, Value value) {
         try {
             value.set(exec, i + 1);
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
+        }
+    }
+
+    private void tag(String tag) throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+            liquibase.tag(tag);
+        }
+    }
+
+    private void update(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            if (changeLog.hasCount()) {
+                l.liquibase.update(changeLog.getCount(), new Contexts(changeLog.getContext()),
+                                   new LabelExpression(changeLog.getLabels()));
+            } else {
+                l.liquibase.update(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                   new LabelExpression(changeLog.getLabels()));
+            }
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to update", e);
         }
     }
 

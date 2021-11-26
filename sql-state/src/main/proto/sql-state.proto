@@ -52,6 +52,18 @@ message BatchUpdate {
     repeated Arguments batch = 2;
 }
 
+message Migration {
+    string liquibaseSchemaName = 1;
+    oneof command {
+        ChangeLog update = 2; 
+        ChangeLog rollback = 3;
+        ChangeLog changelogSync = 4;
+        bool clearCheckSums = 5;
+        Drop drop = 6;
+        string tag = 7;
+    }
+}
+
 message Txn {
     oneof execution {
         Statement statement = 1;
@@ -60,5 +72,22 @@ message Txn {
         BatchUpdate batchUpdate = 4;
         Script script = 5;
         BatchedTransaction batched = 6;
+        Migration migration = 7;
     }
+}
+
+message ChangeLog {
+    oneof type {
+        int32 count = 1;
+        string tag = 2;
+    }
+    string context = 3;
+    string labels = 4;
+    string root = 5;
+    bytes resources = 6;
+}
+
+message Drop {
+    string schemas = 1;
+    string catalog = 2;
 }
