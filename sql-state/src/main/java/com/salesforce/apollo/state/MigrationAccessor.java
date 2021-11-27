@@ -43,7 +43,7 @@ import liquibase.util.StringUtil;
  * @author hal.hildebrand
  *
  */
-public class MigrationAccessor extends AbstractResourceAccessor {
+public class MigrationAccessor extends AbstractResourceAccessor implements AutoCloseable {
 
     private LinkedHashSet<Path> rootPaths = new LinkedHashSet<>();
     private Path                tempFile;

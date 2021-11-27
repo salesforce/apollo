@@ -3,11 +3,8 @@ databaseChangeLog:
       id: 1
       author: hhildebrand
       changes:
-      -  sql:  
-            endDelimiter:  \nGO  
-            splitStatements:  true  
-            sql:  create schema test  
-            stripComments:  true
+      -  sql:   
+            sql:  create schema test 
       -  createTable:
             tableName: books
             schemaName: test
@@ -29,3 +26,8 @@ databaseChangeLog:
             -  column:
                   name: qty
                   type: int
+      rollback:
+          -  sql:    
+                sql:  drop table test.books 
+          -  sql:    
+                sql:  drop schema test 

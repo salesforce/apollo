@@ -211,7 +211,7 @@ public class SqlStateMachine {
     private record baseAndAccessor(Liquibase liquibase, MigrationAccessor ra) implements AutoCloseable {
         @Override
         public void close() throws LiquibaseException {
-            ra.close();
+            ra.clone();
             liquibase.close();
         }
     }
@@ -767,16 +767,14 @@ public class SqlStateMachine {
     private void dropAll(Drop drop) throws LiquibaseException {
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
-        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
-            if (StringUtil.trimToNull(drop.getSchemas()) != null) {
-                List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
-                List<CatalogAndSchema> schemas = new ArrayList<>();
-                for (String name : schemaNames) {
-                    schemas.add(new CatalogAndSchema(drop.getCatalog(), name));
-                }
+        if (StringUtil.trimToNull(drop.getSchemas()) != null) {
+            List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
+            List<CatalogAndSchema> schemas = new ArrayList<>();
+            for (String name : schemaNames) {
+                schemas.add(new CatalogAndSchema(drop.getCatalog(), name));
+            }
+            try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
                 liquibase.dropAll(schemas.toArray(new CatalogAndSchema[schemas.size()]));
-            } else {
-                liquibase.dropAll();
             }
         }
     }
@@ -837,7 +835,7 @@ public class SqlStateMachine {
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
-        final var ra = new MigrationAccessor(changeLog.getResources());
+        var ra = new MigrationAccessor(changeLog.getResources());
         return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }
 

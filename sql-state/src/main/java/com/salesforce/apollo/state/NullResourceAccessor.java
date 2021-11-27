@@ -17,7 +17,11 @@ import liquibase.resource.InputStreamList;
  * @author hal.hildebrand
  *
  */
-public class NullResourceAccessor extends AbstractResourceAccessor {
+public class NullResourceAccessor extends AbstractResourceAccessor implements AutoCloseable {
+
+    @Override
+    public void close() {
+    }
 
     @Override
     public SortedSet<String> describeLocations() {
@@ -34,5 +38,4 @@ public class NullResourceAccessor extends AbstractResourceAccessor {
     public InputStreamList openStreams(String relativeTo, String streamPath) throws IOException {
         return new InputStreamList();
     }
-
 }
