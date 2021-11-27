@@ -20,7 +20,7 @@ public enum Merchantile implements Transitions {
 
         @Exit
         public void cancelTimer() {
-            context().cancelTimer(Combine.AWAIT_SYNC);
+            context().cancelTimer(Combine.AWAIT_REGEN);
         }
 
         @Override

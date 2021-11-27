@@ -106,10 +106,6 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
-    static {
-        ThreadLocalScopeManager.initialize();
-    }
-
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -220,8 +216,9 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
-                                                                                                          SqlStateMachine.class.getCanonicalName());
+    private static final String CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+                                                                                     SqlStateMachine.class.getCanonicalName());
+
     private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final RowSetFactory             factory;
     private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
@@ -230,6 +227,9 @@ public class SqlStateMachine {
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    static {
+        ThreadLocalScopeManager.initialize();
+    }
 
     static {
         try {
@@ -425,7 +425,7 @@ public class SqlStateMachine {
         secureRandom.set(entropy.get());
 
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(newConnection()));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
         try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
             statement = connection.createStatement();
@@ -706,9 +706,12 @@ public class SqlStateMachine {
         }
     }
 
-    private Boolean clearCheckSums() {
-        // TODO Auto-generated method stub
-        return null;
+    private void clearCheckSums() throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+            liquibase.clearCheckSums();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -763,7 +766,7 @@ public class SqlStateMachine {
 
     private void dropAll(Drop drop) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             if (StringUtil.trimToNull(drop.getSchemas()) != null) {
                 List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
@@ -918,7 +921,7 @@ public class SqlStateMachine {
 
     private void tag(String tag) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             liquibase.tag(tag);
         }

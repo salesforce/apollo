@@ -148,7 +148,7 @@ public class CHOAM {
             }
             log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
                      params.member());
-            roundScheduler.schedule(AWAIT_SYNC, () -> {
+            roundScheduler.schedule(AWAIT_REGEN, () -> {
                 futureSynchronization.set(null);
                 awaitRegeneration();
             }, params.regenerationCycles());

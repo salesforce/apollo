@@ -39,6 +39,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -212,6 +213,8 @@ public class MembershipTests {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
+                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))

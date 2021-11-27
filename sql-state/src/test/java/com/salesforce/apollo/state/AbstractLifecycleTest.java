@@ -46,6 +46,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Session;
@@ -288,6 +289,8 @@ abstract public class AbstractLifecycleTest {
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
                                .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
                                .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
                                .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
