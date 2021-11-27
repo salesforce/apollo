@@ -4,19 +4,26 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.model;
+package com.salesforce.apollo.state;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
 import com.salesforce.apollo.utils.DelegatingJdbcConnector;
 
-public class JdbcConnector extends DelegatingJdbcConnector {
+/**
+ * @author hal.hildebrand
+ *
+ */
+public class LiquibaseConnection extends DelegatingJdbcConnector {
 
-    public JdbcConnector(Connection wrapped) throws SQLException {
+    public LiquibaseConnection(Connection wrapped) {
         super(wrapped);
-        wrapped.setReadOnly(true);
-        wrapped.setAutoCommit(false);
+    }
+
+    @Override
+    public void close() throws SQLException { 
+        // no op
     }
 
     public boolean getAutoCommit() throws SQLException {

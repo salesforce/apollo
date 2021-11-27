@@ -833,7 +833,7 @@ public class SqlStateMachine {
 
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
         final var ra = new MigrationAccessor(changeLog.getResources());
         return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }

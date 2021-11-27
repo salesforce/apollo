@@ -107,7 +107,9 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_curBlock", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        final var executor = updater.getExecutor();
+        
+        executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();
@@ -118,7 +120,7 @@ public class UpdaterTest {
         assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
         assertFalse(cb.next(), "Should be only 1 record");
 
-        updater.getExecutor().beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
+        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
         cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT_BLOCK");
 
         assertTrue(cb.next(), "Should exist");

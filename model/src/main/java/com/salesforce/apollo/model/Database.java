@@ -12,6 +12,7 @@ import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
+import com.salesforce.apollo.utils.DelegatingJdbcConnector;
 
 /**
  * Represents a linear ledger in the system, controls access
@@ -29,8 +30,8 @@ public class Database {
         this.state = state;
     }
 
-    public JdbcConnector createConnector() throws SQLException {
-        return new JdbcConnector(state.newConnection());
+    public DelegatingJdbcConnector createConnector() throws SQLException {
+        return new DelegatingJdbcConnector(state.newConnection());
     }
 
     public Digest getId() {

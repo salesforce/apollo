@@ -64,6 +64,7 @@ import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
 import com.salesfoce.apollo.state.proto.EXECUTION;
+import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
@@ -108,6 +109,11 @@ public class Mutator {
 
         public Completion<CallResult> execute(Call call) {
             batch.addTransactions(Txn.newBuilder().setCall(call).build());
+            return new Completion<>();
+        }
+
+        public Completion<Boolean> execute(Migration migration) {
+            batch.addTransactions(Txn.newBuilder().setMigration(migration).build());
             return new Completion<>();
         }
 
@@ -404,6 +410,11 @@ public class Mutator {
     public CompletableFuture<CallResult> execute(Executor exec, Call call, Duration timeout,
                                                  ScheduledExecutorService scheduler) throws InvalidTransaction {
         return session.submit(exec, Txn.newBuilder().setCall(call).build(), timeout, scheduler);
+    }
+
+    public CompletableFuture<List<ResultSet>> execute(Executor exec, Migration migration, Duration timeout,
+                                                      ScheduledExecutorService scheduler) throws InvalidTransaction {
+        return session.submit(exec, Txn.newBuilder().setMigration(migration).build(), timeout, scheduler);
     }
 
     public <T> CompletableFuture<T> execute(Executor exec, Script script, Duration timeout,
