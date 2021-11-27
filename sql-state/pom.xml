@@ -8,7 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>sql-state</artifactId>
-    <name>SQL State: Replicated SQL State Machine</name>
+	<name>SQL State: Replicated SQL State Machine</name>
 	<description>Materialized SQL view state from CHOAM</description>
 
 	<dependencies>
@@ -29,9 +29,17 @@
 			<artifactId>jcl-over-slf4j</artifactId>
 		</dependency>
         <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
+            <groupId>com.mattbertolini</groupId>
+            <artifactId>liquibase-slf4j</artifactId>
         </dependency>
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.yaml</groupId>
+			<artifactId>snakeyaml</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -63,99 +71,24 @@
 
 	<build>
 		<plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>satisfy-liquibase</id>
-                        <phase>generate-sources</phase>
-                        <configuration>
-                            <tasks> 
-                                <mkdir dir="${project.build.directory}/test-classes" />
-                                <mkdir dir="${project.build.directory}/classes" />
-                            </tasks>
-                        </configuration>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.liquibase</groupId>
-                <artifactId>liquibase-maven-plugin</artifactId>
-                <configuration>
-                    <driver>org.h2.Driver</driver>
-                    <url>jdbc:h2:file:${project.build.directory}/data/jooq;IGNORECASE=true</url>
-                    <username>bootstrap</username>
-                    <password>${db.password}</password>
-                    <verbose>true</verbose>
-                    <changeLogFile>${project.basedir}/src/main/resources/internal.yml</changeLogFile>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>initialize database</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>update</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.h2database</groupId>
-                        <artifactId>h2</artifactId>
-                        <version>${h2.version}</version>
-                    </dependency>
-                </dependencies>
-            </plugin>
 			<plugin>
-				<groupId>org.jooq</groupId>
-				<artifactId>jooq-codegen-maven</artifactId>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
 				<executions>
 					<execution>
+						<id>satisfy-liquibase</id>
 						<phase>generate-sources</phase>
+						<configuration>
+							<tasks>
+								<mkdir dir="${project.build.directory}/test-classes" />
+								<mkdir dir="${project.build.directory}/classes" />
+							</tasks>
+						</configuration>
 						<goals>
-							<goal>generate</goal>
+							<goal>run</goal>
 						</goals>
 					</execution>
 				</executions>
-				<dependencies>
-					<dependency>
-						<groupId>com.h2database</groupId>
-						<artifactId>h2</artifactId>
-						<version>${h2.version}</version>
-					</dependency>
-				</dependencies>
-				<configuration>
-					<jdbc>
-						<driver>org.h2.Driver</driver>
-						<url>jdbc:h2:file:${project.build.directory}/data/jooq;IGNORECASE=true</url>
-						<user>bootstrap</user>
-						<password>${db.password}</password>
-					</jdbc>
-					<generator>
-						<database>
-							<name>org.jooq.meta.h2.H2Database</name>
-							<includes>.*</includes>
-							<excludes></excludes>
-							<schemata>
-								<schema>
-									<inputSchema>kernel</inputSchema>
-								</schema>
-								<schema>
-									<inputSchema>APOLLO_INTERNAL</inputSchema>
-								</schema>
-							</schemata>
-						</database>
-						<generate></generate>
-						<target>
-							<packageName>com.salesforce.apollo.state.schema</packageName>
-							<directory>target/generated-sources/jooq</directory>
-						</target>
-					</generator>
-				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -172,7 +105,7 @@
 					only. It has no influence on the Maven build itself. -->
 				<plugin>
 					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId> 
+					<artifactId>lifecycle-mapping</artifactId>
 					<configuration>
 						<lifecycleMappingMetadata>
 							<pluginExecutions>

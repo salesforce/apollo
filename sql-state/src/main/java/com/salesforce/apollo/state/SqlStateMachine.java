@@ -85,6 +85,7 @@ import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.util.StringUtil;
 
 /**
@@ -104,6 +105,10 @@ import liquibase.util.StringUtil;
  *
  */
 public class SqlStateMachine {
+
+    static {
+        ThreadLocalScopeManager.initialize();
+    }
 
     public static class CallResult {
         public final List<Object>    outValues;
@@ -215,21 +220,16 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH       = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
-                                                                                                              SqlStateMachine.class.getCanonicalName());
-    private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL              = "CREATE SCHEMA __APOLLO_INTERNAL__";
-    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK = "CREATE TABLE __APOLLO_INTERNAL__.CURRENT_BLOCK(_U INT, HEIGHT INT8, HASH VARCHAR(256))";
-    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE    = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+                                                                                                          SqlStateMachine.class.getCanonicalName());
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final RowSetFactory             factory;
-    private static final Logger                    log                                        = LoggerFactory.getLogger(SqlStateMachine.class);
-    private static final ObjectMapper              MAPPER                                     = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
-    private static final ThreadLocal<SecureRandom> secureRandom                               = new ThreadLocal<>();
-
-    private static final String SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
-
-    private static final String UPDATE_CURRENT_BLOCK = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
+    private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
+    private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
+    private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
 
     static {
         try {
@@ -423,13 +423,16 @@ public class SqlStateMachine {
 
         SecureRandom prev = secureRandom.get();
         secureRandom.set(entropy.get());
-        try {
+
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(newConnection()));
+        try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
+            liquibase.update((String) null);
             statement = connection.createStatement();
-            statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
-            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK);
-            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
         } catch (SQLException e) {
+            throw new IllegalStateException("unable to initialize db state", e);
+        } catch (LiquibaseException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } finally {
             secureRandom.set(prev);

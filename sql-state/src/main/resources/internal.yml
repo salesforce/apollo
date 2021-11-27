@@ -1,7 +1,4 @@
 databaseChangeLog:
--  preConditions:
-   -  runningAs:
-         username: bootstrap
 -  changeSet:
       id: 1
       author: hhildebrand
@@ -30,9 +27,19 @@ databaseChangeLog:
             columns:
             -  column:
                   name: id
-                  type: BINARY(32)
+                  type: INT
                   constraints:
                      primaryKey: true
             -  column:
-                  name: version
-                  type: INT
+                  name: channel
+                  type: VARCHAR(255)
+            -  column:
+                  name: body
+                  type: JSON
+      -  addAutoIncrement:  
+            columnName: id
+            columnDataType: int
+            generationType: ALWAYS  
+            incrementBy: 1  
+            schemaName: apollo_internal
+            tableName: trampoline
