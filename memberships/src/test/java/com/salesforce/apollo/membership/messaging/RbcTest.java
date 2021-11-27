@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
@@ -144,8 +145,9 @@ public class RbcTest {
 
         Executor commExec = Executors.newFixedThreadPool(5);
 
+        final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node,
+            LocalRouter comms = new LocalRouter(prefix, node,
                                                 ServerConnectionCache.newBuilder().setMetrics(metrics).setTarget(30),
                                                 commExec);
             communications.add(comms);

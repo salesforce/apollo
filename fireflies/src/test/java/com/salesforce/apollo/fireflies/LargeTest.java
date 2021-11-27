@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,17 +54,13 @@ public class LargeTest {
     private static final int                              CARDINALITY = 100;
 
     static {
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
+        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE).build();
     }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -99,7 +96,7 @@ public class LargeTest {
         }));
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
+        + views.size() + " members");
 
         Thread.sleep(5_000);
 
@@ -110,10 +107,8 @@ public class LargeTest {
             }
         }
 
-        List<View> invalid = views.stream()
-                                  .map(view -> view.getLive().size() != views.size() ? view : null)
-                                  .filter(view -> view != null)
-                                  .collect(Collectors.toList());
+        List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .filter(view -> view != null).collect(Collectors.toList());
         assertEquals(0, invalid.size());
 
         Graph<Participant> testGraph = new Graph<>();
@@ -134,11 +129,8 @@ public class LargeTest {
         }
 
         views.forEach(view -> view.getService().stop());
-        ConsoleReporter.forRegistry(node0Registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+        ConsoleReporter.forRegistry(node0Registry).convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS).build().report();
     }
 
     private void initialize() {
@@ -147,13 +139,12 @@ public class LargeTest {
         node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
-        members = certs.values()
-                       .stream()
-                       .map(cert -> new Node(
-                               new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                       cert.getX509Certificate(), cert.getPrivateKey(),
-                                       new SignerImpl(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey()),
-                               parameters))
+        members = certs.values().stream()
+                       .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                   cert.getX509Certificate(), cert.getPrivateKey(),
+                                                                   new SignerImpl(0, cert.getPrivateKey()),
+                                                                   cert.getX509Certificate().getPublicKey()),
+                                             parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -166,11 +157,13 @@ public class LargeTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         ForkJoinPool executor = new ForkJoinPool();
+        final var prefix = UUID.randomUUID().toString();
         views = members.stream().map(node -> {
-            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(
-                    frist.getAndSet(false) ? node0Registry : registry);
-            LocalRouter comms = new LocalRouter(node,
-                    ServerConnectionCache.newBuilder().setTarget(2).setMetrics(fireflyMetricsImpl), executor);
+            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                  : registry);
+            LocalRouter comms = new LocalRouter(prefix, node, ServerConnectionCache.newBuilder().setTarget(2)
+                                                                                   .setMetrics(fireflyMetricsImpl),
+                                                executor);
             communications.add(comms);
             return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());

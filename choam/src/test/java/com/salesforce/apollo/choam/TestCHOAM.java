@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -156,7 +157,7 @@ public class TestCHOAM {
     private Map<Digest, List<Digest>> blocks;
     private Map<Digest, CHOAM>        choams;
     private List<SigningMember>       members;
-    private Map<Digest, Router>       routers; 
+    private Map<Digest, Router>       routers;
 
     private Map<Digest, List<Transaction>> transactions;
 
@@ -178,7 +179,7 @@ public class TestCHOAM {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3); 
+        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         AtomicInteger exec = new AtomicInteger();
@@ -217,9 +218,10 @@ public class TestCHOAM {
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),

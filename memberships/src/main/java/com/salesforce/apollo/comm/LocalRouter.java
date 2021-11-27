@@ -61,10 +61,12 @@ public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
-        private final Limit clientLimit;
+        private final Limit  clientLimit;
+        private final String prefix;
 
-        public LocalServerConnectionFactory(Limit clientLimiter) {
+        public LocalServerConnectionFactory(String prefix, Limit clientLimiter) {
             this.clientLimit = clientLimiter;
+            this.prefix = prefix;
         }
 
         @Override
@@ -84,7 +86,8 @@ public class LocalRouter extends Router {
                     };
                 }
             };
-            final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(qb64(to.getId())).directExecutor()
+            final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
+            final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name).directExecutor()
                                                                            .intercept(clientInterceptor,
                                                                                       new ConcurrencyLimitClientInterceptor(new GrpcClientLimiterBuilder().limit(clientLimit)
                                                                                                                                                           .blockOnLimit(false)
@@ -134,9 +137,9 @@ public class LocalRouter extends Router {
                                                                                           Metadata.ASCII_STRING_MARSHALLER);
     public static final Context.Key<Member>  CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
     public static final ThreadIdentity       LOCAL_IDENTITY             = new ThreadIdentity();
-
-    private static final Logger              log           = LoggerFactory.getLogger(LocalRouter.class);
-    private static final Map<Digest, Member> serverMembers = new ConcurrentHashMap<>();
+    private static final Logger              log                        = LoggerFactory.getLogger(LocalRouter.class);
+    private static final String              NAME_TEMPLATE              = "%s-%s";
+    private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
 
     public static Limit defaultClientLimit() {
         return VegasLimit.newBuilder().maxConcurrency(1_000).initialLimit(1_000).build();
@@ -149,14 +152,14 @@ public class LocalRouter extends Router {
     private final Member member;
     private final Server server;
 
-    public LocalRouter(Member member, Limit clientLimit, ServerConnectionCache.Builder builder, Limit serverLimit,
-                       Executor executor) {
-        this(member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
+    public LocalRouter(String prefix, Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
+                       Limit serverLimit, Executor executor) {
+        this(prefix, member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
     }
 
-    public LocalRouter(Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
+    public LocalRouter(String prefix, Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
                        MutableHandlerRegistry registry, Limit serverLimit, Executor executor) {
-        super(builder.setFactory(new LocalServerConnectionFactory(clientLimit)).build(), registry);
+        super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit)).build(), registry);
         this.member = member;
         serverMembers.put(member.getId(), member);
 
@@ -164,14 +167,15 @@ public class LocalRouter extends Router {
         limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit)
                                                                                              .build())
                                                    .build();
-        final var name = qb64(member.getId());
+        final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
         server = InProcessServerBuilder.forName(name).executor(executor).intercept(interceptor()).intercept(limiter)
                                        .fallbackHandlerRegistry(registry).build();
         log.info("Created server: {} on: {}", name, member);
     }
 
-    public LocalRouter(Member member, ServerConnectionCache.Builder builder, Executor executor) {
-        this(member, defaultClientLimit(), builder, new MutableHandlerRegistry(), defaultServerLimit(), executor);
+    public LocalRouter(String prefix, Member member, ServerConnectionCache.Builder builder, Executor executor) {
+        this(prefix, member, defaultClientLimit(), builder, new MutableHandlerRegistry(), defaultServerLimit(),
+             executor);
     }
 
     @Override

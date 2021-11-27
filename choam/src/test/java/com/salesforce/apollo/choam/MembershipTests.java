@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -224,9 +225,10 @@ public class MembershipTests {
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
         SigningMember testSubject = members.get(cardinality - 1);
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(cardinality)
                                                                                              .setMetrics(params.getMetrics()),

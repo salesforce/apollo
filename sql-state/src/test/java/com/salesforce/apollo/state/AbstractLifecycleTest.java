@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -193,10 +194,6 @@ abstract public class AbstractLifecycleTest {
         updaters.clear();
         parameters.clear();
         members = null;
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            scheduler = null;
-        }
         if (routerExec != null) {
             routerExec.shutdownNow();
             routerExec = null;
@@ -204,6 +201,10 @@ abstract public class AbstractLifecycleTest {
         if (txScheduler != null) {
             txScheduler.shutdownNow();
             txScheduler = null;
+        }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
         }
     }
 
@@ -235,9 +236,10 @@ abstract public class AbstractLifecycleTest {
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
         final SigningMember testSubject = members.get(CARDINALITY - 1);
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),

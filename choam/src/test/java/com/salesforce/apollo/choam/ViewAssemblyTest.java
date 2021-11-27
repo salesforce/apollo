@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -101,9 +102,10 @@ public class ViewAssemblyTest {
             });
         });
         CountDownLatch complete = new CountDownLatch(committee.cardinality());
+        final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream()
                                                     .collect(Collectors.toMap(m -> m,
-                                                                              m -> new LocalRouter(m,
+                                                                              m -> new LocalRouter(prefix, m,
                                                                                                    ServerConnectionCache.newBuilder(),
                                                                                                    executor)));
         var comms = members.stream()
@@ -224,9 +226,10 @@ public class ViewAssemblyTest {
             });
         });
 
+        final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream()
                                                     .collect(Collectors.toMap(m -> m,
-                                                                              m -> new LocalRouter(m,
+                                                                              m -> new LocalRouter(prefix, m,
                                                                                                    ServerConnectionCache.newBuilder(),
                                                                                                    ForkJoinPool.commonPool())));
         var comms = members.stream()

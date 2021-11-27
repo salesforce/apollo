@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,17 +54,13 @@ public class SuccessorTest {
     private static final int                              CARDINALITY = 10;
 
     static {
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
+        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE).build();
     }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -83,14 +80,13 @@ public class SuccessorTest {
         FireflyMetrics metrics = new FireflyMetricsImpl(registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        List<Node> members = certs.values()
-                                  .stream()
-                                  .map(cert -> new Node(
-                                          new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                  cert.getX509Certificate(), cert.getPrivateKey(),
-                                                  new SignerImpl(0, cert.getPrivateKey()),
-                                                  cert.getX509Certificate().getPublicKey()),
-                                          parameters))
+        List<Node> members = certs.values().stream()
+                                  .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new SignerImpl(0, cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()),
+                                                        parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -105,8 +101,9 @@ public class SuccessorTest {
 
         Builder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
         ForkJoinPool executor = new ForkJoinPool();
+        final var prefix = UUID.randomUUID().toString();
         Map<Participant, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(node, builder, executor);
+            LocalRouter comms = new LocalRouter(prefix, node, builder, executor);
             communications.add(comms);
             comms.start();
             return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
@@ -116,11 +113,8 @@ public class SuccessorTest {
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {
-                return views.values()
-                            .stream()
-                            .map(view -> view.getLive().size() != views.size() ? view : null)
-                            .filter(view -> view != null)
-                            .count() == 0;
+                return views.values().stream().map(view -> view.getLive().size() != views.size() ? view : null)
+                            .filter(view -> view != null).count() == 0;
             });
 
             for (View view : views.values()) {
