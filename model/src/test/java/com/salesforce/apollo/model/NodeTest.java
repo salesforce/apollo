@@ -6,17 +6,14 @@
  */
 package com.salesforce.apollo.model;
 
-import java.net.InetAddress;
-
-import com.salesforce.apollo.protocols.HashKey;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface NetworkEndpoint {
-
-    InetAddress endpoint();
-
-    HashKey protocol();
+public class NodeTest {
+    @Test
+    public void smoke() {
+    }
 }

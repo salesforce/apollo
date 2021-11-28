@@ -57,7 +57,8 @@ public interface Combine {
         }
     }
 
-    static final String AWAIT_SYNC = "AWAIT_SYNC";
+    static final String AWAIT_REGEN = "AWAIT_REGEN";
+    static final String AWAIT_SYNC  = "AWAIT_SYNC";
 
     void anchor();
 

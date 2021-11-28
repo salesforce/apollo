@@ -7,15 +7,13 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
 * Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
-* MTLS network communication - Local communication simulation supported for trivial multinode simulation for single process (IDE) testing
-* Group based protocol routing - multiple protocol instances per process
-* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications
-* Reliable Broadcast - garbage collected, context based reliable broadcast
+* MTLS network communication - Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
+* [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay
+* Reliable Broadcast - garbage collected, context routed reliable broadcast
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
 * CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - distributed ledgers.  Built on Ethereal.
-* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, Stored Procedures, functions.
-
+* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, Stored Procedures, functions.
 
 ## Not A Coin Platform(tm)
 Apollo isn't designed for coins, rather as essentially a distributed database.  Of course the systems of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
@@ -38,8 +36,8 @@ To build Apollo, cd to the root directory of the repository and then do:
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
 
 
-## !! Unfortunate Platform Dependency !!
-I develop on an M1 MBP, and there is (currently) no grpc compiler for this platform.  Consequently, the grpc compiler is hard wired for intel.  Apologies.  This will be fixed to be platform independent when this required artifact appears from Google, or I figure out how to special case the M1 platform with the Maven OS config stuff.
+## Builing on Apple M1
+I develop on an M1 MBP, and there is (currently) no _protoc-gen-grpc-java_ for the M1 platform.  If you also build on the M1, until this issue is resolved by essentially using the intel for the arm classivier.  For a simply work around, see [this comment](https://github.com/grpc/grpc-java/issues/7690#issuecomment-772424454).  This works by using the maven settings.xml to hardwire the classifier to intel.  Worked well for me ;)
 
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.

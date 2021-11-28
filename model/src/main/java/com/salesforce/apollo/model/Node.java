@@ -6,10 +6,9 @@
  */
 package com.salesforce.apollo.model;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import com.salesforce.apollo.protocols.HashKey;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 
 /**
  * @author hal.hildebrand
@@ -17,16 +16,19 @@ import com.salesforce.apollo.protocols.HashKey;
  */
 public class Node {
 
-    private final Map<HashKey, Subsystem> hosted = new HashMap<>();
-    private final HashKey                 id;
-    private final Database                management;
+    private final Digest     id;
+    private final Shard      management;
+    private final Stereotomy stereotomy;
+    private final Router     router;
 
-    public Node(HashKey id, Database management) {
+    public Node(Digest id, Shard management, Stereotomy stereotomy, Router router) {
         this.id = id;
         this.management = management;
+        this.stereotomy = stereotomy;
+        this.router = router;
     }
 
-    public HashKey getId() {
+    public Digest getId() {
         return id;
     }
 }

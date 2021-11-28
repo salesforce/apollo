@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -38,6 +39,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -211,6 +213,8 @@ public class MembershipTests {
 
         var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
+                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
@@ -224,9 +228,10 @@ public class MembershipTests {
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
         SigningMember testSubject = members.get(cardinality - 1);
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(cardinality)
                                                                                              .setMetrics(params.getMetrics()),

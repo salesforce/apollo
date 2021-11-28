@@ -20,12 +20,12 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -163,9 +163,7 @@ public class CHOAMTest {
     }
 
     private static final int               CARDINALITY     = 5;
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
-                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                                                                                              .build()));
+    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     private File                               baseDir;
@@ -257,9 +255,10 @@ public class CHOAMTest {
         members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),

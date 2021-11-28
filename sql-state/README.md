@@ -22,26 +22,35 @@ When a transaction is submitted, the client submitting the transaction can provi
 the value returned - possibly null - and the error raised - if any.  This means that calls, scripts, prepared statements, etc, and return values in addition to
 the normal SQL execution, providing a very powerful mechanism for transactions against a SQL store that we normally take for granted.
 
+### Schema Evolution
+The SQL state machine supports the full gamut of the SQL Data Definition Language (DDL).  Note, however, that for H2 and thus the SQL state machine, DDL is not transactional and the current transaction will be committed on each DDL statement.  The DDL statements cannot be rolled back.  Thus one can wedge one's self quite easily with ill advised schema evolution strategies.  In the interests of providing as many sharp knives as needed, there are currently no restrictions on DDL.
+
+Schema may also be maintained by executing [Liquibase](https://docs.liquibase.com/home.html) Migration transactions.  This transaction type includes a Liquibase command and change log that is applied to the H2 SQL store. Note that the actual change log is not stored in the DB, rather it exists only in the CHOAM log.
+
 ### Transaction Types
-Transactions are one of the following types, and are represented as Protobuffs defined in the cdc.proto file.
+Transactions are one of the following types, and are represented as Protobuffs defined in the sql-state.proto file.
 * Statement
 * Call
 * Batch
 * BatchUpdate
 * Script
+* BatchedTransaction
+* Migration
 
 #### Statement
 The Statement  is the equivalent of the JDBC SQL prepared statement with or without arguments.
 #### Call
 The Call  is the transaction to execute SQL stored procedure Calls.
-### Batch
+#### Batch
 A Batch of SQL statements with no arguments, executed in order
-### BatchUpdate
+#### BatchUpdate
 A Single prepared statement that is executed in batch with a list of arguments, one argument set per batch entry
-### Script
+#### Script
 A Java function that accepts a SQL connection and may return results - basically an anonymous function
-### BatchedTransaction
-This is a batch of any of the above types, executed in order in a single transaction
+#### BatchedTransaction
+This is a batch of any of the types (even recursively), executed in order in a single transaction
+#### Migration
+A Liquibase Database migration
 
 ## Stored Procedures, Functions and Triggers
 The model provides the definition and execution of user defined SQL stored procedures, functions and triggers.  These are currently limited to Java implementations, although more languages and WASM support is

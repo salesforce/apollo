@@ -13,12 +13,12 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,6 +45,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Session;
@@ -154,9 +155,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected static final int             CARDINALITY     = 5;
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
-                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                                                                                              .build()));
+    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     protected Map<Digest, List<Digest>>          blocks;
@@ -193,10 +192,6 @@ abstract public class AbstractLifecycleTest {
         updaters.clear();
         parameters.clear();
         members = null;
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            scheduler = null;
-        }
         if (routerExec != null) {
             routerExec.shutdownNow();
             routerExec = null;
@@ -204,6 +199,10 @@ abstract public class AbstractLifecycleTest {
         if (txScheduler != null) {
             txScheduler.shutdownNow();
             txScheduler = null;
+        }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+            scheduler = null;
         }
     }
 
@@ -235,9 +234,10 @@ abstract public class AbstractLifecycleTest {
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m)).toList();
         final SigningMember testSubject = members.get(CARDINALITY - 1);
+        final var prefix = UUID.randomUUID().toString();
         routers = members.stream()
                          .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(m,
+                                                   m -> new LocalRouter(prefix, m,
                                                                         ServerConnectionCache.newBuilder()
                                                                                              .setTarget(CARDINALITY)
                                                                                              .setMetrics(params.getMetrics()),
@@ -286,8 +286,10 @@ abstract public class AbstractLifecycleTest {
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
                                .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
+                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
+                               .setSynchronizeDuration(Duration.ofMillis(10)).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)

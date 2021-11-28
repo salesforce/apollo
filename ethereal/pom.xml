@@ -8,6 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>ethereal</artifactId>
+    <name>Ethereal: Asynchonrous BFT Consensus</name>
 
 	<dependencies>
 		<dependency>

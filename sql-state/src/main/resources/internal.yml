@@ -1,0 +1,45 @@
+databaseChangeLog:
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  sql:  
+            endDelimiter:  \nGO  
+            splitStatements:  true  
+            sql:  create schema apollo_internal  
+            stripComments:  true
+      -  createTable:
+            tableName: current_block
+            schemaName: apollo_internal
+            columns:
+            -  column:
+                  name: _u
+                  type: int
+            -  column:
+                  name: height
+                  type: INT8
+            -  column:
+                  name: hash
+                  type: VARCHAR(256)
+      -  createTable:
+            tableName: trampoline
+            schemaName: apollo_internal
+            columns:
+            -  column:
+                  name: id
+                  type: INT
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: channel
+                  type: VARCHAR(255)
+            -  column:
+                  name: body
+                  type: JSON
+      -  addAutoIncrement:  
+            columnName: id
+            columnDataType: int
+            generationType: ALWAYS  
+            incrementBy: 1  
+            schemaName: apollo_internal
+            tableName: trampoline

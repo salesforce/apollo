@@ -8,6 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>utils</artifactId>
+    <name>Utils: General utilities</name>
 
 	<dependencies>
 		<dependency>

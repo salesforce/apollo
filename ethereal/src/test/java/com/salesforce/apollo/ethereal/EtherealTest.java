@@ -14,6 +14,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -108,6 +109,7 @@ public class EtherealTest {
         }
 
         var level = new AtomicInteger();
+        final var prefix = UUID.randomUUID().toString();
         for (short i = 0; i < nProc; i++) {
             var e = new Ethereal();
             var ds = new SimpleDataSource();
@@ -134,7 +136,7 @@ public class EtherealTest {
                                             .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
                                             .toByteString());
             }
-            Router com = new LocalRouter(members.get(i), ServerConnectionCache.newBuilder(), executor);
+            Router com = new LocalRouter(prefix, members.get(i), ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
             gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
                                               null));

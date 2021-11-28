@@ -148,7 +148,7 @@ public class CHOAM {
             }
             log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
                      params.member());
-            roundScheduler.schedule(AWAIT_SYNC, () -> {
+            roundScheduler.schedule(AWAIT_REGEN, () -> {
                 futureSynchronization.set(null);
                 awaitRegeneration();
             }, params.regenerationCycles());
@@ -561,17 +561,17 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    public static List<Transaction> toGenesisData(List<Message> initializationData) {
+    public static List<Transaction> toGenesisData(List<? super Message> initializationData) {
         return toGenesisData(initializationData, DigestAlgorithm.DEFAULT, SignatureAlgorithm.DEFAULT);
     }
 
-    public static List<Transaction> toGenesisData(List<Message> initializationData, DigestAlgorithm digestAlgo,
+    public static List<Transaction> toGenesisData(List<? super Message> initializationData, DigestAlgorithm digestAlgo,
                                                   SignatureAlgorithm sigAlgo) {
         var source = digestAlgo.getOrigin();
         SignerImpl signer = new SignerImpl(0, sigAlgo.generateKeyPair().getPrivate());
         AtomicInteger nonce = new AtomicInteger();
-        return initializationData.stream().map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer))
-                                 .toList();
+        return initializationData.stream().map(m -> (Message) m)
+                                 .map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer)).toList();
     }
 
     private final Map<Long, CheckpointState>                            cachedCheckpoints     = new ConcurrentHashMap<>();
@@ -645,8 +645,16 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
+    public Context<? extends Member> context() {
+        return params.context();
+    }
+
     public Combine.Transitions getCurrentState() {
         return transitions.fsm().getCurrentState();
+    }
+
+    public Digest getId() {
+        return params.context().getId();
     }
 
     public Session getSession() {

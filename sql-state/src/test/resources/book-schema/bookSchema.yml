@@ -1,0 +1,33 @@
+databaseChangeLog:
+-  changeSet:
+      id: 1
+      author: hhildebrand
+      changes:
+      -  sql:   
+            sql:  create schema test 
+      -  createTable:
+            tableName: books
+            schemaName: test
+            columns:
+            -  column:
+                  name: id
+                  type: int
+                  constraints:
+                     primaryKey: true
+            -  column:
+                  name: title
+                  type: varchar(50)
+            -  column:
+                  name: author
+                  type: varchar(50)
+            -  column:
+                  name: price
+                  type: float
+            -  column:
+                  name: qty
+                  type: int
+      rollback:
+          -  sql:    
+                sql:  drop table test.books 
+          -  sql:    
+                sql:  drop schema test 

@@ -13,6 +13,11 @@
             </Pattern>
         </encoder>
     </appender> 
+    
+    <logger name="liquibase" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
 
     <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
         additivity="false">

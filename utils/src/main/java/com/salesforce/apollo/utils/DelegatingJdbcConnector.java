@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.model;
+package com.salesforce.apollo.utils;
 
 import java.sql.Array;
 import java.sql.Blob;
@@ -26,13 +26,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
-public class JdbcConnector implements Connection {
+public class DelegatingJdbcConnector implements Connection {
     private final Connection wrapped;
 
-    public JdbcConnector(Connection wrapped) throws SQLException {
+    public DelegatingJdbcConnector(Connection wrapped) {
         this.wrapped = wrapped;
-        wrapped.setReadOnly(true);
-        wrapped.setAutoCommit(false);
     }
 
     public void abort(Executor executor) throws SQLException {
@@ -97,7 +95,7 @@ public class JdbcConnector implements Connection {
     }
 
     public boolean getAutoCommit() throws SQLException {
-        return false;
+        return wrapped.getAutoCommit();
     }
 
     public String getCatalog() throws SQLException {
@@ -153,7 +151,7 @@ public class JdbcConnector implements Connection {
     }
 
     public boolean isWrapperFor(Class<?> iface) throws SQLException {
-        return false;
+        return wrapped.isWrapperFor(iface);
     }
 
     public String nativeSQL(String sql) throws SQLException {
@@ -212,7 +210,7 @@ public class JdbcConnector implements Connection {
     }
 
     public void setAutoCommit(boolean autoCommit) throws SQLException {
-        throw new SQLException("Cannot set autocommit on this connection");
+        wrapped.setAutoCommit(autoCommit);
     }
 
     public void setCatalog(String catalog) throws SQLException {
@@ -236,7 +234,7 @@ public class JdbcConnector implements Connection {
     }
 
     public void setReadOnly(boolean readOnly) throws SQLException {
-        throw new SQLException("This is a read only connection");
+        wrapped.setReadOnly(readOnly);
     }
 
     public Savepoint setSavepoint() throws SQLException {
@@ -269,7 +267,7 @@ public class JdbcConnector implements Connection {
     }
 
     public void setTransactionIsolation(int level) throws SQLException {
-        throw new SQLException("Cannot set transaction isolation level on this connection");
+        wrapped.setTransactionIsolation(level);
     }
 
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
@@ -277,6 +275,6 @@ public class JdbcConnector implements Connection {
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
-        throw new SQLException("Cannot unwrap: " + iface.getCanonicalName() + "on th connection");
+        return wrapped.unwrap(iface);
     }
 }

@@ -18,17 +18,18 @@
 		<module>utils</module>
 		<module>ethereal</module>
 		<module>choam</module>
+		<module>model</module>
 	</modules>
 
 	<properties>
 		<dropwizard.version>2.0.10</dropwizard.version>
 		<h2.version>1.4.200</h2.version>
-		<jooq.version>3.14.8</jooq.version>
+		<jooq.version>3.15.4</jooq.version>
 		<bc.version>1.69</bc.version>
 		<logback.version>1.2.7</logback.version>
 		<grpc.version>1.42.1</grpc.version>
 		<protobuf.version>3.19.1</protobuf.version>
-		<liquibase.version>4.3.1</liquibase.version>
+		<liquibase.version>4.6.1</liquibase.version>
 
 		<compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -137,6 +138,16 @@
 				<artifactId>choam</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>model</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.salesforce.apollo</groupId>
+				<artifactId>schema-tool</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 
 			<dependency>
 				<groupId>io.dropwizard</groupId>
@@ -230,21 +241,31 @@
 				<artifactId>liquibase-core</artifactId>
 				<version>${liquibase.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>org.yaml</groupId>
+				<artifactId>snakeyaml</artifactId>
+				<version>1.29</version>
+			</dependency>
+			<dependency>
+				<groupId>com.mattbertolini</groupId>
+				<artifactId>liquibase-slf4j</artifactId>
+				<version>4.0.0</version>
+			</dependency>
 
 			<!-- Test dependencies only below this line! -->
- 
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-engine</artifactId>
-                <version>5.6.3</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter</artifactId>
-                <version>5.6.3</version>
-                <scope>test</scope>
-            </dependency>
+
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-engine</artifactId>
+				<version>5.6.3</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<version>5.6.3</version>
+				<scope>test</scope>
+			</dependency>
 			<dependency>
 				<groupId>ch.qos.logback</groupId>
 				<artifactId>logback-classic</artifactId>
@@ -360,7 +381,6 @@
 		</plugins>
 		<pluginManagement>
 			<plugins>
-
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-site-plugin</artifactId>
@@ -512,7 +532,7 @@
 					<configuration>
 						<protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
 						<pluginId>grpc-java</pluginId>
-						<pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:osx-x86_64</pluginArtifact>
+						<pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
 					</configuration>
 					<executions>
 						<execution>

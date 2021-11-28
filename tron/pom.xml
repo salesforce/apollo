@@ -8,7 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>tron</artifactId>
-	<name>Tron</name>
+    <name>Tron: Finite State Machines</name>
 	<description>FSMs for Java</description>
 	<dependencies>
 		<dependency>

@@ -22,15 +22,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.zip.GZIPOutputStream;
 
@@ -65,6 +66,9 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.ChangeLog;
+import com.salesfoce.apollo.state.proto.Drop;
+import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
@@ -72,7 +76,17 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
+
+import liquibase.CatalogAndSchema;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.core.H2Database;
+import liquibase.exception.LiquibaseException;
+import liquibase.resource.ClassLoaderResourceAccessor;
+import liquibase.util.StringUtil;
 
 /**
  * This is ye Jesus Nut of sql state via distribute linear logs. We use H2 as a
@@ -161,20 +175,20 @@ public class SqlStateMachine {
     }
 
     private static class EventTrampoline {
-        private List<Event> pending = new CopyOnWriteArrayList<>();
+        private final Map<String, Consumer<JsonNode>> handlers = new HashMap<>();
+        private final List<Event>                     pending  = new ArrayList<>();
 
-        public void publish(Event event) {
-            pending.add(event);
+        private void deregister(String discriminator) {
+            handlers.remove(discriminator);
         }
 
-        @SuppressWarnings("unused")
-        private void evaluate(Map<String, BiConsumer<String, JsonNode>> handlers) {
+        private void evaluate() {
             try {
                 for (Event event : pending) {
-                    BiConsumer<String, JsonNode> handler = handlers.get(event.discriminator);
+                    Consumer<JsonNode> handler = handlers.get(event.discriminator);
                     if (handler != null) {
                         try {
-                            handler.accept(event.discriminator, event.body);
+                            handler.accept(event.body);
                         } catch (Throwable e) {
                             log.trace("handler failed for {}", e);
                         }
@@ -184,21 +198,38 @@ public class SqlStateMachine {
                 pending.clear();
             }
         }
+
+        private void publish(Event event) {
+            pending.add(event);
+        }
+
+        private void register(String discriminator, Consumer<JsonNode> handler) {
+            handlers.put(discriminator, handler);
+        }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH       = String.format("CREATE ALIAS __APOLLO_INTERNAL__.PUBLISH FOR \"%s.publish\"",
-                                                                                                              SqlStateMachine.class.getCanonicalName());
-    private static final String                    CREATE_SCHEMA_APOLLO_INTERNAL              = "CREATE SCHEMA __APOLLO_INTERNAL__";
-    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK = "CREATE TABLE __APOLLO_INTERNAL__.CURRENT_BLOCK(_U INT, HEIGHT INT8, HASH VARCHAR(256))";
-    private static final String                    CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE    = "CREATE TABLE __APOLLO_INTERNAL__.TRAMPOLINE(ID INT AUTO_INCREMENT, CHANNEL VARCHAR(255), BODY JSON)";
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "DELETE FROM __APOLLO_INTERNAL__.TRAMPOLINE";
+    private record baseAndAccessor(Liquibase liquibase, MigrationAccessor ra) implements AutoCloseable {
+        @Override
+        public void close() throws LiquibaseException {
+            ra.clone();
+            liquibase.close();
+        }
+    }
+
+    private static final String CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+                                                                                     SqlStateMachine.class.getCanonicalName());
+
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final RowSetFactory             factory;
-    private static final Logger                    log                                        = LoggerFactory.getLogger(SqlStateMachine.class);
-    private static final ObjectMapper              MAPPER                                     = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                             = "INSERT INTO __APOLLO_INTERNAL__.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2)";
-    private static final ThreadLocal<SecureRandom> secureRandom                               = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE     = "select * from __APOLLO_INTERNAL__.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT_BLOCK                       = "MERGE INTO __APOLLO_INTERNAL__.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
+    private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
+    private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
+    private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    static {
+        ThreadLocalScopeManager.initialize();
+    }
 
     static {
         try {
@@ -233,7 +264,8 @@ public class SqlStateMachine {
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
     private final EventTrampoline                         trampoline   = new EventTrampoline();
-    private final String                                  url;
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -276,6 +308,10 @@ public class SqlStateMachine {
         }
     }
 
+    public void deregister(String discriminator) {
+        trampoline.deregister(discriminator);
+    }
+
     public BiConsumer<Long, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
@@ -305,7 +341,7 @@ public class SqlStateMachine {
 
     public Function<Long, File> getCheckpointer() {
         return height -> {
-            String rndm = UUID.randomUUID().toString();
+            String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
             try (java.sql.Statement statement = connection.createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
@@ -361,19 +397,42 @@ public class SqlStateMachine {
         }
     }
 
+    public void register(String discriminator, Consumer<JsonNode> handler) {
+        trampoline.register(discriminator, handler);
+    }
+
+    // Test accessible
+    void commit() {
+        try {
+            publishEvents();
+            connection.commit();
+            trampoline.evaluate();
+        } catch (SQLException e) {
+            log.trace("unable to commit connection", e);
+        }
+    }
+
+    // Test accessible
+    JdbcConnection connection() {
+        return connection;
+    }
+
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
 
         SecureRandom prev = secureRandom.get();
         secureRandom.set(entropy.get());
-        try {
+
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
+            liquibase.update((String) null);
             statement = connection.createStatement();
-            statement.execute(CREATE_SCHEMA_APOLLO_INTERNAL);
-            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_CURRENT_BLOCK);
-            statement.execute(CREATE_TABLE_APOLLO_INTERNAL_TRAMPOLINE);
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
         } catch (SQLException e) {
+            throw new IllegalStateException("unable to initialize db state", e);
+        } catch (LiquibaseException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } finally {
             secureRandom.set(prev);
@@ -498,6 +557,36 @@ public class SqlStateMachine {
         }
     }
 
+    private Boolean acceptMigration(Migration migration) throws SQLException {
+        try {
+            switch (migration.getCommandCase()) {
+            case CHANGELOGSYNC:
+                changeLogSync(migration.getChangelogSync());
+                break;
+            case CLEARCHECKSUMS:
+                clearCheckSums();
+                break;
+            case DROP:
+                dropAll(migration.getDrop());
+                break;
+            case ROLLBACK:
+                rollback(migration.getRollback());
+                break;
+            case TAG:
+                tag(migration.getTag());
+                break;
+            case UPDATE:
+                update(migration.getUpdate());
+                break;
+            default:
+                break;
+            }
+        } catch (Throwable e) {
+            throw new SQLException("Exception during migration", e);
+        }
+        return Boolean.TRUE;
+    }
+
     private List<ResultSet> acceptPreparedStatement(Statement statement) throws SQLException {
         List<ResultSet> results = new ArrayList<>();
         PreparedStatement exec;
@@ -608,12 +697,20 @@ public class SqlStateMachine {
         log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
     }
 
-    private void commit() {
-        try {
-            publishEvents();
-            connection.commit();
-        } catch (SQLException e) {
-            log.trace("unable to commit connection", e);
+    private void changeLogSync(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            l.liquibase.changeLogSync(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                      new LabelExpression(changeLog.getLabels()));
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to sync", e);
+        }
+    }
+
+    private void clearCheckSums() throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+            liquibase.clearCheckSums();
         }
     }
 
@@ -667,6 +764,21 @@ public class SqlStateMachine {
         });
     }
 
+    private void dropAll(Drop drop) throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        if (StringUtil.trimToNull(drop.getSchemas()) != null) {
+            List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
+            List<CatalogAndSchema> schemas = new ArrayList<>();
+            for (String name : schemaNames) {
+                schemas.add(new CatalogAndSchema(drop.getCatalog(), name));
+            }
+            try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+                liquibase.dropAll(schemas.toArray(new CatalogAndSchema[schemas.size()]));
+            }
+        }
+    }
+
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
             onCompletion.completeExceptionally(e);
@@ -682,6 +794,7 @@ public class SqlStateMachine {
             case SCRIPT -> acceptScript(txn.getScript());
             case STATEMENT -> acceptPreparedStatement(txn.getStatement());
             case BATCHED -> acceptBatchTransaction(txn.getBatched());
+            case MIGRATION -> acceptMigration(txn.getMigration());
             default -> null;
             };
         } catch (Throwable th) {
@@ -700,6 +813,7 @@ public class SqlStateMachine {
             case STATEMENT -> SqlStateMachine.this.acceptPreparedStatement(tx.getStatement());
             case SCRIPT -> SqlStateMachine.this.acceptScript(tx.getScript());
             case BATCHED -> acceptBatchTransaction(tx.getBatched());
+            case MIGRATION -> acceptMigration(tx.getMigration());
             default -> null;
             };
             this.complete(onCompletion, results);
@@ -716,6 +830,13 @@ public class SqlStateMachine {
 
     private Session getSession() {
         return (Session) connection.getSession();
+    }
+
+    private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        var ra = new MigrationAccessor(changeLog.getResources());
+        return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }
 
     private void publishEvents() {
@@ -774,11 +895,47 @@ public class SqlStateMachine {
         }
     }
 
+    private void rollback(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            if (changeLog.hasCount()) {
+                l.liquibase.rollback(changeLog.getCount(), new Contexts(changeLog.getContext()),
+                                     new LabelExpression(changeLog.getLabels()));
+            } else {
+                l.liquibase.rollback(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                     new LabelExpression(changeLog.getLabels()));
+            }
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to update", e);
+        }
+    }
+
     private void setArgument(PreparedStatement exec, int i, Value value) {
         try {
             value.set(exec, i + 1);
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
+        }
+    }
+
+    private void tag(String tag) throws LiquibaseException {
+        final var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
+            liquibase.tag(tag);
+        }
+    }
+
+    private void update(ChangeLog changeLog) throws LiquibaseException {
+        try (var l = liquibase(changeLog)) {
+            if (changeLog.hasCount()) {
+                l.liquibase.update(changeLog.getCount(), new Contexts(changeLog.getContext()),
+                                   new LabelExpression(changeLog.getLabels()));
+            } else {
+                l.liquibase.update(changeLog.getTag(), new Contexts(changeLog.getContext()),
+                                   new LabelExpression(changeLog.getLabels()));
+            }
+        } catch (IOException e) {
+            throw new LiquibaseException("unable to update", e);
         }
     }
 

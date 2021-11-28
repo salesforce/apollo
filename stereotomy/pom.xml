@@ -7,7 +7,8 @@
 		<artifactId>apollo.app</artifactId>
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
-	<artifactId>stereotomy</artifactId>
+	<artifactId>Stereotomy</artifactId>
+    <name>Stereotomy: Identity and Key Management</name>
 
 	<dependencies>
 		<dependency>
