@@ -6,11 +6,16 @@
  */
 package com.salesforce.apollo.state;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -27,6 +32,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import org.h2.api.Interval;
 import org.h2.api.TimestampWithTimeZone;
@@ -63,6 +70,8 @@ import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.BatchUpdate;
 import com.salesfoce.apollo.state.proto.BatchedTransaction;
 import com.salesfoce.apollo.state.proto.Call;
+import com.salesfoce.apollo.state.proto.ChangeLog;
+import com.salesfoce.apollo.state.proto.ChangeLog.Builder;
 import com.salesfoce.apollo.state.proto.EXECUTION;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Script;
@@ -71,6 +80,9 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.state.SqlStateMachine.CallResult;
+
+import liquibase.Contexts;
+import liquibase.LabelExpression;
 
 /**
  * The mutation API for the materialized view
@@ -266,6 +278,45 @@ public class Mutator {
                      .build();
     }
 
+    public static ChangeLog changeLog(ByteString resources, String root) {
+        return changeLog(resources, root, null, null).build();
+    }
+
+    public static Builder changeLog(ByteString resources, String root, Contexts context, LabelExpression labels) {
+        final var builder = ChangeLog.newBuilder().setResources(resources).setRoot(root);
+        if (context != null && !context.getContexts().isEmpty()) {
+            builder.setContext(String.join(",", context.getContexts()));
+        }
+        if (labels != null && !labels.getLabels().isEmpty()) {
+            builder.setLabels(String.join(",", labels.getLabels()));
+        }
+        return builder;
+    }
+
+    public static ChangeLog changeLog(int count, ByteString resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resources, root, context, labels).setCount(count).build();
+    }
+
+    public static ChangeLog changeLog(int count, Path resources, String root, Contexts context,
+                                      LabelExpression labels) throws IOException {
+        return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
+    }
+
+    public static ChangeLog changeLog(Path resources, String root) throws IOException {
+        return changeLog(resourcesFrom(resources), root, null, null).build();
+    }
+
+    public static ChangeLog changeLog(String tag, ByteString resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resources, root, context, labels).setTag(tag).build();
+    }
+
+    public static ChangeLog changeLog(String tag, Path resources, String root, Contexts context,
+                                      LabelExpression labels) throws IOException {
+        return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
+    }
+
     public static Value convert(Object x) {
         if (x == null) {
             return ValueNull.INSTANCE;
@@ -352,6 +403,23 @@ public class Mutator {
             throw new IllegalArgumentException("Unknown value type: " + x.getClass());
         }
 
+    }
+
+    public static ByteString resourcesFrom(Path sourceDirectory, FileVisitOption... options) throws IOException {
+        final var baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zs = new ZipOutputStream(baos)) {
+            Files.walk(sourceDirectory, options).filter(path -> !Files.isDirectory(path)).forEach(path -> {
+                ZipEntry zipEntry = new ZipEntry(sourceDirectory.relativize(path).toString());
+                try {
+                    zs.putNextEntry(zipEntry);
+                    Files.copy(path, zs);
+                    zs.closeEntry();
+                } catch (IOException e) {
+                    throw new IllegalStateException("error creating entry: " + path, e);
+                }
+            });
+        }
+        return ByteString.copyFrom(baos.toByteArray());
     }
 
     public static ByteString serialized(Data data, Value arg) {
