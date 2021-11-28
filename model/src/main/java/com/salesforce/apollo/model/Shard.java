@@ -11,6 +11,8 @@ import java.sql.SQLException;
 
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.utils.DelegatingJdbcConnector;
@@ -85,5 +87,9 @@ public class Shard {
 
     public void stop() {
         choam.stop();
+    }
+
+    Context<? extends Member> context() {
+        return choam.context();
     }
 }

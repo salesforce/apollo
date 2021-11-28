@@ -6,8 +6,9 @@
  */
 package com.salesforce.apollo.model;
 
+import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.Stereotomy;
 
 /**
  * @author hal.hildebrand
@@ -15,15 +16,19 @@ import com.salesforce.apollo.membership.SigningMember;
  */
 public class Node {
 
-    private final SigningMember member;
+    private final Digest     id;
     private final Shard      management;
+    private final Stereotomy stereotomy;
+    private final Router     router;
 
-    public Node(SigningMember member, Shard management) {
-        this.member = member;
+    public Node(Digest id, Shard management, Stereotomy stereotomy, Router router) {
+        this.id = id;
         this.management = management;
+        this.stereotomy = stereotomy;
+        this.router = router;
     }
 
     public Digest getId() {
-        return member.getId();
+        return id;
     }
 }

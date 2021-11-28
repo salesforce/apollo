@@ -6,10 +6,14 @@
  */
 package com.salesforce.apollo.model;
 
+import org.junit.jupiter.api.Test;
+
 /**
  * @author hal.hildebrand
  *
  */
-public class DatabaseTest {
-
+public class NodeTest {
+    @Test
+    public void smoke() {
+    }
 }

@@ -8,7 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 	<artifactId>model</artifactId>
-    <name>Model: System Model</name>
+	<name>Model: System Model</name>
 	<description>Sytem model for applications, deployments, tenants, etc.</description>
 
 	<dependencies>
@@ -16,10 +16,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>sql-state</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>stereotomy</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>com.salesforce.apollo</groupId>
+			<artifactId>stereotomy</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>
@@ -50,16 +50,14 @@
 	</dependencies>
 
 	<build>
-		<testResources>
-			<testResource>
-				<directory>src/test/resources</directory>
-				<filtering>true</filtering>
-			</testResource>
-		</testResources>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>build-helper-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.xolstice.maven.plugins</groupId>
+				<artifactId>protobuf-maven-plugin</artifactId>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -69,9 +67,9 @@
 						<id>satisfy-liquibase</id>
 						<phase>generate-sources</phase>
 						<configuration>
-							<tasks> 
+							<tasks>
 								<mkdir dir="${project.build.directory}/test-classes" />
-                                <mkdir dir="${project.build.directory}/classes" />
+								<mkdir dir="${project.build.directory}/classes" />
 							</tasks>
 						</configuration>
 						<goals>
@@ -155,7 +153,8 @@
 		</plugins>
 		<pluginManagement>
 			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+				<!--This plugin's configuration is used to store Eclipse m2e settings 
+					only. It has no influence on the Maven build itself. -->
 				<plugin>
 					<groupId>org.eclipse.m2e</groupId>
 					<artifactId>lifecycle-mapping</artifactId>
