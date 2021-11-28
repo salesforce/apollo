@@ -16,6 +16,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>sql-state</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>stereotomy</artifactId>
+        </dependency>
 
 		<!-- Test only deps below this line -->
 		<dependency>

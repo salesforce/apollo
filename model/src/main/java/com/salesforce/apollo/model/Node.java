@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.model;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.SigningMember;
 
@@ -18,11 +15,10 @@ import com.salesforce.apollo.membership.SigningMember;
  */
 public class Node {
 
-    private final Map<Digest, Subsystem> hosted = new HashMap<>();
-    private final SigningMember          member;
-    private final Database               management;
+    private final SigningMember member;
+    private final Shard      management;
 
-    public Node(SigningMember member, Database management) {
+    public Node(SigningMember member, Shard management) {
         this.member = member;
         this.management = management;
     }

@@ -10,6 +10,6 @@ package com.salesforce.apollo.model;
  * @author hal.hildebrand
  *
  */
-public class DummyTest {
+public class DatabaseTest {
 
 }

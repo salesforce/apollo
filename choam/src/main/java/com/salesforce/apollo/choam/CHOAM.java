@@ -645,6 +645,10 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
+    public Context<? extends Member> context() {
+        return params.context();
+    }
+
     public Combine.Transitions getCurrentState() {
         return transitions.fsm().getCurrentState();
     }
