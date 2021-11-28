@@ -17,6 +17,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import org.h2.jdbc.JdbcSQLSyntaxErrorException;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.ChangeLog;
 import com.salesfoce.apollo.state.proto.Migration;
@@ -36,7 +38,18 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  */
 public class MigrationTest {
 
-    private static final Path BOOK_RESOURCE_PATH = Path.of("src", "test", "resources", "book-schema");
+    public static final Path   BOOK_RESOURCE_PATH = Path.of("src", "test", "resources", "book-schema");
+    public static final String BOOK_SCHEMA_ROOT   = "bookSchema.yml";
+
+    public static List<Message> initializeBookSchema() {
+        return Collections.singletonList(Txn.newBuilder().setMigration(MigrationTest.bookSchemaMigration())
+                                            .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                                            .build());
+    }
+
+    public static Migration bookSchemaMigration() {
+        return Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
+    }
 
     @Test
     public void rollback() throws Exception {
@@ -86,7 +99,7 @@ public class MigrationTest {
         }
 
         migration = Migration.newBuilder()
-                             .setRollback(ChangeLog.newBuilder().setRoot("bookSchema.yml")
+                             .setRollback(ChangeLog.newBuilder().setRoot(BOOK_SCHEMA_ROOT)
                                                    .setResources(Mutator.resourcesFrom(BOOK_RESOURCE_PATH))
                                                    .setTag("test-1"))
                              .build();
@@ -114,7 +127,7 @@ public class MigrationTest {
         final var executor = updater.getExecutor();
         executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
-        Migration migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml"))
+        Migration migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT))
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();

@@ -299,11 +299,11 @@ public class Mutator {
     }
 
     public static ChangeLog changeLog(int count, Path resources, String root, Contexts context,
-                                      LabelExpression labels) throws IOException {
+                                      LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
     }
 
-    public static ChangeLog changeLog(Path resources, String root) throws IOException {
+    public static ChangeLog changeLog(Path resources, String root) {
         return changeLog(resourcesFrom(resources), root, null, null).build();
     }
 
@@ -313,7 +313,7 @@ public class Mutator {
     }
 
     public static ChangeLog changeLog(String tag, Path resources, String root, Contexts context,
-                                      LabelExpression labels) throws IOException {
+                                      LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
     }
 
@@ -405,7 +405,7 @@ public class Mutator {
 
     }
 
-    public static ByteString resourcesFrom(Path sourceDirectory, FileVisitOption... options) throws IOException {
+    public static ByteString resourcesFrom(Path sourceDirectory, FileVisitOption... options) {
         final var baos = new ByteArrayOutputStream();
         try (ZipOutputStream zs = new ZipOutputStream(baos)) {
             Files.walk(sourceDirectory, options).filter(path -> !Files.isDirectory(path)).forEach(path -> {
@@ -418,6 +418,8 @@ public class Mutator {
                     throw new IllegalStateException("error creating entry: " + path, e);
                 }
             });
+        } catch (IOException e) {
+            throw new IllegalStateException("error creating resources: " + sourceDirectory, e);
         }
         return ByteString.copyFrom(baos.toByteArray());
     }

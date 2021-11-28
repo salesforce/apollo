@@ -13,7 +13,6 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -156,9 +155,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected static final int             CARDINALITY     = 5;
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(Collections.singletonList(Txn.newBuilder()
-                                                                                                              .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                                                                                              .build()));
+    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     protected Map<Digest, List<Digest>>          blocks;
@@ -291,8 +288,8 @@ abstract public class AbstractLifecycleTest {
                                .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                                 .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
-                               .setGenesisData(GENESIS_DATA).setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
+                               .setSynchronizeDuration(Duration.ofMillis(10)).setGenesisData(GENESIS_DATA)
+                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
