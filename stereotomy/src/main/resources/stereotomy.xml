@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+	<changeSet author="hhildebrand" id="1">
+		<sql>create schema if not exists stereotomy_kerl</sql>
+
+		<createTable tableName="coordinates"
+			schemaName="stereotomy_kerl">
+			<column autoIncrement="true" name="id" type="INT8">
+				<constraints nullable="false" primaryKey="true"
+					primaryKeyName="coordinates_pkey" />
+			</column>
+			<column name="identifier" type="VARCHAR" />
+			<column name="digest" type="VARCHAR" />
+			<column name="ilk" type="VARCHAR" />
+		</createTable>
+
+		<addUniqueConstraint
+			columnNames="identifier, digest, ilk" tableName="coordinates"
+			schemaName="stereotomy_kerl" />
+
+		<createTable tableName="current_key_state">
+			<column name="identifier" type="VARCHAR">
+				<constraints nullable="false" primaryKey="true" />
+			</column>
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_key_state_coordinates_fk"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+		</createTable>
+
+		<createIndex tableName="current_key_state"
+			indexName="current_key_state_identifier_idx" unique="true">
+			<column name="identifier" />
+		</createIndex>
+
+		<createTable tableName="key_state"
+			schemaName="stereotomy_kerl">
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="key_state_coordinates_fk" primaryKey="true"
+					unique="true" referencedTableName="coordinates"
+					referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="last_event" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="key_state_last_event_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="last_establishing_event" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="key_state_last_establishing_event_fk"
+					primaryKey="true" referencedTableName="coordinates"
+					referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="delegating_identifier" type="VARCHAR" />
+		</createTable>
+
+		<createTable tableName="event"
+			schemaName="stereotomy_kerl">
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="event_coordinates_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="sequence_number" type="INT8" />
+			<column name="identifier" type="VARCHAR" />
+			<column name="digest" type="VARCHAR" />
+			<column name="content" type="BINARY" />
+		</createTable>
+
+		<createIndex tableName="event"
+			schemaName="stereotomy_kerl" indexName="event_digest_idx"
+			unique="true">
+			<column name="digest" />
+		</createIndex>
+	</changeSet>
+</databaseChangeLog>
