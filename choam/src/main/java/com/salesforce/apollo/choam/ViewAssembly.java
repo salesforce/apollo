@@ -150,7 +150,7 @@ public class ViewAssembly implements Reconfiguration {
                                                             return view.generateValidation(p.vm);
                                                         }).toList()))
                              .build().toByteString());
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 20; i++) {
                 ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {
@@ -218,7 +218,7 @@ public class ViewAssembly implements Reconfiguration {
                                                                                 .toList())
                                                         .build())
                              .build().toByteString());
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 20; i++) {
                 ds.put(ByteString.EMPTY);
             }
         } catch (InterruptedException e) {

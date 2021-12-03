@@ -9,7 +9,7 @@ package com.salesforce.apollo.utils;
 import java.nio.ByteBuffer;
 
 import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
+import org.h2.mvstore.type.BasicDataType;
 
 import com.salesforce.apollo.crypto.Digest;
 
@@ -18,15 +18,20 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 
-public class DigestType implements DataType {
+public class DigestType extends BasicDataType<Digest> {
 
     @Override
-    public int compare(Object a, Object b) {
+    public int compare(Digest a, Digest b) {
         return ((Digest) a).compareTo(((Digest) b));
     }
 
     @Override
-    public int getMemory(Object obj) {
+    public Digest[] createStorage(int size) {
+        return new Digest[size];
+    }
+
+    @Override
+    public int getMemory(Digest obj) {
         return ((Digest) obj).getAlgorithm().digestLength() + 1;
     }
 
@@ -36,25 +41,11 @@ public class DigestType implements DataType {
     }
 
     @Override
-    public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-        for (int i = 0; i < len; i++) {
-            obj[i] = read(buff);
-        }
-    }
-
-    @Override
-    public void write(WriteBuffer buff, Object obj) {
+    public void write(WriteBuffer buff, Digest obj) {
         Digest digest = (Digest) obj;
         buff.put(digest.getAlgorithm().digestCode());
         for (long l : digest.getLongs()) {
             buff.putLong(l);
-        }
-    }
-
-    @Override
-    public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-        for (int i = 0; i < len; i++) {
-            write(buff, obj[i]);
         }
     }
 }

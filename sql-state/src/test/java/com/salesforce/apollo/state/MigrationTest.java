@@ -65,6 +65,8 @@ public class MigrationTest {
                                     .build(),
                          success);
 
+        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
+        
         migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml")).build();
 
         success = new CompletableFuture<>();
@@ -104,12 +106,15 @@ public class MigrationTest {
                                                    .setTag("test-1"))
                              .build();
         success = new CompletableFuture<>();
+
+        executor.beginBlock(2, DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
+        
         executor.execute(Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
 
-        success.get(1, TimeUnit.SECONDS);
+        success.get(1, TimeUnit.SECONDS); 
 
         statement = connection.createStatement();
         try {

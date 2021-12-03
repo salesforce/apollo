@@ -23,8 +23,9 @@
 
 	<properties>
 		<dropwizard.version>2.0.10</dropwizard.version>
-		<h2.version>1.4.200</h2.version>
-		<jooq.version>3.15.4</jooq.version>
+		<h2.version>2.0.202</h2.version>
+        <h2.gen.version>1.4.200</h2.gen.version>
+		<jooq.version>3.15.5</jooq.version>
 		<bc.version>1.69</bc.version>
 		<logback.version>1.2.7</logback.version>
 		<grpc.version>1.42.1</grpc.version>
@@ -220,6 +221,11 @@
 				<groupId>com.h2database</groupId>
 				<artifactId>h2-mvstore</artifactId>
 				<version>${h2.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.locationtech.jts</groupId>
+				<artifactId>jts-core</artifactId>
+				<version>1.17.0</version>
 			</dependency>
 			<dependency>
 				<groupId>org.jooq</groupId>
@@ -520,6 +526,7 @@
 									<source>${project.basedir}/src/main/proto</source>
 									<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 									<source>${project.basedir}/target/generated-sources/protobuf/java</source>
+                                    <source>${project.basedir}/target/generated-sources/jooq</source>
 								</sources>
 							</configuration>
 						</execution>

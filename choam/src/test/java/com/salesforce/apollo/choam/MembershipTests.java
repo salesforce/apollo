@@ -197,20 +197,6 @@ public class MembershipTests {
             return thread;
         });
 
-        Function<Long, File> checkpointer = h -> {
-            File cp;
-            try {
-                cp = File.createTempFile("cp-" + h, ".chk");
-                cp.deleteOnExit();
-                try (var os = new FileOutputStream(cp)) {
-                    os.write("Give me food or give me slack or kill me".getBytes());
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-            return cp;
-        };
-
         var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
                                .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
@@ -221,8 +207,7 @@ public class MembershipTests {
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)
-                               .setCheckpointer(checkpointer);
+                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize);
 
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)

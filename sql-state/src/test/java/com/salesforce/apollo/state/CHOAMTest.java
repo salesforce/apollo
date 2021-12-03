@@ -7,7 +7,6 @@
 package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
-import static com.salesforce.apollo.state.Mutator.batchOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,7 +55,6 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
-import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -83,24 +81,24 @@ public class CHOAMTest {
         private final Timer                    latency;
         private final AtomicInteger            lineTotal;
         private final int                      max;
+        private final Mutator                  mutator;
         private final AtomicBoolean            proceed;
         private final ScheduledExecutorService scheduler;
-        private final Session                  session;
         private final Duration                 timeout;
         private final Counter                  timeouts;
 
-        public Transactioneer(CHOAM c, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
+        public Transactioneer(Mutator mutator, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
                               AtomicInteger lineTotal, int max, CountDownLatch countdown,
                               ScheduledExecutorService txScheduler) {
             this.latency = latency;
             this.proceed = proceed;
-            this.session = c.getSession();
             this.timeout = timeout;
             this.lineTotal = lineTotal;
             this.timeouts = timeouts;
             this.max = max;
             this.countdown = countdown;
             this.scheduler = txScheduler;
+            this.mutator = mutator;
         }
 
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
@@ -117,7 +115,8 @@ public class CHOAMTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
+                                                                     update(entropy, mutator), timeout, scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -137,7 +136,8 @@ public class CHOAMTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
+                                                                     update(entropy, mutator), timeout, scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -154,7 +154,9 @@ public class CHOAMTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler), time);
+                    decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                         scheduler),
+                             time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -226,20 +228,6 @@ public class CHOAMTest {
         });
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        Function<Long, File> checkpointer = h -> {
-            File cp;
-            try {
-                cp = File.createTempFile("cp-" + h, ".chk");
-                cp.deleteOnExit();
-                try (var os = new FileOutputStream(cp)) {
-                    os.write("Give me food or give me slack or kill me".getBytes());
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-            return cp;
-        };
-
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1)).setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
@@ -248,7 +236,7 @@ public class CHOAMTest {
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(200).setCheckpointer(checkpointer);
+                               .setTxnPermits(10_000).setCheckpointBlockSize(200);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
@@ -301,9 +289,13 @@ public class CHOAMTest {
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            choams.values().stream().map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max,
-                                                                 countdown, txScheduler))
-                  .forEach(e -> transactioneers.add(e));
+            updaters.entrySet().stream().map(e -> new Transactioneer(
+                                                                     e.getValue()
+                                                                      .getMutator(choams.get(e.getKey().getId())
+                                                                                        .getSession()),
+                                                                     timeout, timeouts, latency, proceed, lineTotal,
+                                                                     max, countdown, txScheduler))
+                    .forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
@@ -386,6 +378,7 @@ public class CHOAMTest {
 
                                    @Override
                                    public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
                                        up.getExecutor().genesis(height, hash, initialization);
                                    }
                                }).build(),
@@ -402,7 +395,7 @@ public class CHOAMTest {
                   .build();
     }
 
-    private Txn update(Random entropy) {
+    private Txn update(Random entropy, Mutator mutator) {
 
         List<List<Object>> batch = new ArrayList<>();
         for (int rep = 0; rep < 10; rep++) {
@@ -410,6 +403,6 @@ public class CHOAMTest {
                 batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
             }
         }
-        return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
+        return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 }

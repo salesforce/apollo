@@ -23,7 +23,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.StreamSupport;
 
-import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.slf4j.Logger;
@@ -298,7 +297,7 @@ public class Store {
 
     public void validate(long from, long to) throws IllegalStateException {
         AtomicReference<Digest> prevHash = new AtomicReference<>();
-        new Cursor<Long, byte[]>(blocks.getRootPage(), to, from).forEachRemaining(l -> {
+        blocks.cursor(to, from, false).forEachRemaining(l -> {
             if (l == to) {
                 Digest k = hash(l);
                 if (k == null) {

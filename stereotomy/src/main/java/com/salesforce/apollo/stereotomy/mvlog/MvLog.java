@@ -23,7 +23,7 @@ import java.util.OptionalLong;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
+import org.h2.mvstore.type.BasicDataType;
 
 import com.google.protobuf.AbstractMessage;
 import com.google.protobuf.Any;
@@ -55,7 +55,7 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  */
 public class MvLog implements KERL {
 
-    private static class ProtobuffDataType implements DataType {
+    private static class ProtobuffDataType extends BasicDataType<Object> {
 
         @Override
         public int compare(Object a, Object b) {
@@ -78,13 +78,6 @@ public class MvLog implements KERL {
         }
 
         @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
-            }
-        }
-
-        @Override
         public void write(WriteBuffer buff, Object obj) {
             Any any = Any.pack((AbstractMessage) obj);
             try {
@@ -102,13 +95,6 @@ public class MvLog implements KERL {
                 });
             } catch (IOException e) {
                 throw new IllegalStateException("Cannot write", e);
-            }
-        }
-
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
             }
         }
 
@@ -142,12 +128,12 @@ public class MvLog implements KERL {
             case "InceptionEvent": {
                 InceptionEvent event = (InceptionEvent) msg;
                 yield (event.hasDelegatingEvent()) ? new DelegatedInceptionEventImpl(event)
-                        : new InceptionEventImpl(event);
+                                                   : new InceptionEventImpl(event);
             }
             case "RotationEvent": {
                 RotationEvent event = (RotationEvent) msg;
                 yield (event.hasDelegatingSeal()) ? new DelegatedRotationEventImpl(event)
-                        : new RotationEventImpl(event);
+                                                  : new RotationEventImpl(event);
             }
             case "InteractionEvent": {
                 yield new InteractionEventImpl((InteractionEvent) msg);
@@ -155,6 +141,11 @@ public class MvLog implements KERL {
             default:
                 throw new IllegalArgumentException("Unexpected message type: " + msg.getClass());
             };
+        }
+
+        @Override
+        public Object[] createStorage(int size) {
+            return new Object[size];
         }
 
     }
@@ -233,8 +224,10 @@ public class MvLog implements KERL {
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
         KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIlk(),
-                coordinates.getIdentifier(), coordinates.getPreviousEvent().getDigest(),
-                coordinates.getSequenceNumber())));
+                                                                               coordinates.getIdentifier(),
+                                                                               coordinates.getPreviousEvent()
+                                                                                          .getDigest(),
+                                                                               coordinates.getSequenceNumber())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 

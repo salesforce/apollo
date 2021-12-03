@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.callScript;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +40,7 @@ public class ScriptTest {
         createAndInsert(connection);
         connection.commit();
         Txn txn = Txn.newBuilder()
-                     .setScript(callScript("test.DbAccess", "call",
+                     .setScript(new Mutator(null, machine.getSession()).callScript("test.DbAccess", "call",
                                            Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();

@@ -15,7 +15,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
-import com.salesforce.apollo.utils.DelegatingJdbcConnector;
 
 /**
  * Represents a linear ledger in the system, controls access
@@ -24,42 +23,6 @@ import com.salesforce.apollo.utils.DelegatingJdbcConnector;
  *
  */
 public class Shard {
-    public static class JdbcConnector extends DelegatingJdbcConnector {
-
-        public JdbcConnector(Connection wrapped) throws SQLException {
-            super(wrapped);
-            wrapped.setReadOnly(true);
-            wrapped.setAutoCommit(false);
-        }
-
-        public boolean getAutoCommit() throws SQLException {
-            return false;
-        }
-
-        public boolean isWrapperFor(Class<?> iface) throws SQLException {
-            return false;
-        }
-
-        public void setAutoCommit(boolean autoCommit) throws SQLException {
-            if (autoCommit) {
-                throw new SQLException("Cannot set autocommit on this connection");
-            }
-        }
-
-        public void setReadOnly(boolean readOnly) throws SQLException {
-            if (!readOnly) {
-                throw new SQLException("This is a read only connection");
-            }
-        }
-
-        public void setTransactionIsolation(int level) throws SQLException {
-            throw new SQLException("Cannot set transaction isolation level on this connection");
-        }
-
-        public <T> T unwrap(Class<T> iface) throws SQLException {
-            throw new SQLException("Cannot unwrap: " + iface.getCanonicalName() + "on th connection");
-        }
-    }
 
     private final CHOAM           choam;
     private final SqlStateMachine state;
@@ -70,7 +33,7 @@ public class Shard {
     }
 
     public Connection createConnection() throws SQLException {
-        return new JdbcConnector(state.newConnection());
+        return state.newConnection();
     }
 
     public Digest getId() {
@@ -78,7 +41,7 @@ public class Shard {
     }
 
     public Mutator getMutator() {
-        return new Mutator(choam.getSession());
+        return state.getMutator(choam.getSession());
     }
 
     public void start() {

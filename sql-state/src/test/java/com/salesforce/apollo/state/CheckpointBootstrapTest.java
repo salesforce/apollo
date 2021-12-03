@@ -7,6 +7,7 @@
 package com.salesforce.apollo.state;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
@@ -70,10 +71,11 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                               txScheduler))
-                  .forEach(e -> transactioneers.add(e));
+            updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject))
+                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
+                                                 timeout, timeouts, latency, proceed, lineTotal, max, countdown,
+                                                 txScheduler))
+                    .forEach(e -> transactioneers.add(e));
         }
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");
@@ -117,17 +119,23 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         for (Member m : members) {
             Connection connection = updaters.get(m).newConnection();
             Statement statement = connection.createStatement();
-            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
-            while (results.next()) {
-                manifested.computeIfAbsent(m, k -> new HashMap<>())
-                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            try {
+                ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+                while (results.next()) {
+                    manifested.computeIfAbsent(m, k -> new HashMap<>())
+                              .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+                }
+            } catch (Throwable e) {
+                // ignore for now;
             }
             connection.close();
         }
 
         Map<Integer, row> standard = manifested.get(members.get(0));
+        assertNotNull(standard, "No results for: " + members.get(0));
         for (Member m : members) {
             var candidate = manifested.get(m);
+            assertNotNull(candidate, "No results for: " + m);
             for (var entry : standard.entrySet()) {
                 assertTrue(candidate.containsKey(entry.getKey()));
                 assertEquals(entry.getValue(), candidate.get(entry.getKey()));

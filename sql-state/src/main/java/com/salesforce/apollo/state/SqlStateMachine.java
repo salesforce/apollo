@@ -6,8 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.NULL_HANDLER;
-
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -40,12 +39,14 @@ import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
 import org.h2.api.ErrorCode;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.message.DbException;
-import org.h2.store.Data;
+import org.h2.util.CloseWatcher;
+import org.h2.util.DateTimeUtils;
+import org.h2.util.JdbcUtils;
 import org.h2.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +59,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Arguments;
@@ -73,9 +73,16 @@ import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.state.liquibase.LiquibaseConnection;
+import com.salesforce.apollo.state.liquibase.MigrationAccessor;
+import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
+import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
+import com.salesforce.apollo.state.liquibase.ThreadLocalScopeManager;
+import com.salesforce.apollo.utils.DelegatingJdbcConnector;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
@@ -83,6 +90,7 @@ import liquibase.CatalogAndSchema;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.changelog.ChangeLogHistoryServiceFactory;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
@@ -134,6 +142,51 @@ public class SqlStateMachine {
         }
     }
 
+    public static class ReadOnlyConnector extends DelegatingJdbcConnector {
+
+        private final CloseWatcher watcher;
+
+        public ReadOnlyConnector(Connection wrapped, org.h2.engine.Session session) throws SQLException {
+            super(wrapped);
+            wrapped.setReadOnly(true);
+            wrapped.setAutoCommit(false);
+            this.watcher = CloseWatcher.register(this, session, false);
+        }
+
+        @Override
+        public void close() throws SQLException {
+            CloseWatcher.unregister(watcher);
+        }
+
+        public boolean getAutoCommit() throws SQLException {
+            return false;
+        }
+
+        public boolean isWrapperFor(Class<?> iface) throws SQLException {
+            return false;
+        }
+
+        public void setAutoCommit(boolean autoCommit) throws SQLException {
+            if (autoCommit) {
+                throw new SQLException("Cannot set autocommit on this connection");
+            }
+        }
+
+        public void setReadOnly(boolean readOnly) throws SQLException {
+            if (!readOnly) {
+                throw new SQLException("This is a read only connection");
+            }
+        }
+
+        public void setTransactionIsolation(int level) throws SQLException {
+            throw new SQLException("Cannot set transaction isolation level on this connection");
+        }
+
+        public <T> T unwrap(Class<T> iface) throws SQLException {
+            throw new SQLException("Cannot unwrap: " + iface.getCanonicalName() + "on th connection");
+        }
+    }
+
     public class TxnExec implements TransactionExecutor {
         @Override
         public void beginBlock(long height, Digest hash) {
@@ -144,7 +197,7 @@ public class SqlStateMachine {
         public void execute(Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
-                closed = connection.isClosed();
+                closed = connection().isClosed();
             } catch (SQLException e) {
                 return;
             }
@@ -158,15 +211,19 @@ public class SqlStateMachine {
                 log.warn("invalid txn", e);
                 return;
             }
-            SqlStateMachine.this.execute(txn, onComplete);
+            withContext(() -> {
+                SqlStateMachine.this.execute(txn, onComplete);
+            });
 
         }
 
         @Override
         public void genesis(long height, Digest hash, List<Transaction> initialization) {
             begin(height, hash);
-            initializeState();
-            updateCurrentBlock(height, hash);
+            withContext(() -> {
+                initializeState();
+                updateCurrentBlock(height, hash);
+            });
             for (Transaction txn : initialization) {
                 execute(txn, null);
             }
@@ -216,9 +273,8 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
-                                                                                     SqlStateMachine.class.getCanonicalName());
-
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+                                                                                                          SqlStateMachine.class.getCanonicalName());
     private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final RowSetFactory             factory;
     private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
@@ -227,6 +283,7 @@ public class SqlStateMachine {
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+
     static {
         ThreadLocalScopeManager.initialize();
     }
@@ -256,16 +313,16 @@ public class SqlStateMachine {
 
     private final LoadingCache<String, CallableStatement> callCache;
     private final File                                    checkpointDirectory;
+    private final BlockClock                              clock        = new BlockClock();
     private final ScriptCompiler                          compiler     = new ScriptCompiler();
-    private final JdbcConnection                          connection;
+    private volatile JdbcConnection                       connection;
     private final AtomicReference<CurrentBlock>           currentBlock = new AtomicReference<>();
     private final AtomicReference<SecureRandom>           entropy      = new AtomicReference<>();
     private final TxnExec                                 executor     = new TxnExec();
     private final Properties                              info;
     private final LoadingCache<String, PreparedStatement> psCache;
     private final EventTrampoline                         trampoline   = new EventTrampoline();
-
-    private final String url;
+    private final String                                  url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -281,16 +338,6 @@ public class SqlStateMachine {
                 + checkpointDirectory.getAbsolutePath());
             }
         }
-        try {
-            connection = new JdbcConnection(url, info);
-        } catch (SQLException e) {
-            throw new IllegalStateException("Unable to create connection using " + url, e);
-        }
-        try {
-            connection.setAutoCommit(false);
-        } catch (SQLException e) {
-            log.error("Unable to set autocommit to false", e);
-        }
         callCache = constructCallCache();
         psCache = constructPsCache();
     }
@@ -299,11 +346,11 @@ public class SqlStateMachine {
         psCache.invalidateAll();
         callCache.invalidateAll();
         try {
-            connection.rollback();
+            connection().rollback();
         } catch (SQLException e1) {
         }
         try {
-            connection.close();
+            connection().close();
         } catch (SQLException e) {
         }
     }
@@ -315,7 +362,7 @@ public class SqlStateMachine {
     public BiConsumer<Long, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
-            try (java.sql.Statement statement = connection.createStatement()) {
+            try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
                     state.assemble(temp);
@@ -342,7 +389,7 @@ public class SqlStateMachine {
     public Function<Long, File> getCheckpointer() {
         return height -> {
             String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
-            try (java.sql.Statement statement = connection.createStatement()) {
+            try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
                     statement.execute(String.format("SCRIPT DROP TO '%s'", temp.getAbsolutePath()));
@@ -354,6 +401,14 @@ public class SqlStateMachine {
                 if (!temp.exists()) {
                     log.error("Written file does not exist: {}", temp.getAbsolutePath());
                     return null;
+                }
+                try (var fis = new FileInputStream(temp)) {
+                    var baos = new ByteArrayOutputStream();
+                    fis.transferTo(baos);
+                    baos.close();
+                    System.out.println(baos.toString());
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
@@ -389,11 +444,15 @@ public class SqlStateMachine {
         return executor;
     }
 
+    public Mutator getMutator(Session session) {
+        return new Mutator(session, getSession());
+    }
+
     public Connection newConnection() {
         try {
-            return new JdbcConnection(url, info);
+            return new ReadOnlyConnector(new JdbcConnection(getSession(), "", url), getSession());
         } catch (SQLException e) {
-            throw new IllegalStateException("cannot get JDBC connection", e);
+            throw new IllegalStateException(e);
         }
     }
 
@@ -405,7 +464,7 @@ public class SqlStateMachine {
     void commit() {
         try {
             publishEvents();
-            connection.commit();
+            connection().commit();
             trampoline.evaluate();
         } catch (SQLException e) {
             log.trace("unable to commit connection", e);
@@ -414,28 +473,56 @@ public class SqlStateMachine {
 
     // Test accessible
     JdbcConnection connection() {
+        final var current = connection;
+        if (current == null) {
+            withContext(() -> {
+                try {
+                    connection = new JdbcConnection(url, info, "", "");
+                } catch (SQLException e) {
+                    throw new IllegalStateException("Unable to create connection using " + url, e);
+                }
+                try {
+                    connection().setAutoCommit(false);
+                } catch (SQLException e) {
+                    log.error("Unable to set autocommit to false", e);
+                }
+            });
+        }
         return connection;
+    }
+
+    SessionLocal getSession() {
+        return (SessionLocal) connection().getSession();
+    }
+
+    private void withContext(Runnable action) {
+        SecureRandom prev = secureRandom.get();
+        secureRandom.set(entropy.get());
+        BlockClock prevClock = DateTimeUtils.CLOCK.get();
+        DateTimeUtils.CLOCK.set(clock);
+        try {
+            action.run();
+        } finally {
+            secureRandom.set(prev);
+            DateTimeUtils.CLOCK.set(prevClock);
+        }
     }
 
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
 
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
-
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
-            statement = connection.createStatement();
+            statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
         } catch (SQLException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } catch (LiquibaseException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } finally {
-            secureRandom.set(prev);
             if (statement != null) {
                 try {
                     statement.close();
@@ -447,7 +534,7 @@ public class SqlStateMachine {
     }
 
     private int[] acceptBatch(Batch batch) throws SQLException {
-        try (java.sql.Statement exec = connection.createStatement()) {
+        try (java.sql.Statement exec = connection().createStatement()) {
             for (String sql : batch.getStatementsList()) {
                 exec.addBatch(sql);
             }
@@ -479,10 +566,9 @@ public class SqlStateMachine {
         }
         try {
             for (Arguments args : batchUpdate.getBatchList()) {
-                int i = 0;
-                for (ByteString argument : args.getArgsList()) {
-                    Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-                    setArgument(exec, i++, data.readValue());
+                int i = 1;
+                for (Value v : new StreamTransfer(getSession()).read(args.getArgs())) {
+                    setArgument(exec, i++, v);
                 }
                 exec.addBatch();
             }
@@ -509,10 +595,10 @@ public class SqlStateMachine {
             throw new IllegalStateException("Unable to get callable statement: " + call.getSql(), e);
         }
         try {
-            int i = 0;
-            for (ByteString argument : call.getArgsList()) {
-                Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i++, data.readValue());
+            int i = 1;
+            for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
+                                                                                                  .getArgs())) {
+                setArgument(exec, i++, v);
             }
             for (int p = 0; p < call.getOutParametersCount(); p++) {
                 exec.registerOutParameter(p, call.getOutParameters(p));
@@ -638,13 +724,7 @@ public class SqlStateMachine {
 
         Object instance;
 
-        Value[] args = new Value[script.getArgsCount()];
-        int i = 1;
-        for (ByteString argument : script.getArgsList()) {
-            Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-            args[i++] = data.readValue();
-        }
-
+        Value[] args = new StreamTransfer(script.getArgs().getVersion(), getSession()).read(script.getArgs().getArgs());
         try {
             Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(), getClass().getClassLoader());
             instance = clazz.getConstructor().newInstance();
@@ -680,7 +760,11 @@ public class SqlStateMachine {
     }
 
     private void begin(long height, Digest hash) {
-        getSession().getRandom().setSeed(new DigestHasher(hash, height).identityHash());
+        final var session = getSession();
+        if (session == null) {
+            return;
+        }
+        session.getRandom().setSeed(new DigestHasher(hash, height).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
             secureEntropy.setSeed(hash.getBytes());
@@ -689,12 +773,15 @@ public class SqlStateMachine {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
         currentBlock.set(new CurrentBlock(hash, height));
+        clock.incrementHeight();
     }
 
     private void beginBlock(long height, Digest hash) {
         begin(height, hash);
-        updateCurrentBlock(height, hash);
-        log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
+        withContext(() -> {
+            updateCurrentBlock(height, hash);
+            log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
+        });
     }
 
     private void changeLogSync(ChangeLog changeLog) throws LiquibaseException {
@@ -708,7 +795,7 @@ public class SqlStateMachine {
 
     private void clearCheckSums() throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             liquibase.clearCheckSums();
         }
@@ -737,7 +824,7 @@ public class SqlStateMachine {
         }).build(new CacheLoader<String, CallableStatement>() {
             @Override
             public CallableStatement load(String sql) throws Exception {
-                return connection.prepareCall(sql);
+                return connection().prepareCall(sql);
             }
         });
     }
@@ -758,7 +845,7 @@ public class SqlStateMachine {
 
             @Override
             public PreparedStatement load(String sql) throws Exception {
-                return connection.prepareStatement(sql);
+                return connection().prepareStatement(sql);
             }
 
         });
@@ -766,7 +853,7 @@ public class SqlStateMachine {
 
     private void dropAll(Drop drop) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         if (StringUtil.trimToNull(drop.getSchemas()) != null) {
             List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
             List<CatalogAndSchema> schemas = new ArrayList<>();
@@ -803,8 +890,11 @@ public class SqlStateMachine {
     }
 
     private void execute(Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
-        SecureRandom prev = SqlStateMachine.secureRandom.get();
-        SqlStateMachine.secureRandom.set(SqlStateMachine.this.entropy.get());
+        log.debug("executing: {}", tx.getExecutionCase());
+
+        clock.incrementTxn();
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
+
         try {
             Object results = switch (tx.getExecutionCase()) {
             case BATCH -> SqlStateMachine.this.acceptBatch(tx.getBatch());
@@ -823,18 +913,13 @@ public class SqlStateMachine {
             rollback();
             exception(onCompletion, e);
         } finally {
-            secureRandom.set(prev);
             commit();
         }
     }
 
-    private Session getSession() {
-        return (Session) connection.getSession();
-    }
-
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         var ra = new MigrationAccessor(changeLog.getResources());
         return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }
@@ -889,7 +974,7 @@ public class SqlStateMachine {
 
     private void rollback() {
         try {
-            connection.rollback();
+            connection().rollback();
         } catch (SQLException e) {
             log.trace("unable to rollback connection", e);
         }
@@ -911,7 +996,7 @@ public class SqlStateMachine {
 
     private void setArgument(PreparedStatement exec, int i, Value value) {
         try {
-            value.set(exec, i + 1);
+            JdbcUtils.set(exec, i, value, connection());
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
         }
@@ -919,7 +1004,7 @@ public class SqlStateMachine {
 
     private void tag(String tag) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             liquibase.tag(tag);
         }

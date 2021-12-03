@@ -12,17 +12,17 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender> 
+    </appender>
+    
+	<logger name="h2database" level="TRACE">
+	    <appender-ref ref="STDOUT" />
+	</logger>
     
     <logger name="liquibase" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>  
 
     <logger name="com.salesforce.apollo.state" level="info"
         additivity="false">
@@ -33,6 +33,21 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
+    
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="trace"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
+
+    <logger name="com.salesforce.apollo.choam.Producer" level="debug"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
 
     <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
         additivity="false">
@@ -54,7 +69,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <root level="INFO">
+    <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
 

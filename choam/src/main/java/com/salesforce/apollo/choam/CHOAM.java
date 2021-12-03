@@ -698,7 +698,7 @@ public class CHOAM {
         store.put(next);
         final Committee c = current.get();
         c.accept(next);
-        log.debug("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
+        log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
                   params.member());
     }
 
@@ -767,10 +767,11 @@ public class CHOAM {
                                                         c.height(), c.hash, v.height(), v.hash))
                                  .setCheckpoint(cp).build();
 
+        HashedBlock hb = new HashedBlock(params.digestAlgorithm(), block);
         MVMap<Integer, byte[]> stored = store.putCheckpoint(height(block), state, cp);
         state.delete();
-        cachedCheckpoints.put(head.get().height(), new CheckpointState(cp, stored));
-        log.info("Created checkpoint: {} height: {} on: {}", head.get().hash, head.get().height(), params.member());
+        cachedCheckpoints.put(hb.height(), new CheckpointState(cp, stored));
+        log.info("Created checkpoint: {} height: {} on: {}", hb.hash, hb.height(), params.member());
         transitions.finishCheckpoint();
         return block;
     }
@@ -874,7 +875,8 @@ public class CHOAM {
 
     private void execute(List<Transaction> execs) {
         final var h = head.get();
-        log.trace("Executing transactions for block: {} height: {}  on: {}", h.hash, h.height(), params.member());
+        log.info("Executing transactions for block: {} height: {} txns: {} on: {}", h.hash, h.height(), execs.size(),
+                 params.member());
         params.processor().beginBlock(h.height(), h.hash);
         execs.forEach(exec -> {
             Digest hash = hashOf(exec, params.digestAlgorithm());

@@ -68,6 +68,7 @@ public class Producer {
 
         @Override
         public void checkpoint() {
+            log.error("Generating checkpoint block on: {}", params().member());
             Block ckpt = view.checkpoint();
             if (ckpt == null) {
                 log.error("Cannot generate checkpoint block on: {}", params().member());
@@ -220,11 +221,11 @@ public class Producer {
 
     public SubmitResult submit(Transaction transaction) {
         if (ds.offer(transaction)) {
-            log.debug("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+            log.trace("Submitted received txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                       params().member());
             return SubmitResult.newBuilder().setSuccess(true).setStatus("OK").build();
         } else {
-            log.debug("Transaction buffer full, cannot submit received txn: {} on: {}",
+            log.trace("Transaction buffer full, cannot submit received txn: {} on: {}",
                       CHOAM.hashOf(transaction, params().digestAlgorithm()), params().member());
             return SubmitResult.newBuilder().setSuccess(false)
                                .setStatus("Transaction buffer full on: " + params().member().getId()).build();
