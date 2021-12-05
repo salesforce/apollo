@@ -114,7 +114,7 @@ public class ViewAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, 3_000),
+                                                                                                        null, r),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -240,7 +240,7 @@ public class ViewAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, 3_000),
+                                                                                                        null, r),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
