@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -53,11 +52,6 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Arguments;
@@ -310,18 +304,16 @@ public class SqlStateMachine {
         return true;
     }
 
-    private final LoadingCache<String, CallableStatement> callCache;
-    private final File                                    checkpointDirectory;
-    private final BlockClock                              clock        = new BlockClock();
-    private final ScriptCompiler                          compiler     = new ScriptCompiler();
-    private volatile JdbcConnection                       connection;
-    private final AtomicReference<CurrentBlock>           currentBlock = new AtomicReference<>();
-    private final AtomicReference<SecureRandom>           entropy      = new AtomicReference<>();
-    private final TxnExec                                 executor     = new TxnExec();
-    private final Properties                              info;
-    private final LoadingCache<String, PreparedStatement> psCache;
-    private final EventTrampoline                         trampoline   = new EventTrampoline();
-    private final String                                  url;
+    private final File                          checkpointDirectory;
+    private final BlockClock                    clock        = new BlockClock();
+    private final ScriptCompiler                compiler     = new ScriptCompiler();
+    private volatile JdbcConnection             connection;
+    private final AtomicReference<CurrentBlock> currentBlock = new AtomicReference<>();
+    private final AtomicReference<SecureRandom> entropy      = new AtomicReference<>();
+    private final TxnExec                       executor     = new TxnExec();
+    private final Properties                    info;
+    private final EventTrampoline               trampoline   = new EventTrampoline();
+    private final String                        url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -337,13 +329,9 @@ public class SqlStateMachine {
                 + checkpointDirectory.getAbsolutePath());
             }
         }
-        callCache = constructCallCache();
-        psCache = constructPsCache();
     }
 
     public void close() {
-        psCache.invalidateAll();
-        callCache.invalidateAll();
         try {
             connection().rollback();
         } catch (SQLException e1) {
@@ -486,19 +474,6 @@ public class SqlStateMachine {
         return (SessionLocal) connection().getSession();
     }
 
-    private void withContext(Runnable action) {
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
-        BlockClock prevClock = DateTimeUtils.CLOCK.get();
-        DateTimeUtils.CLOCK.set(clock);
-        try {
-            action.run();
-        } finally {
-            secureRandom.set(prev);
-            DateTimeUtils.CLOCK.set(prevClock);
-        }
-    }
-
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
@@ -546,92 +521,78 @@ public class SqlStateMachine {
     }
 
     private int[] acceptBatchUpdate(BatchUpdate batchUpdate) throws SQLException {
-        PreparedStatement exec;
-        try {
-            exec = psCache.get(batchUpdate.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to get prepared update statement: " + batchUpdate.getSql(), e);
-        }
-        try {
-            for (Arguments args : batchUpdate.getBatchList()) {
-                int i = 1;
-                for (Value v : new StreamTransfer(getSession()).read(args.getArgs())) {
-                    setArgument(exec, i++, v);
-                }
-                exec.addBatch();
-            }
-            return exec.executeBatch();
-        } finally {
+        return execute(batchUpdate.getSql(), exec -> {
             try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
+                for (Arguments args : batchUpdate.getBatchList()) {
+                    int i = 1;
+                    for (Value v : new StreamTransfer(getSession()).read(args.getArgs())) {
+                        setArgument(exec, i++, v);
+                    }
+                    exec.addBatch();
+                }
+                return exec.executeBatch();
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-        }
+        });
     }
 
     private CallResult acceptCall(Call call) throws SQLException {
-        List<ResultSet> results = new ArrayList<>();
-        CallableStatement exec;
-        try {
-            exec = callCache.get(call.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to get callable statement: " + call.getSql(), e);
-        }
-        try {
-            int i = 1;
-            for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
-                                                                                                  .getArgs())) {
-                setArgument(exec, i++, v);
-            }
-            for (int p = 0; p < call.getOutParametersCount(); p++) {
-                exec.registerOutParameter(p, call.getOutParameters(p));
-            }
-            List<Object> out = new ArrayList<>();
+        return call(call.getSql(), exec -> {
+            List<ResultSet> results = new ArrayList<>();
+            try {
+                int i = 1;
+                for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
+                                                                                                      .getArgs())) {
+                    setArgument(exec, i++, v);
+                }
+                for (int p = 0; p < call.getOutParametersCount(); p++) {
+                    exec.registerOutParameter(p, call.getOutParameters(p));
+                }
+                List<Object> out = new ArrayList<>();
 
-            switch (call.getExecution()) {
-            case EXECUTE:
-                exec.execute();
-                break;
-            case QUERY:
-                exec.executeQuery();
-                break;
-            case UPDATE:
-                exec.executeUpdate();
-                break;
-            default:
-                log.debug("Invalid statement execution enum: {}", call.getExecution());
-                return new CallResult(out, results);
-            }
-            CachedRowSet rowset = factory.createCachedRowSet();
+                switch (call.getExecution()) {
+                case EXECUTE:
+                    exec.execute();
+                    break;
+                case QUERY:
+                    exec.executeQuery();
+                    break;
+                case UPDATE:
+                    exec.executeUpdate();
+                    break;
+                default:
+                    log.debug("Invalid statement execution enum: {}", call.getExecution());
+                    return new CallResult(out, results);
+                }
+                CachedRowSet rowset = factory.createCachedRowSet();
 
-            rowset.populate(exec.getResultSet());
-            results.add(rowset);
-
-            while (exec.getMoreResults()) {
-                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
+                    rowset.populate(exec.getResultSet());
+                    results.add(rowset);
+                }
+                for (int j = 0; j < call.getOutParametersCount(); j++) {
+                    out.add(exec.getObject(j));
+                }
+                return new CallResult(out, results);
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-            for (int j = 0; j < call.getOutParametersCount(); j++) {
-                out.add(exec.getObject(j));
-            }
-            return new CallResult(out, results);
-        } finally {
-            try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
-            }
-        }
+        });
     }
 
     private Boolean acceptMigration(Migration migration) throws SQLException {
@@ -665,50 +626,43 @@ public class SqlStateMachine {
     }
 
     private List<ResultSet> acceptPreparedStatement(Statement statement) throws SQLException {
-        List<ResultSet> results = new ArrayList<>();
-        PreparedStatement exec;
-        try {
-            exec = psCache.get(statement.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to create prepared statement: " + statement.getSql(), e);
-        }
-        try {
-            switch (statement.getExecution()) {
-            case EXECUTE:
-                exec.execute();
-                break;
-            case QUERY:
-                exec.executeQuery();
-                break;
-            case UPDATE:
-                exec.executeUpdate();
-                break;
-            default:
-                log.debug("Invalid statement execution enum: {}", statement.getExecution());
-                return Collections.emptyList();
-            }
-            CachedRowSet rowset = factory.createCachedRowSet();
+        return execute(statement.getSql(), exec -> {
+            List<ResultSet> results = new ArrayList<>();
+            try {
+                switch (statement.getExecution()) {
+                case EXECUTE:
+                    exec.execute();
+                    break;
+                case QUERY:
+                    exec.executeQuery();
+                    break;
+                case UPDATE:
+                    exec.executeUpdate();
+                    break;
+                default:
+                    log.debug("Invalid statement execution enum: {}", statement.getExecution());
+                    return Collections.emptyList();
+                }
+                CachedRowSet rowset = factory.createCachedRowSet();
 
-            rowset.populate(exec.getResultSet());
-            results.add(rowset);
-
-            while (exec.getMoreResults()) {
-                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
+                    rowset.populate(exec.getResultSet());
+                    results.add(rowset);
+                }
+                return results;
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-            return results;
-        } finally {
-            try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
-            }
-        }
+        });
     }
 
     private Object acceptScript(Script script) throws SQLException {
@@ -775,6 +729,21 @@ public class SqlStateMachine {
         });
     }
 
+    private <T> T call(String sql, CheckedFunction<CallableStatement, T> execution) throws SQLException {
+        CallableStatement cs = null;
+        try {
+            cs = connection().prepareCall(sql);
+            return execution.apply(cs);
+        } finally {
+            if (cs != null) {
+                try {
+                    cs.close();
+                } catch (SQLException e) {
+                }
+            }
+        }
+    }
+
     private void changeLogSync(ChangeLog changeLog) throws LiquibaseException {
         try (var l = liquibase(changeLog)) {
             l.liquibase.changeLogSync(changeLog.getTag(), new Contexts(changeLog.getContext()),
@@ -800,48 +769,6 @@ public class SqlStateMachine {
         onCompletion.complete(results);
     }
 
-    private LoadingCache<String, CallableStatement> constructCallCache() {
-        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, CallableStatement>() {
-            @Override
-            public void onRemoval(RemovalNotification<String, CallableStatement> notification) {
-                try {
-                    notification.getValue().close();
-                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                    // ignore
-                } catch (SQLException e) {
-                    log.error("Error closing cached statment: {}", notification.getKey(), e);
-                }
-            }
-        }).build(new CacheLoader<String, CallableStatement>() {
-            @Override
-            public CallableStatement load(String sql) throws Exception {
-                return connection().prepareCall(sql);
-            }
-        });
-    }
-
-    private LoadingCache<String, PreparedStatement> constructPsCache() {
-        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, PreparedStatement>() {
-            @Override
-            public void onRemoval(RemovalNotification<String, PreparedStatement> notification) {
-                try {
-                    notification.getValue().close();
-                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                    // ignore
-                } catch (SQLException e) {
-                    log.error("Error closing cached statment: {}", notification.getKey(), e);
-                }
-            }
-        }).build(new CacheLoader<String, PreparedStatement>() {
-
-            @Override
-            public PreparedStatement load(String sql) throws Exception {
-                return connection().prepareStatement(sql);
-            }
-
-        });
-    }
-
     private void dropAll(Drop drop) throws LiquibaseException {
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
@@ -860,6 +787,26 @@ public class SqlStateMachine {
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
             onCompletion.completeExceptionally(e);
+        }
+    }
+
+    @FunctionalInterface
+    private interface CheckedFunction<A, B> {
+        B apply(A a) throws SQLException;
+    }
+
+    private <T> T execute(String sql, CheckedFunction<PreparedStatement, T> execution) throws SQLException {
+        PreparedStatement ps = null;
+        try {
+            ps = connection().prepareStatement(sql);
+            return execution.apply(ps);
+        } finally {
+            if (ps != null) {
+                try {
+                    ps.close();
+                } catch (SQLException e) {
+                }
+            }
         }
     }
 
@@ -916,49 +863,42 @@ public class SqlStateMachine {
     }
 
     private void publishEvents() {
-        PreparedStatement exec;
         try {
-            exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof JdbcSQLNonTransientException ||
-                e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
-                return;
-            }
-            log.error("Error publishing events", e.getCause());
-            throw new IllegalStateException("Cannot publish events", e.getCause());
-        }
-        try (ResultSet events = exec.executeQuery()) {
-            while (events.next()) {
-                String channel = events.getString(2);
-                JsonNode body;
-                try {
-                    body = MAPPER.readTree(events.getString(3));
-                } catch (JsonProcessingException e) {
-                    log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
-                    continue;
+            execute(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE, exec -> {
+                try (ResultSet events = exec.executeQuery()) {
+                    while (events.next()) {
+                        String channel = events.getString(2);
+                        JsonNode body;
+                        try {
+                            body = MAPPER.readTree(events.getString(3));
+                        } catch (JsonProcessingException e) {
+                            log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                            continue;
+                        }
+                        trampoline.publish(new Event(channel, body));
+                    }
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    return null;
+                } catch (SQLException e) {
+                    log.error("Error retrieving published events", e.getCause());
+                    throw new IllegalStateException("Cannot retrieve published events", e.getCause());
                 }
-                trampoline.publish(new Event(channel, body));
-            }
-        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-            return;
-        } catch (SQLException e) {
-            log.error("Error retrieving published events", e.getCause());
-            throw new IllegalStateException("Cannot retrieve published events", e.getCause());
-        }
+                return null;
+            });
 
-        try {
-            exec = psCache.get(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-        } catch (ExecutionException e) {
-            log.error("Error publishing events", e.getCause());
-            throw new IllegalStateException("Cannot publish events", e.getCause());
-        }
-        try {
-            exec.execute();
-        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-            return;
+            execute(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE, exec -> {
+                try {
+                    exec.execute();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    return null;
+                } catch (SQLException e) {
+                    log.error("Error cleaning published events", e);
+                    throw new IllegalStateException("Cannot clean published events", e);
+                }
+                return null;
+            });
         } catch (SQLException e) {
-            log.error("Error cleaning published events", e);
-            throw new IllegalStateException("Cannot clean published events", e);
+            throw new IllegalStateException("Cannot publish events", e);
         }
 
     }
@@ -1016,32 +956,42 @@ public class SqlStateMachine {
     }
 
     private void updateCurrentBlock(long height, Digest hash) {
-        PreparedStatement exec;
         try {
-            exec = psCache.get(UPDATE_CURRENT_BLOCK);
-        } catch (ExecutionException e) {
-            final var cause = e.getCause();
-            if (cause instanceof JdbcSQLNonTransientException) {
-                return;
-            }
-            throw new IllegalStateException("Unable to get prepared update statement: " + UPDATE_CURRENT_BLOCK, e);
-        }
-        try {
-            exec.setLong(1, height);
-            exec.setString(2, QualifiedBase64.qb64(hash));
-            exec.execute();
+            execute(UPDATE_CURRENT_BLOCK, exec -> {
+                try {
+                    exec.setLong(1, height);
+                    exec.setString(2, QualifiedBase64.qb64(hash));
+                    exec.execute();
+                } catch (SQLException e) {
+                    log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
+                    throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
+                } finally {
+                    try {
+                        exec.clearBatch();
+                        exec.clearParameters();
+                    } catch (SQLException e) {
+                        // ignore
+                    }
+                }
+                return null;
+            });
         } catch (SQLException e) {
             log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
             throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
-        } finally {
-            try {
-                exec.clearBatch();
-                ;
-                exec.clearParameters();
-            } catch (SQLException e) {
-                // ignore
-            }
         }
         commit();
+    }
+
+    private void withContext(Runnable action) {
+        SecureRandom prev = secureRandom.get();
+        secureRandom.set(entropy.get());
+        BlockClock prevClock = DateTimeUtils.CLOCK.get();
+        DateTimeUtils.CLOCK.set(clock);
+        try {
+            action.run();
+        } finally {
+            secureRandom.set(prev);
+            DateTimeUtils.CLOCK.set(prevClock);
+        }
     }
 }

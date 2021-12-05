@@ -69,8 +69,13 @@ public class Producer {
                 }
             };
             assembly.start();
-            log.debug("Awaiting assembly: {} dropped txns: {} on: {}", nextViewId, ds.getRemaining(),
-                      params().member());
+            if (ds.getRemaining() > 0) {
+                log.warn("Awaiting assembly: {} dropped txns: {} on: {}", nextViewId, ds.getRemaining(),
+                         params().member());
+            } else {
+                log.debug("Awaiting assembly: {} dropped txns: {} on: {}", nextViewId, ds.getRemaining(),
+                          params().member());
+            }
         }
 
         @Override
@@ -160,7 +165,8 @@ public class Producer {
         lastEpoch = ep.getNumberOfEpochs();
 
         // Number of rounds we can provide data for
-        final int maxElements = (ep.getEpochLength() * (lastEpoch - 1)) + (ep.getEpochLength() / 2);
+        final var blocks = ep.getEpochLength() - 4;
+        final int maxElements = blocks * lastEpoch;
 
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount());
@@ -272,7 +278,7 @@ public class Producer {
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
             log.debug("Created block: {} height: {} prev: {} last: {} on: {}", next.hash, next.height(), lb.hash, last,
-                     params().member());
+                      params().member());
         }
         if (last) {
             started.set(true);

@@ -123,9 +123,9 @@ public class CHOAMTest {
                 } else {
                     time.close();
                     final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                    if (tot % 100 == 0) {
                         System.out.println(".");
-                    } else if (tot % 100 == 0) {
+                    } else {
                         System.out.print(".");
                     }
                     var tc = latency.time();
@@ -255,7 +255,7 @@ public class CHOAMTest {
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        final Duration timeout = Duration.ofSeconds(15);
+        final Duration timeout = Duration.ofSeconds(6);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
@@ -263,8 +263,8 @@ public class CHOAMTest {
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
-        final int clientCount = 3000;
-        final int max = 10;
+        final int clientCount = 100;
+        final int max = 5;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
@@ -360,7 +360,7 @@ public class CHOAMTest {
 
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setExec(Router.createFjPool())
-                               .setProcessor(new TransactionExecutor() {
+                               .setCheckpointer(up.getCheckpointer()).setProcessor(new TransactionExecutor() {
 
                                    @Override
                                    public void beginBlock(long height, Digest hash) {
