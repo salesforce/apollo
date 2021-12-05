@@ -199,7 +199,7 @@ public class ViewAssembly implements Reconfiguration {
                                          .setNextView(nextViewId.toDigeste()).build();
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicReference<Runnable> reiterate = new AtomicReference<>();
-        AtomicInteger countDown = new AtomicInteger(3); // 3 rounds of attempts
+        AtomicInteger countDown = new AtomicInteger(1); // 1 rounds of attempts
         AtomicReference<Duration> retryDelay = new AtomicReference<>(Duration.ofMillis(10));
         reiterate.set(() -> committee.iterate((term, m) -> {
             if (proposals.containsKey(m.getId())) {
@@ -268,7 +268,7 @@ public class ViewAssembly implements Reconfiguration {
         final var cid = Digest.from(v.getWitness().getId());
         var certifier = view.context().getMember(cid);
         if (certifier == null) {
-            log.trace("Unknown certifier: {} on: {}", cid, params().member());
+            log.warn("Unknown certifier: {} on: {}", cid, params().member());
             return; // do not have the join yet
         }
         final var hash = Digest.from(v.getHash());
@@ -278,12 +278,12 @@ public class ViewAssembly implements Reconfiguration {
         }
         var proposed = proposals.get(hash);
         if (proposed == null) {
-            log.trace("Invalid certification, unknown view join: {} on: {}", hash, params().member());
+            log.warn("Invalid certification, unknown view join: {} on: {}", hash, params().member());
             return; // do not have the join yet
         }
         if (!view.validate(proposed.vm, v)) {
-            log.trace("Invalid cetification for view join: {} from: {} on: {}", hash,
-                      Digest.from(v.getWitness().getId()), params().member());
+            log.warn("Invalid cetification for view join: {} from: {} on: {}", hash,
+                     Digest.from(v.getWitness().getId()), params().member());
             return;
         }
         proposed.validations.put(certifier, v);

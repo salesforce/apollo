@@ -90,8 +90,9 @@ public class ViewReconfiguration extends ViewAssembly {
             super.validate(v);
             return;
         }
-        log.trace("Validating block: {} produced on: {}", reconfiguration.hash, params().member());
+        log.trace("Validating reconfiguration block: {} height: {} on: {}", reconfiguration.hash, reconfiguration.height(), params().member());
         if (!view.validate(reconfiguration, v)) {
+            log.warn("Cannot validate reconfiguration block: {} produced on: {}", reconfiguration.hash, params().member());
             return;
         }
         witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);

@@ -218,7 +218,7 @@ public class CHOAMTest {
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         AtomicInteger exec = new AtomicInteger();
-        routerExec = Executors.newFixedThreadPool(CARDINALITY * 5, r -> {
+        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
             Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
@@ -233,7 +233,7 @@ public class CHOAMTest {
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(1_000).setCheckpointBlockSize(200);
+                               .setTxnPermits(500).setCheckpointBlockSize(200);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
@@ -263,7 +263,7 @@ public class CHOAMTest {
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
-        final int clientCount = 3000;
+        final int clientCount = 1000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -297,7 +297,7 @@ public class CHOAMTest {
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         try {
-            success = countdown.await(60, TimeUnit.SECONDS);
+            success = countdown.await(120, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
         }
@@ -308,7 +308,9 @@ public class CHOAMTest {
 
         try {
 
-            Utils.waitForCondition(60_000, 1000,
+            assertTrue(success, "did not finish transactioneers: " + countdown.getCount());
+
+            Utils.waitForCondition(20_000, 1000,
                                    () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
                                                 .filter(cb -> cb != null).mapToLong(cb -> cb.height())
                                                 .filter(l -> l >= target).count() == members.size());
