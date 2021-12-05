@@ -143,7 +143,6 @@ public class TxDataSource implements DataSource {
 
     public boolean offer(Transaction txn) {
         switch (mode.get()) {
-        case DRAIN:
         case UNIT:
             return processing.offer(txn);
         default:
