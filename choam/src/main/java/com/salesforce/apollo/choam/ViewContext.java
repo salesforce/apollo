@@ -111,6 +111,10 @@ public class ViewContext {
         return validation;
     }
 
+    public Block genesis(Map<Member, Join> slate, Digest nextViewId, HashedBlock previous) {
+        return blockProducer.genesis(slate, nextViewId, previous);
+    }
+
     public Signer getSigner() {
         return signer;
     }

@@ -38,10 +38,6 @@ public class BlockClock extends Clock {
 
     @Override
     public Instant instant() {
-//        if (true) {
-//            return Instant.now();
-//        }
-        incrementQuery();
         final var currentHeight = height;
         final var currentTxn = txn;
         return Instant.ofEpochSecond(currentHeight, currentTxn);
@@ -64,10 +60,5 @@ public class BlockClock extends Clock {
     protected void incrementTxn() {
         final var current = txn;
         txn = current + txnInc;
-    }
-
-    private void incrementQuery() {
-        final var current = txn;
-        txn = current + 1;
     }
 }

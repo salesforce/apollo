@@ -241,7 +241,7 @@ public class Creator {
             Unit u = candidates[i];
             for (; u != null && u.level() >= level; u = u.predecessor())
                 ;
-            if (u != null) {
+            if (u != null && u.level() == level - 1) {
                 result[u.creator()] = u;
             }
         }

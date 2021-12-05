@@ -9,9 +9,6 @@ package com.salesforce.apollo.choam;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +26,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -194,9 +190,7 @@ public class TestCHOAM {
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(100))
-                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
-                                                              .build())
+                                                              .setBatchInterval(Duration.ofMillis(100)).build())
                                .setTxnPermits(10_000).setCheckpointBlockSize(1);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));

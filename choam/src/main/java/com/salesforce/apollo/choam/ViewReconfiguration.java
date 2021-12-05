@@ -14,13 +14,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesfoce.apollo.choam.proto.Validations;
-import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.comm.Terminal;
+import com.salesforce.apollo.choam.fsm.Reconfigure;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -39,14 +38,11 @@ public class ViewReconfiguration extends ViewAssembly {
     private final HashedBlock           previous;
     private final AtomicBoolean         published = new AtomicBoolean();
     private volatile HashedBlock        reconfiguration;
-    private final BlockProducer         reconfigureBlock;
     private final Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
 
     public ViewReconfiguration(Digest nextViewId, ViewContext vc, HashedBlock previous,
-                               CommonCommunications<Terminal, ?> comms, BlockProducer reconfigureBlock,
-                               boolean forGenesis) {
+                               CommonCommunications<Terminal, ?> comms, boolean forGenesis) {
         super(nextViewId, vc, comms);
-        this.reconfigureBlock = reconfigureBlock;
         this.previous = previous;
         this.forGenesis = forGenesis;
     }
@@ -79,6 +75,16 @@ public class ViewReconfiguration extends ViewAssembly {
     }
 
     @Override
+    protected int epochs() {
+        return 4;
+    }
+
+    @Override
+    protected Reconfigure getStartState() {
+        return Reconfigure.GATHER;
+    }
+
+    @Override
     protected void validate(Validate v) {
         if (!feed.get()) {
             super.validate(v);
@@ -99,29 +105,14 @@ public class ViewReconfiguration extends ViewAssembly {
     private void generate() {
         final var slate = getSlate();
         reconfiguration = new HashedBlock(params().digestAlgorithm(),
-                                          forGenesis ? reconfigureBlock.genesis(slate, nextViewId, previous)
-                                                     : reconfigureBlock.reconfigure(slate, nextViewId, previous));
+                                          forGenesis ? view.genesis(slate, nextViewId, previous)
+                                                     : view.reconfigure(slate, nextViewId, previous));
         var validate = view.generateValidation(reconfiguration);
         log.trace("Certifying reconfiguration block: {} for: {} count: {} on: {}", reconfiguration.hash, nextViewId,
                   slate.size(), params().member());
-        ds.clear();
-        try {
-            assert ds.size() == 0 : "Existing data! size: " + ds.size();
-            ds.put(Reassemble.newBuilder().setValidations(Validations.newBuilder().addValidations(validate).build())
-                             .build().toByteString());
-            for (int i = 0; i < 20; i++) {
-                ds.put(ByteString.EMPTY);
-            }
-        } catch (InterruptedException e) {
-            log.error("Failed enqueing block reconfiguration validation for: {} on: {}", nextViewId, params().member(),
-                      e);
-            transitions.failed();
-        }
-    }
-
-    @Override
-    protected int epochs() {
-        return 4;
+        ds = new OneShot();
+        ds.setValue(Reassemble.newBuilder().setValidations(Validations.newBuilder().addValidations(validate).build())
+                              .build().toByteString());
     }
 
     private void publish() {

@@ -11,8 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -35,7 +33,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -258,7 +255,7 @@ public class CHOAMTest {
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(15);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
@@ -300,7 +297,8 @@ public class CHOAMTest {
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         try {
-            countdown.await(120, TimeUnit.SECONDS);
+            success = countdown.await(600, TimeUnit.SECONDS);
+            assertTrue(success, "Remaining: " + countdown.getCount());
         } finally {
             proceed.set(false);
         }

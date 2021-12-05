@@ -20,6 +20,12 @@ import com.salesforce.apollo.choam.fsm.Driven.Transitions;
  */
 public enum Earner implements Driven.Transitions {
     AWAIT_VIEW {
+        @Override
+        public Transitions assembled() {
+            context().assembled();
+            return null;
+        }
+
         @Entry
         public void checkAssembly() {
             context().checkAssembly();
@@ -27,9 +33,8 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions viewComplete() {
-            return RECONFIGURE;
+            return COMPLETE;
         }
-
     },
     CHECKPOINTING {
 
@@ -44,11 +49,23 @@ public enum Earner implements Driven.Transitions {
         }
     },
     COMPLETE {
+    },
+    DRAIN {
 
         @Override
-        public Transitions complete() {
-            context().complete();
+        public Transitions assembled() {
+            context().markAssembled();
             return null;
+        }
+
+        @Entry
+        public void drain() {
+            context().drain();
+        }
+
+        @Override
+        public Transitions lastBlock() {
+            return AWAIT_VIEW;
         }
     },
     INITIAL {
@@ -70,11 +87,6 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions checkpoint() {
-            return null;
-        }
-
-        @Override
-        public Transitions complete() {
             return null;
         }
 
@@ -109,22 +121,24 @@ public enum Earner implements Driven.Transitions {
             return null;
         }
     },
-    RECONFIGURE {
-        @Override
-        public Transitions complete() {
-            return COMPLETE;
-        }
-
-        @Entry
-        public void reconfigure() {
-            context().reconfigure();
-        }
-    },
     SPICE {
+        @Override
+        public Transitions assembled() {
+            context().markAssembled();
+            return null;
+        }
 
         @Override
         public Transitions lastBlock() {
             return AWAIT_VIEW;
+        }
+
+        @Override
+        public Transitions newEpoch(int epoch, int lastEpoch) {
+            if (lastEpoch - 1 == epoch) {
+                return DRAIN;
+            }
+            return null;
         }
 
         @Entry

@@ -30,10 +30,6 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
-        default Transitions complete() {
-            return null;
-        }
-
         default Transitions establish() {
             throw fsm().invalidTransitionOn();
         }
@@ -43,6 +39,10 @@ public interface Driven {
         }
 
         default Transitions lastBlock() {
+            throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions newEpoch(int epoch, int lastEpoch) {
             throw fsm().invalidTransitionOn();
         }
 
@@ -58,15 +58,19 @@ public interface Driven {
     public static String PERIODIC_VALIDATIONS = "PERIODIC_VALIDATIONS";
     public static String SYNC                 = "SYNC";
 
+    void assembled();
+
     void checkAssembly();
 
     void checkpoint();
 
     void complete();
 
+    void drain();
+
     void fail();
 
-    void reconfigure();
+    void markAssembled();
 
     void startProduction();
 }

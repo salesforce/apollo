@@ -14,6 +14,17 @@ import com.salesforce.apollo.choam.fsm.Reconfiguration.Transitions;
  *
  */
 public enum Reconfigure implements Transitions {
+    AWAIT_ASSEMBLY {
+        public Transitions assembled() {
+            return GATHER;
+        }
+
+        @Override
+        public Transitions nextEpoch(int epoch) {
+            assert epoch == 0;
+            return null;
+        }
+    },
     CERTIFICATION {
         @Entry
         public void certify() {
@@ -99,6 +110,11 @@ public enum Reconfigure implements Transitions {
         @Entry
         public void completion() {
             context().complete();
+        }
+
+        @Override
+        public Transitions nextEpoch(int epoch) {
+            return null;
         }
 
         @Override

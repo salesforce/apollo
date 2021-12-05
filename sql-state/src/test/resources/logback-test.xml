@@ -13,7 +13,12 @@
             </Pattern>
         </encoder>
     </appender>
-    
+
+    <logger name="com.chiralbehaviors.tron" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
 	<logger name="h2database" level="TRACE">
 	    <appender-ref ref="STDOUT" />
 	</logger>
@@ -23,6 +28,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
+    <logger name="com.salesforce.apollo.ethereal" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
+
+    <logger name="com.salesforce.apollo.ethereal.memberships.ContextGossiper" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
 
     <logger name="com.salesforce.apollo.state" level="info"
         additivity="false">
@@ -38,13 +52,23 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
-
-    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="trace"
+    
+    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>  
+    </logger> 
 
-    <logger name="com.salesforce.apollo.choam.Producer" level="debug"
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.Producer" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>  
@@ -54,7 +78,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.tron" level="INFO"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

@@ -145,6 +145,8 @@ public class ViewAssemblyTest {
             communications.values().forEach(r -> r.start());
             recons.values().forEach(r -> r.start());
 
+            recons.values().forEach(r -> r.assembled());
+
             complete.await(20, TimeUnit.SECONDS);
             assertEquals(committee.cardinality(), published.size());
         } finally {
@@ -248,7 +250,7 @@ public class ViewAssemblyTest {
             params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
                                                validators, reconfigure);
-            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));
+            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), false));
         });
 
         try {

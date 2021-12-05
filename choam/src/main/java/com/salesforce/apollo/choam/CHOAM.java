@@ -272,14 +272,19 @@ public class CHOAM {
         }
 
         @Override
+        public void assembled() {
+            producer.assembled();
+        }
+
+        @Override
         public void complete() {
             producer.stop();
         }
 
         @Override
         public SubmitResult submit(SubmitTransaction request) {
-            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
-                      params().member());
+//            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
+//                      params().member());
             return producer.submit(request.getTransaction());
         }
     }
@@ -346,8 +351,8 @@ public class CHOAM {
                     f.set(Status.UNAVAILABLE.withDescription("No link to server"));
                     return f;
                 }
-                log.debug("Submitting received txn: {} to: {} in: {} on: {}",
-                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
+//                log.trace("Submitting received txn: {} to: {} in: {} on: {}",
+//                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
                 return link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
                                                     .setTransaction(transaction).build());
             } catch (StatusRuntimeException e) {
@@ -391,8 +396,7 @@ public class CHOAM {
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()), params.member());
                 Signer signer = new SignerImpl(0, c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, constructBlock(),
-                                                      true);
+                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, true);
                 nextViewId.set(params.genesisViewId());
             } else {
                 reconfigure = null;
@@ -699,7 +703,7 @@ public class CHOAM {
         final Committee c = current.get();
         c.accept(next);
         log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
-                  params.member());
+                 params.member());
     }
 
     private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
@@ -722,25 +726,25 @@ public class CHOAM {
     private boolean checkJoin(JoinRequest request, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
-            log.debug("Request to join from non member: {} on: {}", from, params.member());
+            log.warn("Request to join from non member: {} on: {}", from, params.member());
             return false;
         }
         Digest nextView = new Digest(request.getNextView());
         final var nextId = nextViewId.get();
         if (nextId == null) {
             log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
-                      params.member());
+                     params.member());
             return false;
         }
         if (!nextId.equals(nextView)) {
             log.debug("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId, source,
-                      params.member());
+                     params.member());
             return false;
         }
         final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
         if (!members.contains(params.member())) {
             log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
-                      members, params.member());
+                     members, params.member());
             return false;
         }
         return true;
@@ -881,8 +885,6 @@ public class CHOAM {
         execs.forEach(exec -> {
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
-            log.trace("Executing transaction: {} block: {} height: {} stxn: {} on: {}", hash, h.hash, h.height(),
-                      stxn == null ? "null" : "present", params.member());
             try {
                 params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
@@ -935,7 +937,7 @@ public class CHOAM {
     }
 
     private void genesisInitialization(final HashedBlock h, final List<Transaction> initialization) {
-        log.trace("Executing genesis initialization block: {} on: {}", h.hash, params.member());
+        log.info("Executing genesis initialization block: {} on: {}", h.hash, params.member());
         try {
             params.processor().genesis(h.height(), h.hash, initialization);
         } catch (Throwable t) {
@@ -952,8 +954,6 @@ public class CHOAM {
         if (h.hash.equals(prev)) {
             return true;
         }
-        log.trace("Failed isNext: {} expected height: {} actual: {} expected previous: {} actual: {} on: {}", next.hash,
-                  next.height(), h.height() + 1, prev, h.hash, params.member());
         return false;
     }
 
@@ -983,10 +983,11 @@ public class CHOAM {
         switch (h.block.getBodyCase()) {
         case ASSEMBLE:
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
-            log.debug("Next view id: {} on: {}", nextViewId.get(), params.member());
-            break;
-        case CHECKPOINT:
-//            checkpoint();
+            log.info("Next view id: {} on: {}", nextViewId.get(), params.member());
+            final var c = current.get();
+            if (c != null) {
+                c.assembled();
+            }
             break;
         case RECONFIGURE:
             reconfigure(h.block.getReconfigure());
@@ -994,12 +995,12 @@ public class CHOAM {
         case GENESIS:
             cancelSynchronization();
             reconfigure(h.block.getGenesis().getInitialView());
-            log.trace("Executing genesis transactions for block: {}  on: {}", h.hash, params.member());
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
             transitions.regenerated();
         case EXECUTIONS:
             execute(h.block.getExecutions().getExecutionsList());
             break;
+        case CHECKPOINT:
         default:
             break;
         }
@@ -1091,7 +1092,7 @@ public class CHOAM {
 
     private Function<SubmittedTransaction, ListenableFuture<Status>> service() {
         return stx -> {
-            log.debug("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
+//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
             SettableFuture<Status> f = SettableFuture.create();
             final var c = current.get();
             if (c == null) {
@@ -1120,11 +1121,11 @@ public class CHOAM {
         }
         final var c = current.get();
         if (c == null) {
-            log.warn("No committee to submit txn from: {} on: {}", from, params.member());
+//            log.trace("No committee to submit txn from: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setSuccess(false).setStatus("No committee to submit txn").build();
         }
-        log.debug("Submiting received txn: {} from: {} on: {}",
-                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
+//        log.trace("Submiting received txn: {} from: {} on: {}",
+//                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
         return c.submit(request);
     }
 

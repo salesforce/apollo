@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -401,14 +400,6 @@ public class SqlStateMachine {
                 if (!temp.exists()) {
                     log.error("Written file does not exist: {}", temp.getAbsolutePath());
                     return null;
-                }
-                try (var fis = new FileInputStream(temp)) {
-                    var baos = new ByteArrayOutputStream();
-                    fis.transferTo(baos);
-                    baos.close();
-                    System.out.println(baos.toString());
-                } catch (IOException e) {
-                    e.printStackTrace();
                 }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
@@ -1029,6 +1020,10 @@ public class SqlStateMachine {
         try {
             exec = psCache.get(UPDATE_CURRENT_BLOCK);
         } catch (ExecutionException e) {
+            final var cause = e.getCause();
+            if (cause instanceof JdbcSQLNonTransientException) {
+                return;
+            }
             throw new IllegalStateException("Unable to get prepared update statement: " + UPDATE_CURRENT_BLOCK, e);
         }
         try {

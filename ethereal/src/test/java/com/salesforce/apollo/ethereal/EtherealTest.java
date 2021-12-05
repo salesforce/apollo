@@ -73,9 +73,10 @@ public class EtherealTest {
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        JohnHancock signature = PreUnit.sign(CreatorTest.DEFAULT_SIGNER, id, crown, data, rsData);
-        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData,
-                           signature);
+        byte[] salt = {};
+        JohnHancock signature = PreUnit.sign(CreatorTest.DEFAULT_SIGNER, id, crown, data, rsData, salt);
+        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData, signature,
+                           salt);
     }
 
     @Test

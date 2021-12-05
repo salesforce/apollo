@@ -106,9 +106,10 @@ public class CreatorTest {
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        final var signature = PreUnit.sign(signer, id, crown, data, rsData);
-        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData,
-                           signature);
+        final var salt = new byte[] {};
+        final var signature = PreUnit.sign(signer, id, crown, data, rsData, salt);
+        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData, signature,
+                           salt);
     }
 
     private double bias = 3.0;

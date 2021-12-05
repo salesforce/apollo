@@ -73,6 +73,7 @@ public class AgeBatchingQueue<T> {
     private final AtomicBoolean                 oldBatchesQueueFull;
     private final AtomicInteger                 size    = new AtomicInteger();
     private final AtomicBoolean                 started = new AtomicBoolean();
+    private final AtomicInteger                 total   = new AtomicInteger();
 
     AgeBatchingQueue(String label, int queueSize, int limit) {
         this.label = label;
@@ -90,8 +91,15 @@ public class AgeBatchingQueue<T> {
     }
 
     public Queue<T> blockingTakeWithTimeout(Duration timeout) throws InterruptedException {
+        return blockingTakeWithTimeout(timeout, false);
+    }
+
+    public Queue<T> blockingTakeWithTimeout(Duration timeout, boolean countAgainstTotal) throws InterruptedException {
         final var batch = oldBatches.poll(timeout.toMillis(), TimeUnit.MILLISECONDS);
         if (batch == null) {
+            if (countAgainstTotal) {
+                total.incrementAndGet();
+            }
             return null;
         }
         size.decrementAndGet();
@@ -102,6 +110,7 @@ public class AgeBatchingQueue<T> {
         oldBatches.clear();
         currentBatch.get().clear();
         size.set(0);
+        total.set(0);
     }
 
     public Queue<T> nonBlockingTake() {
@@ -113,7 +122,7 @@ public class AgeBatchingQueue<T> {
     }
 
     public boolean offer(T event) {
-        if (size.get() >= limit) {
+        if (total.get() >= limit) {
             return false;
         }
         if (oldBatchesQueueFull.get()) {
@@ -171,11 +180,15 @@ public class AgeBatchingQueue<T> {
         if (currentBatchRef.events.isEmpty()) {
             return true;
         }
+        if (total.get() > limit) {
+            return false;
+        }
         // We should not block here as the offer & reaper thread both does not block in
         // any condition.
         if (batchReapingLock.tryLock()) {
             try {
                 if (oldBatches.offer(currentBatchRef)) {
+                    total.incrementAndGet();
                     currentBatch.getAndSet(createNewBatch());
                     size.incrementAndGet();
                     LOGGER.debug("[Reaping source: {}] Reaped the old batch with size {} for: {}", operatorName,
@@ -185,7 +198,7 @@ public class AgeBatchingQueue<T> {
                 } else {
                     oldBatchesQueueFull.set(true);
                     LOGGER.debug("[Reaping source: {}] Old batches queue for: {} is full. Not reaping the batch till we get space.",
-                                operatorName, label);
+                                 operatorName, label);
                 }
             } finally {
                 batchReapingLock.unlock();

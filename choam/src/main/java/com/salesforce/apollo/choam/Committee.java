@@ -81,6 +81,9 @@ public interface Committee {
     }
 
     void accept(HashedCertifiedBlock next);
+    
+    default void assembled() {
+    }
 
     void complete();
 
@@ -97,12 +100,10 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log().trace("Cannot submit txn, inactive committee on: {}", params().member());
         return SubmitResult.newBuilder().setSuccess(false).setStatus("Cannot submit txn, inactive committee").build();
     }
 
     default ListenableFuture<Status> submitTxn(Transaction transaction) {
-        log().trace("Cannot submit txn, inactive committee on: {}", params().member());
         SettableFuture<Status> f = SettableFuture.create();
         f.set(Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee on: " + params().member()));
         return f;

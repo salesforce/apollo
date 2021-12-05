@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -551,8 +552,12 @@ public class ReliableBroadcaster {
             buffer.receive(gossip.getUpdatesList());
         } finally {
             if (started.get()) {
-                scheduler.schedule(() -> oneRound(exec, duration, scheduler), duration.toMillis(),
-                                   TimeUnit.MILLISECONDS);
+                try {
+                    scheduler.schedule(() -> oneRound(exec, duration, scheduler), duration.toMillis(),
+                                       TimeUnit.MILLISECONDS);
+                } catch (RejectedExecutionException e) {
+                    return;
+                }
                 buffer.tick();
                 int gossipRound = buffer.round();
                 roundListeners.values().forEach(l -> {
