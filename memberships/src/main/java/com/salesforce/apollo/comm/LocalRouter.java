@@ -16,6 +16,7 @@ import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,8 @@ import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientIntercep
 import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
-import com.netflix.concurrency.limits.limit.VegasLimit;
+import com.netflix.concurrency.limits.limit.Gradient2Limit;
+import com.netflix.concurrency.limits.limit.WindowedLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -65,7 +67,8 @@ public class LocalRouter extends Router {
         private final String prefix;
 
         public LocalServerConnectionFactory(String prefix, Limit clientLimiter) {
-            this.clientLimit = clientLimiter;
+            this.clientLimit = WindowedLimit.newBuilder().minWindowTime(100, TimeUnit.MILLISECONDS).windowSize(10)
+                                            .build(clientLimiter);
             this.prefix = prefix;
         }
 
@@ -142,11 +145,11 @@ public class LocalRouter extends Router {
     private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
 
     public static Limit defaultClientLimit() {
-        return VegasLimit.newBuilder().maxConcurrency(1_000).initialLimit(1_000).build();
+        return Gradient2Limit.newBuilder().build();
     }
 
     public static Limit defaultServerLimit() {
-        return VegasLimit.newBuilder().maxConcurrency(5_000).initialLimit(5_000).build();
+        return Gradient2Limit.newBuilder().build();
     }
 
     private final Member member;
@@ -164,7 +167,11 @@ public class LocalRouter extends Router {
         serverMembers.put(member.getId(), member);
 
         ConcurrencyLimitServerInterceptor limiter;
-        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit)
+        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(WindowedLimit.newBuilder()
+                                                                                                                 .minWindowTime(100,
+                                                                                                                                TimeUnit.MILLISECONDS)
+                                                                                                                 .windowSize(10)
+                                                                                                                 .build(serverLimit))
                                                                                              .build())
                                                    .build();
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));

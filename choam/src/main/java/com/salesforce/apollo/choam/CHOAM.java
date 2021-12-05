@@ -636,7 +636,7 @@ public class CHOAM {
         comm = params.communications()
                      .create(params.member(), params.context().getId(), service,
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
-                                                     params.metrics(), r, params.txnPermits()),
+                                                     params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
@@ -733,18 +733,18 @@ public class CHOAM {
         final var nextId = nextViewId.get();
         if (nextId == null) {
             log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
-                     params.member());
+                      params.member());
             return false;
         }
         if (!nextId.equals(nextView)) {
             log.debug("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId, source,
-                     params.member());
+                      params.member());
             return false;
         }
         final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
         if (!members.contains(params.member())) {
             log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
-                     members, params.member());
+                      members, params.member());
             return false;
         }
         return true;

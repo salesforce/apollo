@@ -123,9 +123,9 @@ public class CHOAMTest {
                 } else {
                     time.close();
                     final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0) {
+                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
                         System.out.println(".");
-                    } else {
+                    } else if (tot % 100 == 0) {
                         System.out.print(".");
                     }
                     var tc = latency.time();
@@ -218,7 +218,7 @@ public class CHOAMTest {
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         AtomicInteger exec = new AtomicInteger();
-        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
+        routerExec = Executors.newFixedThreadPool(CARDINALITY * 5, r -> {
             Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
             thread.setDaemon(true);
             return thread;
@@ -233,7 +233,7 @@ public class CHOAMTest {
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(200);
+                               .setTxnPermits(1_000).setCheckpointBlockSize(200);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
@@ -263,8 +263,8 @@ public class CHOAMTest {
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
-        final int clientCount = 100;
-        final int max = 5;
+        final int clientCount = 3000;
+        final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
@@ -297,8 +297,7 @@ public class CHOAMTest {
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         try {
-            success = countdown.await(600, TimeUnit.SECONDS);
-            assertTrue(success, "Remaining: " + countdown.getCount());
+            success = countdown.await(60, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
         }
@@ -307,48 +306,51 @@ public class CHOAMTest {
                                     .mapToLong(cb -> cb.height()).max().getAsLong()
         + 10;
 
-        Utils.waitForCondition(60_000, 1000,
-                               () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                                            .filter(cb -> cb != null).mapToLong(cb -> cb.height())
-                                            .filter(l -> l >= target).count() == members.size());
+        try {
 
-        System.out.println("target: " + target + " results: "
-        + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                 .map(cb -> cb.height()).toList());
+            Utils.waitForCondition(60_000, 1000,
+                                   () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
+                                                .filter(cb -> cb != null).mapToLong(cb -> cb.height())
+                                                .filter(l -> l >= target).count() == members.size());
 
-        System.out.println();
-        System.out.println();
-        System.out.println();
+            record row(float price, int quantity) {}
 
-        record row(float price, int quantity) {}
+            System.out.println("Validating consistency");
 
-        System.out.println("Validating consistency");
+            Map<Member, Map<Integer, row>> manifested = new HashMap<>();
 
-        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
-
-        for (Member m : members) {
-            Connection connection = updaters.get(m).newConnection();
-            Statement statement = connection.createStatement();
-            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
-            while (results.next()) {
-                manifested.computeIfAbsent(m, k -> new HashMap<>())
-                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            for (Member m : members) {
+                Connection connection = updaters.get(m).newConnection();
+                Statement statement = connection.createStatement();
+                ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+                while (results.next()) {
+                    manifested.computeIfAbsent(m, k -> new HashMap<>())
+                              .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+                }
+                connection.close();
             }
-            connection.close();
-        }
 
-        Map<Integer, row> standard = manifested.get(members.get(0));
-        for (Member m : members) {
-            var candidate = manifested.get(m);
-            for (var entry : standard.entrySet()) {
-                assertTrue(candidate.containsKey(entry.getKey()));
-                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            Map<Integer, row> standard = manifested.get(members.get(0));
+            for (Member m : members) {
+                var candidate = manifested.get(m);
+                for (var entry : standard.entrySet()) {
+                    assertTrue(candidate.containsKey(entry.getKey()));
+                    assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+                }
             }
-        }
+        } finally {
+            System.out.println("target: " + target + " results: "
+            + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
+                     .map(cb -> cb.height()).toList());
 
-        System.out.println("# of clients: " + choams.size() * clientCount);
-        ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build().report();
+            System.out.println();
+            System.out.println();
+            System.out.println();
+
+            System.out.println("# of clients: " + choams.size() * clientCount);
+            ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build().report();
+        }
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m) {

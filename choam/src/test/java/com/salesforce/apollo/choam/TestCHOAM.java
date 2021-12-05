@@ -191,7 +191,7 @@ public class TestCHOAM {
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100)).build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(1);
+                               .setTxnPermits(100).setCheckpointBlockSize(1);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 

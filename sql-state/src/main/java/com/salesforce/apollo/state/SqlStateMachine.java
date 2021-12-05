@@ -800,6 +800,8 @@ public class SqlStateMachine {
         try {
             ps = connection().prepareStatement(sql);
             return execution.apply(ps);
+        } catch (JdbcSQLNonTransientException e) {
+            return null;
         } finally {
             if (ps != null) {
                 try {
