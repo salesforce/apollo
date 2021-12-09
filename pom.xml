@@ -22,9 +22,10 @@
 	</modules>
 
 	<properties>
+		<jackson.version>2.13.0</jackson.version>
 		<dropwizard.version>2.0.10</dropwizard.version>
 		<h2.version>2.0.202</h2.version>
-        <h2.gen.version>1.4.200</h2.gen.version>
+		<h2.gen.version>1.4.200</h2.gen.version>
 		<jooq.version>3.15.5</jooq.version>
 		<bc.version>1.69</bc.version>
 		<logback.version>1.2.7</logback.version>
@@ -43,6 +44,13 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+				<groupId>com.fasterxml.jackson</groupId>
+				<artifactId>jackson-base</artifactId>
+				<version>${jackson.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>com.google.guava</groupId>
 				<artifactId>guava</artifactId>
@@ -526,7 +534,7 @@
 									<source>${project.basedir}/src/main/proto</source>
 									<source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
 									<source>${project.basedir}/target/generated-sources/protobuf/java</source>
-                                    <source>${project.basedir}/target/generated-sources/jooq</source>
+									<source>${project.basedir}/target/generated-sources/jooq</source>
 								</sources>
 							</configuration>
 						</execution>

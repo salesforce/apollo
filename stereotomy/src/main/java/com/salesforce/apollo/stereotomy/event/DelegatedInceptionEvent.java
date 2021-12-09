@@ -5,7 +5,6 @@
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.stereotomy.event;
- 
 
 /**
  * @author hal.hildebrand
@@ -13,4 +12,8 @@ package com.salesforce.apollo.stereotomy.event;
  */
 public interface DelegatedInceptionEvent extends InceptionEvent, DelegatedEstablishmentEvent {
 
+    @Override
+    default String getIlk() {
+        return DELEGATED_INCEPTION_TYPE;
+    }
 }

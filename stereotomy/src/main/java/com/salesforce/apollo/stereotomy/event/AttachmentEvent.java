@@ -15,6 +15,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
  *
  */
 public interface AttachmentEvent extends KeyEvent {
+
     Map<Integer, JohnHancock> getEndorsements();
 
     Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();

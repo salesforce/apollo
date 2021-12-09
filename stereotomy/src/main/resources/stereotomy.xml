@@ -10,21 +10,38 @@
 
 		<createTable tableName="coordinates"
 			schemaName="stereotomy_kerl">
-			<column autoIncrement="true" name="id" type="INT8">
+			<column autoIncrement="true" generationType="ALWAYS" name="id"
+				type="INT8">
 				<constraints nullable="false" primaryKey="true"
 					primaryKeyName="coordinates_pkey" />
 			</column>
-			<column name="identifier" type="VARCHAR" />
-			<column name="digest" type="VARCHAR" />
-			<column name="ilk" type="VARCHAR" />
+			<column name="identifier" type="VARCHAR(2048)">
+				<constraints nullable="false" />
+			</column>
+			<column name="digest" type="VARCHAR(2048)">
+				<constraints nullable="false" />
+			</column>
+            <column name="sequence_number" type="INT8">
+                <constraints nullable="false" />
+            </column>
+			<column name="ilk" type="VARCHAR(2048)">
+				<constraints nullable="false" />
+			</column>
 		</createTable>
 
 		<addUniqueConstraint
-			columnNames="identifier, digest, ilk" tableName="coordinates"
+			columnNames="identifier, digest, sequence_number, ilk" tableName="coordinates"
 			schemaName="stereotomy_kerl" />
 
-		<createTable tableName="current_key_state">
-			<column name="identifier" type="VARCHAR">
+		<createIndex tableName="coordinates"
+			schemaName="stereotomy_kerl" indexName="coordinates_identifier_idx"
+			unique="true">
+			<column name="identifier" />
+		</createIndex>
+
+		<createTable tableName="current_key_state"
+			schemaName="stereotomy_kerl">
+			<column name="identifier" type="VARCHAR(2048)">
 				<constraints nullable="false" primaryKey="true" />
 			</column>
 			<column name="coordinates" type="INT8">
@@ -35,35 +52,31 @@
 			</column>
 		</createTable>
 
-		<createIndex tableName="current_key_state"
-			indexName="current_key_state_identifier_idx" unique="true">
-			<column name="identifier" />
-		</createIndex>
-
 		<createTable tableName="key_state"
 			schemaName="stereotomy_kerl">
 			<column name="coordinates" type="INT8">
 				<constraints nullable="false"
-					foreignKeyName="key_state_coordinates_fk" primaryKey="true"
-					unique="true" referencedTableName="coordinates"
-					referencedColumnNames="id"
-					referencedTableSchemaName="stereotomy_kerl" />
-			</column>
-			<column name="last_event" type="INT8">
-				<constraints nullable="false"
-					foreignKeyName="key_state_last_event_fk" primaryKey="true"
+					foreignKeyName="key_state_coordinates_fk"
 					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
 			<column name="last_establishing_event" type="INT8">
 				<constraints nullable="false"
 					foreignKeyName="key_state_last_establishing_event_fk"
-					primaryKey="true" referencedTableName="coordinates"
-					referencedColumnNames="id"
+					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
-			<column name="delegating_identifier" type="VARCHAR" />
+			<column name="delegating_identifier" type="VARCHAR(2048)" />
+			<column name="keys" type="JSON">
+				<constraints nullable="false" />
+			</column>
+			<column name="witnesses" type="JSON" />
+			<column name="witnessThreshold" type="INT" />
 		</createTable>
+
+		<addPrimaryKey columnNames="coordinates"
+			constraintName="key_state_pk" tableName="key_state"
+			schemaName="stereotomy_kerl" />
 
 		<createTable tableName="event"
 			schemaName="stereotomy_kerl">
@@ -73,16 +86,58 @@
 					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
-			<column name="sequence_number" type="INT8" />
-			<column name="identifier" type="VARCHAR" />
-			<column name="digest" type="VARCHAR" />
-			<column name="content" type="BINARY" />
+			<column name="content" type="BINARY">
+				<constraints nullable="false" />
+			</column>
+			<column name="previous" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="event_previous_fk"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
 		</createTable>
 
-		<createIndex tableName="event"
-			schemaName="stereotomy_kerl" indexName="event_digest_idx"
-			unique="true">
-			<column name="digest" />
+		<createTable tableName="attachements"
+			schemaName="stereotomy_kerl">
+			<column name="key_coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="receipt_key_coordinates_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="receipt_coordinates_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="signatures" type="JSON">
+				<constraints nullable="false" />
+			</column>
+			<column name="endorsements" type="JSON" />
+			<column name="authentication" type="JSON" />
+		</createTable>
+
+		<createIndex tableName="attachements"
+			schemaName="stereotomy_kerl" indexName="attachements_coordinates_idx">
+			<column name="key_coordinates" />
 		</createIndex>
+
+		<createTable tableName="current_receipt"
+			schemaName="stereotomy_kerl">
+			<column name="for_identifier" type="VARCHAR(2048)">
+				<constraints nullable="false" primaryKey="true" />
+			</column>
+			<column name="by_identifier" type="VARCHAR(2048)">
+				<constraints nullable="false" primaryKey="true" />
+			</column>
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_receipt_key_coordinates_fk"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+		</createTable>
+
 	</changeSet>
 </databaseChangeLog>

@@ -26,6 +26,9 @@ public class EventCoordinates {
     public static EventCoordinates NONE = new EventCoordinates();
 
     public static EventCoordinates from(EventCoords coordinates) {
+        if (EventCoords.getDefaultInstance().equals(coordinates)) {
+            return NONE;
+        }
         return new EventCoordinates(coordinates);
     }
 
@@ -40,7 +43,8 @@ public class EventCoordinates {
     public static EventCoordinates of(KeyEvent event) {
         requireNonNull(event, "event");
         var algorithm = event.getPrevious().equals(EventCoordinates.NONE) ? DigestAlgorithm.DEFAULT
-                : event.getPrevious().getDigest().getAlgorithm();
+                                                                          : event.getPrevious().getDigest()
+                                                                                 .getAlgorithm();
         if (algorithm.equals(DigestAlgorithm.NONE)) {
             algorithm = DigestAlgorithm.DEFAULT;
         }
@@ -92,7 +96,7 @@ public class EventCoordinates {
         identifier = Identifier.NONE;
         digest = Digest.NONE;
         sequenceNumber = -1;
-        ilk = null;
+        ilk = KeyEvent.NONE;
     }
 
     @Override
@@ -104,8 +108,8 @@ public class EventCoordinates {
             return false;
         }
         EventCoordinates other = (EventCoordinates) obj;
-        return Objects.equals(digest, other.digest) && Objects.equals(identifier, other.identifier)
-                && sequenceNumber == other.sequenceNumber;
+        return Objects.equals(digest, other.digest) && Objects.equals(identifier, other.identifier) &&
+               sequenceNumber == other.sequenceNumber;
     }
 
     public Digest getDigest() {
@@ -130,12 +134,8 @@ public class EventCoordinates {
     }
 
     public EventCoords toEventCoords() {
-        return EventCoords.newBuilder()
-                          .setSequenceNumber(sequenceNumber)
-                          .setIdentifier(identifier.toIdent())
-                          .setIlk(ilk)
-                          .setDigest(digest.toDigeste())
-                          .build();
+        return EventCoords.newBuilder().setSequenceNumber(sequenceNumber).setIdentifier(identifier.toIdent())
+                          .setIlk(ilk).setDigest(digest.toDigeste()).build();
     }
 
     @Override

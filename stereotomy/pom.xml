@@ -31,17 +31,16 @@
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -58,6 +57,11 @@
 			<groupId>org.jooq</groupId>
 			<artifactId>jooq</artifactId>
 			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 
@@ -154,6 +158,11 @@
 						<artifactId>h2</artifactId>
 						<version>${h2.gen.version}</version>
 					</dependency>
+					<dependency>
+						<groupId>com.fasterxml.jackson.core</groupId>
+						<artifactId>jackson-databind</artifactId>
+						<version>${jackson.version}</version>
+					</dependency>
 				</dependencies>
 				<configuration>
 					<jdbc>
@@ -170,6 +179,15 @@
 									<inputSchema>stereotomy_kerl</inputSchema>
 								</schema>
 							</schemata>
+
+							<forcedTypes>
+								<forcedType>
+									<userType>com.fasterxml.jackson.databind.JsonNode</userType>
+									<binding>com.salesforce.apollo.utils.jooq.JSONJacksonBinding</binding>
+									<includeExpression>.*json.*</includeExpression>
+									<includeTypes>.*</includeTypes>
+								</forcedType>
+							</forcedTypes>
 						</database>
 						<generate></generate>
 						<target>
