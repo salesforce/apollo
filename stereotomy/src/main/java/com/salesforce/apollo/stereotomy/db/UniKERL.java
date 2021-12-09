@@ -68,7 +68,8 @@ abstract public class UniKERL implements KERL {
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
         return dsl.select(EVENT.CONTENT).from(EVENT)
                   .where(EVENT.COORDINATES.eq(dsl.select(COORDINATES.ID).from(COORDINATES)
-                                                 .where(COORDINATES.DIGEST.eq(qb64(digest)))))
+                                                 .where(COORDINATES.DIGEST.eq(digest.toDigeste().toByteString()
+                                                                                    .toByteArray()))))
                   .fetchOptional().map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
     }
 

@@ -25,9 +25,7 @@ import com.salesforce.apollo.utils.Pair;
 public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent {
 
     private static Map<Integer, JohnHancock> signaturesOf(Receipt receipt) {
-        return receipt.getSignaturesMap()
-                      .entrySet()
-                      .stream()
+        return receipt.getSignatures().getSignaturesMap().entrySet().stream()
                       .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
     }
 
@@ -40,18 +38,15 @@ public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent
 
     @Override
     public Map<Integer, JohnHancock> getEndorsements() {
-        return event.getEndorsementsMap()
-                    .entrySet()
-                    .stream()
+        return event.getEndorsements().getSignaturesMap().entrySet().stream()
                     .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
     }
 
     @Override
     public Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts() {
-        return event.getReceiptsList()
-                    .stream()
-                    .map(receipt -> new Pair<EventCoordinates, Map<Integer, JohnHancock>>(
-                            EventCoordinates.from(receipt.getCoordinates()), signaturesOf(receipt)))
+        return event.getReceiptsList().stream()
+                    .map(receipt -> new Pair<EventCoordinates, Map<Integer, JohnHancock>>(EventCoordinates.from(receipt.getCoordinates()),
+                                                                                          signaturesOf(receipt)))
                     .collect(Collectors.toMap(e -> e.a, e -> e.b));
     }
 

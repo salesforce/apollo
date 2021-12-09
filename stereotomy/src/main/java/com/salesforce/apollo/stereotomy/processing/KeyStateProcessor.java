@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KeyCurrentState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -68,59 +69,56 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
             witnesses.removeAll(re.getWitnessesRemovedList());
             witnesses.addAll(re.getWitnessesAddedList());
         }
-        KeyState state = newKeyState(currentState.getIdentifier(), signingThreshold, keys,
+        KeyState state = newKeyState(event.getIdentifier(), signingThreshold, keys,
                                      nextKeyConfigugurationDigest.orElse(null), witnessThreshold, witnesses,
                                      currentState.configurationTraits(), event, lastEstablishmentEvent,
-                                     currentState.getDelegatingIdentifier().orElse(null));
+                                     currentState.getDelegatingIdentifier().orElse(null),
+                                     events.getDigestAlgorithm().digest(event.getBytes()));
         events.append(event, state);
         return state;
     }
 
     private KeyState initialState(InceptionEvent event) {
-        var delegatingPrefix = event instanceof DelegatedInceptionEvent
-                ? ((DelegatedEstablishmentEvent) event).getDelegatingSeal().getCoordinates().getIdentifier()
-                : null;
+        var delegatingPrefix = event instanceof DelegatedInceptionEvent ? ((DelegatedEstablishmentEvent) event).getDelegatingSeal()
+                                                                                                               .getCoordinates()
+                                                                                                               .getIdentifier()
+                                                                        : null;
 
         return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),
                            event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(), event.getWitnesses(),
-                           event.getConfigurationTraits(), event, event, delegatingPrefix);
+                           event.getConfigurationTraits(), event, event, delegatingPrefix,
+                           events.getDigestAlgorithm().digest(event.getBytes()));
     }
 
     private KeyState newKeyState(Identifier identifier,
                                  com.salesforce.apollo.stereotomy.event.SigningThreshold signingThreshold,
                                  List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
                                  List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-                                 KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
-                                 Identifier delegatingPrefix) {
-        return new KeyStateImpl(
-                com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder()
-                                                                    .setDigest(event.hash(events.getDigestAlgorithm())
-                                                                                    .toDigeste())
-                                                                    .addAllConfigurationTraits(configurationTraits.stream()
-                                                                                                                  .map(e -> e.name())
-                                                                                                                  .collect(Collectors.toList()))
-                                                                    .setCoordinates(event.getCoordinates()
-                                                                                         .toEventCoords())
-                                                                    .setDelegatingIdentifier(delegatingPrefix == null
-                                                                            ? Identifier.NONE_IDENT
-                                                                            : delegatingPrefix.toIdent())
-                                                                    .setIdentifier(identifier.toIdent())
-                                                                    .addAllKeys(keys.stream()
-                                                                                    .map(pk -> bs(pk))
-                                                                                    .collect(Collectors.toList()))
-                                                                    .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
-                                                                                                                     .toEventCoords())
-                                                                    .setLastEvent(event.getCoordinates()
-                                                                                       .toEventCoords())
-                                                                    .setNextKeyConfigurationDigest(nextKeyConfiguration == null
-                                                                            ? Digest.NONE.toDigeste()
-                                                                            : nextKeyConfiguration.toDigeste())
-                                                                    .setSigningThreshold(toSigningThreshold(signingThreshold))
-                                                                    .addAllWitnesses(witnesses.stream()
-                                                                                              .map(e -> e.toIdent())
-                                                                                              .collect(Collectors.toList()))
-                                                                    .setWitnessThreshold(witnessThreshold)
-                                                                    .build());
+                                 KeyEvent event, EstablishmentEvent lastEstablishmentEvent, Identifier delegatingPrefix,
+                                 Digest digest) {
+        final var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder();
+        return new KeyStateImpl(builder.setCurrent(KeyCurrentState.newBuilder()
+                                                                  .addAllKeys(keys.stream().map(pk -> bs(pk))
+                                                                                  .collect(Collectors.toList()))
+                                                                  .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
+                                                                                                                              : nextKeyConfiguration.toDigeste())
+                                                                  .setSigningThreshold(toSigningThreshold(signingThreshold))
+                                                                  .addAllWitnesses(witnesses.stream()
+                                                                                            .map(e -> e.toIdent())
+                                                                                            .collect(Collectors.toList()))
+                                                                  .setWitnessThreshold(witnessThreshold))
+                                       .setDigest(digest.toDigeste())
+                                       .addAllConfigurationTraits(configurationTraits.stream().map(e -> e.name())
+                                                                                     .collect(Collectors.toList()))
+                                       .setCoordinates(event.getCoordinates().toEventCoords())
+                                       .setDelegatingIdentifier(delegatingPrefix == null ? Identifier.NONE_IDENT
+                                                                                         : delegatingPrefix.toIdent())
+
+                                       .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
+                                                                                        .toEventCoords())
+                                       .setLastEvent(event.getCoordinates().toEventCoords())
+
+                                       .build());
     }
 
 }

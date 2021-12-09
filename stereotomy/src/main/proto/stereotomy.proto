@@ -81,7 +81,7 @@ message Header {
 message EventCommon {
     utils.Digeste configuration = 2;
     EventCoords previous = 3;
-    map<int32, utils.Sig> authentication = 4;
+    Signatures authentication = 4;
 }
 
 // The interaction specification and common event structure
@@ -101,7 +101,7 @@ message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
     EventCoords coordinates = 3;
-    map<int32, utils.Sig> endorsements = 5; 
+    Signatures endorsements = 5; 
     repeated Receipt receipts = 6;
 }
 
@@ -148,7 +148,7 @@ message IdentifierSpec {
 
 message Receipt {
     EventCoords coordinates = 1;
-    map<int32, utils.Sig> signatures = 2;
+    Signatures signatures = 2;
 }
 
 message Weight {
@@ -175,18 +175,21 @@ message Version {
 // state of an identifier and corresponding public/private keys,
 // KEL and KERL
 message KeyState {
-    Ident identifier = 1;
-    utils.Digeste digest = 2;
-    EventCoords coordinates = 3;
-    EventCoords lastEvent = 4;
-    EventCoords lastEstablishmentEvent = 5;
-    Ident delegatingIdentifier = 6;
-    repeated utils.PubKey keys = 7;
-    utils.Digeste nextKeyConfigurationDigest = 8;
-    repeated string configurationTraits = 9;
-    SigningThreshold signingThreshold = 10;
-    repeated Ident witnesses = 11;
-    int32 witnessThreshold = 12;
+    utils.Digeste digest = 1;
+    EventCoords coordinates = 2;
+    EventCoords lastEvent = 3;
+    EventCoords lastEstablishmentEvent = 4;
+    Ident delegatingIdentifier = 5;
+    repeated string configurationTraits = 6;
+    KeyCurrentState current = 7;
+}
+
+message KeyCurrentState {
+    utils.Digeste nextKeyConfigurationDigest = 1;
+    repeated utils.PubKey keys = 2;
+    SigningThreshold signingThreshold = 3;
+    repeated Ident witnesses = 4;
+    int32 witnessThreshold = 5; 
 }
 
 message Signatures {

@@ -43,9 +43,7 @@ abstract public class KeyEventImpl implements KeyEvent {
 
     @Override
     public Map<Integer, JohnHancock> getAuthentication() {
-        return common.getAuthenticationMap()
-                     .entrySet()
-                     .stream()
+        return common.getAuthentication().getSignaturesMap().entrySet().stream()
                      .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
     }
 

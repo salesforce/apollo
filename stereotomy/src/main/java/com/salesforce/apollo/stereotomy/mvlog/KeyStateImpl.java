@@ -40,9 +40,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Set<ConfigurationTrait> configurationTraits() {
-        return state.getConfigurationTraitsList()
-                    .stream()
-                    .map(s -> ConfigurationTrait.valueOf(s))
+        return state.getConfigurationTraitsList().stream().map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
     }
 
@@ -73,7 +71,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public List<PublicKey> getKeys() {
-        return state.getKeysList().stream().map(s -> publicKey(s)).collect(Collectors.toList());
+        return state.getCurrent().getKeysList().stream().map(s -> publicKey(s)).collect(Collectors.toList());
     }
 
     @Override
@@ -88,29 +86,25 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Digest> getNextKeyConfigurationDigest() {
-        return state.hasNextKeyConfigurationDigest() ? Optional.of(digest(state.getNextKeyConfigurationDigest()))
-                : Optional.empty();
+        return state.getCurrent()
+                    .hasNextKeyConfigurationDigest() ? Optional.of(digest(state.getCurrent().getNextKeyConfigurationDigest())) : Optional.empty();
     }
 
     @Override
     public SigningThreshold getSigningThreshold() {
-        return ProtobufEventFactory.toSigningThreshold(state.getSigningThreshold());
+        return ProtobufEventFactory.toSigningThreshold(state.getCurrent().getSigningThreshold());
     }
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return state.getWitnessesList()
-                    .stream()
-                    .map(s -> identifier(s))
-                    .filter(i -> i instanceof BasicIdentifier)
-                    .filter(i -> i != null)
-                    .map(i -> (BasicIdentifier) i)
+        return state.getCurrent().getWitnessesList().stream().map(s -> identifier(s))
+                    .filter(i -> i instanceof BasicIdentifier).filter(i -> i != null).map(i -> (BasicIdentifier) i)
                     .collect(Collectors.toList());
     }
 
     @Override
     public int getWitnessThreshold() {
-        return state.getWitnessThreshold();
+        return state.getCurrent().getWitnessThreshold();
     }
 
     @Override
