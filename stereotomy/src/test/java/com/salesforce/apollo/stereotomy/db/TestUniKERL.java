@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -62,16 +63,17 @@ public class TestUniKERL {
         uni.append(inception, null);
 
         // rotate
-        var rotSpec = RotationSpecification.newBuilder();
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var digest = inception.hash(uni.getDigestAlgorithm());
 
-        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          rotSpec.getNextKeysAlgorithm());
-        rotSpec.setIdentifier(inception.getIdentifier()).setCurrentCoords(inception.getCoordinates())
-               .setCurrentDigest(inception.hash(uni.getDigestAlgorithm())).setKey(nextKeyPair.getPublic())
-               .setNextKeys(nextKeys).setSigner(0, nextKeyPair.getPrivate());
+        RotationEvent rotation = rotation(digest, inception, nextKeyPair, factory);
+        uni.append(rotation, null);
 
-        RotationEvent rotation = factory.rotation(rotSpec.build());
+        // rotate again
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        digest = inception.hash(uni.getDigestAlgorithm());
+
+        rotation = rotation(digest, rotation, nextKeyPair, factory);
         uni.append(rotation, null);
     }
 
@@ -86,5 +88,17 @@ public class TestUniKERL {
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
+    }
+
+    private RotationEvent rotation(final Digest prevDigest, EstablishmentEvent prev, KeyPair nextKeyPair,
+                                   ProtobufEventFactory factory) {
+        var rotSpec = RotationSpecification.newBuilder();
+        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
+                                                          rotSpec.getNextKeysAlgorithm());
+        rotSpec.setIdentifier(prev.getIdentifier()).setCurrentCoords(prev.getCoordinates()).setCurrentDigest(prevDigest)
+               .setKey(nextKeyPair.getPublic()).setNextKeys(nextKeys).setSigner(0, nextKeyPair.getPrivate());
+
+        RotationEvent rotation = factory.rotation(rotSpec.build());
+        return rotation;
     }
 }
