@@ -52,7 +52,6 @@ public class UniKERLDirect extends UniKERL {
                    .set(COORDINATES.IDENTIFIER, 0L)
                    .set(COORDINATES.SEQUENCE_NUMBER, EventCoordinates.NONE.getSequenceNumber())
                    .set(COORDINATES.ILK, EventCoordinates.NONE.getIlk()).execute();
-            System.out.println(context.selectFrom(COORDINATES).fetch());
         });
     }
 
@@ -95,8 +94,6 @@ public class UniKERLDirect extends UniKERL {
             final var digest = event.hash(digestAlgorithm);
             context.insertInto(EVENT).set(EVENT.COORDINATES, id).set(EVENT.DIGEST, digest.toDigeste().toByteArray())
                    .set(EVENT.CONTENT, event.getBytes()).set(EVENT.PREVIOUS, prev.value1()).execute();
-            System.out.println(context.selectFrom(COORDINATES).fetch());
-            System.out.println(context.selectFrom(EVENT).fetch());
         });
     }
 }

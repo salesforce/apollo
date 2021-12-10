@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
+import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
+import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
 import java.security.KeyPair;
@@ -15,6 +18,7 @@ import java.util.List;
 import java.util.Properties;
 
 import org.h2.jdbc.JdbcConnection;
+import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -55,6 +59,17 @@ public class TestUniKERL {
         var uni = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
         uni.initialize();
 
+        doOne(factory, uni);
+        doOne(factory, uni);
+        doOne(factory, uni);
+        doOne(factory, uni);
+
+        System.out.println(DSL.using(connection).selectFrom(IDENTIFIER).fetch());
+        System.out.println(DSL.using(connection).selectFrom(COORDINATES).fetch());
+        System.out.println(DSL.using(connection).selectFrom(EVENT).fetch());
+    }
+
+    private void doOne(ProtobufEventFactory factory, UniKERLDirect uni) {
         var specification = IdentifierSpecification.newBuilder();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -71,7 +86,14 @@ public class TestUniKERL {
 
         // rotate again
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        digest = inception.hash(uni.getDigestAlgorithm());
+        digest = rotation.hash(uni.getDigestAlgorithm());
+
+        rotation = rotation(digest, rotation, nextKeyPair, factory);
+        uni.append(rotation, null);
+
+        // rotate once more
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        digest = rotation.hash(uni.getDigestAlgorithm());
 
         rotation = rotation(digest, rotation, nextKeyPair, factory);
         uni.append(rotation, null);
