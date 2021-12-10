@@ -8,16 +8,23 @@ package com.salesforce.apollo.stereotomy.db;
 
 import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
 import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
+import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_INCEPTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_ROTATION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
 
 import java.sql.Connection;
 import java.util.Optional;
 import java.util.OptionalLong;
 
 import org.jooq.DSLContext;
-import org.jooq.Record1;
 import org.jooq.impl.DSL;
 
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KERL;
@@ -26,8 +33,12 @@ import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.mvlog.KeyStateImpl;
 
 /**
  * @author hal.hildebrand
@@ -62,31 +73,23 @@ abstract public class UniKERL implements KERL {
 
     @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        return dsl.select(EVENT.CONTENT).from(EVENT)
+        return dsl.select(EVENT.CONTENT, COORDINATES.ILK).from(EVENT).join(COORDINATES)
+                  .on(COORDINATES.ID.eq(EVENT.COORDINATES))
                   .where(EVENT.DIGEST.eq(digest.toDigeste().toByteString().toByteArray())).fetchOptional()
-                  .map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
-    }
-
-    private KeyStateImpl mapKeyEvent(Record1<byte[]> b) {
-        try {
-            return new KeyStateImpl(com.salesfoce.apollo.stereotomy.event.proto.KeyState.parseFrom(b.value1()));
-        } catch (InvalidProtocolBufferException e) {
-            return null;
-        }
+                  .map(r -> mapKeyEvent(r.value1(), r.value2()));
     }
 
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return dsl.select(EVENT.CONTENT).from(EVENT)
-                  .where(EVENT.COORDINATES.eq(dsl.select(COORDINATES.ID).from(COORDINATES)
-                                                 .where(COORDINATES.IDENTIFIER.eq(coordinates.getIdentifier().toIdent()
-                                                                                             .toByteArray()))
-                                                 .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste()
-                                                                                       .toByteArray()))
-                                                 .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
-                                                 .and(COORDINATES.ILK.eq(coordinates.getIlk())
-                                                                     .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber())))))
-                  .fetchOptional().map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
+        return dsl.select(EVENT.CONTENT, COORDINATES.ILK).from(EVENT).join(COORDINATES)
+                  .on(EVENT.COORDINATES.eq(COORDINATES.ID)).join(IDENTIFIER)
+                  .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                  .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                  .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber())).fetchOptional()
+                  .map(r -> mapKeyEvent(r.value1(), r.value2()));
     }
 
     @Override
@@ -99,6 +102,21 @@ abstract public class UniKERL implements KERL {
     public Optional<KeyState> getKeyState(Identifier identifier) {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    private KeyEvent mapKeyEvent(byte[] event, String ilk) {
+        try {
+            return switch (ilk) {
+            case ROTATION_TYPE -> new RotationEventImpl(RotationEvent.parseFrom(event));
+            case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(InceptionEvent.parseFrom(event));
+            case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(RotationEvent.parseFrom(event));
+            case INCEPTION_TYPE -> new InceptionEventImpl(InceptionEvent.parseFrom(event));
+            case INTERACTION_TYPE -> new InteractionEventImpl(InteractionEvent.parseFrom(event));
+            default -> null;
+            };
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
 }

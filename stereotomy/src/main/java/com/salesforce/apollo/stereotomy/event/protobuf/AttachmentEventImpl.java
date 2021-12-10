@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.event.protobuf;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
@@ -37,6 +38,18 @@ public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof AttachmentEventImpl)) {
+            return false;
+        }
+        AttachmentEventImpl other = (AttachmentEventImpl) obj;
+        return Objects.equals(event, other.event);
+    }
+
+    @Override
     public Map<Integer, JohnHancock> getEndorsements() {
         return event.getEndorsements().getSignaturesMap().entrySet().stream()
                     .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
@@ -48,6 +61,11 @@ public class AttachmentEventImpl extends KeyEventImpl implements AttachmentEvent
                     .map(receipt -> new Pair<EventCoordinates, Map<Integer, JohnHancock>>(EventCoordinates.from(receipt.getCoordinates()),
                                                                                           signaturesOf(receipt)))
                     .collect(Collectors.toMap(e -> e.a, e -> e.b));
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(event);
     }
 
     @Override

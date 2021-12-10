@@ -10,6 +10,9 @@ import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
 import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.security.KeyPair;
 import java.security.SecureRandom;
@@ -77,12 +80,22 @@ public class TestUniKERL {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
         uni.append(inception, null);
 
+        var retrieved = uni.getKeyEvent(inception.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(inception, retrieved.get());
+
         // rotate
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var digest = inception.hash(uni.getDigestAlgorithm());
 
         RotationEvent rotation = rotation(digest, inception, nextKeyPair, factory);
         uni.append(rotation, null);
+
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
 
         // rotate again
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -91,12 +104,22 @@ public class TestUniKERL {
         rotation = rotation(digest, rotation, nextKeyPair, factory);
         uni.append(rotation, null);
 
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
+
         // rotate once more
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         digest = rotation.hash(uni.getDigestAlgorithm());
 
         rotation = rotation(digest, rotation, nextKeyPair, factory);
         uni.append(rotation, null);
+
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
     }
 
     private InceptionEvent inception(Builder specification, KeyPair initialKeyPair, ProtobufEventFactory factory,

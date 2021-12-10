@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
@@ -27,9 +28,27 @@ public class InteractionEventImpl extends KeyEventImpl implements InteractionEve
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof InteractionEventImpl)) {
+            return false;
+        }
+        InteractionEventImpl other = (InteractionEventImpl) obj;
+        return Objects.equals(event, other.event);
+    }
+
+    @Override
     public List<Seal> getSeals() {
-        List<Seal> seals = event.getSpecification().getSealsList().stream().map(s -> Seal.from(s)).collect(Collectors.toList());
+        List<Seal> seals = event.getSpecification().getSealsList().stream().map(s -> Seal.from(s))
+                                .collect(Collectors.toList());
         return seals;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(event);
     }
 
     @Override

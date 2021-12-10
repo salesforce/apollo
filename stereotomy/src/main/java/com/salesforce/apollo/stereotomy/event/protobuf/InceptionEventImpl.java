@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.event.protobuf;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,17 +28,26 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     public InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inceptionEvent) {
         super(inceptionEvent.getSpecification().getHeader(), inceptionEvent.getCommon(),
-                inceptionEvent.getSpecification().getEstablishment());
+              inceptionEvent.getSpecification().getEstablishment());
         event = inceptionEvent;
 
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof InceptionEventImpl)) {
+            return false;
+        }
+        InceptionEventImpl other = (InceptionEventImpl) obj;
+        return Objects.equals(event, other.event);
+    }
+
+    @Override
     public Set<ConfigurationTrait> getConfigurationTraits() {
-        return event.getSpecification()
-                    .getConfigurationList()
-                    .stream()
-                    .map(s -> ConfigurationTrait.valueOf(s))
+        return event.getSpecification().getConfigurationList().stream().map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
     }
 
@@ -53,12 +63,13 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return event.getSpecification()
-                    .getWitnessesList()
-                    .stream()
-                    .map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
-                    .collect(Collectors.toList());
+        return event.getSpecification().getWitnessesList().stream().map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null).collect(Collectors.toList());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(event);
     }
 
     @Override

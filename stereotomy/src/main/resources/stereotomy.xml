@@ -57,13 +57,30 @@
 			schemaName="stereotomy_kerl">
 			<column name="coordinates" type="INT8">
 				<constraints nullable="false" primaryKey="true"
-					foreignKeyName="current_key_state_coordinates_fk"
+					foreignKeyName="key_state_coordinates_fk"
 					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
 			<column name="last_establishing_event" type="INT8">
 				<constraints nullable="false"
 					foreignKeyName="key_state_last_establishing_event_fk"
+					referencedTableName="key_state" referencedColumnNames="coordinates"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="current_state" type="VARBINARY" />
+		</createTable>
+
+		<createTable tableName="current_key_state"
+			schemaName="stereotomy_kerl">
+			<column name="identifier" type="INT8">
+				<constraints nullable="false" primaryKey="true"
+					foreignKeyName="current_key_state_identifier_fk"
+					referencedTableName="identifier" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="current" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_key_state_current_fk"
 					referencedTableName="key_state" referencedColumnNames="coordinates"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
@@ -124,10 +141,10 @@
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
 			<column name="by" type="INT8">
-                <constraints nullable="false"
-                    foreignKeyName="current_receipt_by_fk" primaryKey="true"
-                    referencedTableName="coordinates" referencedColumnNames="id"
-                    referencedTableSchemaName="stereotomy_kerl" />
+				<constraints nullable="false"
+					foreignKeyName="current_receipt_by_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
 			<column name="coordinates" type="INT8">
 				<constraints nullable="false"
