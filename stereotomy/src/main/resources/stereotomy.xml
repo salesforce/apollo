@@ -44,6 +44,10 @@
 			</column>
 		</createTable>
 
+		<sql>alter table stereotomy_kerl.coordinates add constraint
+			coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp', 'ixn',
+			'nan', 'rct', 'vrc', 'rot'))</sql>
+
 		<addUniqueConstraint
 			columnNames="identifier, digest, sequence_number, ilk"
 			tableName="coordinates" schemaName="stereotomy_kerl" />
