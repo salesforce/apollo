@@ -26,8 +26,6 @@ public interface KEL {
 
     Optional<KeyState> getKeyState(EventCoordinates coordinates);
 
-    Optional<String> getKeyEventHash(EventCoordinates coordinates);
-
     Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates);
 
     Optional<KeyEvent> getKeyEvent(Digest digest);

@@ -34,8 +34,7 @@
 			tableName="coordinates" schemaName="stereotomy_kerl" />
 
 		<createIndex tableName="coordinates"
-			schemaName="stereotomy_kerl" indexName="coordinates_identifier_idx"
-			unique="true">
+			schemaName="stereotomy_kerl" indexName="coordinates_identifier_idx">
 			<column name="identifier" />
 		</createIndex>
 
@@ -53,16 +52,7 @@
 					referencedTableName="key_state" referencedColumnNames="coordinates"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
-            <column name="signing_threshold" type="INT">
-                <constraints nullable="false" />
-            </column>
-			<column name="configuration_traits" type="VARBINARY" />
-			<column name="delegating_identifier" type="VARBINARY" />
-			<column name="keys" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
-			<column name="witnesses" type="VARBINARY" />
-			<column name="witnessThreshold" type="INT" />
+			<column name="current_state" type="VARBINARY" />
 		</createTable>
 
 		<createTable tableName="event"
@@ -72,6 +62,9 @@
 					foreignKeyName="event_coordinates_fk" primaryKey="true"
 					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="digest" type="VARBINARY">
+				<constraints nullable="false" />
 			</column>
 			<column name="content" type="VARBINARY">
 				<constraints nullable="false" />
@@ -98,11 +91,7 @@
 					referencedTableName="coordinates" referencedColumnNames="id"
 					referencedTableSchemaName="stereotomy_kerl" />
 			</column>
-			<column name="signatures" type="VARBINARY">
-				<constraints nullable="false" />
-			</column>
 			<column name="endorsements" type="VARBINARY" />
-			<column name="authentication" type="VARBINARY" />
 			<column name="receipts" type="VARBINARY" />
 		</createTable>
 
@@ -111,7 +100,7 @@
 			<column name="key_coordinates" />
 		</createIndex>
 
-		<createTable tableName="current_receipt">
+		<createTable tableName="current_receipts">
 			<column name="for_identifier" type="INT8">
 				<constraints nullable="false"
 					foreignKeyName="current_receipt_for_identifier_fk"

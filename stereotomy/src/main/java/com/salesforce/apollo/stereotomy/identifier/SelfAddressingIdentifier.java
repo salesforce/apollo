@@ -61,6 +61,6 @@ public class SelfAddressingIdentifier implements Identifier {
 
     @Override
     public String toString() {
-        return "SA[" + digest + "]";
+        return "SA" + digest;
     }
 }

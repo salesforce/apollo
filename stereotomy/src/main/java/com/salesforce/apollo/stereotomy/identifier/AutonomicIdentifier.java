@@ -70,7 +70,7 @@ public class AutonomicIdentifier implements Identifier {
 
     @Override
     public String toString() {
-        return "AID[" + prefix + ":" + uri + "]";
+        return "AID" + prefix + ":" + uri;
     }
 
 }

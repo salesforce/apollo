@@ -20,7 +20,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -37,8 +36,12 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class RotationSpecification {
 
     public static class Builder implements Cloneable {
+        private EventCoordinates            currentCoords;
+        private Digest                      currentDigest;
+        private final List<BasicIdentifier> currentWitnesses           = new ArrayList<>();
         private DigestAlgorithm             digestAlgorithm            = DigestAlgorithm.DEFAULT;
         private Format                      format                     = Format.PROTOBUF;
+        private Identifier                  identifier;
         private final List<PublicKey>       keys                       = new ArrayList<>();
         private final List<Digest>          listOfNextKeyDigests       = new ArrayList<>();
         private final List<PublicKey>       listOfNextKeys             = new ArrayList<>();
@@ -49,7 +52,6 @@ public class RotationSpecification {
         private SignatureAlgorithm          signatureAlgorithm         = SignatureAlgorithm.DEFAULT;
         private Signer                      signer;
         private SigningThreshold            signingThreshold;
-        private KeyState                    state;
         private Version                     version                    = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses                  = new ArrayList<>();
         private int                         witnessThreshold           = 0;
@@ -98,14 +100,14 @@ public class RotationSpecification {
                 var unw = (SigningThreshold.Unweighted) signingThreshold;
                 if (unw.getThreshold() > keys.size()) {
                     throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
-                            + " threshold: " + unw.getThreshold());
+                    + " threshold: " + unw.getThreshold());
                 }
             } else if (signingThreshold instanceof SigningThreshold.Weighted) {
                 var w = (SigningThreshold.Weighted) signingThreshold;
                 var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                 if (countOfWeights != keys.size()) {
                     throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
-                            + keys.size() + " weights: " + countOfWeights);
+                    + keys.size() + " weights: " + countOfWeights);
                 }
             } else {
                 throw new IllegalArgumentException("Unknown SigningThreshold type: " + signingThreshold.getClass());
@@ -113,9 +115,9 @@ public class RotationSpecification {
 
             // --- NEXT KEYS ---
 
-            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null))
-                    || (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty())
-                    || (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
+            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null)) ||
+                (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty()) ||
+                (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
                 throw new IllegalArgumentException("Only provide one of nextKeys, nextKeyDigests, or a nextKeys.");
             }
 
@@ -127,24 +129,23 @@ public class RotationSpecification {
                     var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
                     if (unw.getThreshold() > keys.size()) {
                         throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                                + keys.size() + " threshold: " + unw.getThreshold());
+                        + keys.size() + " threshold: " + unw.getThreshold());
                     }
                 } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
                     var w = (SigningThreshold.Weighted) nextSigningThreshold;
                     var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                     if (countOfWeights != keys.size()) {
                         throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
-                                + " keys: " + keys.size() + " weights: " + countOfWeights);
+                        + " keys: " + keys.size() + " weights: " + countOfWeights);
                     }
                 } else {
-                    throw new IllegalArgumentException(
-                            "Unknown SigningThreshold type: " + nextSigningThreshold.getClass());
+                    throw new IllegalArgumentException("Unknown SigningThreshold type: "
+                    + nextSigningThreshold.getClass());
                 }
 
                 if (listOfNextKeyDigests.isEmpty()) {
                     if (listOfNextKeys.isEmpty()) {
-                        throw new IllegalArgumentException(
-                                "None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
+                        throw new IllegalArgumentException("None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
                     }
 
                     nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, listOfNextKeys,
@@ -157,14 +158,15 @@ public class RotationSpecification {
 
             // --- WITNESSES ---
             var added = new ArrayList<>(witnesses);
-            added.removeAll(state.getWitnesses());
+            added.removeAll(currentWitnesses);
 
-            var removed = new ArrayList<>(state.getWitnesses());
+            var removed = new ArrayList<>(currentWitnesses);
             removed.removeAll(witnesses);
 
-            return new RotationSpecification(format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signingThreshold, keys, signer,
-                    nextKeyConfigurationDigest, witnessThreshold, removed, added, seals, version, state.getDigest());
+            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber() + 1,
+                                             currentCoords,
+                                             signingThreshold, keys, signer, nextKeyConfigurationDigest,
+                                             witnessThreshold, removed, added, seals, version, currentDigest);
         }
 
         @Override
@@ -178,12 +180,24 @@ public class RotationSpecification {
             return clone;
         }
 
+        public EventCoordinates getCurrentCoords() {
+            return currentCoords;
+        }
+
+        public Digest getCurrentDigest() {
+            return currentDigest;
+        }
+
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
         }
 
         public Format getFormat() {
             return format;
+        }
+
+        public Identifier getIdentifier() {
+            return identifier;
         }
 
         public List<PublicKey> getKeys() {
@@ -226,10 +240,6 @@ public class RotationSpecification {
             return signingThreshold;
         }
 
-        public KeyState getState() {
-            return state;
-        }
-
         public Version getVersion() {
             return version;
         }
@@ -268,8 +278,23 @@ public class RotationSpecification {
             return this;
         }
 
+        public Builder setCurrentCoords(EventCoordinates currentCoords) {
+            this.currentCoords = currentCoords;
+            return this;
+        }
+
+        public Builder setCurrentDigest(Digest currentDigest) {
+            this.currentDigest = currentDigest;
+            return this;
+        }
+
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
+            return this;
+        }
+
+        public Builder setIdentifier(Identifier identifier) {
+            this.identifier = identifier;
             return this;
         }
 
@@ -345,11 +370,6 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setState(KeyState state) {
-            this.state = state;
-            return this;
-        }
-
         public Builder setVersion(Version version) {
             this.version = version;
             return this;
@@ -386,9 +406,10 @@ public class RotationSpecification {
     private final int                   witnessThreshold;
 
     public RotationSpecification(Format format, Identifier identifier, long sequenceNumber,
-            EventCoordinates previousEvent, SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer,
-            Digest nextKeys, int witnessThreshold, List<BasicIdentifier> removedWitnesses,
-            List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version, Digest priorEventDigest) {
+                                 EventCoordinates previousEvent, SigningThreshold signingThreshold,
+                                 List<PublicKey> keys, Signer signer, Digest nextKeys, int witnessThreshold,
+                                 List<BasicIdentifier> removedWitnesses, List<BasicIdentifier> addedWitnesses,
+                                 List<Seal> seals, Version version, Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = sequenceNumber;

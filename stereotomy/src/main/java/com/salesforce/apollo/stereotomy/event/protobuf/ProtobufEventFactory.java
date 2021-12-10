@@ -119,7 +119,7 @@ public class ProtobufEventFactory implements EventFactory {
         var bs = identifierSpec(prefix, specification).toByteString();
         var signature = specification.getSigner().sign(bs);
 
-        var common = EventCommon.newBuilder()
+        var common = EventCommon.newBuilder() 
                                 .setAuthentication(Signatures.newBuilder()
                                                              .putAllSignatures(Map.of(0, signature.toSig())));
 
@@ -165,7 +165,7 @@ public class ProtobufEventFactory implements EventFactory {
                                                                                          .collect(Collectors.toMap(e -> e.getKey(),
                                                                                                                    e -> e.getValue()
                                                                                                                          .toSig()))));
-        com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
     }
 

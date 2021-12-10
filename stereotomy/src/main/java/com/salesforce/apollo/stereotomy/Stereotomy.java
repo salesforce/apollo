@@ -431,7 +431,8 @@ public class Stereotomy {
         KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(newNextKeyPair.getPublic()),
                                                           specification.getNextKeysAlgorithm());
-        specification.setState(state).setKey(nextKeyPair.getPublic()).setNextKeys(nextKeys)
+        specification.setIdentifier(identifier).setCurrentCoords(state.getCoordinates())
+                     .setCurrentDigest(state.getDigest()).setKey(nextKeyPair.getPublic()).setNextKeys(nextKeys)
                      .setSigner(0, nextKeyPair.getPrivate());
 
         RotationEvent event = eventFactory.rotation(specification.build());

@@ -55,7 +55,7 @@ public interface Identifier {
 
                                              @Override
                                              public String toString() {
-                                                 return "Identifier<NONE>";
+                                                 return "<NONE>";
                                              }
                                          };
     public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();

@@ -243,11 +243,6 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public Optional<String> getKeyEventHash(EventCoordinates coordinates) {
-        return Optional.of(locationToHash.get(coordinateOrdering(coordinates)));
-    }
-
-    @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
         return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
     }

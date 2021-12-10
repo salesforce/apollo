@@ -6,9 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.model.schema.tables.Event.*;
-import static com.salesforce.apollo.model.schema.tables.Coordinates.*;
-import static com.salesforce.apollo.crypto.QualifiedBase64.*;
+import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
 
 import java.sql.Connection;
 import java.util.Optional;
@@ -16,14 +15,11 @@ import java.util.OptionalLong;
 
 import org.jooq.DSLContext;
 import org.jooq.Record1;
-import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.model.schema.tables.Coordinates;
-import com.salesforce.apollo.model.schema.tables.Event;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
@@ -67,10 +63,8 @@ abstract public class UniKERL implements KERL {
     @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
         return dsl.select(EVENT.CONTENT).from(EVENT)
-                  .where(EVENT.COORDINATES.eq(dsl.select(COORDINATES.ID).from(COORDINATES)
-                                                 .where(COORDINATES.DIGEST.eq(digest.toDigeste().toByteString()
-                                                                                    .toByteArray()))))
-                  .fetchOptional().map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
+                  .where(EVENT.DIGEST.eq(digest.toDigeste().toByteString().toByteArray())).fetchOptional()
+                  .map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
     }
 
     private KeyStateImpl mapKeyEvent(Record1<byte[]> b) {
@@ -83,14 +77,16 @@ abstract public class UniKERL implements KERL {
 
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public Optional<String> getKeyEventHash(EventCoordinates coordinates) {
-        // TODO Auto-generated method stub
-        return null;
+        return dsl.select(EVENT.CONTENT).from(EVENT)
+                  .where(EVENT.COORDINATES.eq(dsl.select(COORDINATES.ID).from(COORDINATES)
+                                                 .where(COORDINATES.IDENTIFIER.eq(coordinates.getIdentifier().toIdent()
+                                                                                             .toByteArray()))
+                                                 .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste()
+                                                                                       .toByteArray()))
+                                                 .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                                                 .and(COORDINATES.ILK.eq(coordinates.getIlk())
+                                                                     .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber())))))
+                  .fetchOptional().map(b -> mapKeyEvent(b)).map(e -> (KeyEvent) e);
     }
 
     @Override

@@ -8,8 +8,8 @@ package com.salesforce.apollo.stereotomy.db;
 
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
+import java.security.KeyPair;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -17,13 +17,16 @@ import java.util.Properties;
 import org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
-import com.salesforce.apollo.utils.DelegatingJdbcConnector;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
@@ -38,6 +41,7 @@ public class TestUniKERL {
 
     @Test
     public void smoke() throws Exception {
+        var factory = new ProtobufEventFactory();
         final var url = "jdbc:h2:mem:test_engine-smoke;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
@@ -48,12 +52,32 @@ public class TestUniKERL {
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
         var uni = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
-        var factory = new ProtobufEventFactory();
+        uni.initialize();
 
-        IdentifierSpecification.Builder specification = IdentifierSpecification.newBuilder();
-
+        var specification = IdentifierSpecification.newBuilder();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+
+        var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
+        uni.append(inception, null);
+
+        // rotate
+        var rotSpec = RotationSpecification.newBuilder();
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+
+        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
+                                                          rotSpec.getNextKeysAlgorithm());
+        rotSpec.setIdentifier(inception.getIdentifier()).setCurrentCoords(inception.getCoordinates())
+               .setCurrentDigest(inception.hash(uni.getDigestAlgorithm())).setKey(nextKeyPair.getPublic())
+               .setNextKeys(nextKeys).setSigner(0, nextKeyPair.getPrivate());
+
+        RotationEvent rotation = factory.rotation(rotSpec.build());
+        uni.append(rotation, null);
+    }
+
+    private InceptionEvent inception(Builder specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
+                                     KeyPair nextKeyPair) {
+
         var nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
                                                        specification.getNextKeysAlgorithm());
 
@@ -61,8 +85,6 @@ public class TestUniKERL {
                      .setSigner(0, initialKeyPair.getPrivate()).build();
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
-        
-        uni.initialize();
-        uni.append(event, null);
+        return event;
     }
 }

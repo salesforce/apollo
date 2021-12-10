@@ -64,7 +64,7 @@ public class BasicIdentifier implements Identifier {
 
     @Override
     public String toString() {
-        return "B[" + shortQb64(publicKey) + "]";
+        return "B" + shortQb64(publicKey);
     }
 
     @Override
