@@ -7,6 +7,8 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_INCEPTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_ROTATION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
@@ -19,6 +21,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
+import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
@@ -42,6 +45,21 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
+
+    public static KeyEvent toKeyEvent(byte[] event, String ilk) {
+        try {
+            return switch (ilk) {
+            case ROTATION_TYPE -> new RotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+            case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+            case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+            case INCEPTION_TYPE -> new InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+            case INTERACTION_TYPE -> new InteractionEventImpl(InteractionEvent.parseFrom(event));
+            default -> null;
+            };
+        } catch (Throwable e) {
+            return null;
+        }
+    }
 
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
         if (signingThreshold.getWeightsCount() == 0) {
@@ -119,7 +137,7 @@ public class ProtobufEventFactory implements EventFactory {
         var bs = identifierSpec(prefix, specification).toByteString();
         var signature = specification.getSigner().sign(bs);
 
-        var common = EventCommon.newBuilder() 
+        var common = EventCommon.newBuilder()
                                 .setAuthentication(Signatures.newBuilder()
                                                              .putAllSignatures(Map.of(0, signature.toSig())));
 
