@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.mvlog;
+package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
@@ -12,6 +12,7 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 
 import java.security.PublicKey;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -23,7 +24,6 @@ import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -56,6 +56,18 @@ public class KeyStateImpl implements KeyState {
             return (T) state;
         }
         throw new IllegalArgumentException("Cannot transform into format: " + format);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof KeyStateImpl)) {
+            return false;
+        }
+        KeyStateImpl other = (KeyStateImpl) obj;
+        return Objects.equals(state, other.state);
     }
 
     @Override
@@ -114,6 +126,11 @@ public class KeyStateImpl implements KeyState {
     @Override
     public int getWitnessThreshold() {
         return state.getWitnessThreshold();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(state);
     }
 
     @Override

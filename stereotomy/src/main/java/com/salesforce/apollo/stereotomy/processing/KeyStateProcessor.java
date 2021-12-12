@@ -19,11 +19,11 @@ import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.mvlog.KeyStateImpl;
 
 public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyState> {
 

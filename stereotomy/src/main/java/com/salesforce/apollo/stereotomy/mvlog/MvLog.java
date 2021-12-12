@@ -45,6 +45,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventIm
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.utils.BbBackedInputStream;

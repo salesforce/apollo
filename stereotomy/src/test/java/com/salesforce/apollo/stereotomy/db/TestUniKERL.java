@@ -26,6 +26,7 @@ import org.h2.jdbc.JdbcConnection;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.model.schema.tables.Coordinates;
@@ -33,6 +34,7 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -94,13 +96,14 @@ public class TestUniKERL {
         }
     }
 
-    private void doOne(ProtobufEventFactory factory, Connection connection, UniKERL uni) {
+    private void doOne(ProtobufEventFactory factory, Connection connection,
+                       UniKERL uni) throws InvalidProtocolBufferException {
         var specification = IdentifierSpecification.newBuilder();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
-        append(inception, connection);
+        var appendKeyState = new KeyStateImpl(append(inception, connection));
 
         var retrieved = uni.getKeyEvent(inception.getCoordinates());
         assertNotNull(retrieved);
@@ -110,13 +113,17 @@ public class TestUniKERL {
         assertNotNull(current);
         assertEquals(inception.getCoordinates(), current.get().getCoordinates());
 
+        assertNotNull(appendKeyState);
+        assertEquals(current.get(), appendKeyState);
+
         // rotate
         var prevNext = nextKeyPair;
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var digest = inception.hash(uni.getDigestAlgorithm());
 
         RotationEvent rotation = rotation(prevNext, digest, inception, nextKeyPair, factory);
-        append(rotation, connection);
+        appendKeyState = new KeyStateImpl(append(rotation, connection));
+        assertNotNull(appendKeyState);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
@@ -125,6 +132,7 @@ public class TestUniKERL {
         current = uni.getKeyState(rotation.getIdentifier());
         assertNotNull(current);
         assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
+        assertEquals(current.get(), appendKeyState);
 
         // rotate again
         prevNext = nextKeyPair;
@@ -132,7 +140,8 @@ public class TestUniKERL {
         digest = rotation.hash(uni.getDigestAlgorithm());
 
         rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
-        append(rotation, connection);
+        appendKeyState = new KeyStateImpl(append(rotation, connection));
+        assertNotNull(appendKeyState);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
@@ -141,6 +150,7 @@ public class TestUniKERL {
         current = uni.getKeyState(rotation.getIdentifier());
         assertNotNull(current);
         assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
+        assertEquals(current.get(), appendKeyState);
 
         // rotate once more
         prevNext = nextKeyPair;
@@ -148,7 +158,8 @@ public class TestUniKERL {
         digest = rotation.hash(uni.getDigestAlgorithm());
 
         rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
-        append(rotation, connection);
+        appendKeyState = new KeyStateImpl(append(rotation, connection));
+        assertNotNull(appendKeyState);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
@@ -157,6 +168,7 @@ public class TestUniKERL {
         current = uni.getKeyState(rotation.getIdentifier());
         assertNotNull(current);
         assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
+        assertEquals(current.get(), appendKeyState);
     }
 
     private void doOne(ProtobufEventFactory factory, UniKERLDirect uni) {

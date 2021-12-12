@@ -36,9 +36,9 @@ import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.mvlog.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 
 /**
