@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
-import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
 import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,6 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -26,8 +28,10 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.model.schema.tables.Coordinates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -53,23 +57,106 @@ public class TestUniKERL {
         final var url = "jdbc:h2:mem:test_engine-smoke;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
-        final var database = new H2Database();
+        var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/stereotomy.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
         var uni = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
-        uni.initialize();
 
         doOne(factory, uni);
         doOne(factory, uni);
         doOne(factory, uni);
         doOne(factory, uni);
 
+        doOne(factory, connection, uni);
+        doOne(factory, connection, uni);
+        doOne(factory, connection, uni);
+        doOne(factory, connection, uni);
+
+        System.out.println(DSL.using(connection).selectFrom(Coordinates.COORDINATES).fetch());
         System.out.println(DSL.using(connection).selectFrom(IDENTIFIER).fetch());
-        System.out.println(DSL.using(connection).selectFrom(COORDINATES).fetch());
-        System.out.println(DSL.using(connection).selectFrom(EVENT).fetch());
+    }
+
+    private byte[] append(KeyEvent event, Connection connection) {
+        CallableStatement proc;
+        try {
+            proc = connection.prepareCall("{ ? = call stereotomy_kerl.append(?, ?, ?) }");
+            proc.registerOutParameter(1, Types.BINARY);
+            proc.setObject(2, event.getBytes());
+            proc.setObject(3, event.getIlk());
+            proc.setObject(4, DigestAlgorithm.DEFAULT.digestCode());
+            proc.execute();
+            return proc.getBytes(1);
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void doOne(ProtobufEventFactory factory, Connection connection, UniKERL uni) {
+        var specification = IdentifierSpecification.newBuilder();
+        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+
+        var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
+        append(inception, connection);
+
+        var retrieved = uni.getKeyEvent(inception.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(inception, retrieved.get());
+        var current = uni.getKeyState(inception.getIdentifier());
+        assertNotNull(current);
+        assertEquals(inception.getCoordinates(), current.get().getCoordinates());
+
+        // rotate
+        var prevNext = nextKeyPair;
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var digest = inception.hash(uni.getDigestAlgorithm());
+
+        RotationEvent rotation = rotation(prevNext, digest, inception, nextKeyPair, factory);
+        append(rotation, connection);
+
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
+
+        // rotate again
+        prevNext = nextKeyPair;
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        digest = rotation.hash(uni.getDigestAlgorithm());
+
+        rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
+        append(rotation, connection);
+
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
+
+        // rotate once more
+        prevNext = nextKeyPair;
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        digest = rotation.hash(uni.getDigestAlgorithm());
+
+        rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
+        append(rotation, connection);
+
+        retrieved = uni.getKeyEvent(rotation.getCoordinates());
+        assertNotNull(retrieved);
+        assertFalse(retrieved.isEmpty());
+        assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
     }
 
     private void doOne(ProtobufEventFactory factory, UniKERLDirect uni) {
@@ -78,48 +165,63 @@ public class TestUniKERL {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
-        uni.append(inception, null);
+        uni.append(inception);
 
         var retrieved = uni.getKeyEvent(inception.getCoordinates());
         assertNotNull(retrieved);
         assertFalse(retrieved.isEmpty());
         assertEquals(inception, retrieved.get());
+        var current = uni.getKeyState(inception.getIdentifier());
+        assertNotNull(current);
+        assertEquals(inception.getCoordinates(), current.get().getCoordinates());
 
         // rotate
+        var prevNext = nextKeyPair;
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var digest = inception.hash(uni.getDigestAlgorithm());
 
-        RotationEvent rotation = rotation(digest, inception, nextKeyPair, factory);
-        uni.append(rotation, null);
+        RotationEvent rotation = rotation(prevNext, digest, inception, nextKeyPair, factory);
+        uni.append(rotation);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
         assertFalse(retrieved.isEmpty());
         assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
 
         // rotate again
+        prevNext = nextKeyPair;
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         digest = rotation.hash(uni.getDigestAlgorithm());
 
-        rotation = rotation(digest, rotation, nextKeyPair, factory);
-        uni.append(rotation, null);
+        rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
+        uni.append(rotation);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
         assertFalse(retrieved.isEmpty());
         assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
 
         // rotate once more
+        prevNext = nextKeyPair;
         nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         digest = rotation.hash(uni.getDigestAlgorithm());
 
-        rotation = rotation(digest, rotation, nextKeyPair, factory);
-        uni.append(rotation, null);
+        rotation = rotation(prevNext, digest, rotation, nextKeyPair, factory);
+        uni.append(rotation);
 
         retrieved = uni.getKeyEvent(rotation.getCoordinates());
         assertNotNull(retrieved);
         assertFalse(retrieved.isEmpty());
         assertEquals(rotation, retrieved.get());
+        current = uni.getKeyState(rotation.getIdentifier());
+        assertNotNull(current);
+        assertEquals(rotation.getCoordinates(), current.get().getCoordinates());
     }
 
     private InceptionEvent inception(Builder specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
@@ -129,19 +231,20 @@ public class TestUniKERL {
                                                        specification.getNextKeysAlgorithm());
 
         specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setWitnesses(Collections.emptyList())
-                     .setSigner(0, initialKeyPair.getPrivate()).build();
+                     .setSigner(0, initialKeyPair.getPrivate());
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
     }
 
-    private RotationEvent rotation(final Digest prevDigest, EstablishmentEvent prev, KeyPair nextKeyPair,
-                                   ProtobufEventFactory factory) {
+    private RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
+                                   KeyPair nextKeyPair, ProtobufEventFactory factory) {
         var rotSpec = RotationSpecification.newBuilder();
         Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
                                                           rotSpec.getNextKeysAlgorithm());
+
         rotSpec.setIdentifier(prev.getIdentifier()).setCurrentCoords(prev.getCoordinates()).setCurrentDigest(prevDigest)
-               .setKey(nextKeyPair.getPublic()).setNextKeys(nextKeys).setSigner(0, nextKeyPair.getPrivate());
+               .setKey(prevNext.getPublic()).setNextKeys(nextKeys).setSigner(0, prevNext.getPrivate());
 
         RotationEvent rotation = factory.rotation(rotSpec.build());
         return rotation;

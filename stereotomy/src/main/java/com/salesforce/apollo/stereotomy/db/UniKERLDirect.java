@@ -29,10 +29,6 @@ public class UniKERLDirect extends UniKERL {
 
     }
 
-    public void initialize() {
-        initialize(dsl);
-    }
-
     @Override
     public void append(KeyEvent event, KeyState newState) {
         append(dsl, event, newState, digestAlgorithm);

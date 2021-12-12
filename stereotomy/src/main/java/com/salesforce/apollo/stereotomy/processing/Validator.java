@@ -69,8 +69,8 @@ public interface Validator {
             log.debug("Identifier: {} not found in KeyState", identifier);
             return false;
         }
-        for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent())
-                               .orElse(null); lee != null; lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
+        for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent()).orElse(null); lee != null;
+             lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
             var lastEstablishment = (EstablishmentEvent) lee;
             lastEstablishment.getKeys();
 
@@ -140,7 +140,8 @@ public interface Validator {
                 var dee = (DelegatedEstablishmentEvent) ee;
                 var delegatingEvent = kel.getKeyEvent(dee.getDelegatingSeal().getCoordinates())
                                          .orElseThrow(() -> new MissingDelegatingEventException(event,
-                                                 dee.getDelegatingSeal().getCoordinates()));
+                                                                                                dee.getDelegatingSeal()
+                                                                                                   .getCoordinates()));
 
                 this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
                               "delegated establishment event seal must contain be contained in referenced delegating event");
@@ -162,9 +163,9 @@ public interface Validator {
             if (s instanceof Seal.CoordinatesSeal) {
                 var ecds = (Seal.CoordinatesSeal) s;
                 var digest = ecds.getEvent().getDigest();
-                if (ecds.getEvent().getIdentifier().equals(event.getIdentifier())
-                        && ecds.getEvent().getSequenceNumber() == event.getSequenceNumber()
-                        && event.hash(digest.getAlgorithm()).equals(digest)) {
+                if (ecds.getEvent().getIdentifier().equals(event.getIdentifier()) &&
+                    ecds.getEvent().getSequenceNumber() == event.getSequenceNumber() &&
+                    event.hash(digest.getAlgorithm()).equals(digest)) {
                     return true;
                 }
             }
@@ -263,8 +264,7 @@ public interface Validator {
         } else {
             this.validate(rot.getWitnessThreshold() <= newWitnesses.size(),
                           "witness threshold must be less than or equal to the number of witnesses "
-                                  + "(threshold: %s, witnesses: %s)",
-                          rot.getWitnessThreshold(), newWitnesses.size());
+                          + "(threshold: %s, witnesses: %s)", rot.getWitnessThreshold(), newWitnesses.size());
         }
     }
 

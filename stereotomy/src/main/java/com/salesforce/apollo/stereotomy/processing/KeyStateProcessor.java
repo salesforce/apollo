@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyCurrentState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -74,7 +73,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                      currentState.configurationTraits(), event, lastEstablishmentEvent,
                                      currentState.getDelegatingIdentifier().orElse(null),
                                      events.getDigestAlgorithm().digest(event.getBytes()));
-        events.append(event, state);
+//        events.append(event, state);
         return state;
     }
 
@@ -97,17 +96,13 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
                                  KeyEvent event, EstablishmentEvent lastEstablishmentEvent, Identifier delegatingPrefix,
                                  Digest digest) {
         final var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder();
-        return new KeyStateImpl(builder.setCurrent(KeyCurrentState.newBuilder()
-                                                                  .addAllKeys(keys.stream().map(pk -> bs(pk))
-                                                                                  .collect(Collectors.toList()))
-                                                                  .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
-                                                                                                                              : nextKeyConfiguration.toDigeste())
-                                                                  .setSigningThreshold(toSigningThreshold(signingThreshold))
-                                                                  .addAllWitnesses(witnesses.stream()
-                                                                                            .map(e -> e.toIdent())
-                                                                                            .collect(Collectors.toList()))
-                                                                  .setWitnessThreshold(witnessThreshold))
-                                       .setDigest(digest.toDigeste())
+        return new KeyStateImpl(builder.addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
+                                       .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
+                                                                                                   : nextKeyConfiguration.toDigeste())
+                                       .setSigningThreshold(toSigningThreshold(signingThreshold))
+                                       .addAllWitnesses(witnesses.stream().map(e -> e.toIdent())
+                                                                 .collect(Collectors.toList()))
+                                       .setWitnessThreshold(witnessThreshold).setDigest(digest.toDigeste())
                                        .addAllConfigurationTraits(configurationTraits.stream().map(e -> e.name())
                                                                                      .collect(Collectors.toList()))
                                        .setCoordinates(event.getCoordinates().toEventCoords())

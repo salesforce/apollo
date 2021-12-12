@@ -181,15 +181,11 @@ message KeyState {
     EventCoords lastEstablishmentEvent = 4;
     Ident delegatingIdentifier = 5;
     repeated string configurationTraits = 6;
-    KeyCurrentState current = 7;
-}
-
-message KeyCurrentState {
-    utils.Digeste nextKeyConfigurationDigest = 1;
-    repeated utils.PubKey keys = 2;
-    SigningThreshold signingThreshold = 3;
-    repeated Ident witnesses = 4;
-    int32 witnessThreshold = 5; 
+    utils.Digeste nextKeyConfigurationDigest = 7;
+    repeated utils.PubKey keys = 8;
+    SigningThreshold signingThreshold = 9;
+    repeated Ident witnesses = 10;
+    int32 witnessThreshold = 11; 
 }
 
 message Signatures {

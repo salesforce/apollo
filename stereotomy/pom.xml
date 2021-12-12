@@ -10,6 +10,10 @@
 	<artifactId>Stereotomy</artifactId>
 	<name>Stereotomy: Identity and Key Management</name>
 
+	<properties>
+		<h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</h2.db.url>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>com.salesforce.apollo</groupId>
@@ -35,6 +39,16 @@
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.jooq</groupId>
+			<artifactId>jooq</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<optional>true</optional>
+		</dependency>
 
 		<!-- Test only deps below this line -->
 
@@ -47,16 +61,6 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<dependency>
-			<groupId>org.jooq</groupId>
-			<artifactId>jooq</artifactId>
-			<optional>true</optional>
 		</dependency>
 		<dependency>
 			<groupId>org.liquibase</groupId>
@@ -120,7 +124,7 @@
 				<artifactId>liquibase-maven-plugin</artifactId>
 				<configuration>
 					<driver>org.h2.Driver</driver>
-					<url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</url>
+					<url>${h2.db.url}</url>
 					<verbose>true</verbose>
 					<changeLogFile>${project.basedir}/src/main/resources/stereotomy.xml</changeLogFile>
 				</configuration>
@@ -133,13 +137,6 @@
 						</goals>
 					</execution>
 				</executions>
-				<dependencies>
-					<dependency>
-						<groupId>com.h2database</groupId>
-						<artifactId>h2</artifactId>
-						<version>${h2.gen.version}</version>
-					</dependency>
-				</dependencies>
 			</plugin>
 			<plugin>
 				<groupId>org.jooq</groupId>
@@ -152,54 +149,60 @@
 						</goals>
 					</execution>
 				</executions>
-				<dependencies>
-					<dependency>
-						<groupId>com.h2database</groupId>
-						<artifactId>h2</artifactId>
-						<version>${h2.gen.version}</version>
-					</dependency>
-					<dependency>
-						<groupId>com.fasterxml.jackson.core</groupId>
-						<artifactId>jackson-databind</artifactId>
-						<version>${jackson.version}</version>
-					</dependency>
-				</dependencies>
-				<configuration>
-					<jdbc>
-						<driver>org.h2.Driver</driver>
-						<url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</url>
-					</jdbc>
-					<generator>
-						<database>
-							<name>org.jooq.meta.h2.H2Database</name>
-							<includes>.*</includes>
-							<excludes></excludes>
-							<schemata>
-								<schema>
-									<inputSchema>stereotomy_kerl</inputSchema>
-								</schema>
-							</schemata>
-
-							<forcedTypes>
-								<forcedType>
-									<userType>com.fasterxml.jackson.databind.JsonNode</userType>
-									<binding>com.salesforce.apollo.utils.jooq.JSONJacksonBinding</binding>
-									<includeExpression>.*json.*</includeExpression>
-									<includeTypes>.*</includeTypes>
-								</forcedType>
-							</forcedTypes>
-						</database>
-						<generate></generate>
-						<target>
-							<packageName>com.salesforce.apollo.model.schema</packageName>
-							<directory>target/generated-sources/jooq</directory>
-						</target>
-					</generator>
-				</configuration>
 			</plugin>
 		</plugins>
 		<pluginManagement>
 			<plugins>
+				<plugin>
+					<groupId>org.liquibase</groupId>
+					<artifactId>liquibase-maven-plugin</artifactId>
+					<dependencies>
+						<dependency>
+							<groupId>com.h2database</groupId>
+							<artifactId>h2</artifactId>
+							<version>${h2.gen.version}</version>
+						</dependency>
+					</dependencies>
+				</plugin>
+				<plugin>
+					<groupId>org.jooq</groupId>
+					<artifactId>jooq-codegen-maven</artifactId>
+					<dependencies>
+						<dependency>
+							<groupId>com.h2database</groupId>
+							<artifactId>h2</artifactId>
+							<version>${h2.gen.version}</version>
+						</dependency>
+						<dependency>
+							<groupId>com.fasterxml.jackson.core</groupId>
+							<artifactId>jackson-databind</artifactId>
+							<version>${jackson.version}</version>
+						</dependency>
+					</dependencies>
+					<configuration>
+						<jdbc>
+							<driver>org.h2.Driver</driver>
+							<url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</url>
+						</jdbc>
+						<generator>
+							<database>
+								<name>org.jooq.meta.h2.H2Database</name>
+								<includes>.*</includes>
+								<excludes></excludes>
+								<schemata>
+									<schema>
+										<inputSchema>stereotomy_kerl</inputSchema>
+									</schema>
+								</schemata>
+							</database>
+							<generate></generate>
+							<target>
+								<packageName>com.salesforce.apollo.model.schema</packageName>
+								<directory>target/generated-sources/jooq</directory>
+							</target>
+						</generator>
+					</configuration>
+				</plugin>
 				<!--This plugin's configuration is used to store Eclipse m2e settings 
 					only. It has no influence on the Maven build itself. -->
 				<plugin>

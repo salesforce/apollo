@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
@@ -33,6 +34,10 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class KeyStateImpl implements KeyState {
 
     private final com.salesfoce.apollo.stereotomy.event.proto.KeyState state;
+
+    public KeyStateImpl(byte[] content) throws InvalidProtocolBufferException {
+        this.state = com.salesfoce.apollo.stereotomy.event.proto.KeyState.parseFrom(content);
+    }
 
     public KeyStateImpl(com.salesfoce.apollo.stereotomy.event.proto.KeyState state) {
         this.state = state;
@@ -54,6 +59,11 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
+    public byte[] getBytes() {
+        return state.toByteString().toByteArray();
+    }
+
+    @Override
     public EventCoordinates getCoordinates() {
         return EventCoordinates.from(state.getCoordinates());
     }
@@ -71,7 +81,7 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public List<PublicKey> getKeys() {
-        return state.getCurrent().getKeysList().stream().map(s -> publicKey(s)).collect(Collectors.toList());
+        return state.getKeysList().stream().map(s -> publicKey(s)).collect(Collectors.toList());
     }
 
     @Override
@@ -86,25 +96,24 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Optional<Digest> getNextKeyConfigurationDigest() {
-        return state.getCurrent()
-                    .hasNextKeyConfigurationDigest() ? Optional.of(digest(state.getCurrent().getNextKeyConfigurationDigest())) : Optional.empty();
+        return state.hasNextKeyConfigurationDigest() ? Optional.of(digest(state.getNextKeyConfigurationDigest()))
+                                                     : Optional.empty();
     }
 
     @Override
     public SigningThreshold getSigningThreshold() {
-        return ProtobufEventFactory.toSigningThreshold(state.getCurrent().getSigningThreshold());
+        return ProtobufEventFactory.toSigningThreshold(state.getSigningThreshold());
     }
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return state.getCurrent().getWitnessesList().stream().map(s -> identifier(s))
-                    .filter(i -> i instanceof BasicIdentifier).filter(i -> i != null).map(i -> (BasicIdentifier) i)
-                    .collect(Collectors.toList());
+        return state.getWitnessesList().stream().map(s -> identifier(s)).filter(i -> i instanceof BasicIdentifier)
+                    .filter(i -> i != null).map(i -> (BasicIdentifier) i).collect(Collectors.toList());
     }
 
     @Override
     public int getWitnessThreshold() {
-        return state.getCurrent().getWitnessThreshold();
+        return state.getWitnessThreshold();
     }
 
     @Override

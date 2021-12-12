@@ -169,6 +169,11 @@ public class Stereotomy {
         }
 
         @Override
+        public byte[] getBytes() {
+            return state.getBytes();
+        }
+
+        @Override
         public EventCoordinates getCoordinates() {
             return state.getCoordinates();
         }
@@ -379,7 +384,7 @@ public class Stereotomy {
                                                        specification.getNextKeysAlgorithm());
 
         specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setWitnesses(Arrays.asList(witnesses))
-                     .setSigner(0, initialKeyPair.getPrivate()).build();
+                     .setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = processor.process(event);

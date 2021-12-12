@@ -30,6 +30,8 @@ public interface KeyState {
 
     <T> T convertTo(Format format);
 
+    byte[] getBytes();
+
     EventCoordinates getCoordinates();
 
     Optional<Identifier> getDelegatingIdentifier();
@@ -63,8 +65,7 @@ public interface KeyState {
     }
 
     default boolean isTransferable() {
-        return this.getCoordinates().getIdentifier().isTransferable()
-                && this.getNextKeyConfigurationDigest().isPresent();
+        return this.getCoordinates().getIdentifier().isTransferable() &&
+               this.getNextKeyConfigurationDigest().isPresent();
     }
-
 }

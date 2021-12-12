@@ -70,13 +70,6 @@ public class KeyEventProcessor implements Validator, Verifier {
                                 .orElseThrow(() -> new MissingEventException(event, event.getPrevious()));
         }
 
-        validateKeyEventData(previousState, event, kerl);
-
-        KeyState newState = keyStateProcessor.apply(previousState, event);
-
-        // TODO remove invalid signatures before appending
-        kerl.append(event, newState);
-
-        return newState;
+        return process(previousState, event);
     }
 }
