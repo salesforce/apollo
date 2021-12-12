@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URL;
 import java.security.KeyPair;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.List;
 
@@ -23,8 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
 import com.salesforce.apollo.stereotomy.Stereotomy.StereotomyKeyStore;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -48,16 +45,16 @@ import com.salesforce.apollo.utils.Hex;
  *
  */
 public class StereotomyTests {
-
-    final MvLog              kel          = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
-    final StereotomyKeyStore ks           = new InMemoryKeyStore();
-    SecureRandom             secureRandom = new SecureRandom(new byte[] { 6, 6, 6 });
+    KERL                     kel;
+    final StereotomyKeyStore ks = new InMemoryKeyStore();
+    SecureRandom             secureRandom;
 
     @BeforeEach
-    public void beforeEachTest() throws NoSuchAlgorithmException {
-        // this makes the values of secureRandom deterministic
+    public void beforeEachTest() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
         secureRandom.setSeed(new byte[] { 0 });
+        initializeKel();
+        // this makes the values of secureRandom deterministic
     }
 
     @Test
@@ -217,6 +214,10 @@ public class StereotomyTests {
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
         assertFalse(identifier.isDelegated());
+    }
+
+    void initializeKel() throws Exception {
+        kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
 }

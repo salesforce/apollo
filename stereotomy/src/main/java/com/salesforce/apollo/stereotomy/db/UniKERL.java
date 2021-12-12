@@ -35,7 +35,6 @@ import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
-import com.salesforce.apollo.stereotomy.event.protobuf.KeyEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -187,8 +186,16 @@ abstract public class UniKERL implements KERL {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        // TODO Auto-generated method stub
-        return null;
+        return dsl.select(EVENT.CONTENT, COORDINATES.ILK).from(EVENT).join(COORDINATES)
+                  .on(EVENT.COORDINATES.eq(COORDINATES.ID)).join(IDENTIFIER)
+                  .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                  .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                  .and(COORDINATES.DIGEST.eq(coordinates.getPreviousEvent().getDigest().toDigeste().toByteArray()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber())).fetchOptional()
+                  .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
+                  .map(ke -> ke instanceof SealingEvent ? (SealingEvent) ke : null);
     }
 
     @Override

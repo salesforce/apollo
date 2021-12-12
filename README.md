@@ -2,7 +2,7 @@
 The Apollo Delphinius project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication overlay.  The consensus layer is supplied by a green - i.e. non POW - async bft consensus protocol. At the top is a largely JDBC connectable replicated SQL store, supported by checkpointed CHOAM linear logs.
 
 ## Requirements
-Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above.  
+Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
