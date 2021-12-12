@@ -34,6 +34,6 @@ public interface KEL {
 
     DigestAlgorithm getDigestAlgorithm();
 
-    void append(KeyEvent event, KeyState newState);
+    KeyState append(KeyEvent event);
 
 }

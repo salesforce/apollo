@@ -34,10 +34,10 @@ public class KeyEventProcessor implements Validator, Verifier {
     public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
         KeyEvent event = kerl.getKeyEvent(attachmentEvent.getCoordinates())
                              .orElseThrow(() -> new MissingEventException(attachmentEvent,
-                                     attachmentEvent.getCoordinates()));
+                                                                          attachmentEvent.getCoordinates()));
         var state = kerl.getKeyState(attachmentEvent.getCoordinates())
                         .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
-                                attachmentEvent.getCoordinates()));
+                                                                               attachmentEvent.getCoordinates()));
 
         @SuppressWarnings("unused")
         var validControllerSignatures = verifyAuthentication(state, event, attachmentEvent.getAuthentication(), kerl);
@@ -55,9 +55,6 @@ public class KeyEventProcessor implements Validator, Verifier {
         validateKeyEventData(previousState, event, kerl);
 
         KeyState newState = keyStateProcessor.apply(previousState, event);
-
-        // TODO remove invalid signatures before appending
-        kerl.append(event, newState);
 
         return newState;
     }

@@ -49,7 +49,6 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
-import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
@@ -326,21 +325,14 @@ public class Stereotomy {
     private final KERL               kerl;
     private final StereotomyKeyStore keyStore;
     private final LimitedController  limitedController = new LimitedStereotomy();
-    private final KeyEventProcessor  processor;
 
     public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
         this(keyStore, kerl, entropy, new ProtobufEventFactory());
     }
 
     public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy, EventFactory eventFactory) {
-        this(keyStore, kerl, entropy, eventFactory, new KeyEventProcessor(kerl));
-    }
-
-    public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy, EventFactory eventFactory,
-                      KeyEventProcessor processor) {
         this.keyStore = keyStore;
         this.entropy = entropy;
-        this.processor = processor;
         this.eventFactory = eventFactory;
         this.kerl = kerl;
     }
@@ -387,7 +379,7 @@ public class Stereotomy {
                      .setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
-        KeyState state = processor.process(event);
+        KeyState state = kerl.append(event);
         if (state == null) {
             throw new IllegalStateException("Invalid event produced");
         }
@@ -441,7 +433,7 @@ public class Stereotomy {
                      .setSigner(0, nextKeyPair.getPrivate());
 
         RotationEvent event = eventFactory.rotation(specification.build());
-        KeyState newState = processor.process(state, event);
+        KeyState newState = kerl.append(event);
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
 
@@ -479,10 +471,11 @@ public class Stereotomy {
             throw new IllegalArgumentException("Key pair for identifier not found in keystore");
         }
 
-        specification.setState(state).setSigner(0, keyPair.get().getPrivate());
+        specification.setPriorEventDigest(state.getDigest()).setLastEvent(state.getLastEvent())
+                     .setIdentifier(identifier).setSigner(0, keyPair.get().getPrivate());
 
         KeyEvent event = eventFactory.interaction(specification.build());
-        KeyState newKeyState = processor.process(state, event);
+        KeyState newKeyState = kerl.append(event);
         return newKeyState;
     }
 

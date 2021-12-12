@@ -30,7 +30,9 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public void append(KeyEvent event, KeyState newState) {
+    public KeyState append(KeyEvent event) {
+        KeyState newState = processor.process(event);
         append(dsl, event, newState, digestAlgorithm);
+        return newState;
     }
 }

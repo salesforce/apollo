@@ -15,7 +15,6 @@ import java.util.List;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -31,18 +30,19 @@ public class InteractionSpecification {
 
     public static class Builder implements Cloneable {
         private Format           format  = Format.PROTOBUF;
+        private Identifier       identifier;
+        private EventCoordinates lastEvent;
+        private Digest           priorEventDigest;
         private final List<Seal> seals   = new ArrayList<>();
         private Signer           signer;
-        private KeyState         state;
         private Version          version = Stereotomy.currentVersion();
 
         public Builder() {
         }
 
         public InteractionSpecification build() {
-            return new InteractionSpecification(this.format, state.getIdentifier(),
-                    state.getLastEvent().getSequenceNumber() + 1, state.getLastEvent(), signer, seals, version,
-                    state.getDigest());
+            return new InteractionSpecification(this.format, identifier, lastEvent.getSequenceNumber() + 1, lastEvent,
+                                                signer, seals, version, priorEventDigest);
         }
 
         @Override
@@ -60,16 +60,24 @@ public class InteractionSpecification {
             return format;
         }
 
+        public Identifier getIdentifier() {
+            return identifier;
+        }
+
+        public EventCoordinates getLastEvent() {
+            return lastEvent;
+        }
+
+        public Digest getPriorEventDigest() {
+            return priorEventDigest;
+        }
+
         public List<Seal> getSeals() {
             return seals;
         }
 
         public Signer getSigner() {
             return signer;
-        }
-
-        public KeyState getState() {
-            return state;
         }
 
         public Version getVersion() {
@@ -81,13 +89,28 @@ public class InteractionSpecification {
             return this;
         }
 
+        public Builder setIdentifier(Identifier identifier) {
+            this.identifier = identifier;
+            return this;
+        }
+
         public Builder setJson() {
             format = Format.JSON;
             return this;
         }
 
+        public Builder setLastEvent(EventCoordinates lastEvent) {
+            this.lastEvent = lastEvent;
+            return this;
+        }
+
         public Builder setMessagePack() {
             format = Format.MESSAGE_PACK;
+            return this;
+        }
+
+        public Builder setPriorEventDigest(Digest priorEventDigest) {
+            this.priorEventDigest = priorEventDigest;
             return this;
         }
 
@@ -115,11 +138,6 @@ public class InteractionSpecification {
             return this;
         }
 
-        public Builder setState(KeyState state) {
-            this.state = state;
-            return this;
-        }
-
         public Builder setVersion(Version version) {
             this.version = version;
             return this;
@@ -133,14 +151,15 @@ public class InteractionSpecification {
     private final Format           format;
     private final Identifier       identifier;
     private final EventCoordinates previous;
+    private final Digest           priorEventDigest;
     private final List<Seal>       seals;
     private final long             sequenceNumber;
     private final Signer           signer;
     private final Version          version;
-    private final Digest           priorEventDigest;
 
     public InteractionSpecification(Format format, Identifier identifier, long sequenceNumber,
-            EventCoordinates previous, Signer signer, List<Seal> seals, Version version, Digest priorEventDigest) {
+                                    EventCoordinates previous, Signer signer, List<Seal> seals, Version version,
+                                    Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = sequenceNumber;
@@ -163,6 +182,10 @@ public class InteractionSpecification {
         return previous;
     }
 
+    public Digest getPriorEventDigest() {
+        return priorEventDigest;
+    }
+
     public List<Seal> getSeals() {
         return seals;
     }
@@ -177,10 +200,6 @@ public class InteractionSpecification {
 
     public Version getVersion() {
         return version;
-    }
-
-    public Digest getPriorEventDigest() {
-        return priorEventDigest;
     }
 
 }

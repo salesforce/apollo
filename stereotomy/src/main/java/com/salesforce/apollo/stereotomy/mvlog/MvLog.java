@@ -48,6 +48,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -61,6 +62,11 @@ public class MvLog implements KERL {
         @Override
         public int compare(Object a, Object b) {
             return 0;
+        }
+
+        @Override
+        public Object[] createStorage(int size) {
+            return new Object[size];
         }
 
         @Override
@@ -144,11 +150,6 @@ public class MvLog implements KERL {
             };
         }
 
-        @Override
-        public Object[] createStorage(int size) {
-            return new Object[size];
-        }
-
     }
 
     private static final String AUTHENTICATIONS         = "AUTHENTICATIONS";
@@ -176,6 +177,7 @@ public class MvLog implements KERL {
     // Order by <stateOrdering>
     private final MVMap<String, Long>   lastReceipt;
     private final MVMap<String, String> locationToHash;
+    private final KeyEventProcessor     processor = new KeyEventProcessor(this);
     // Order by <receiptOrdering>
     private final MVMap<String, Signatures> receipts;
 
@@ -202,14 +204,10 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public void append(KeyEvent event, KeyState newState) {
-        String coordinates = coordinateOrdering(event.getCoordinates());
-        events.put(coordinates, event);
-        String hashstring = qb64(newState.getDigest());
-        eventsByHash.put(hashstring, coordinates);
-        locationToHash.put(coordinates, hashstring);
-        keyState.put(coordinates, newState);
-        keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
+    public KeyState append(KeyEvent event) {
+        final var newState = processor.process(event);
+        append(event, newState);
+        return newState;
     }
 
     @Override
@@ -253,6 +251,16 @@ public class MvLog implements KERL {
         String stateHash = keyStateByIdentifier.get(qb64(identifier));
 
         return stateHash == null ? Optional.empty() : Optional.ofNullable(keyState.get(stateHash));
+    }
+
+    private void append(KeyEvent event, KeyState newState) {
+        String coordinates = coordinateOrdering(event.getCoordinates());
+        events.put(coordinates, event);
+        String hashstring = qb64(newState.getDigest());
+        eventsByHash.put(hashstring, coordinates);
+        locationToHash.put(coordinates, hashstring);
+        keyState.put(coordinates, newState);
+        keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
     }
 
     private void appendAttachments(EventCoordinates coordinates, Map<Integer, JohnHancock> signatures,

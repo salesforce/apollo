@@ -76,9 +76,6 @@ public class TestUniKERL {
         doOne(factory, connection, uni);
         doOne(factory, connection, uni);
         doOne(factory, connection, uni);
-
-        System.out.println(DSL.using(connection).selectFrom(Coordinates.COORDINATES).fetch());
-        System.out.println(DSL.using(connection).selectFrom(IDENTIFIER).fetch());
     }
 
     private byte[] append(KeyEvent event, Connection connection) {

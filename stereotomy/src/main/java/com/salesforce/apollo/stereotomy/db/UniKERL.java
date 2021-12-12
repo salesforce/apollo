@@ -161,7 +161,7 @@ abstract public class UniKERL implements KERL {
     protected final DigestAlgorithm digestAlgorithm;
     protected final DSLContext      dsl;
 
-    private final KeyEventProcessor processor;
+    protected final KeyEventProcessor processor;
 
     public UniKERL(Connection connection, DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
@@ -170,7 +170,9 @@ abstract public class UniKERL implements KERL {
     }
 
     public KeyState append(KeyEvent k) {
-        return processor.process(k);
+        final var newState = processor.process(k);
+        append(dsl, k, newState, digestAlgorithm);
+        return newState;
     }
 
     @Override
