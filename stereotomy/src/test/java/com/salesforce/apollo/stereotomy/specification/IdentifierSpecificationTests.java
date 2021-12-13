@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,8 +39,10 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__int() {
-        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic()).addSigner(this.signer)
-                                          .setSigningThreshold(1).build();
+        var spec = IdentifierSpecification.newBuilder()
+                                          .setKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
+                                          .setNextKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
+                                          .addSigner(this.signer).setSigningThreshold(1).build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -47,7 +50,8 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__unweighted() {
-        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic()).addSigner(this.signer)
+        var spec = IdentifierSpecification.newBuilder().addKey(this.keyPair.getPublic()).addSigner(this.signer)
+                                          .setNextKeys(Arrays.asList(keyPair2.getPublic()))
                                           .setNextSigningThreshold(SigningThreshold.unweighted(1)).build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
@@ -56,8 +60,11 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__weighted() {
-        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic())
-                                          .setKey(this.keyPair2.getPublic()).addSigner(this.signer)
+        var spec = IdentifierSpecification.newBuilder()
+                                          .setKeys(Arrays.asList(this.keyPair.getPublic(), this.keyPair2.getPublic()))
+                                          .setNextKeys(Arrays.asList(this.keyPair.getPublic(),
+                                                                     this.keyPair2.getPublic()))
+                                          .addSigner(this.signer)
                                           .setSigningThreshold(SigningThreshold.weighted("1", "2")).build();
 
         SigningThreshold signingThreshold = spec.getSigningThreshold();

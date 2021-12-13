@@ -36,7 +36,6 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
-import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 import liquibase.Liquibase;
@@ -161,10 +160,8 @@ public class TestUniKERL {
     private InceptionEvent inception(Builder specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
                                      KeyPair nextKeyPair) {
 
-        var nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                       specification.getNextKeysAlgorithm());
-
-        specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setWitnesses(Collections.emptyList())
+        specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
+                     .setNextKeys(List.of(nextKeyPair.getPublic())).setWitnesses(Collections.emptyList())
                      .setSigner(0, initialKeyPair.getPrivate());
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
@@ -211,11 +208,9 @@ public class TestUniKERL {
     private RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
                                    KeyPair nextKeyPair, ProtobufEventFactory factory) {
         var rotSpec = RotationSpecification.newBuilder();
-        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                          rotSpec.getNextKeysAlgorithm());
-
         rotSpec.setIdentifier(prev.getIdentifier()).setCurrentCoords(prev.getCoordinates()).setCurrentDigest(prevDigest)
-               .setKey(prevNext.getPublic()).setNextKeys(nextKeys).setSigner(0, prevNext.getPrivate());
+               .setKey(prevNext.getPublic()).setSigningThreshold(unweighted(1))
+               .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(0, prevNext.getPrivate());
 
         RotationEvent rotation = factory.rotation(rotSpec.build());
         return rotation;

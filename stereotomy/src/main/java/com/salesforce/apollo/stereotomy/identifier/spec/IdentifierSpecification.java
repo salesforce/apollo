@@ -49,9 +49,7 @@ public class IdentifierSpecification {
         private Format                            format                        = Format.PROTOBUF;
         private DigestAlgorithm                   identifierDigestAlgorithm     = DigestAlgorithm.BLAKE3_256;
         private final List<PublicKey>             keys                          = new ArrayList<>();
-        private final List<Digest>                listOfNextKeyDigests          = new ArrayList<>();
-        private final List<PublicKey>             listOfNextKeys                = new ArrayList<>();
-        private Digest                            nextKeyConfigurationDigest    = Digest.NONE;
+        private final List<PublicKey>             nextKeys                      = new ArrayList<>();
         private final DigestAlgorithm             nextKeysAlgorithm             = DigestAlgorithm.BLAKE3_256;
         private SigningThreshold                  nextSigningThreshold;
         private DigestAlgorithm                   selfAddressingDigestAlgorithm = DigestAlgorithm.DEFAULT;
@@ -108,46 +106,34 @@ public class IdentifierSpecification {
 
             // --- NEXT KEYS ---
 
-            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null)) ||
-                (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty()) ||
-                (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
-                throw new IllegalArgumentException("Only provide one of nextKeys, nextKeyDigests, or a nextKeys.");
+            Digest nextKeyConfigurationDigest = null;
+
+            // if we don't have it, we use default of majority nextSigningThreshold
+            if (nextSigningThreshold == null) {
+                nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
+            } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
+                var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
+                if (unw.getThreshold() > keys.size()) {
+                    throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
+                    + " threshold: " + unw.getThreshold());
+                }
+            } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
+                var w = (SigningThreshold.Weighted) nextSigningThreshold;
+                var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
+                if (countOfWeights != keys.size()) {
+                    throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
+                    + keys.size() + " weights: " + countOfWeights);
+                }
+            } else {
+                throw new IllegalArgumentException("Unknown SigningThreshold type: " + nextSigningThreshold.getClass());
             }
 
-            if (nextKeyConfigurationDigest == null) {
-                // if we don't have it, we use default of majority nextSigningThreshold
-                if (nextSigningThreshold == null) {
-                    nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
-                } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
-                    var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
-                    if (unw.getThreshold() > keys.size()) {
-                        throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                        + keys.size() + " threshold: " + unw.getThreshold());
-                    }
-                } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
-                    var w = (SigningThreshold.Weighted) nextSigningThreshold;
-                    var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
-                    if (countOfWeights != keys.size()) {
-                        throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
-                        + " keys: " + keys.size() + " weights: " + countOfWeights);
-                    }
-                } else {
-                    throw new IllegalArgumentException("Unknown SigningThreshold type: "
-                    + nextSigningThreshold.getClass());
-                }
-
-                if (listOfNextKeyDigests.isEmpty()) {
-                    if (listOfNextKeys.isEmpty()) {
-                        throw new IllegalArgumentException("None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
-                    }
-
-                    nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, listOfNextKeys,
-                                                                                 nextKeysAlgorithm);
-                } else {
-                    nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold,
-                                                                                 listOfNextKeyDigests);
-                }
+            if (nextKeys.isEmpty()) {
+                throw new IllegalArgumentException("Next keys not provided");
             }
+
+            nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, nextKeys,
+                                                                         nextKeysAlgorithm);
 
             // --- WITNESSES ---
 
@@ -203,16 +189,8 @@ public class IdentifierSpecification {
             return keys;
         }
 
-        public List<Digest> getListOfNextKeyDigests() {
-            return listOfNextKeyDigests;
-        }
-
-        public List<PublicKey> getListOfNextKeys() {
-            return listOfNextKeys;
-        }
-
-        public Digest getNextKeyConfigurationDigest() {
-            return nextKeyConfigurationDigest;
+        public List<PublicKey> getNextKeys() {
+            return nextKeys;
         }
 
         public DigestAlgorithm getNextKeysAlgorithm() {
@@ -281,7 +259,7 @@ public class IdentifierSpecification {
             return this;
         }
 
-        public Builder setKey(PublicKey key) {
+        public Builder addKey(PublicKey key) {
             keys.add(requireNonNull(key));
             return this;
         }
@@ -293,12 +271,13 @@ public class IdentifierSpecification {
                 throw new RuntimeException("Public keys must be provided.");
             }
 
-            keys.addAll(keys);
+            this.keys.addAll(keys);
             return this;
         }
 
-        public Builder setNextKeys(Digest nextKeysDigest) {
-            nextKeyConfigurationDigest = requireNonNull(nextKeysDigest);
+        public Builder setNextKeys(List<PublicKey> nextKeys) {
+            this.nextKeys.clear();
+            this.nextKeys.addAll(nextKeys);
             return this;
         }
 

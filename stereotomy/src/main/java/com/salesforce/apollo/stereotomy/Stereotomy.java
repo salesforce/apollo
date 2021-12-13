@@ -46,7 +46,6 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
-import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
@@ -371,12 +370,9 @@ public class Stereotomy {
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        
-        var nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
-                                                       specification.getNextKeysAlgorithm());
 
-        specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setSigner(0,
-                                                                                         initialKeyPair.getPrivate());
+        specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
+                     .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(0, initialKeyPair.getPrivate());
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = kerl.append(event);
@@ -411,7 +407,6 @@ public class Stereotomy {
         KeyState state = kerl.getKeyState(identifier)
                              .orElseThrow(() -> new IllegalArgumentException("identifier key state not found in key store"));
 
-        // require single keys, nextKeys
         if (state.getNextKeyConfigurationDigest().isEmpty()) {
             throw new IllegalArgumentException("identifier cannot be rotated");
         }
@@ -426,11 +421,11 @@ public class Stereotomy {
                                       + currentKeyCoordinates));
 
         KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
-        Digest nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(newNextKeyPair.getPublic()),
-                                                          specification.getNextKeysAlgorithm());
-        specification.setIdentifier(identifier).setCurrentCoords(state.getCoordinates())
-                     .setCurrentDigest(state.getDigest()).setKey(nextKeyPair.getPublic()).setNextKeys(nextKeys)
-                     .setSigner(0, nextKeyPair.getPrivate());
+
+        specification.setSigningThreshold(unweighted(1)).setIdentifier(identifier)
+                     .setDigestAlgorithm(kerl.getDigestAlgorithm()).setCurrentCoords(state.getCoordinates())
+                     .setCurrentDigest(state.getDigest()).setKey(nextKeyPair.getPublic())
+                     .setNextKeys(List.of(newNextKeyPair.getPublic())).setSigner(0, nextKeyPair.getPrivate());
 
         RotationEvent event = eventFactory.rotation(specification.build());
         KeyState newState = kerl.append(event);

@@ -40,23 +40,21 @@ public class RotationSpecification {
     public static class Builder implements Cloneable {
         private EventCoordinates            currentCoords;
         private Digest                      currentDigest;
-        private final List<BasicIdentifier> currentWitnesses           = new ArrayList<>();
-        private DigestAlgorithm             digestAlgorithm            = DigestAlgorithm.DEFAULT;
-        private Format                      format                     = Format.PROTOBUF;
+        private final List<BasicIdentifier> currentWitnesses   = new ArrayList<>();
+        private DigestAlgorithm             digestAlgorithm    = DigestAlgorithm.DEFAULT;
+        private Format                      format             = Format.PROTOBUF;
         private Identifier                  identifier;
-        private final List<PublicKey>       keys                       = new ArrayList<>();
-        private final List<Digest>          listOfNextKeyDigests       = new ArrayList<>();
-        private final List<PublicKey>       listOfNextKeys             = new ArrayList<>();
-        private Digest                      nextKeyConfigurationDigest = Digest.NONE;
-        private final DigestAlgorithm       nextKeysAlgorithm          = DigestAlgorithm.BLAKE3_256;
+        private final List<PublicKey>       keys               = new ArrayList<>();
+        private final List<PublicKey>       nextKeys     = new ArrayList<>();
+        private final DigestAlgorithm       nextKeysAlgorithm  = DigestAlgorithm.BLAKE3_256;
         private SigningThreshold            nextSigningThreshold;
-        private final List<Seal>            seals                      = new ArrayList<>();
-        private SignatureAlgorithm          signatureAlgorithm         = SignatureAlgorithm.DEFAULT;
-        private Map<Integer, Signer>        signers                    = new HashMap<>();
+        private final List<Seal>            seals              = new ArrayList<>();
+        private SignatureAlgorithm          signatureAlgorithm = SignatureAlgorithm.DEFAULT;
+        private Map<Integer, Signer>        signers            = new HashMap<>();
         private SigningThreshold            signingThreshold;
-        private Version                     version                    = Stereotomy.currentVersion();
-        private final List<BasicIdentifier> witnesses                  = new ArrayList<>();
-        private int                         witnessThreshold           = 0;
+        private Version                     version            = Stereotomy.currentVersion();
+        private final List<BasicIdentifier> witnesses          = new ArrayList<>();
+        private int                         witnessThreshold   = 0;
 
         public Builder() {
         }
@@ -117,46 +115,32 @@ public class RotationSpecification {
 
             // --- NEXT KEYS ---
 
-            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null)) ||
-                (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty()) ||
-                (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
-                throw new IllegalArgumentException("Only provide one of nextKeys, nextKeyDigests, or a nextKeys.");
+            // if we don't have it, we use default of majority nextSigningThreshold
+            if (nextSigningThreshold == null) {
+                nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
+            } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
+                var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
+                if (unw.getThreshold() > keys.size()) {
+                    throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
+                    + " threshold: " + unw.getThreshold());
+                }
+            } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
+                var w = (SigningThreshold.Weighted) nextSigningThreshold;
+                var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
+                if (countOfWeights != keys.size()) {
+                    throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
+                    + keys.size() + " weights: " + countOfWeights);
+                }
+            } else {
+                throw new IllegalArgumentException("Unknown SigningThreshold type: " + nextSigningThreshold.getClass());
             }
 
-            if (nextKeyConfigurationDigest == null) {
-                // if we don't have it, we use default of majority nextSigningThreshold
-                if (nextSigningThreshold == null) {
-                    nextSigningThreshold = SigningThreshold.unweighted((keys.size() / 2) + 1);
-                } else if (nextSigningThreshold instanceof SigningThreshold.Unweighted) {
-                    var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
-                    if (unw.getThreshold() > keys.size()) {
-                        throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                        + keys.size() + " threshold: " + unw.getThreshold());
-                    }
-                } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
-                    var w = (SigningThreshold.Weighted) nextSigningThreshold;
-                    var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
-                    if (countOfWeights != keys.size()) {
-                        throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
-                        + " keys: " + keys.size() + " weights: " + countOfWeights);
-                    }
-                } else {
-                    throw new IllegalArgumentException("Unknown SigningThreshold type: "
-                    + nextSigningThreshold.getClass());
-                }
-
-                if (listOfNextKeyDigests.isEmpty()) {
-                    if (listOfNextKeys.isEmpty()) {
-                        throw new IllegalArgumentException("None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
-                    }
-
-                    nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, listOfNextKeys,
-                                                                                 nextKeysAlgorithm);
-                } else {
-                    nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold,
-                                                                                 listOfNextKeyDigests);
-                }
+            if (nextKeys.isEmpty()) {
+                throw new IllegalArgumentException("None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
             }
+
+            var nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, nextKeys,
+                                                                             nextKeysAlgorithm);
 
             // --- WITNESSES ---
             var added = new ArrayList<>(witnesses);
@@ -204,17 +188,15 @@ public class RotationSpecification {
         public List<PublicKey> getKeys() {
             return keys;
         }
-
-        public List<Digest> getListOfNextKeyDigests() {
-            return listOfNextKeyDigests;
+        
+        public Builder setNextKeys(List<PublicKey> nextKeys) {
+            this.nextKeys.clear();
+            this.nextKeys.addAll(nextKeys);
+            return this;
         }
 
-        public List<PublicKey> getListOfNextKeys() {
-            return listOfNextKeys;
-        }
-
-        public Digest getNextKeyConfigurationDigest() {
-            return nextKeyConfigurationDigest;
+        public List<PublicKey> getNextKeys() {
+            return nextKeys;
         }
 
         public DigestAlgorithm getNextKeysAlgorithm() {
@@ -316,11 +298,6 @@ public class RotationSpecification {
 
         public Builder setMessagePack() {
             format = Format.MESSAGE_PACK;
-            return this;
-        }
-
-        public Builder setNextKeys(Digest nextKeysDigest) {
-            nextKeyConfigurationDigest = requireNonNull(nextKeysDigest);
             return this;
         }
 
