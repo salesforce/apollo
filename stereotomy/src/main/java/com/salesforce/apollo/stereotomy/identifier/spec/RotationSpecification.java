@@ -12,7 +12,9 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -50,7 +52,7 @@ public class RotationSpecification {
         private SigningThreshold            nextSigningThreshold;
         private final List<Seal>            seals                      = new ArrayList<>();
         private SignatureAlgorithm          signatureAlgorithm         = SignatureAlgorithm.DEFAULT;
-        private Signer                      signer;
+        private Map<Integer, Signer>        signers                    = new HashMap<>();
         private SigningThreshold            signingThreshold;
         private Version                     version                    = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses                  = new ArrayList<>();
@@ -163,9 +165,8 @@ public class RotationSpecification {
             var removed = new ArrayList<>(currentWitnesses);
             removed.removeAll(witnesses);
 
-            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber() + 1,
-                                             currentCoords,
-                                             signingThreshold, keys, signer, nextKeyConfigurationDigest,
+            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber() + 1, currentCoords,
+                                             signingThreshold, keys, signers, nextKeyConfigurationDigest,
                                              witnessThreshold, removed, added, seals, version, currentDigest);
         }
 
@@ -232,8 +233,8 @@ public class RotationSpecification {
             return signatureAlgorithm;
         }
 
-        public Signer getSigner() {
-            return signer;
+        public Map<Integer, Signer> getSigners() {
+            return signers;
         }
 
         public SigningThreshold getSigningThreshold() {
@@ -347,12 +348,16 @@ public class RotationSpecification {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
             }
 
-            signer = new SignerImpl(keyIndex, requireNonNull(privateKey));
+            signers.put(keyIndex, new SignerImpl(keyIndex, requireNonNull(privateKey)));
             return this;
         }
 
         public Builder setSigner(Signer signer) {
-            this.signer = requireNonNull(signer);
+            requireNonNull(signer);
+            if (signer.keyIndex() < 0) {
+                throw new IllegalArgumentException("keyIndex must be >= 0");
+            }
+            signers.put(signer.keyIndex(), signer);
             return this;
         }
 
@@ -400,23 +405,24 @@ public class RotationSpecification {
     private final List<BasicIdentifier> removedWitnesses;
     private final List<Seal>            seals;
     private final long                  sequenceNumber;
-    private final Signer                signer;
+    private final Map<Integer, Signer>  signers;
     private final SigningThreshold      signingThreshold;
     private final Version               version;
     private final int                   witnessThreshold;
 
     public RotationSpecification(Format format, Identifier identifier, long sequenceNumber,
                                  EventCoordinates previousEvent, SigningThreshold signingThreshold,
-                                 List<PublicKey> keys, Signer signer, Digest nextKeys, int witnessThreshold,
-                                 List<BasicIdentifier> removedWitnesses, List<BasicIdentifier> addedWitnesses,
-                                 List<Seal> seals, Version version, Digest priorEventDigest) {
+                                 List<PublicKey> keys, Map<Integer, Signer> signers, Digest nextKeys,
+                                 int witnessThreshold, List<BasicIdentifier> removedWitnesses,
+                                 List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version,
+                                 Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = sequenceNumber;
         this.previous = previousEvent;
         this.signingThreshold = signingThreshold;
         this.keys = List.copyOf(keys);
-        this.signer = signer;
+        this.signers = signers;
         this.nextKeys = nextKeys;
         this.witnessThreshold = witnessThreshold;
         this.addedWitnesses = List.copyOf(addedWitnesses);
@@ -466,8 +472,8 @@ public class RotationSpecification {
         return sequenceNumber;
     }
 
-    public Signer getSigner() {
-        return signer;
+    public Map<Integer, Signer> getSigners() {
+        return signers;
     }
 
     public SigningThreshold getSigningThreshold() {

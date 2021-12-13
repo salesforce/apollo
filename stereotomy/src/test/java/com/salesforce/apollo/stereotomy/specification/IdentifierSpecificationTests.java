@@ -22,7 +22,6 @@ public class IdentifierSpecificationTests {
     KeyPair      keyPair;
     KeyPair      keyPair2;
     Signer       signer;
-    Signer       signer2;
 
     @BeforeEach
     public void beforeEachTest() throws NoSuchAlgorithmException {
@@ -34,17 +33,13 @@ public class IdentifierSpecificationTests {
         this.signer = new SignerImpl(1, this.keyPair.getPrivate());
 
         this.keyPair2 = SignatureAlgorithm.ED_25519.generateKeyPair();
-        this.signer2 = new SignerImpl(2, this.keyPair2.getPrivate());
 
     }
 
     @Test
     public void test__builder__signingThreshold__int() {
-        var spec = IdentifierSpecification.newBuilder()
-                                          .setKey(this.keyPair.getPublic())
-                                          .setSigner(this.signer)
-                                          .setSigningThreshold(1)
-                                          .build();
+        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic()).addSigner(this.signer)
+                                          .setSigningThreshold(1).build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -52,11 +47,8 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__unweighted() {
-        var spec = IdentifierSpecification.newBuilder()
-                                          .setKey(this.keyPair.getPublic())
-                                          .setSigner(this.signer)
-                                          .setNextSigningThreshold(SigningThreshold.unweighted(1))
-                                          .build();
+        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic()).addSigner(this.signer)
+                                          .setNextSigningThreshold(SigningThreshold.unweighted(1)).build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -64,12 +56,9 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void test__builder__signingThreshold__weighted() {
-        var spec = IdentifierSpecification.newBuilder()
-                                          .setKey(this.keyPair.getPublic())
-                                          .setKey(this.keyPair2.getPublic())
-                                          .setSigner(this.signer)
-                                          .setSigningThreshold(SigningThreshold.weighted("1", "2"))
-                                          .build();
+        var spec = IdentifierSpecification.newBuilder().setKey(this.keyPair.getPublic())
+                                          .setKey(this.keyPair2.getPublic()).addSigner(this.signer)
+                                          .setSigningThreshold(SigningThreshold.weighted("1", "2")).build();
 
         SigningThreshold signingThreshold = spec.getSigningThreshold();
         assertTrue(signingThreshold instanceof SigningThreshold.Weighted);

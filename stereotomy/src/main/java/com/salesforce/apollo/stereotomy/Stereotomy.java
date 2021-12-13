@@ -363,20 +363,20 @@ public class Stereotomy {
     }
 
     public ControllableIdentifier newIdentifier(Identifier identifier, BasicIdentifier... witnesses) {
-        return newIdentifier(identifier, IdentifierSpecification.newBuilder(), witnesses);
+        return newIdentifier(identifier, IdentifierSpecification.newBuilder().setWitnesses(Arrays.asList(witnesses)));
     }
 
-    public ControllableIdentifier newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec,
-                                                BasicIdentifier... witnesses) {
+    public ControllableIdentifier newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        
         var nextKeys = KeyConfigurationDigester.digest(unweighted(1), List.of(nextKeyPair.getPublic()),
                                                        specification.getNextKeysAlgorithm());
 
-        specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setWitnesses(Arrays.asList(witnesses))
-                     .setSigner(0, initialKeyPair.getPrivate());
+        specification.setKey(initialKeyPair.getPublic()).setNextKeys(nextKeys).setSigner(0,
+                                                                                         initialKeyPair.getPrivate());
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = kerl.append(event);
@@ -391,8 +391,8 @@ public class Stereotomy {
         ControllableIdentifier cid = new ControllableIdentifierImpl(state);
 
         log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}",
-                 witnesses.length == 0 ? "Private" : "Public", identifier, cid.getIdentifier(), keyCoordinates,
-                 shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
+                 specification.getWitnesses().isEmpty() ? "Private" : "Public", identifier, cid.getIdentifier(),
+                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return cid;
     }
 

@@ -13,7 +13,6 @@ import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -28,7 +27,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.Stereotomy.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -135,11 +133,14 @@ public class ProtobufEventFactory implements EventFactory {
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
         var bs = identifierSpec(prefix, specification).toByteString();
-        var signature = specification.getSigner().sign(bs);
 
         var common = EventCommon.newBuilder()
                                 .setAuthentication(Signatures.newBuilder()
-                                                             .putAllSignatures(Map.of(0, signature.toSig())));
+                                                             .putAllSignatures(specification.getSigners().values()
+                                                                                            .stream()
+                                                                                            .collect(Collectors.toMap(s -> s.keyIndex(),
+                                                                                                                      s -> s.sign(bs)
+                                                                                                                            .toSig()))));
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
 
@@ -150,19 +151,11 @@ public class ProtobufEventFactory implements EventFactory {
     @Override
     public KeyEvent interaction(InteractionSpecification specification) {
         InteractionSpec ispec = interactionSpec(specification);
-        Map<Integer, JohnHancock> signatures = Map.of();
-
-        if (specification.getSigner() != null) {
-            var signature = specification.getSigner().sign(ispec.toByteString());
-            signatures = Map.of(0, signature);
-        }
-
+        final var bs = ispec.toByteString();
+        var signatures = specification.getSigners().values().stream()
+                                      .collect(Collectors.toMap(s -> s.keyIndex(), s -> s.sign(bs).toSig()));
         var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
-                                .setAuthentication(Signatures.newBuilder()
-                                                             .putAllSignatures(signatures.entrySet().stream()
-                                                                                         .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                                                   e -> e.getValue()
-                                                                                                                         .toSig()))));
+                                .setAuthentication(Signatures.newBuilder().putAllSignatures(signatures));
         com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
@@ -170,19 +163,13 @@ public class ProtobufEventFactory implements EventFactory {
     @Override
     public RotationEvent rotation(RotationSpecification specification) {
         var rotationSpec = rotationSpec(specification.getIdentifier(), specification);
-        Map<Integer, JohnHancock> signatures = Map.of();
 
-        if (specification.getSigner() != null) {
-            var signature = specification.getSigner().sign(rotationSpec.toByteArray());
-            signatures = Map.of(0, signature);
-        }
+        final var bs = rotationSpec.toByteString();
+        var signatures = specification.getSigners().values().stream()
+                                      .collect(Collectors.toMap(s -> s.keyIndex(), s -> s.sign(bs).toSig()));
 
         var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
-                                .setAuthentication(Signatures.newBuilder()
-                                                             .putAllSignatures(signatures.entrySet().stream()
-                                                                                         .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                                                   e -> e.getValue()
-                                                                                                                         .toSig()))));
+                                .setAuthentication(Signatures.newBuilder().putAllSignatures(signatures));
         var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
     }

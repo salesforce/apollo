@@ -14,8 +14,11 @@ import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
@@ -53,11 +56,20 @@ public class IdentifierSpecification {
         private SigningThreshold                  nextSigningThreshold;
         private DigestAlgorithm                   selfAddressingDigestAlgorithm = DigestAlgorithm.DEFAULT;
         private SignatureAlgorithm                signatureAlgorithm            = SignatureAlgorithm.DEFAULT;
-        private Signer                            signer;
+        private Map<Integer, Signer>              signers                       = new HashMap<>();
         private SigningThreshold                  signingThreshold;
         private Version                           version                       = Stereotomy.currentVersion();
         private final List<BasicIdentifier>       witnesses                     = new ArrayList<>();
         private int                               witnessThreshold              = 0;
+
+        public Builder addSigner(Signer signer) {
+            if (signer.keyIndex() < 0) {
+                throw new IllegalArgumentException("keyIndex must be >= 0");
+            }
+
+            signers.put(signer.keyIndex(), signer);
+            return this;
+        }
 
         public Builder basicDerivation(PublicKey key) {
             this.derivation = BasicIdentifier.class;
@@ -81,14 +93,14 @@ public class IdentifierSpecification {
                 var unw = (SigningThreshold.Unweighted) signingThreshold;
                 if (unw.getThreshold() > keys.size()) {
                     throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: " + keys.size()
-                            + " threshold: " + unw.getThreshold());
+                    + " threshold: " + unw.getThreshold());
                 }
             } else if (signingThreshold instanceof SigningThreshold.Weighted) {
                 var w = (SigningThreshold.Weighted) signingThreshold;
                 var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                 if (countOfWeights != keys.size()) {
                     throw new IllegalArgumentException("Count of weights and count of keys are not equal: " + " keys: "
-                            + keys.size() + " weights: " + countOfWeights);
+                    + keys.size() + " weights: " + countOfWeights);
                 }
             } else {
                 throw new IllegalArgumentException("Unknown SigningThreshold type: " + signingThreshold.getClass());
@@ -96,9 +108,9 @@ public class IdentifierSpecification {
 
             // --- NEXT KEYS ---
 
-            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null))
-                    || (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty())
-                    || (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
+            if ((!listOfNextKeys.isEmpty() && (nextKeyConfigurationDigest != null)) ||
+                (!listOfNextKeys.isEmpty() && !listOfNextKeyDigests.isEmpty()) ||
+                (!listOfNextKeyDigests.isEmpty() && (nextKeyConfigurationDigest != null))) {
                 throw new IllegalArgumentException("Only provide one of nextKeys, nextKeyDigests, or a nextKeys.");
             }
 
@@ -110,24 +122,23 @@ public class IdentifierSpecification {
                     var unw = (SigningThreshold.Unweighted) nextSigningThreshold;
                     if (unw.getThreshold() > keys.size()) {
                         throw new IllegalArgumentException("Invalid unweighted signing threshold:" + " keys: "
-                                + keys.size() + " threshold: " + unw.getThreshold());
+                        + keys.size() + " threshold: " + unw.getThreshold());
                     }
                 } else if (nextSigningThreshold instanceof SigningThreshold.Weighted) {
                     var w = (SigningThreshold.Weighted) nextSigningThreshold;
                     var countOfWeights = Stream.of(w.getWeights()).mapToLong(wts -> wts.length).sum();
                     if (countOfWeights != keys.size()) {
                         throw new IllegalArgumentException("Count of weights and count of keys are not equal: "
-                                + " keys: " + keys.size() + " weights: " + countOfWeights);
+                        + " keys: " + keys.size() + " weights: " + countOfWeights);
                     }
                 } else {
-                    throw new IllegalArgumentException(
-                            "Unknown SigningThreshold type: " + nextSigningThreshold.getClass());
+                    throw new IllegalArgumentException("Unknown SigningThreshold type: "
+                    + nextSigningThreshold.getClass());
                 }
 
                 if (listOfNextKeyDigests.isEmpty()) {
                     if (listOfNextKeys.isEmpty()) {
-                        throw new IllegalArgumentException(
-                                "None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
+                        throw new IllegalArgumentException("None of nextKeys, digestOfNextKeys, or nextKeyConfigurationDigest provided");
                     }
 
                     nextKeyConfigurationDigest = KeyConfigurationDigester.digest(nextSigningThreshold, listOfNextKeys,
@@ -146,7 +157,7 @@ public class IdentifierSpecification {
 
             if (!witnesses.isEmpty() && ((witnessThreshold < 1) || (witnessThreshold > witnesses.size()))) {
                 throw new RuntimeException("Invalid witness threshold:" + " witnesses: " + witnesses.size()
-                        + " threshold: " + witnessThreshold);
+                + " threshold: " + witnessThreshold);
             }
 
             // TODO test duplicate detection--need to write equals() hashcode for classes
@@ -156,8 +167,9 @@ public class IdentifierSpecification {
 
             // validation is provided by spec consumer
             return new IdentifierSpecification(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
-                    signer, nextKeyConfigurationDigest, witnessThreshold, witnesses, configurationTraits, version,
-                    selfAddressingDigestAlgorithm, signatureAlgorithm);
+                                               signers, nextKeyConfigurationDigest, witnessThreshold, witnesses,
+                                               configurationTraits, version, selfAddressingDigestAlgorithm,
+                                               signatureAlgorithm);
         }
 
         @Override
@@ -219,8 +231,8 @@ public class IdentifierSpecification {
             return signatureAlgorithm;
         }
 
-        public Signer getSigner() {
-            return signer;
+        public Map<Integer, Signer> getSigners() {
+            return signers;
         }
 
         public SigningThreshold getSigningThreshold() {
@@ -330,12 +342,12 @@ public class IdentifierSpecification {
                 throw new IllegalArgumentException("keyIndex must be >= 0");
             }
 
-            signer = new SignerImpl(keyIndex, requireNonNull(privateKey));
+            signers.put(keyIndex, new SignerImpl(keyIndex, requireNonNull(privateKey)));
             return this;
         }
 
-        public Builder setSigner(Signer signer) {
-            this.signer = signer;
+        public Builder setSigners(List<Signer> signers) {
+            this.signers = signers.stream().collect(Collectors.toMap(s -> s.keyIndex(), s -> s));
             return this;
         }
 
@@ -408,22 +420,24 @@ public class IdentifierSpecification {
     private final Digest                      nextKeys;
     private final DigestAlgorithm             selfAddressingDigestAlgorithm;
     private final SignatureAlgorithm          signatureAlgorithm;
-    private final Signer                      signer;
+    private final Map<Integer, Signer>        signers;
     private final SigningThreshold            signingThreshold;
     private final Version                     version;
     private final List<BasicIdentifier>       witnesses;
     private final int                         witnessThreshold;
 
     private IdentifierSpecification(Class<? extends Identifier> derivation, DigestAlgorithm identifierDigestAlgorithm,
-            Format format, SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer, Digest nextKeys,
-            int witnessThreshold, List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
-            Version version, DigestAlgorithm selfAddressingDigestAlgorithm, SignatureAlgorithm signatureAlgorithm) {
+                                    Format format, SigningThreshold signingThreshold, List<PublicKey> keys,
+                                    Map<Integer, Signer> signers, Digest nextKeys, int witnessThreshold,
+                                    List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
+                                    Version version, DigestAlgorithm selfAddressingDigestAlgorithm,
+                                    SignatureAlgorithm signatureAlgorithm) {
         this.derivation = derivation;
         this.identifierDigestAlgorithm = identifierDigestAlgorithm;
         this.format = format;
         this.signingThreshold = signingThreshold;
         this.keys = List.copyOf(keys);
-        this.signer = signer;
+        this.signers = signers;
         this.nextKeys = nextKeys;
         this.witnessThreshold = witnessThreshold;
         this.witnesses = List.copyOf(witnesses);
@@ -465,8 +479,12 @@ public class IdentifierSpecification {
         return signatureAlgorithm;
     }
 
-    public Signer getSigner() {
-        return signer;
+    public Signer getSigner(int i) {
+        return signers.get(i);
+    }
+
+    public Map<Integer, Signer> getSigners() {
+        return signers;
     }
 
     public SigningThreshold getSigningThreshold() {

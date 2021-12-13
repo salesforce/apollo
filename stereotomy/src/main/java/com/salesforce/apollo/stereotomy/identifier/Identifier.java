@@ -80,7 +80,7 @@ public interface Identifier {
         } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
             return selfAddressing(inceptionStatement, spec.getSelfAddressingDigestAlgorithm());
         } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
-            return selfSigning(inceptionStatement, spec.getSigner());
+            return selfSigning(inceptionStatement, spec.getSigner(0));
         } else {
             throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
         }

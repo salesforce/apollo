@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,13 +22,11 @@ import java.util.List;
 import java.util.Properties;
 
 import org.h2.jdbc.JdbcConnection;
-import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.model.schema.tables.Coordinates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
