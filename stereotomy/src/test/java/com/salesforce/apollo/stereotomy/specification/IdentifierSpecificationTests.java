@@ -38,7 +38,7 @@ public class IdentifierSpecificationTests {
     }
 
     @Test
-    public void test__builder__signingThreshold__int() {
+    public void testBuilderSigningThresholdInt() {
         var spec = IdentifierSpecification.newBuilder()
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
@@ -49,7 +49,7 @@ public class IdentifierSpecificationTests {
     }
 
     @Test
-    public void test__builder__signingThreshold__unweighted() {
+    public void testBuilderSigningThresholdUnweighted() {
         var spec = IdentifierSpecification.newBuilder().addKey(this.keyPair.getPublic()).addSigner(this.signer)
                                           .setNextKeys(Arrays.asList(keyPair2.getPublic()))
                                           .setNextSigningThreshold(SigningThreshold.unweighted(1)).build();
@@ -59,7 +59,7 @@ public class IdentifierSpecificationTests {
     }
 
     @Test
-    public void test__builder__signingThreshold__weighted() {
+    public void testBuilderSigningThresholdWeighted() {
         var spec = IdentifierSpecification.newBuilder()
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), this.keyPair2.getPublic()))
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(),
