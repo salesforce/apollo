@@ -10,12 +10,10 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,7 +22,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -32,6 +29,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
@@ -43,177 +41,112 @@ import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
 import com.salesforce.apollo.stereotomy.processing.MissingEstablishmentEventException;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Stereotomy {
-    public interface ControllableIdentifier extends KeyState {
-        Signer getSigner(int keyIndex);
-
-        Verifier getVerifier();
-
-        void rotate();
-
-        void rotate(List<Seal> seals);
-
-        void rotate(RotationSpecification.Builder spec);
-
-        void seal(InteractionSpecification.Builder spec);
-
-        void seal(List<Seal> seals);
-
-        default JohnHancock sign(byte[]... buffs) {
-            return sign(BbBackedInputStream.aggregate(buffs));
-        }
-
-        default JohnHancock sign(ByteBuffer... buffs) {
-            return sign(BbBackedInputStream.aggregate(buffs));
-        }
-
-        default JohnHancock sign(ByteString... buffs) {
-            return sign(BbBackedInputStream.aggregate(buffs));
-        }
-
-        JohnHancock sign(InputStream is);
-
-        EventSignature sign(KeyEvent event);
-
-    }
-
-    public interface EventFactory {
-
-        InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
-
-        KeyEvent interaction(InteractionSpecification specification);
-
-        RotationEvent rotation(RotationSpecification specification);
-
-    }
-
-    public static class EventSignature {
-
-        private final EventCoordinates          event;
-        private final EventCoordinates          keyEstablishmentEvent;
-        private final Map<Integer, JohnHancock> signatures;
-
-        public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
-                              Map<Integer, JohnHancock> signatures) {
-            this.event = event;
-            this.keyEstablishmentEvent = keyEstablishmentEvent;
-            this.signatures = Collections.unmodifiableMap(signatures);
-        }
-
-        public EventCoordinates getEvent() {
-            return this.event;
-        }
-
-        public EventCoordinates getKeyEstablishmentEvent() {
-            return this.keyEstablishmentEvent;
-        }
-
-        public Map<Integer, JohnHancock> getSignatures() {
-            return this.signatures;
-        }
-
-    }
-
-    public interface StereotomyKeyStore {
-
-        Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> getNextKey(KeyCoordinates keyCoordinates);
-
-        Optional<PublicKey> getPublicKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> removeKey(KeyCoordinates keyCoordinates);
-
-        Optional<KeyPair> removeNextKey(KeyCoordinates keyCoordinates);
-
-        void storeKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
-
-        void storeNextKey(KeyCoordinates keyCoordinates, KeyPair keyPair);
-
-    }
-
-    private class ControllableIdentifierImpl implements ControllableIdentifier {
+    private class BoundControllableIdentifier extends ControllableIdentifierImpl {
         private final KeyState state;
 
-        public ControllableIdentifierImpl(KeyState state) {
+        public BoundControllableIdentifier(KeyState state) {
+            super(state.getIdentifier());
             this.state = state;
         }
 
         @Override
+        public ControllableIdentifier bind() {
+            return this;
+        }
+
+        @Override
+        KeyState getState() {
+            return state;
+        }
+
+    }
+
+    private class ControllableIdentifierImpl implements ControllableIdentifier {
+        private final Identifier identifier;
+
+        public ControllableIdentifierImpl(Identifier identifier) {
+            this.identifier = identifier;
+        }
+
+        @Override
+        public ControllableIdentifier bind() {
+            return new BoundControllableIdentifier(getState());
+        }
+
+        @Override
         public Set<ConfigurationTrait> configurationTraits() {
-            return state.configurationTraits();
+            return getState().configurationTraits();
         }
 
         @Override
         public <T> T convertTo(Format format) {
-            return state.convertTo(format);
+            return getState().convertTo(format);
         }
 
         @Override
         public boolean equals(Object o) {
-            return state.equals(o);
+            return getState().equals(o);
         }
 
         @Override
         public byte[] getBytes() {
-            return state.getBytes();
+            return getState().getBytes();
         }
 
         @Override
         public EventCoordinates getCoordinates() {
-            return state.getCoordinates();
+            return getState().getCoordinates();
         }
 
         @Override
         public Optional<Identifier> getDelegatingIdentifier() {
-            return state.getDelegatingIdentifier();
+            return getState().getDelegatingIdentifier();
         }
 
         @Override
         public Digest getDigest() {
-            return state.getDigest();
+            return getState().getDigest();
         }
 
         @Override
         public Identifier getIdentifier() {
-            return state.getIdentifier();
+            return identifier;
         }
 
         @Override
         public List<PublicKey> getKeys() {
-            return state.getKeys();
+            return getState().getKeys();
         }
 
         @Override
         public EventCoordinates getLastEstablishmentEvent() {
-            return state.getLastEstablishmentEvent();
+            return getState().getLastEstablishmentEvent();
         }
 
         @Override
         public EventCoordinates getLastEvent() {
-            return state.getLastEvent();
+            return getState().getLastEvent();
         }
 
         @Override
         public Optional<Digest> getNextKeyConfigurationDigest() {
-            return state.getNextKeyConfigurationDigest();
+            return getState().getNextKeyConfigurationDigest();
         }
 
         @Override
         public long getSequenceNumber() {
-            return state.getSequenceNumber();
+            return getState().getSequenceNumber();
         }
 
         @Override
@@ -223,7 +156,7 @@ public class Stereotomy {
 
         @Override
         public SigningThreshold getSigningThreshold() {
-            return state.getSigningThreshold();
+            return getState().getSigningThreshold();
         }
 
         @Override
@@ -233,27 +166,27 @@ public class Stereotomy {
 
         @Override
         public List<BasicIdentifier> getWitnesses() {
-            return state.getWitnesses();
+            return getState().getWitnesses();
         }
 
         @Override
         public int getWitnessThreshold() {
-            return state.getWitnessThreshold();
+            return getState().getWitnessThreshold();
         }
 
         @Override
         public int hashCode() {
-            return state.hashCode();
+            return getState().hashCode();
         }
 
         @Override
         public boolean isDelegated() {
-            return state.isDelegated();
+            return getState().isDelegated();
         }
 
         @Override
         public boolean isTransferable() {
-            return state.isTransferable();
+            return getState().isTransferable();
         }
 
         @Override
@@ -290,15 +223,10 @@ public class Stereotomy {
         public EventSignature sign(KeyEvent event) {
             return Stereotomy.this.sign(getIdentifier(), event);
         }
-    }
 
-    private class LimitedStereotomy implements LimitedController {
-
-        @Override
-        public JohnHancock sign(SelfAddressingIdentifier identifier, InputStream message) {
-            return Stereotomy.this.sign(identifier, message);
+        KeyState getState() {
+            return kerl.getKeyState(identifier).get();
         }
-
     }
 
     private static final Logger log = LoggerFactory.getLogger(Stereotomy.class);
@@ -318,12 +246,11 @@ public class Stereotomy {
         };
     }
 
-    private final SecureRandom entropy;
+    protected final SecureRandom entropy;
+    protected final EventFactory eventFactory;
+    protected final KERL         kerl;
 
-    private final EventFactory       eventFactory;
-    private final KERL               kerl;
     private final StereotomyKeyStore keyStore;
-    private final LimitedController  limitedController = new LimitedStereotomy();
 
     public Stereotomy(StereotomyKeyStore keyStore, KERL kerl, SecureRandom entropy) {
         this(keyStore, kerl, entropy, new ProtobufEventFactory());
@@ -336,25 +263,12 @@ public class Stereotomy {
         this.kerl = kerl;
     }
 
-    public LimitedController getLimitedController() {
-        return limitedController;
-    }
-
-    public Signer getSigner(int keyIndex, Identifier identifier) {
-        KeyState state = kerl.getKeyState(identifier)
-                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
-        KeyPair keyPair = getKeyPair(identifier, state, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
-
-        return new Signer.SignerImpl(keyIndex, keyPair.getPrivate());
-    }
-
-    public Verifier getVerifier(Identifier identifier) {
-        KeyState state = kerl.getKeyState(identifier)
-                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
-        KeyPair keyPair = getKeyPair(identifier, state, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
-
-        var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
-        return new Verifier.DefaultVerifier(ops, keyPair.getPublic());
+    public ControllableIdentifier controlOf(Identifier identifier) {
+        final var lookup = kerl.getKeyState(identifier);
+        if (lookup.isEmpty()) {
+            throw new IllegalArgumentException("Identifier has no key state: " + identifier);
+        }
+        return new ControllableIdentifierImpl(identifier);
     }
 
     public ControllableIdentifier newDelegatedIdentifier(Identifier delegator) {
@@ -384,7 +298,7 @@ public class Stereotomy {
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
-        ControllableIdentifier cid = new ControllableIdentifierImpl(state);
+        ControllableIdentifier cid = new ControllableIdentifierImpl(state.getIdentifier());
 
         log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}",
                  specification.getWitnesses().isEmpty() ? "Private" : "Public", identifier, cid.getIdentifier(),
@@ -392,16 +306,33 @@ public class Stereotomy {
         return cid;
     }
 
-    public void rotate(Identifier identifier) {
+    protected Signer getSigner(int keyIndex, Identifier identifier) {
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
+        KeyPair keyPair = getKeyPair(identifier, state, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
+
+        return new Signer.SignerImpl(keyIndex, keyPair.getPrivate());
+    }
+
+    protected Verifier getVerifier(Identifier identifier) {
+        KeyState state = kerl.getKeyState(identifier)
+                             .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
+        KeyPair keyPair = getKeyPair(identifier, state, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
+
+        var ops = SignatureAlgorithm.lookup(keyPair.getPrivate());
+        return new Verifier.DefaultVerifier(ops, keyPair.getPublic());
+    }
+
+    protected void rotate(Identifier identifier) {
         rotate(identifier, RotationSpecification.newBuilder());
     }
 
-    public KeyState rotate(Identifier identifier, List<Seal> seals) {
+    protected KeyState rotate(Identifier identifier, List<Seal> seals) {
         Builder builder = RotationSpecification.newBuilder().addAllSeals(seals);
         return rotate(identifier, builder);
     }
 
-    public KeyState rotate(Identifier identifier, RotationSpecification.Builder spec) {
+    protected KeyState rotate(Identifier identifier, RotationSpecification.Builder spec) {
         RotationSpecification.Builder specification = spec.clone();
 
         KeyState state = kerl.getKeyState(identifier)
@@ -445,7 +376,7 @@ public class Stereotomy {
         return newState;
     }
 
-    public KeyState seal(Identifier identifier, InteractionSpecification.Builder spec) {
+    protected KeyState seal(Identifier identifier, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         KeyState state = kerl.getKeyState(identifier)
                              .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KEL"));
@@ -474,13 +405,13 @@ public class Stereotomy {
         return newKeyState;
     }
 
-    public void seal(Identifier identifier, List<Seal> seals) {
+    protected void seal(Identifier identifier, List<Seal> seals) {
         InteractionSpecification.Builder builder = InteractionSpecification.newBuilder();
         builder.setseals(seals);
         seal(identifier, builder);
     }
 
-    public JohnHancock sign(Identifier identifier, InputStream message) {
+    protected JohnHancock sign(Identifier identifier, InputStream message) {
         KeyState state = kerl.getKeyState(identifier)
                              .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
         KeyPair keyPair = getKeyPair(identifier, state, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
@@ -489,7 +420,7 @@ public class Stereotomy {
         return ops.sign(keyPair.getPrivate(), message);
     }
 
-    public EventSignature sign(Identifier identifier, KeyEvent event) {
+    protected EventSignature sign(Identifier identifier, KeyEvent event) {
         KeyState state = kerl.getKeyState(identifier)
                              .orElseThrow(() -> new IllegalArgumentException("Identifier not found in KERL"));
 

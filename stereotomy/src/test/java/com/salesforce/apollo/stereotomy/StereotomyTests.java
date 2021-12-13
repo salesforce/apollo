@@ -22,8 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.stereotomy.Stereotomy.ControllableIdentifier;
-import com.salesforce.apollo.stereotomy.Stereotomy.StereotomyKeyStore;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
