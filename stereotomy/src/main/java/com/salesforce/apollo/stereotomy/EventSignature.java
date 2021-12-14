@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
  * Signature for an event by an identifier

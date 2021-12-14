@@ -25,8 +25,9 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
  * QB64 DSL for identifier conversion
@@ -48,6 +49,14 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         case "B" -> SignatureAlgorithm.ED_448;
         default -> throw new IllegalArgumentException("unknown code: " + code);
         };
+    }
+
+    public static EventCoordinates eventCoordinates(String qb64) {
+        String[] split = qb64.split(":");
+        if (split.length != 4) {
+            throw new IllegalArgumentException("Invalid event coordinates: " + qb64);
+        }
+        return new EventCoordinates(identifier(split[0]), Long.parseLong(split[1]), digest(split[2]), split[3]);
     }
 
     public static Identifier identifier(Ident identifier) {
@@ -115,10 +124,28 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         }
     }
 
+    public static KeyCoordinates keyCoordinates(String qb64) {
+        int last = qb64.lastIndexOf(':');
+        if (last <= 0) {
+            throw new IllegalArgumentException("Invalid key coordinates: " + qb64);
+        }
+        EventCoordinates coordinates = eventCoordinates(qb64.substring(0, last));
+
+        int index = Integer.parseInt(qb64.substring(last + 1));
+        return new KeyCoordinates(coordinates, index);
+    }
+
     public static String qb64(BasicIdentifier identifier) {
         var stdAlgo = SignatureAlgorithm.lookup(identifier.getPublicKey());
         var sigOps = lookup(identifier.getPublicKey());
         return nonTransferrableIdentifierCode(stdAlgo) + base64(sigOps.encode(identifier.getPublicKey()));
+    }
+
+    /**
+     * identifier:sequence number:digest:ilk
+     */
+    public static String qb64(EventCoordinates c) {
+        return qb64(c.getIdentifier()) + ":" + c.getSequenceNumber() + ":" + qb64(c.getDigest()) + ":" + c.getIlk();
     }
 
     public static String qb64(Identifier identifier) {
@@ -133,6 +160,13 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         }
 
         throw new IllegalStateException("Unrecognized identifier: " + identifier.getClass());
+    }
+
+    /**
+     * identifier:sequence number:digest:ilk:keyIndex
+     */
+    public static String qb64(KeyCoordinates c) {
+        return qb64(c.getEstablishmentEvent()) + ":" + c.getKeyIndex();
     }
 
     public static String qb64(SelfAddressingIdentifier identifier) {
@@ -159,11 +193,17 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     }
 
     public static String shortQb64(EventCoordinates c) {
-        return shortQb64(c.getIdentifier()) + ":" + c.getSequenceNumber() + ":" + shortQb64(c.getDigest());
+        return shortQb64(c.getIdentifier()) + ":" + c.getSequenceNumber() + ":" + shortQb64(c.getDigest()) + c.getIlk();
     }
 
     public static String shortQb64(Identifier identifier) {
         return identifier == Identifier.NONE ? "<none>" : qb64(identifier).substring(0, SHORTENED_LENGTH);
+    }
+
+    public static String shortQb64(KeyCoordinates c) {
+        var coordinates = c.getEstablishmentEvent();
+        return shortQb64(coordinates.getIdentifier()) + ":" + coordinates.getSequenceNumber() + ":"
+        + shortQb64(coordinates.getDigest()) + ":" + c.getKeyIndex();
     }
 
     public static String transferrableIdentifierCode(SignatureAlgorithm a) {

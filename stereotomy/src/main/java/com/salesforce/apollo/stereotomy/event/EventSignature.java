@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * @author hal.hildebrand

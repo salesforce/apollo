@@ -11,6 +11,7 @@ import java.util.Map;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -33,7 +34,7 @@ public interface KeyEvent {
     byte[] getBytes();
 
     default EventCoordinates getCoordinates() {
-        return new EventCoordinates(getIlk(), getIdentifier(), getPriorEventDigest(), getSequenceNumber());
+        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPriorEventDigest(), getIlk());
     }
 
     Format getFormat();

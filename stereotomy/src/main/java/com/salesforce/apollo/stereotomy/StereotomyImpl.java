@@ -37,7 +37,6 @@ import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
@@ -264,6 +263,9 @@ public class StereotomyImpl implements Stereotomy {
         public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom,
                                                              Duration valid, List<CertExtension> extensions,
                                                              SignatureAlgorithm algo) {
+
+            var lastEstablishing = getState().getLastEstablishmentEvent();
+            var keyCoordinates = new KeyCoordinates(lastEstablishing, 0);
             var signer = getSigner(0);
             if (signer.isEmpty()) {
                 log.warn("Cannot get signer for key 0 for: {}", getIdentifier());
@@ -271,10 +273,11 @@ public class StereotomyImpl implements Stereotomy {
             }
 
             KeyPair keyPair = algo.generateKeyPair(entropy);
+
             var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
             var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", endpoint.getHostName(),
-                                                        endpoint.getPort(), qb64(getIdentifier()), qb64(signature)));
+                                                        endpoint.getPort(), qb64(keyCoordinates), qb64(signature)));
 
             return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
                                                                                    validFrom, validFrom.plus(valid),
@@ -388,6 +391,16 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
+    public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+        var state = getKeyState(coordinates);
+        if (state.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
+    }
+
+    @Override
     public Optional<ControllableIdentifier> newDelegatedIdentifier(Identifier delegator) {
         return null;
     }
@@ -479,9 +492,12 @@ public class StereotomyImpl implements Stereotomy {
             return Optional.empty();
         }
 
-        var lastEstablishing = kerl.getKeyEvent(state.get().getLastEstablishmentEvent())
-                                   .orElseThrow(() -> new IllegalStateException("establishment event is missing"));
-        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing;
+        var lastEstablishing = kerl.getKeyEvent(state.get().getLastEstablishmentEvent());
+        if (lastEstablishing.isEmpty()) {
+            log.warn("Identifier cannot be rotated: {} estatblishment event missing: {}", identifier);
+            return Optional.empty();
+        }
+        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
 
         KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
@@ -528,6 +544,7 @@ public class StereotomyImpl implements Stereotomy {
             return Optional.empty();
         }
         KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
+
         Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
         if (keyPair.isEmpty()) {

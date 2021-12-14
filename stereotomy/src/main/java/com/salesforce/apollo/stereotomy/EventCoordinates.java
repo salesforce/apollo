@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.event;
+package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static java.util.Objects.requireNonNull;
@@ -14,10 +14,13 @@ import java.util.Objects;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
+ * Coordinates that precisely locate a unique event in the KEL
+ * 
  * @author hal.hildebrand
  *
  */
@@ -33,11 +36,11 @@ public class EventCoordinates {
     }
 
     public static EventCoordinates of(EventCoordinates event, Digest digest) {
-        return new EventCoordinates(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
+        return new EventCoordinates(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
     }
 
     public static EventCoordinates of(Identifier identifier) {
-        return new EventCoordinates(INCEPTION_TYPE, identifier, Digest.NONE, 0);
+        return new EventCoordinates(identifier, 0, Digest.NONE, INCEPTION_TYPE);
     }
 
     public static EventCoordinates of(KeyEvent event) {
@@ -52,7 +55,7 @@ public class EventCoordinates {
     }
 
     public static EventCoordinates of(KeyEvent event, Digest digest) {
-        return new EventCoordinates(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
+        return new EventCoordinates(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
     }
 
     public static EventCoordinates of(KeyEvent event, DigestAlgorithm algorithm) {
@@ -71,7 +74,7 @@ public class EventCoordinates {
     private final long sequenceNumber;
 
     public EventCoordinates(EventCoordinates event, Digest digest) {
-        this(event.getIlk(), event.getIdentifier(), digest, event.getSequenceNumber());
+        this(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
     }
 
     public EventCoordinates(EventCoords coordinates) {
@@ -82,10 +85,10 @@ public class EventCoordinates {
     }
 
     public EventCoordinates(String ilk, BasicIdentifier identifier) {
-        this(ilk, identifier, Digest.NONE, 0);
+        this(identifier, 0, Digest.NONE, ilk);
     }
 
-    public EventCoordinates(String ilk, Identifier identifier, Digest digest, long sequenceNumber) {
+    public EventCoordinates(Identifier identifier, long sequenceNumber, Digest digest, String ilk) {
         this.identifier = requireNonNull(identifier, "identifier");
         this.sequenceNumber = sequenceNumber;
         this.digest = requireNonNull(digest, "digest");

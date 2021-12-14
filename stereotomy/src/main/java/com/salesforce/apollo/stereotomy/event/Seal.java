@@ -10,6 +10,7 @@ import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.EventLoc;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**

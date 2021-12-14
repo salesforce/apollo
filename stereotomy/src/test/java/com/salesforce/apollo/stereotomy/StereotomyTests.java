@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
@@ -221,17 +220,17 @@ public class StereotomyTests {
     public void provision() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
         var i = controller.newIdentifier(Identifier.NONE).get();
-        provision(i);
+        provision(i, controller);
         i.rotate();
-        provision(i);
+        provision(i, controller);
     }
 
     void initializeKel() throws Exception {
         kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
-    private void provision(ControllableIdentifier i) throws CertificateExpiredException,
-                                                     CertificateNotYetValidException {
+    private void provision(ControllableIdentifier i, Stereotomy controller) throws CertificateExpiredException,
+                                                                            CertificateNotYetValidException {
         var now = Instant.now();
         var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
         var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
@@ -245,10 +244,15 @@ public class StereotomyTests {
 
         var decoded = Stereotomy.decode(cert);
         assertFalse(decoded.isEmpty());
+        final var coordinates = decoded.get().coordinates();
 
-        assertEquals(i.getIdentifier(), decoded.get().identifier());
+        assertEquals(i.getIdentifier(), coordinates.getEstablishmentEvent().getIdentifier());
         assertEquals(endpoint, decoded.get().endpoint());
-        assertTrue(i.getVerifier(0).get().verify(decoded.get().signature(), qb64(basicId)));
+        final var qb64Id = qb64(basicId);
+
+        assertTrue(controller.getVerifier(coordinates).get().verify(decoded.get().signature(), qb64Id));
+        assertTrue(decoded.get().verifier(controller).get().verify(decoded.get().signature(), qb64Id));
+        assertTrue(decoded.get().verifier(kel).get().verify(decoded.get().signature(), qb64Id));
 
         var privateKey = cwpk.getPrivateKey();
         assertNotNull(privateKey);

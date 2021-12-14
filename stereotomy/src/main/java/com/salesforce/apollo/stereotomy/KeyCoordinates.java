@@ -12,7 +12,6 @@ import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyCoords;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
  * The coordinates of a key in the KEL

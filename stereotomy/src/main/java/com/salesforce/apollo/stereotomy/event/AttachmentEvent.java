@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.event;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 
 /**
  * @author hal.hildebrand

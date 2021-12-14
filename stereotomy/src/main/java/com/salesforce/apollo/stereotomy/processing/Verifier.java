@@ -15,10 +15,10 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 

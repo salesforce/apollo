@@ -45,6 +45,20 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * Provision a certificate that encodes the host, port and this identifier using
      * a generated Basic Identifier. The certificate returned is signed by this self
      * same generated basic identifier
+     * <p>
+     * A new key pair is generated and this becomes the signing key of the
+     * certificate. This new public key is then signed by this identifier's current
+     * key state's key(0). The resulting certificate encodes the KeyCoordinates of
+     * this KeyState for the identifier that was used for signing.
+     * <p>
+     * The values are encoded into the SubjectDN of the certificate as follows:
+     * <ul>
+     * <li>CN - Host name of the supplied endpoint</li>
+     * <li>L - Port number of supplied endpoint</li>
+     * <li>UID - QB64 encoding of the KeyCoordinates of the keystate used</li>
+     * <li>DC - The signature of the key state of the coordinates in UID of the
+     * generated public key that signs the certificate</li>
+     * </ul>
      * 
      * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate
@@ -62,6 +76,20 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * Provision a certificate that encodes the host, port and this identifier using
      * a generated Basic Identifier. The certificate returned is signed by this self
      * same generated basic identifier
+     * <p>
+     * A new key pair is generated and this becomes the signing key of the
+     * certificate. This new public key is then signed by this identifier's current
+     * key state's key(0). The resulting certificate encodes the KeyCoordinates of
+     * this KeyState for the identifier that was used for signing.
+     * <p>
+     * The values are encoded into the SubjectDN of the certificate as follows:
+     * <ul>
+     * <li>CN - Host name of the supplied endpoint</li>
+     * <li>L - Port number of supplied endpoint</li>
+     * <li>UID - QB64 encoding of the KeyCoordinates of the keystate used</li>
+     * <li>DC - The signature of the key state of the coordinates in UID of the
+     * generated public key that signs the certificate</li>
+     * </ul>
      * 
      * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate

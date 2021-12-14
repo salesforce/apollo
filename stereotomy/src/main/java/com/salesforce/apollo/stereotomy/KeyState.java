@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;

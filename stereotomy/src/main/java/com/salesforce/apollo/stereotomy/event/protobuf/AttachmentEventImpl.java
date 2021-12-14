@@ -15,8 +15,8 @@ import java.util.stream.Collectors;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Receipt;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.utils.Pair;
 
 /**

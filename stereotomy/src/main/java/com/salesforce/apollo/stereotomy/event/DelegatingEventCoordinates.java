@@ -1,6 +1,7 @@
 package com.salesforce.apollo.stereotomy.event;
 
 import com.salesfoce.apollo.stereotomy.event.proto.DelegatingEventCoords;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 public class DelegatingEventCoordinates {
