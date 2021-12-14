@@ -59,7 +59,7 @@ public class StereotomyTests {
     public void identifierInteraction() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(Identifier.NONE);
+        var i = controller.newIdentifier(Identifier.NONE).get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -76,7 +76,7 @@ public class StereotomyTests {
     public void identifierRotate() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(Identifier.NONE);
+        var i = controller.newIdentifier(Identifier.NONE).get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -90,7 +90,7 @@ public class StereotomyTests {
     public void newIdentifier() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        ControllableIdentifier identifier = controller.newIdentifier(Identifier.NONE);
+        ControllableIdentifier identifier = controller.newIdentifier(Identifier.NONE).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -155,7 +155,7 @@ public class StereotomyTests {
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
                                                           new URL("http://foo.com/bar/baz/bozo").toURI());
-        ControllableIdentifier identifier = controller.newIdentifier(aid);
+        ControllableIdentifier identifier = controller.newIdentifier(aid).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);

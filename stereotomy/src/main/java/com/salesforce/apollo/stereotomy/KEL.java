@@ -17,6 +17,8 @@ import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
+ * The Key Event Log
+ * 
  * @author hal.hildebrand
  *
  */

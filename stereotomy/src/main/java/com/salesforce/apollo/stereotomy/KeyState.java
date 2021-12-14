@@ -20,6 +20,8 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
+ * The state of a key in the KEL
+ * 
  * @author hal.hildebrand
  *
  */

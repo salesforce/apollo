@@ -12,6 +12,12 @@ import java.util.Map;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
+/**
+ * Signature for an event by an identifier
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public class EventSignature {
 
     private final EventCoordinates          event;

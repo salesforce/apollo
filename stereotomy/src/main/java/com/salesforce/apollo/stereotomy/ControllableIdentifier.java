@@ -6,51 +6,62 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Optional;
 
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
-public interface ControllableIdentifier extends KeyState {
-    ControllableIdentifier bind();
+/**
+ * A controlled identifier, representing the current state of the identifier at
+ * all times.
+ * 
+ * @author hal.hildebrand
+ *
+ */
+public interface ControllableIdentifier extends BoundIdentifier {
+    /**
+     * @return the binding of the identifier to the current key state
+     */
+    BoundIdentifier bind();
 
-    Signer getSigner(int keyIndex);
+    /**
+     * @param keyIndex
+     * @return the Signer for the key state binding
+     */
+    Optional<Signer> getSigner(int keyIndex);
 
-    Verifier getVerifier();
-
+    /**
+     * Rotate the current key state
+     */
     void rotate();
 
+    /**
+     * Rotate the current key state using the supplied seals
+     */
     void rotate(List<Seal> seals);
 
+    /**
+     * Rotate the current key state using the supplied specification
+     */
     void rotate(RotationSpecification.Builder spec);
 
+    /**
+     * Publish the SealingEvent using the supplied specification
+     */
     void seal(InteractionSpecification.Builder spec);
 
+    /**
+     * Publish the SealingEvent using the supplied seals
+     */
     void seal(List<Seal> seals);
 
-    default JohnHancock sign(byte[]... buffs) {
-        return sign(BbBackedInputStream.aggregate(buffs));
-    }
-
-    default JohnHancock sign(ByteBuffer... buffs) {
-        return sign(BbBackedInputStream.aggregate(buffs));
-    }
-
-    default JohnHancock sign(ByteString... buffs) {
-        return sign(BbBackedInputStream.aggregate(buffs));
-    }
-
-    JohnHancock sign(InputStream is);
-
-    EventSignature sign(KeyEvent event);
+    /**
+     * @return the EventSignature for the supplied event
+     */
+    Optional<EventSignature> sign(KeyEvent event);
 
 }

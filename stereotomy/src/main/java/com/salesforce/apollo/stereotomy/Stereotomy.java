@@ -6,12 +6,17 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.util.Optional;
+
+import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**
+ * The Controller interface
+ * 
  * @author hal.hildebrand
  *
  */
@@ -32,12 +37,18 @@ public interface Stereotomy {
         };
     }
 
-    ControllableIdentifier controlOf(Identifier identifier);
+    Optional<ControllableIdentifier> controlOf(Identifier identifier);
 
-    ControllableIdentifier newDelegatedIdentifier(Identifier delegator);
+    Optional<KeyState> getKeyState(EventCoordinates eventCoordinates);
 
-    ControllableIdentifier newIdentifier(Identifier identifier, BasicIdentifier... witnesses);
+    default Optional<KeyState> getKeyState(KeyCoordinates keyCoordinates) {
+        return getKeyState(keyCoordinates.getEstablishmentEvent());
+    }
 
-    ControllableIdentifier newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec);
+    Optional<ControllableIdentifier> newDelegatedIdentifier(Identifier delegator);
+
+    Optional<ControllableIdentifier> newIdentifier(Identifier identifier, BasicIdentifier... witnesses);
+
+    Optional<ControllableIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec);
 
 }

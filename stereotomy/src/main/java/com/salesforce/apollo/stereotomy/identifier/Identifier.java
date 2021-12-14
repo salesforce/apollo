@@ -139,11 +139,9 @@ public interface Identifier {
     }
 
     static Signatures signatures(Map<Integer, JohnHancock> signatures) {
-        return Signatures.newBuilder()
-                         .putAllSignatures(signatures.entrySet()
-                                                     .stream()
-                                                     .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> e.getValue().toSig())))
+        return Signatures.newBuilder().putAllSignatures(signatures.entrySet().stream()
+                                                                  .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                            e -> e.getValue().toSig())))
                          .build();
     }
 

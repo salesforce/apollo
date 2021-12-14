@@ -10,6 +10,13 @@ import java.security.KeyPair;
 import java.security.PublicKey;
 import java.util.Optional;
 
+/**
+ * The interface for a keystore that tracks KeyPairs by keyCoordinates, and
+ * knows about current and next keypairs associated with those coordinates
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public interface StereotomyKeyStore {
 
     Optional<KeyPair> getKey(KeyCoordinates keyCoordinates);
