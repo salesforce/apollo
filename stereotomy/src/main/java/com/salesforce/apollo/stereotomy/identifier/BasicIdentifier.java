@@ -39,13 +39,13 @@ public class BasicIdentifier implements Identifier, Verifier {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof BasicIdentifier)) {
+        if (!(obj instanceof BasicIdentifier other)) {
             return false;
         }
-        BasicIdentifier other = (BasicIdentifier) obj;
         return Objects.equals(publicKey, other.publicKey);
     }
 
+    @Override
     public PublicKey getPublicKey() {
         return publicKey;
     }

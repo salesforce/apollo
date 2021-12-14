@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.net.URL;
 import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.util.List;
@@ -29,7 +28,6 @@ import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.SigningThreshold.Unweighted;
-import com.salesforce.apollo.stereotomy.identifier.AutonomicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -153,15 +151,14 @@ public class StereotomyTests {
     public void newIdentifierFromIdentifier() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
-        AutonomicIdentifier aid = new AutonomicIdentifier(new BasicIdentifier(keyPair.getPublic()),
-                                                          new URL("http://foo.com/bar/baz/bozo").toURI());
+        BasicIdentifier aid = new BasicIdentifier(keyPair.getPublic());
         ControllableIdentifier identifier = controller.newIdentifier(aid).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
-        assertEquals("4b442022c4ac298ec6c427c71833b0d1740082500ccd84a499ee569c988d0c6a",
+        assertEquals("a0c09574bf1ba5421b6a3cacb0884dc7389c4580d98c33c6b0736f64a0fd678e",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
