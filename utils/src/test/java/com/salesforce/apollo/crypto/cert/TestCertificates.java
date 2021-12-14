@@ -16,7 +16,6 @@ import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -52,8 +51,8 @@ public class TestCertificates {
     void testSelfSigned(KeyPair keyPair) throws CertificateExpiredException, CertificateNotYetValidException {
         BcX500NameDnImpl dn = new BcX500NameDnImpl("CN=0fgdSAGdx_");
         BigInteger sn = BigInteger.valueOf(Long.MAX_VALUE);
-        Date notBefore = Date.from(Instant.now());
-        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        var notBefore = Instant.now();
+        var notAfter = Instant.now().plusSeconds(10_000);
         List<CertExtension> extensions = Collections.emptyList();
         X509Certificate selfSignedCert = Certificates.selfSign(true, dn, sn, keyPair, notBefore, notAfter, extensions);
         assertNotNull(selfSignedCert);

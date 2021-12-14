@@ -30,6 +30,12 @@ import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 
+/**
+ * common operations and state per algorithm.
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public class EdDSAOperations {
 
     public static final String EDDSA_ALGORITHM_NAME = "EdDSA";

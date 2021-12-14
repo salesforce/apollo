@@ -29,6 +29,8 @@ import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
+ * QB64 DSL for identifier conversion
+ * 
  * @author hal.hildebrand
  *
  */

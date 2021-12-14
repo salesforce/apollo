@@ -8,10 +8,14 @@ package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
+import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +31,10 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
+import com.salesforce.apollo.crypto.cert.CertExtension;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
@@ -249,6 +257,18 @@ public class StereotomyImpl implements Stereotomy {
             result = prime * result + getEnclosingInstance().hashCode();
             result = prime * result + Objects.hash(state);
             return result;
+        }
+
+        @Override
+        public CertificateWithPrivateKey provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
+                                                   List<CertExtension> extensions, SignatureAlgorithm algo) {
+            var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s", endpoint.getAddress().getHostAddress(),
+                                                        endpoint.getPort(), qb64(getIdentifier())));
+
+            KeyPair keyPair = algo.generateKeyPair(entropy); 
+            return new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair, validFrom,
+                                                                       validFrom.plus(valid), extensions),
+                                                 keyPair.getPrivate());
         }
 
         @Override

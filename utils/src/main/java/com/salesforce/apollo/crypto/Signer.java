@@ -17,6 +17,8 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
+ * Produces signatures using a given key
+ * 
  * @author hal.hildebrand
  *
  */

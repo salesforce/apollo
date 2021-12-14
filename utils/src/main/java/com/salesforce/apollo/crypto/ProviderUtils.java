@@ -8,6 +8,12 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
 
+/**
+ * The generic sacrifice to the JCE provider gods
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public class ProviderUtils {
 
     static final String PROVIDER_NAME_BC     = BouncyCastleProvider.PROVIDER_NAME;
@@ -151,8 +157,8 @@ public class ProviderUtils {
 
     static void setupLowPriority(boolean fips) {
         Provider[] providers = Security.getProviders();
-        if (providers.length >= 2 && isProviderBC(providers[providers.length - 2])
-                && isProviderBCJSSE(providers[providers.length - 1], fips)) {
+        if (providers.length >= 2 && isProviderBC(providers[providers.length - 2]) &&
+            isProviderBCJSSE(providers[providers.length - 1], fips)) {
             return;
         }
 

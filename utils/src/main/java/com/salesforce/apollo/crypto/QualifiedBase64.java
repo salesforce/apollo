@@ -22,6 +22,12 @@ import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesfoce.apollo.utils.proto.Sig;
 
+/**
+ * Qualifieed Base 64 KERI conversion for core crypto interop
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public class QualifiedBase64 {
 
     public final static int SHORTENED_LENGTH = 12;
@@ -91,9 +97,7 @@ public class QualifiedBase64 {
 
     public static PubKey bs(PublicKey publicKey) {
         SignatureAlgorithm algo = SignatureAlgorithm.lookup(publicKey);
-        return PubKey.newBuilder()
-                     .setCode(algo.signatureCode())
-                     .setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
+        return PubKey.newBuilder().setCode(algo.signatureCode()).setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
                      .build();
     }
 
@@ -212,7 +216,7 @@ public class QualifiedBase64 {
         var bits = materialLength * 8;
         return bits / 6 + (bits % 6 != 0 ? 1 : 0) + (bits % 6 != 0 ? (6 - bits % 6) / 2 : 0)
         // if no padding, then we add 4 to accomodate code
-                + (bits % 6 == 0 ? 4 : 0);
+        + (bits % 6 == 0 ? 4 : 0);
     }
 
     public static String shortQb64(Digest digest) {
