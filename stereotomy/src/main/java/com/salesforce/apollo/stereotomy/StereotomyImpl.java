@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
@@ -242,7 +243,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Signer> getSigner(int keyIndex) {
-            return null;
+            return StereotomyImpl.this.getSigner(getIdentifier(), keyIndex);
         }
 
         @Override
@@ -260,15 +261,25 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public CertificateWithPrivateKey provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                   List<CertExtension> extensions, SignatureAlgorithm algo) {
-            var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s", endpoint.getAddress().getHostAddress(),
-                                                        endpoint.getPort(), qb64(getIdentifier())));
+        public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom,
+                                                             Duration valid, List<CertExtension> extensions,
+                                                             SignatureAlgorithm algo) {
+            var signer = getSigner(0);
+            if (signer.isEmpty()) {
+                log.warn("Cannot get signer for key 0 for: {}", getIdentifier());
+                return Optional.empty();
+            }
 
-            KeyPair keyPair = algo.generateKeyPair(entropy); 
-            return new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair, validFrom,
-                                                                       validFrom.plus(valid), extensions),
-                                                 keyPair.getPrivate());
+            KeyPair keyPair = algo.generateKeyPair(entropy);
+            var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
+
+            var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", endpoint.getHostName(),
+                                                        endpoint.getPort(), qb64(getIdentifier()), qb64(signature)));
+
+            return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
+                                                                                   validFrom, validFrom.plus(valid),
+                                                                                   extensions),
+                                                             keyPair.getPrivate()));
         }
 
         @Override

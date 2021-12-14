@@ -6,13 +6,19 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import org.h2.mvstore.MVStore;
@@ -211,8 +217,41 @@ public class StereotomyTests {
         assertFalse(identifier.isDelegated());
     }
 
+    @Test
+    public void provision() throws Exception {
+        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
+        var i = controller.newIdentifier(Identifier.NONE).get();
+        provision(i);
+        i.rotate();
+        provision(i);
+    }
+
     void initializeKel() throws Exception {
         kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
+    }
+
+    private void provision(ControllableIdentifier i) throws CertificateExpiredException,
+                                                     CertificateNotYetValidException {
+        var now = Instant.now();
+        var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
+        var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
+        assertNotNull(cwpk);
+        var cert = cwpk.getX509Certificate();
+        assertNotNull(cert);
+        cert.checkValidity();
+        var publicKey = cert.getPublicKey();
+        assertNotNull(publicKey);
+        var basicId = new BasicIdentifier(publicKey);
+
+        var decoded = Stereotomy.decode(cert);
+        assertFalse(decoded.isEmpty());
+
+        assertEquals(i.getIdentifier(), decoded.get().identifier());
+        assertEquals(endpoint, decoded.get().endpoint());
+        assertTrue(i.getVerifier(0).get().verify(decoded.get().signature(), qb64(basicId)));
+
+        var privateKey = cwpk.getPrivateKey();
+        assertNotNull(privateKey);
     }
 
 }

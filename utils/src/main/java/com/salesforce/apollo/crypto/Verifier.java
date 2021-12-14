@@ -62,27 +62,7 @@ public interface Verifier {
         }
 
         @Override
-        public boolean verify(JohnHancock signature, byte[]... message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteBuffer... message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteString... message) {
-            return true;
-        }
-
-        @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
             return true;
         }
 
@@ -106,5 +86,9 @@ public interface Verifier {
 
     default boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
         return verify(signature, BbBackedInputStream.aggregate(forSigning));
+    }
+
+    default boolean verify(JohnHancock signature, String message) {
+        return verify(signature, BbBackedInputStream.aggregate(message.getBytes()));
     }
 }

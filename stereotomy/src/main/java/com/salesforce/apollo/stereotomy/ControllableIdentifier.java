@@ -55,8 +55,8 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    CertificateWithPrivateKey provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                        List<CertExtension> extensions, SignatureAlgorithm algo);
+    Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
+                                                  List<CertExtension> extensions, SignatureAlgorithm algo);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using
@@ -71,8 +71,8 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    default CertificateWithPrivateKey provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                SignatureAlgorithm algo) {
+    default Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
+                                                          SignatureAlgorithm algo) {
         return provision(endpoint, validFrom, valid, Collections.emptyList(), algo);
     }
 

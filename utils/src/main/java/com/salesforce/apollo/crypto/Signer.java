@@ -84,28 +84,8 @@ public interface Signer {
         }
 
         @Override
-        public JohnHancock sign(byte[]... bytes) {
-            return algorithm.sign(privateKey, bytes);
-        }
-
-        @Override
-        public JohnHancock sign(ByteBuffer... buffs) {
-            return algorithm.sign(privateKey, buffs);
-        }
-
-        @Override
-        public JohnHancock sign(ByteString... message) {
-            return algorithm.sign(privateKey, message);
-        }
-
-        @Override
         public JohnHancock sign(InputStream message) {
             return algorithm.sign(privateKey, message);
-        }
-
-        @Override
-        public JohnHancock sign(List<ByteBuffer> buffers) {
-            return algorithm.sign(privateKey, BbBackedInputStream.aggregate(buffers));
         }
     }
 
@@ -113,14 +93,26 @@ public interface Signer {
 
     int keyIndex();
 
-    JohnHancock sign(byte[]... bytes);
+    default JohnHancock sign(byte[]... bytes) {
+        return sign(BbBackedInputStream.aggregate(bytes));
+    }
 
-    JohnHancock sign(ByteBuffer... buffs);
+    default JohnHancock sign(ByteBuffer... buffs) {
+        return sign(BbBackedInputStream.aggregate(buffs));
+    }
 
-    JohnHancock sign(ByteString... message);
+    default JohnHancock sign(ByteString... message) {
+        return sign(BbBackedInputStream.aggregate(message));
+    }
 
     JohnHancock sign(InputStream message);
 
-    JohnHancock sign(List<ByteBuffer> buffers);
+    default JohnHancock sign(List<ByteBuffer> buffers) {
+        return sign(BbBackedInputStream.aggregate(buffers));
+    }
+
+    default JohnHancock sign(String msg) {
+        return sign(BbBackedInputStream.aggregate(msg.getBytes()));
+    }
 
 }
