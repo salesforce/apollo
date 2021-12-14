@@ -37,6 +37,8 @@ public interface Stereotomy {
         };
     }
 
+    Optional<BoundIdentifier> bindingOf(EventCoordinates coordinates);
+
     Optional<ControllableIdentifier> controlOf(Identifier identifier);
 
     Optional<KeyState> getKeyState(EventCoordinates eventCoordinates);

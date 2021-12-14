@@ -332,6 +332,16 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
+    public Optional<BoundIdentifier> bindingOf(EventCoordinates coordinates) {
+        final var lookup = kerl.getKeyState(coordinates);
+        if (lookup.isEmpty()) {
+            log.warn("Identifier has no key state: {}", coordinates);
+            return Optional.empty();
+        }
+        return Optional.of(new ControllableIdentifierImpl(lookup.get()));
+    }
+
+    @Override
     public Optional<ControllableIdentifier> controlOf(Identifier identifier) {
         final var lookup = kerl.getKeyState(identifier);
         if (lookup.isEmpty()) {
