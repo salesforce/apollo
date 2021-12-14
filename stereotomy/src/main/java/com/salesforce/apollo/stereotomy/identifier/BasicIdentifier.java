@@ -10,17 +10,20 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
+import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class BasicIdentifier implements Identifier {
+public class BasicIdentifier implements Identifier, Verifier {
     private final PublicKey publicKey;
 
     public BasicIdentifier(PubKey pk) {
@@ -63,12 +66,17 @@ public class BasicIdentifier implements Identifier {
     }
 
     @Override
+    public Ident toIdent() {
+        return Ident.newBuilder().setBasic(bs(publicKey)).build();
+    }
+
+    @Override
     public String toString() {
         return "B" + shortQb64(publicKey);
     }
 
     @Override
-    public Ident toIdent() {
-        return Ident.newBuilder().setBasic(bs(publicKey)).build();
+    public boolean verify(JohnHancock signature, InputStream message) {
+        return new Verifier.DefaultVerifier(publicKey).verify(signature, message);
     }
 }

@@ -46,28 +46,8 @@ public interface Verifier {
         }
 
         @Override
-        public boolean verify(JohnHancock signature, byte[]... message) {
-            return algo.verify(key, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteBuffer... message) {
-            return algo.verify(key, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteString... message) {
-            return algo.verify(key, signature, message);
-        }
-
-        @Override
         public boolean verify(JohnHancock signature, InputStream message) {
             return algo.verify(key, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, List<ByteBuffer> buffers) {
-            return algo.verify(key, signature, BbBackedInputStream.aggregate(buffers));
         }
 
     }
@@ -108,13 +88,21 @@ public interface Verifier {
 
     PublicKey getPublicKey();
 
-    boolean verify(JohnHancock signature, byte[]... message);
+    default boolean verify(JohnHancock signature, byte[]... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
 
-    boolean verify(JohnHancock signature, ByteBuffer... message);
+    default boolean verify(JohnHancock signature, ByteBuffer... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
 
-    boolean verify(JohnHancock signature, ByteString... message);
+    default boolean verify(JohnHancock signature, ByteString... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
 
     boolean verify(JohnHancock signature, InputStream message);
 
-    boolean verify(JohnHancock signature, List<ByteBuffer> forSigning);
+    default boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
+        return verify(signature, BbBackedInputStream.aggregate(forSigning));
+    }
 }

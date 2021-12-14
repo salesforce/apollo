@@ -11,17 +11,13 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
 import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
-import java.util.List;
 import java.util.Map;
 
-import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * @author hal.hildebrand
@@ -90,25 +86,6 @@ public interface Member extends Comparable<Member>, Verifier {
     @Override
     int hashCode();
 
-    /**
-     * Verify the signature with the member's signing key
-     */
-    default boolean verify(JohnHancock signature, byte[]... message) {
-        return verify(signature, BbBackedInputStream.aggregate(message));
-    }
-
-    default boolean verify(JohnHancock signature, ByteBuffer... message) {
-        return verify(signature, BbBackedInputStream.aggregate(message));
-    }
-
-    default boolean verify(JohnHancock signature, ByteString... message) {
-        return verify(signature, BbBackedInputStream.aggregate(message));
-    }
-
     boolean verify(JohnHancock signature, InputStream message);
-
-    default boolean verify(JohnHancock sig, List<ByteBuffer> buffers) {
-        return verify(sig, BbBackedInputStream.aggregate(buffers));
-    }
 
 }
