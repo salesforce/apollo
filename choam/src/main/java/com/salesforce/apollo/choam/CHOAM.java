@@ -1024,7 +1024,7 @@ public class CHOAM {
                  validators.entrySet().stream()
                            .map(e -> String.format("id: %s key: %s", e.getKey(),
                                                    params.digestAlgorithm()
-                                                         .digest(e.getValue().getPublicKey().getEncoded())))
+                                                         .digest(e.toString())))
                            .toList(),
                  params.member());
     }

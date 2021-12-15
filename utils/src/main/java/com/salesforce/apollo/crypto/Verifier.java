@@ -34,32 +34,18 @@ public interface Verifier {
             this.key = key;
         }
 
-        public SignatureAlgorithm getAlgorithm() {
-            return algo;
-        }
-
-        public PublicKey getKey() {
-            return key;
-        }
-
         @Override
-        public PublicKey getPublicKey() {
-            return key;
+        public String toString() {
+            return "V[" + key.getEncoded() + "]";
         }
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
             return algo.verify(key, signature, message);
         }
-
     }
 
     class MockVerifier implements Verifier {
-
-        @Override
-        public PublicKey getPublicKey() {
-            return null;
-        }
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
@@ -67,8 +53,6 @@ public interface Verifier {
         }
 
     }
-
-    PublicKey getPublicKey();
 
     default boolean verify(JohnHancock signature, byte[]... message) {
         return verify(signature, BbBackedInputStream.aggregate(message));

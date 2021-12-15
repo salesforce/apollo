@@ -45,7 +45,6 @@ public class BasicIdentifier implements Identifier, Verifier {
         return Objects.equals(publicKey, other.publicKey);
     }
 
-    @Override
     public PublicKey getPublicKey() {
         return publicKey;
     }

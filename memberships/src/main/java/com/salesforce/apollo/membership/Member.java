@@ -83,6 +83,8 @@ public interface Member extends Comparable<Member>, Verifier {
      */
     Digest getId();
 
+    PublicKey getPublicKey();
+
     @Override
     int hashCode();
 

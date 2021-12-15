@@ -81,7 +81,7 @@ public interface Committee {
     }
 
     void accept(HashedCertifiedBlock next);
-    
+
     default void assembled() {
     }
 
@@ -130,10 +130,10 @@ public interface Committee {
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
         if (!verified) {
             log().debug("Failed verification: {} using: {} key: {} on: {}", verified, witness.getId(),
-                        DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member());
         } else {
             log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                        DigestAlgorithm.DEFAULT.digest(verify.getPublicKey().getEncoded()), params.member());
+                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member());
         }
         return verified;
     }
