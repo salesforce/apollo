@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
@@ -23,18 +24,50 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KEL {
 
-    Optional<KeyState> getKeyState(Identifier identifier);
+    /**
+     * Answer the Verifier using key state at the supplied key coordinates
+     */
+    default public Optional<Verifier> getVerifier(KeyCoordinates coordinates) {
+        var state = getKeyState(coordinates.getEstablishmentEvent());
+        if (state.isEmpty()) {
+            return Optional.empty();
+        }
 
-    Optional<KeyState> getKeyState(EventCoordinates coordinates);
+        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
+    }
 
-    Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates);
-
-    Optional<KeyEvent> getKeyEvent(Digest digest);
-
-    Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates);
-
-    DigestAlgorithm getDigestAlgorithm();
-
+    /**
+     * Append the event. The event will be validated before inserted.
+     */
     KeyState append(KeyEvent event);
 
+    /**
+     * The digest algorithm used
+     */
+    DigestAlgorithm getDigestAlgorithm();
+
+    /**
+     * Answer the SealingEvent of the delegating coordinates
+     */
+    Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates);
+
+    /**
+     * Answer the KeyEvent that has the matching digest
+     */
+    Optional<KeyEvent> getKeyEvent(Digest digest);
+
+    /**
+     * Answer the KeyEvent of the coordinates
+     */
+    Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates);
+
+    /**
+     * Answer the KeyState of the coordinates
+     */
+    Optional<KeyState> getKeyState(EventCoordinates coordinates);
+
+    /**
+     * Answer the current KeyState of an identifier
+     */
+    Optional<KeyState> getKeyState(Identifier identifier);
 }

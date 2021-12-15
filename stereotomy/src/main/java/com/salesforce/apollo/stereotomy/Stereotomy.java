@@ -46,12 +46,7 @@ public interface Stereotomy {
         }
 
         public Optional<Verifier> verifier(KEL kel) {
-            var state = kel.getKeyState(coordinates.getEstablishmentEvent());
-            if (state.isEmpty()) {
-                return Optional.empty();
-            }
-
-            return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
+            return kel.getVerifier(coordinates);
         }
     }
 
