@@ -169,12 +169,6 @@ abstract public class UniKERL implements KERL {
         processor = new KeyEventProcessor(this);
     }
 
-    public KeyState append(KeyEvent k) {
-        final var newState = processor.process(k);
-        append(dsl, k, newState, digestAlgorithm);
-        return newState;
-    }
-
     @Override
     public OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier) {
         // TODO Auto-generated method stub

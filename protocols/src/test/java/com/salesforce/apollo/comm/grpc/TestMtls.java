@@ -124,17 +124,12 @@ public class TestMtls {
 
     private CertificateValidator validator() {
         return new CertificateValidator() {
-
             @Override
             public void validateServer(X509Certificate[] chain) throws CertificateException {
-                // TODO Auto-generated method stub
-
             }
 
             @Override
             public void validateClient(X509Certificate[] chain) throws CertificateException {
-                // TODO Auto-generated method stub
-
             }
         };
     }
