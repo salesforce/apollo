@@ -12,11 +12,7 @@
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>utils</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.hakky54</groupId>
-            <artifactId>sslcontext-kickstart-for-netty</artifactId>
-        </dependency>
+        </dependency> 
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty-shaded</artifactId>
