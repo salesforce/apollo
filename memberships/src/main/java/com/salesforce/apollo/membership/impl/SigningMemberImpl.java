@@ -42,7 +42,7 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
      */
     public SigningMemberImpl(CertificateWithPrivateKey cert) {
         this(Member.getMemberIdentifier(cert.getX509Certificate()), cert.getX509Certificate(), cert.getPrivateKey(),
-             new SignerImpl(0, cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
+             new SignerImpl(cert.getPrivateKey()), cert.getX509Certificate().getPublicKey());
     }
 
     public SigningMemberImpl(Digest id, X509Certificate cert, PrivateKey certKey, Signer signer, PublicKey signerKey) {
@@ -65,11 +65,6 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
     public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
         return MtlsServer.forServer(clientAuth, alias, certificate, certKey, validator);
-    }
-
-    @Override
-    public int keyIndex() {
-        return signer.keyIndex();
     }
 
     @Override

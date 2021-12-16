@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.event;
+package com.salesforce.apollo.crypto;
 
 import static java.util.Objects.requireNonNull;
 
@@ -16,9 +16,9 @@ import java.util.stream.Stream;
 
 import org.apache.commons.math3.fraction.Fraction;
 
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight.WeightImpl;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.WeightedImpl;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.WeightedImpl;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight.WeightImpl;
 
 /**
  * @author hal.hildebrand

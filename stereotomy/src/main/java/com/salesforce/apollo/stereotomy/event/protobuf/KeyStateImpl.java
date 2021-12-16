@@ -19,11 +19,11 @@ import java.util.stream.Collectors;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 

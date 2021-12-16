@@ -12,9 +12,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 

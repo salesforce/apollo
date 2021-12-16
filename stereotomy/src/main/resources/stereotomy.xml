@@ -57,8 +57,6 @@
 			schemaName="stereotomy_kerl" indexName="coordinates_identifier_idx">
 			<column name="identifier" />
 		</createIndex>
-		
-        <sql>create schema if not exists stereotomy_kerl</sql>
 
 		<createTable tableName="event"
 			schemaName="stereotomy_kerl">

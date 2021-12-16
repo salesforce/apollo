@@ -90,7 +90,7 @@ public class KeyStateProcessor implements BiFunction<KeyState, KeyEvent, KeyStat
     }
 
     private KeyState newKeyState(Identifier identifier,
-                                 com.salesforce.apollo.stereotomy.event.SigningThreshold signingThreshold,
+                                 com.salesforce.apollo.crypto.SigningThreshold signingThreshold,
                                  List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
                                  List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
                                  KeyEvent event, EstablishmentEvent lastEstablishmentEvent, Identifier delegatingPrefix,

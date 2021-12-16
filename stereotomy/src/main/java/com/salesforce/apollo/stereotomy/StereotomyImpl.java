@@ -8,11 +8,12 @@ package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
-import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
+import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.net.InetSocketAddress;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -22,7 +23,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
 import com.salesforce.apollo.crypto.cert.CertExtension;
@@ -44,7 +46,6 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -186,8 +187,8 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<Verifier> getVerifier(int keyIndex) {
-            return StereotomyImpl.this.getVerifier(getIdentifier(), keyIndex);
+        public Optional<Verifier> getVerifier() {
+            return StereotomyImpl.this.getVerifier(getIdentifier());
         }
 
         @Override
@@ -241,13 +242,13 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<Signer> getSigner(int keyIndex) {
-            return StereotomyImpl.this.getSigner(getIdentifier(), keyIndex);
+        public Optional<Signer> getSigner() {
+            return StereotomyImpl.this.getSigner(getIdentifier());
         }
 
         @Override
-        public Optional<Verifier> getVerifier(int keyIndex) {
-            return StereotomyImpl.this.getVerifier(getIdentifier(), keyIndex);
+        public Optional<Verifier> getVerifier() {
+            return StereotomyImpl.this.getVerifier(getIdentifier());
         }
 
         @Override
@@ -266,9 +267,9 @@ public class StereotomyImpl implements Stereotomy {
 
             var lastEstablishing = getState().getLastEstablishmentEvent();
             var keyCoordinates = new KeyCoordinates(lastEstablishing, 0);
-            var signer = getSigner(0);
+            var signer = getSigner();
             if (signer.isEmpty()) {
-                log.warn("Cannot get signer for key 0 for: {}", getIdentifier());
+                log.warn("Cannot get signer for: {}", getIdentifier());
                 return Optional.empty();
             }
 
@@ -418,7 +419,8 @@ public class StereotomyImpl implements Stereotomy {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
         specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
-                     .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(0, initialKeyPair.getPrivate());
+                     .setNextKeys(List.of(nextKeyPair.getPublic()))
+                     .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
         KeyState state = kerl.append(event);
@@ -439,33 +441,34 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(cid);
     }
 
-    protected Optional<Signer> getSigner(Identifier identifier, int keyIndex) {
+    protected Optional<Signer> getSigner(Identifier identifier) {
         Optional<KeyState> state = kerl.getKeyState(identifier);
         if (state.isEmpty()) {
             log.warn("Identifier not found in KEL: {}", identifier);
             return Optional.empty();
         }
-        Optional<KeyPair> keyPair = getKeyPair(identifier, keyIndex, state.get(),
-                                               kerl.getKeyEvent(state.get().getLastEstablishmentEvent()));
-        if (keyPair.isEmpty()) {
-            log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
-                     state.get().getCoordinates(), state.get().getLastEstablishmentEvent());
-            return Optional.empty();
+        PrivateKey[] signers = new PrivateKey[state.get().getKeys().size()];
+        for (int i = 0; i < signers.length; i++) {
+            Optional<KeyPair> keyPair = getKeyPair(identifier, i, state.get(),
+                                                   kerl.getKeyEvent(state.get().getLastEstablishmentEvent()));
+            if (keyPair.isEmpty()) {
+                log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
+                         state.get().getCoordinates(), state.get().getLastEstablishmentEvent());
+                return Optional.empty();
+            }
+            signers[i] = keyPair.get().getPrivate();
         }
-
-        return Optional.of(new Signer.SignerImpl(keyIndex, keyPair.get().getPrivate()));
+        return Optional.of(new Signer.SignerImpl(signers));
     }
 
-    protected Optional<Verifier> getVerifier(Identifier identifier, int keyIndex) {
+    protected Optional<Verifier> getVerifier(Identifier identifier) {
         Optional<KeyState> state = kerl.getKeyState(identifier);
         if (state.isEmpty()) {
             log.warn("Identifier not found in KEL: {}", identifier);
             return Optional.empty();
         }
 
-        final var publicKey = state.get().getKeys().get(keyIndex);
-        var ops = SignatureAlgorithm.lookup(publicKey);
-        return Optional.of(new Verifier.DefaultVerifier(ops, publicKey));
+        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys()));
     }
 
     protected Optional<KeyState> rotate(Identifier identifier) {
@@ -509,7 +512,8 @@ public class StereotomyImpl implements Stereotomy {
         specification.setSigningThreshold(unweighted(1)).setIdentifier(identifier)
                      .setDigestAlgorithm(kerl.getDigestAlgorithm()).setCurrentCoords(state.get().getCoordinates())
                      .setCurrentDigest(state.get().getDigest()).setKey(nextKeyPair.getPublic())
-                     .setNextKeys(List.of(newNextKeyPair.getPublic())).setSigner(0, nextKeyPair.getPrivate());
+                     .setNextKeys(List.of(newNextKeyPair.getPublic()))
+                     .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
 
         RotationEvent event = eventFactory.rotation(specification.build());
         KeyState newState = kerl.append(event);
@@ -552,7 +556,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         specification.setPriorEventDigest(state.get().getDigest()).setLastEvent(state.get().getLastEvent())
-                     .setIdentifier(identifier).setSigner(0, keyPair.get().getPrivate());
+                     .setIdentifier(identifier).setSigner(new SignerImpl(keyPair.get().getPrivate()));
 
         KeyEvent event = eventFactory.interaction(specification.build());
         KeyState newKeyState = kerl.append(event);
@@ -572,13 +576,15 @@ public class StereotomyImpl implements Stereotomy {
         }
         byte[] bs = event.getBytes();
 
-        return Optional.of(new EventSignature(event.getCoordinates(),
-                                              kerl.getKeyEvent(state.get().getLastEstablishmentEvent()).get()
-                                                  .getCoordinates(),
-                                              IntStream.range(0, state.get().getKeys().size() - 1)
-                                                       .mapToObj(i -> getSigner(identifier, i))
-                                                       .filter(s -> s.isPresent()).map(s -> s.get())
-                                                       .collect(Collectors.toMap(s -> s.keyIndex(), s -> s.sign(bs)))));
+        var lee = kerl.getKeyEvent(state.get().getLastEstablishmentEvent());
+        var signer = signerFor(identifier, state, lee);
+        return Optional.of(new EventSignature(event.getCoordinates(), lee.get().getCoordinates(), signer.sign(bs)));
+    }
+
+    private SignerImpl signerFor(Identifier identifier, Optional<KeyState> state, Optional<KeyEvent> lee) {
+        return new SignerImpl((PrivateKey[]) IntStream.range(0, state.get().getKeys().size())
+                                                      .mapToObj(i -> getKeyPair(identifier, i, state.get(), lee))
+                                                      .map(s -> s.isEmpty() ? null : s.get().getPrivate()).toArray());
     }
 
     private Optional<KeyPair> getKeyPair(Identifier identifier, int keyIndex, KeyState state,

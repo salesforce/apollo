@@ -36,10 +36,9 @@ public interface ControllableIdentifier extends BoundIdentifier {
     BoundIdentifier bind();
 
     /**
-     * @param keyIndex
      * @return the Signer for the key state binding
      */
-    Optional<Signer> getSigner(int keyIndex);
+    Optional<Signer> getSigner();
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using

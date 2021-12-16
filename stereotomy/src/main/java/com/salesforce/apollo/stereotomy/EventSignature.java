@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.Collections;
-import java.util.Map;
-
 import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
@@ -19,15 +16,14 @@ import com.salesforce.apollo.crypto.JohnHancock;
  */
 public class EventSignature {
 
-    private final EventCoordinates          event;
-    private final EventCoordinates          keyEstablishmentEvent;
-    private final Map<Integer, JohnHancock> signatures;
+    private final EventCoordinates event;
+    private final EventCoordinates keyEstablishmentEvent;
+    private final JohnHancock      signatures;
 
-    public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
-                          Map<Integer, JohnHancock> signatures) {
+    public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent, JohnHancock signatures) {
         this.event = event;
         this.keyEstablishmentEvent = keyEstablishmentEvent;
-        this.signatures = Collections.unmodifiableMap(signatures);
+        this.signatures = signatures;
     }
 
     public EventCoordinates getEvent() {
@@ -38,7 +34,7 @@ public class EventSignature {
         return this.keyEstablishmentEvent;
     }
 
-    public Map<Integer, JohnHancock> getSignatures() {
+    public JohnHancock getSignatures() {
         return this.signatures;
     }
 

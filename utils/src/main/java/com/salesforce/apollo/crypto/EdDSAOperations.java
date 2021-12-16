@@ -138,19 +138,25 @@ public class EdDSAOperations {
         }
     }
 
-    public JohnHancock sign(PrivateKey privateKey, InputStream is) {
+    public JohnHancock sign(PrivateKey[] privateKeys, InputStream is) {
+        byte[][] signatures = new byte[privateKeys.length][];
         try {
+            int i = 0;
             var sig = SIGNATURE_CACHE.get();
-            sig.initSign(privateKey);
-            byte[] buf = new byte[1024];
-            try {
-                for (int read = is.read(buf); read > 0; read = is.read(buf)) {
-                    sig.update(buf, 0, read);
+            for (PrivateKey privateKey : privateKeys) {
+                sig.initSign(privateKey);
+                byte[] buf = new byte[1024];
+                try {
+                    for (int read = is.read(buf); read > 0; read = is.read(buf)) {
+                        sig.update(buf, 0, read);
+                    }
+                } catch (IOException e) {
+                    throw new IllegalStateException("Io error", e);
                 }
-            } catch (IOException e) {
-                throw new IllegalStateException("Io error", e);
+                signatures[i] = sig.sign();
+                i++;
             }
-            return new JohnHancock(signatureAlgorithm, sig.sign());
+            return new JohnHancock(signatureAlgorithm, signatures);
         } catch (GeneralSecurityException e) {
             throw new IllegalArgumentException("Cannot sign", e);
         }
@@ -158,17 +164,6 @@ public class EdDSAOperations {
 
     public JohnHancock signature(byte[] signatureBytes) {
         return new JohnHancock(signatureAlgorithm, signatureBytes);
-    }
-
-    public boolean verify(byte[] message, JohnHancock signature, PublicKey publicKey) {
-        try {
-            var sig = SIGNATURE_CACHE.get();
-            sig.initVerify(publicKey);
-            sig.update(message);
-            return sig.verify(signature.bytes);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalArgumentException("Cannot verify", e);
-        }
     }
 
     private static final ThreadLocal<Signature> SIGNATURE_CACHE = new ThreadLocal<>() {
@@ -183,7 +178,7 @@ public class EdDSAOperations {
         }
     };
 
-    public boolean verify(PublicKey publicKey, JohnHancock signature, InputStream is) {
+    public boolean verify(PublicKey publicKey, byte[] bytes, InputStream is) {
         try {
             var sig = SIGNATURE_CACHE.get();
             sig.initVerify(publicKey);
@@ -195,7 +190,7 @@ public class EdDSAOperations {
             } catch (IOException e) {
                 throw new IllegalStateException("Io error", e);
             }
-            return sig.verify(signature.bytes);
+            return sig.verify(bytes);
         } catch (GeneralSecurityException e) {
             // TODO handle better
             throw new RuntimeException(e);

@@ -24,7 +24,7 @@ message Digeste {
 
 message Sig {
     int32 code = 1;
-    bytes signature = 2;
+    repeated bytes signatures = 2;
 }
 
 message PubKey {

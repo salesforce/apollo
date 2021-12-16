@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import java.util.List;
 import java.util.Map;
 
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -17,7 +18,7 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
  */
 public interface AttachmentEvent extends KeyEvent {
 
-    Map<Integer, JohnHancock> getEndorsements();
+    List<JohnHancock> getEndorsements();
 
-    Map<EventCoordinates, Map<Integer, JohnHancock>> getReceipts();
+    Map<EventCoordinates, JohnHancock> getReceipts();
 }

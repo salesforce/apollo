@@ -32,11 +32,6 @@ public interface Signer {
         }
 
         @Override
-        public int keyIndex() {
-            return 0;
-        }
-
-        @Override
         public JohnHancock sign(byte[]... bytes) {
             return new JohnHancock(algorithm(), new byte[algorithm().signatureLength()]);
         }
@@ -64,13 +59,20 @@ public interface Signer {
 
     class SignerImpl implements Signer {
         private final SignatureAlgorithm algorithm;
-        private final int                keyIndex;
-        private final PrivateKey         privateKey;
+        private final PrivateKey[]       privateKeys;
 
-        public SignerImpl(int keyIndex, PrivateKey privateKey) {
-            this.keyIndex = keyIndex;
-            this.privateKey = requireNonNull(privateKey);
-            algorithm = SignatureAlgorithm.lookup(privateKey);
+        public SignerImpl(List<PrivateKey> privateKeys) {
+            this((PrivateKey[]) privateKeys.toArray());
+        }
+
+        public SignerImpl(PrivateKey privateKey) {
+            this(new PrivateKey[] { privateKey });
+        }
+
+        public SignerImpl(PrivateKey[] privateKeys) {
+            assert privateKeys.length > 0;
+            this.privateKeys = requireNonNull(privateKeys);
+            algorithm = SignatureAlgorithm.lookup(privateKeys[0]);
         }
 
         @Override
@@ -79,19 +81,12 @@ public interface Signer {
         }
 
         @Override
-        public int keyIndex() {
-            return keyIndex;
-        }
-
-        @Override
         public JohnHancock sign(InputStream message) {
-            return algorithm.sign(privateKey, message);
+            return algorithm.sign(privateKeys, message);
         }
     }
 
     SignatureAlgorithm algorithm();
-
-    int keyIndex();
 
     default JohnHancock sign(byte[]... bytes) {
         return sign(BbBackedInputStream.aggregate(bytes));

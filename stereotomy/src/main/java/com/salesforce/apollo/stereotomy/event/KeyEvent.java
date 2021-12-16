@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import java.util.Map;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -29,7 +27,7 @@ public interface KeyEvent {
     public static final String RECEIPT_FROM_TRANSFERABLE_TYPE = "vrc";
     public static final String ROTATION_TYPE                  = "rot";
 
-    Map<Integer, JohnHancock> getAuthentication();
+    JohnHancock getAuthentication();
 
     byte[] getBytes();
 

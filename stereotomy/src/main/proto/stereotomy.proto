@@ -81,7 +81,7 @@ message Header {
 message EventCommon {
     utils.Digeste configuration = 2;
     EventCoords previous = 3;
-    Signatures authentication = 4;
+    utils.Sig authentication = 4;
 }
 
 // The interaction specification and common event structure
@@ -101,7 +101,7 @@ message AttachmentEvent {
     Header header = 1;
     EventCommon common = 2;
     EventCoords coordinates = 3;
-    Signatures endorsements = 5; 
+    repeated utils.Sig endorsements = 5; 
     repeated Receipt receipts = 6;
 }
 
@@ -148,7 +148,7 @@ message IdentifierSpec {
 
 message Receipt {
     EventCoords coordinates = 1;
-    Signatures signatures = 2;
+    utils.Sig signatures = 2;
 }
 
 message Weight {
@@ -186,10 +186,6 @@ message KeyState {
     SigningThreshold signingThreshold = 9;
     repeated Ident witnesses = 10;
     int32 witnessThreshold = 11; 
-}
-
-message Signatures {
-    map<int32, utils.Sig> signatures = 1;
 }
 
 // A binding

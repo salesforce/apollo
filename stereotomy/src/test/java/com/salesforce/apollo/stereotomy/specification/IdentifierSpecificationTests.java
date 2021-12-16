@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 public class IdentifierSpecificationTests {
@@ -31,7 +31,7 @@ public class IdentifierSpecificationTests {
         this.deterministicRandom.setSeed(new byte[] { 0 });
 
         this.keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        this.signer = new SignerImpl(1, this.keyPair.getPrivate());
+        this.signer = new SignerImpl(this.keyPair.getPrivate());
 
         this.keyPair2 = SignatureAlgorithm.ED_25519.generateKeyPair();
 
@@ -42,7 +42,7 @@ public class IdentifierSpecificationTests {
         var spec = IdentifierSpecification.newBuilder()
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
-                                          .addSigner(this.signer).setSigningThreshold(1).build();
+                                          .setSigner(this.signer).setSigningThreshold(1).build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -50,7 +50,7 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void testBuilderSigningThresholdUnweighted() {
-        var spec = IdentifierSpecification.newBuilder().addKey(this.keyPair.getPublic()).addSigner(this.signer)
+        var spec = IdentifierSpecification.newBuilder().addKey(this.keyPair.getPublic()).setSigner(this.signer)
                                           .setNextKeys(Arrays.asList(keyPair2.getPublic()))
                                           .setNextSigningThreshold(SigningThreshold.unweighted(1)).build();
 
@@ -64,7 +64,7 @@ public class IdentifierSpecificationTests {
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), this.keyPair2.getPublic()))
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(),
                                                                      this.keyPair2.getPublic()))
-                                          .addSigner(this.signer)
+                                          .setSigner(this.signer)
                                           .setSigningThreshold(SigningThreshold.weighted("1", "2")).build();
 
         SigningThreshold signingThreshold = spec.getSigningThreshold();

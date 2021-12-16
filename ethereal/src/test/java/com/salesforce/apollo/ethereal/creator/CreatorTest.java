@@ -80,7 +80,7 @@ public class CreatorTest {
 
     static {
         DEFAULT_KEYPAIR = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        DEFAULT_SIGNER = new SignerImpl(0, DEFAULT_KEYPAIR.getPrivate());
+        DEFAULT_SIGNER = new SignerImpl(DEFAULT_KEYPAIR.getPrivate());
     }
 
     public static Creator newCreator(Config cnf, Consumer<Unit> send) {
@@ -120,7 +120,7 @@ public class CreatorTest {
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setSigner(DEFAULT_SIGNER).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
+                                .setSigner(new SignerImpl(keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
                                 .build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);

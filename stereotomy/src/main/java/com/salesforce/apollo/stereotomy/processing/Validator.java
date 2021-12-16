@@ -9,7 +9,6 @@ package com.salesforce.apollo.stereotomy.processing;
 import static java.util.Collections.disjoint;
 
 import java.io.InputStream;
-import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -22,8 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.stereotomy.KEL;
-import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
@@ -34,7 +34,6 @@ import com.salesforce.apollo.stereotomy.event.InteractionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -74,15 +73,8 @@ public interface Validator {
             var lastEstablishment = (EstablishmentEvent) lee;
             lastEstablishment.getKeys();
 
-            KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lee, 0);
-            PublicKey keyPair = lastEstablishment.getKeys().get(0);
-            if (keyPair == null) {
-                log.debug("Key pair: {} not found for prefix: {}", keyCoords, identifier);
-                return false;
-            }
-
-            var ops = SignatureAlgorithm.lookup(keyPair);
-            if (ops.verify(keyPair, signature, message)) {
+            if (new DefaultVerifier(lastEstablishment.getKeys()).verify(lastEstablishment.getSigningThreshold(),
+                                                                        signature, message)) {
                 return true;
             }
         }
@@ -200,6 +192,8 @@ public interface Validator {
             this.validate(event.getKeys().size() == 1, "self-signing identifiers can only have a single key");
 
             var ops = SignatureAlgorithm.lookup(event.getKeys().get(0));
+            new DefaultVerifier(event.getKeys()).verify(event.getSigningThreshold(), ssp.getSignature(),
+                                                        event.getInceptionStatement());
             this.validate(ops.verify(event.getKeys().get(0), ssp.getSignature(), event.getInceptionStatement()),
                           "self-signing prefix signature must verify against inception statement");
 

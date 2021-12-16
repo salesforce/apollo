@@ -135,7 +135,7 @@ public class RbcTest {
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
                                                                               cert.getPrivateKey(),
-                                                                              new SignerImpl(0, cert.getPrivateKey()),
+                                                                              new SignerImpl(cert.getPrivateKey()),
                                                                               cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
 

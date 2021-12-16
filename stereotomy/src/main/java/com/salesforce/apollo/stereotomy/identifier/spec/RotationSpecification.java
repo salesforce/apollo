@@ -8,25 +8,21 @@ package com.salesforce.apollo.stereotomy.identifier.spec;
 
 import static java.util.Objects.requireNonNull;
 
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -45,12 +41,12 @@ public class RotationSpecification {
         private Format                      format             = Format.PROTOBUF;
         private Identifier                  identifier;
         private final List<PublicKey>       keys               = new ArrayList<>();
-        private final List<PublicKey>       nextKeys     = new ArrayList<>();
+        private final List<PublicKey>       nextKeys           = new ArrayList<>();
         private final DigestAlgorithm       nextKeysAlgorithm  = DigestAlgorithm.BLAKE3_256;
         private SigningThreshold            nextSigningThreshold;
         private final List<Seal>            seals              = new ArrayList<>();
         private SignatureAlgorithm          signatureAlgorithm = SignatureAlgorithm.DEFAULT;
-        private Map<Integer, Signer>        signers            = new HashMap<>();
+        private Signer                      signer;
         private SigningThreshold            signingThreshold;
         private Version                     version            = Stereotomy.currentVersion();
         private final List<BasicIdentifier> witnesses          = new ArrayList<>();
@@ -150,7 +146,7 @@ public class RotationSpecification {
             removed.removeAll(witnesses);
 
             return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber() + 1, currentCoords,
-                                             signingThreshold, keys, signers, nextKeyConfigurationDigest,
+                                             signingThreshold, keys, signer, nextKeyConfigurationDigest,
                                              witnessThreshold, removed, added, seals, version, currentDigest);
         }
 
@@ -188,7 +184,7 @@ public class RotationSpecification {
         public List<PublicKey> getKeys() {
             return keys;
         }
-        
+
         public Builder setNextKeys(List<PublicKey> nextKeys) {
             this.nextKeys.clear();
             this.nextKeys.addAll(nextKeys);
@@ -215,8 +211,8 @@ public class RotationSpecification {
             return signatureAlgorithm;
         }
 
-        public Map<Integer, Signer> getSigners() {
-            return signers;
+        public Signer getSigner() {
+            return signer;
         }
 
         public SigningThreshold getSigningThreshold() {
@@ -320,21 +316,9 @@ public class RotationSpecification {
             return this;
         }
 
-        public Builder setSigner(int keyIndex, PrivateKey privateKey) {
-            if (keyIndex < 0) {
-                throw new IllegalArgumentException("keyIndex must be >= 0");
-            }
-
-            signers.put(keyIndex, new SignerImpl(keyIndex, requireNonNull(privateKey)));
-            return this;
-        }
-
         public Builder setSigner(Signer signer) {
             requireNonNull(signer);
-            if (signer.keyIndex() < 0) {
-                throw new IllegalArgumentException("keyIndex must be >= 0");
-            }
-            signers.put(signer.keyIndex(), signer);
+            this.signer = signer;
             return this;
         }
 
@@ -382,24 +366,23 @@ public class RotationSpecification {
     private final List<BasicIdentifier> removedWitnesses;
     private final List<Seal>            seals;
     private final long                  sequenceNumber;
-    private final Map<Integer, Signer>  signers;
+    private final Signer                signer;
     private final SigningThreshold      signingThreshold;
     private final Version               version;
     private final int                   witnessThreshold;
 
     public RotationSpecification(Format format, Identifier identifier, long sequenceNumber,
                                  EventCoordinates previousEvent, SigningThreshold signingThreshold,
-                                 List<PublicKey> keys, Map<Integer, Signer> signers, Digest nextKeys,
-                                 int witnessThreshold, List<BasicIdentifier> removedWitnesses,
-                                 List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version,
-                                 Digest priorEventDigest) {
+                                 List<PublicKey> keys, Signer signer, Digest nextKeys, int witnessThreshold,
+                                 List<BasicIdentifier> removedWitnesses, List<BasicIdentifier> addedWitnesses,
+                                 List<Seal> seals, Version version, Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
         this.sequenceNumber = sequenceNumber;
         this.previous = previousEvent;
         this.signingThreshold = signingThreshold;
         this.keys = List.copyOf(keys);
-        this.signers = signers;
+        this.signer = signer;
         this.nextKeys = nextKeys;
         this.witnessThreshold = witnessThreshold;
         this.addedWitnesses = List.copyOf(addedWitnesses);
@@ -449,8 +432,8 @@ public class RotationSpecification {
         return sequenceNumber;
     }
 
-    public Map<Integer, Signer> getSigners() {
-        return signers;
+    public Signer getSigner() {
+        return signer;
     }
 
     public SigningThreshold getSigningThreshold() {

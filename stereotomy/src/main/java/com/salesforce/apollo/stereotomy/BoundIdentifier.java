@@ -19,8 +19,7 @@ import com.salesforce.apollo.crypto.Verifier;
 public interface BoundIdentifier extends KeyState {
 
     /**
-     * @param keyIndex
      * @return the Verifier for the key state binding
      */
-    Optional<Verifier> getVerifier(int keyIndex);
+    Optional<Verifier> getVerifier();
 }

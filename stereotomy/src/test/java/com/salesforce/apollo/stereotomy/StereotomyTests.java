@@ -27,12 +27,12 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Unweighted;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;

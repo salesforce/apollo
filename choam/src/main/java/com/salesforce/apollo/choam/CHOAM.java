@@ -265,7 +265,7 @@ public class CHOAM {
                       params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
                       params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
                       params.member());
-            Signer signer = new SignerImpl(0, nextView.consensusKeyPair.getPrivate());
+            Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
             producer = new Producer(viewContext, head.get(), comm);
             producer.start();
@@ -394,7 +394,7 @@ public class CHOAM {
                 log.trace("Using genesis consensus key: {} sig: {} on: {}",
                           params.digestAlgorithm().digest(c.consensusKeyPair.getPublic().getEncoded()),
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()), params.member());
-                Signer signer = new SignerImpl(0, c.consensusKeyPair.getPrivate());
+                Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
                 reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, true);
                 nextViewId.set(params.genesisViewId());
@@ -572,7 +572,7 @@ public class CHOAM {
     public static List<Transaction> toGenesisData(List<? super Message> initializationData, DigestAlgorithm digestAlgo,
                                                   SignatureAlgorithm sigAlgo) {
         var source = digestAlgo.getOrigin();
-        SignerImpl signer = new SignerImpl(0, sigAlgo.generateKeyPair().getPrivate());
+        SignerImpl signer = new SignerImpl(sigAlgo.generateKeyPair().getPrivate());
         AtomicInteger nonce = new AtomicInteger();
         return initializationData.stream().map(m -> (Message) m)
                                  .map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer)).toList();

@@ -13,14 +13,10 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -80,7 +76,7 @@ public interface Identifier {
         } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
             return selfAddressing(inceptionStatement, spec.getSelfAddressingDigestAlgorithm());
         } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
-            return selfSigning(inceptionStatement, spec.getSigner(0));
+            return selfSigning(inceptionStatement, spec.getSigner());
         } else {
             throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
         }
@@ -136,13 +132,6 @@ public interface Identifier {
     static SelfSigningIdentifier selfSigning(ByteBuffer inceptionStatement, Signer signer) {
         var signature = signer.sign(inceptionStatement);
         return new SelfSigningIdentifier(signature);
-    }
-
-    static Signatures signatures(Map<Integer, JohnHancock> signatures) {
-        return Signatures.newBuilder().putAllSignatures(signatures.entrySet().stream()
-                                                                  .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                            e -> e.getValue().toSig())))
-                         .build();
     }
 
     @Override

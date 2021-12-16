@@ -221,10 +221,9 @@ public class EtherealTest {
             final short pid = i;
             final AtomicInteger round = new AtomicInteger();
             List<PreBlock> output = produced.get(pid);
-            builder.setSigner(new SignerImpl(0, cpks.get(i).getPrivateKey()));
-            var controller = e.deterministic(builder.setSigner(new SignerImpl(0,
-                                                                              SignatureAlgorithm.DEFAULT.generateKeyPair()
-                                                                                                        .getPrivate()))
+            builder.setSigner(new SignerImpl(cpks.get(i).getPrivateKey()));
+            var controller = e.deterministic(builder.setSigner(new SignerImpl(SignatureAlgorithm.DEFAULT.generateKeyPair()
+                                        .getPrivate()))
                                                     .setPid(pid).build(),
                                              ds, (pb, last) -> {
                                                  if (pid == 0) {
@@ -326,8 +325,8 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            builder.setSigner(new SignerImpl(0, cpks.get(i).getPrivateKey()));
-            var controller = e.deterministic(builder.setSigner(new SignerImpl(0, cpks.get(pid).getPrivateKey()))
+            builder.setSigner(new SignerImpl(cpks.get(i).getPrivateKey()));
+            var controller = e.deterministic(builder.setSigner(new SignerImpl(cpks.get(pid).getPrivateKey()))
                                                     .setPid(pid).build(),
                                              ds, (pb, last) -> {
                                                  if (pid == 0) {

@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.stereotomy.event.SigningThreshold.unweighted;
+import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -162,7 +163,7 @@ public class TestUniKERL {
 
         specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
                      .setNextKeys(List.of(nextKeyPair.getPublic())).setWitnesses(Collections.emptyList())
-                     .setSigner(0, initialKeyPair.getPrivate());
+                     .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
@@ -210,7 +211,7 @@ public class TestUniKERL {
         var rotSpec = RotationSpecification.newBuilder();
         rotSpec.setIdentifier(prev.getIdentifier()).setCurrentCoords(prev.getCoordinates()).setCurrentDigest(prevDigest)
                .setKey(prevNext.getPublic()).setSigningThreshold(unweighted(1))
-               .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(0, prevNext.getPrivate());
+               .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(new SignerImpl(prevNext.getPrivate()));
 
         RotationEvent rotation = factory.rotation(rotSpec.build());
         return rotation;

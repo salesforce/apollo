@@ -204,7 +204,17 @@ public class QualifiedBase64 {
     }
 
     public static String qb64(JohnHancock s) {
-        return signatureCode(s.getAlgorithm()) + base64(s.getBytes());
+        final var bytes = s.getBytes();
+        var builder = new StringBuilder();
+        for (int i = 0; i < bytes.length; i++) {
+            if (bytes[i] != null) {
+                builder.append(base64(bytes[i]));
+            }
+            if (i < bytes.length - 1) {
+                builder.append(':');
+            }
+        }
+        return signatureCode(s.getAlgorithm()) + builder.toString();
     }
 
     public static String qb64(PublicKey publicKey) {
