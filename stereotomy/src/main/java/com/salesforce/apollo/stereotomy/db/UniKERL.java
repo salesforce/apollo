@@ -182,8 +182,11 @@ abstract public class UniKERL implements KERL {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        return dsl.select(EVENT.CONTENT, COORDINATES.ILK).from(EVENT).join(COORDINATES)
-                  .on(EVENT.COORDINATES.eq(COORDINATES.ID)).join(IDENTIFIER)
+        return dsl.select(EVENT.CONTENT, COORDINATES.ILK)
+                  .from(EVENT)
+                  .join(COORDINATES)
+                  .on(EVENT.COORDINATES.eq(COORDINATES.ID))
+                  .join(IDENTIFIER)
                   .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                   .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                   .and(COORDINATES.DIGEST.eq(coordinates.getPreviousEvent().getDigest().toDigeste().toByteArray()))
@@ -191,7 +194,7 @@ abstract public class UniKERL implements KERL {
                   .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                   .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber())).fetchOptional()
                   .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
-                  .map(ke -> ke instanceof SealingEvent ? (SealingEvent) ke : null);
+                  .map(ke -> ke instanceof SealingEvent se ? se : null);
     }
 
     @Override
