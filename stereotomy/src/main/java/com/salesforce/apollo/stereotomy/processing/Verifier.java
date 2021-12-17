@@ -75,7 +75,6 @@ public interface Verifier {
                                                               KEL kel) {
         var verified = new HashMap<EventCoordinates, JohnHancock>();
         for (var kv : otherReceipts.entrySet()) {
-            // TODO escrow or something
             Optional<KeyState> keyState = kel.getKeyState(kv.getKey());
 
             if (keyState.isEmpty()) {

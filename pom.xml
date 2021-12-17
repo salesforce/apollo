@@ -17,6 +17,7 @@
         <module>ethereal</module>
         <module>choam</module>
         <module>model</module>
+        <module>delphinius</module>
     </modules>
 
     <properties>
@@ -30,6 +31,7 @@
         <grpc.version>1.42.1</grpc.version>
         <protobuf.version>3.19.1</protobuf.version>
         <liquibase.version>4.6.1</liquibase.version>
+        <antlr4.version>4.9.3</antlr4.version>
 
         <compiler.dir>${project.build.directory}/compiler</compiler.dir>
 
@@ -263,6 +265,16 @@
                 <groupId>com.mattbertolini</groupId>
                 <artifactId>liquibase-slf4j</artifactId>
                 <version>4.0.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4</artifactId>
+                <version>${antlr4.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>${antlr4.version}</version>
             </dependency>
 
             <!-- Test dependencies only below this line! -->
@@ -527,10 +539,12 @@
                             </goals>
                             <configuration>
                                 <sources>
+                                    <source>${project.basedir}/src/main/antlr4</source>
                                     <source>${project.basedir}/src/main/proto</source>
                                     <source>${project.basedir}/target/generated-sources/protobuf/grpc-java</source>
                                     <source>${project.basedir}/target/generated-sources/protobuf/java</source>
                                     <source>${project.basedir}/target/generated-sources/jooq</source>
+                                    <source>${project.basedir}/target/generated-sources/antlr4</source>
                                 </sources>
                             </configuration>
                         </execution>
@@ -567,6 +581,18 @@
                                 <goal>compile-custom</goal>
                                 <goal>test-compile</goal>
                                 <goal>test-compile-custom</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.antlr</groupId>
+                    <artifactId>antlr4-maven-plugin</artifactId>
+                    <version>${antlr4.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>antlr4</goal>
                             </goals>
                         </execution>
                     </executions>

@@ -10,8 +10,11 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Optional;
 
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.stereotomy.Stereotomy.Decoded;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 
 /**
@@ -36,7 +39,7 @@ public class StereotomyValidator implements CertificateValidator {
         validate(chain[0]);
     }
 
-    private void validate(final X509Certificate cert) throws CertificateException {
+    void validate(final X509Certificate cert) throws CertificateException {
         var publicKey = cert.getPublicKey();
         var basicId = new BasicIdentifier(publicKey);
 
@@ -45,10 +48,13 @@ public class StereotomyValidator implements CertificateValidator {
             throw new CertificateException();
         }
         final var qb64Id = qb64(basicId);
-
-        if (!decoded.get().verifier(kel).get().verify(decoded.get().signature(), qb64Id)) {
-            throw new CertificateException(String.format("Cannot verify signature for %s",
-                                                         decoded.get().coordinates()));
+        Decoded decoder = decoded.get();
+        Optional<Verifier> verifier = decoder.verifier(kel);
+        if (verifier.isEmpty()) {
+            throw new CertificateException("Cannot get verifier for: " + decoder.coordinates());
+        }
+        if (!verifier.get().verify(decoder.signature(), qb64Id)) {
+            throw new CertificateException(String.format("Cannot verify signature for %s", decoder.coordinates()));
         }
     }
 

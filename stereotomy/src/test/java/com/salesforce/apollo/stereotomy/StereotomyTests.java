@@ -15,8 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.SecureRandom;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -229,8 +227,7 @@ public class StereotomyTests {
         kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
-    private void provision(ControllableIdentifier i, Stereotomy controller) throws CertificateExpiredException,
-                                                                            CertificateNotYetValidException {
+    private void provision(ControllableIdentifier i, Stereotomy controller) throws Exception {
         var now = Instant.now();
         var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
         var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
@@ -253,6 +250,8 @@ public class StereotomyTests {
         assertTrue(controller.getVerifier(coordinates).get().verify(decoded.get().signature(), qb64Id));
         assertTrue(decoded.get().verifier(controller).get().verify(decoded.get().signature(), qb64Id));
         assertTrue(decoded.get().verifier(kel).get().verify(decoded.get().signature(), qb64Id));
+
+        new StereotomyValidator(kel).validate(cert);
 
         var privateKey = cwpk.getPrivateKey();
         assertNotNull(privateKey);
