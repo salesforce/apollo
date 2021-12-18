@@ -35,12 +35,12 @@ facts
     ;
 
 // Horn clauses or rules in the query
-rule
+clause
     : atom ':-' atoms '.'
     ;
 
 rules
-    : rule+
+    : clause+
     ;
 
 query
