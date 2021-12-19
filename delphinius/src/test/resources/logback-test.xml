@@ -14,7 +14,7 @@
         </encoder>
     </appender>
     
-    <logger name="liquibase" level="debug"
+    <logger name="liquibase" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
