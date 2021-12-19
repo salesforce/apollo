@@ -86,22 +86,22 @@
         <createTable tableName="tuple"
             schemaName="delphinius">
             <column name="subject" type="INT8">
-                <constraints nullable="false" primaryKey="true"
-                    foreignKeyName="tuple_subject_fk"
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_subject_fk"
                     referencedTableName="subject"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
             <column name="relation" type="INT8">
-                <constraints nullable="false" primaryKey="true"
-                    foreignKeyName="tuple_relation_fk"
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_relation_fk"
                     referencedTableName="relation"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
             <column name="object" type="INT8">
-                <constraints nullable="false" primaryKey="true"
-                    foreignKeyName="tuple_object_fk"
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_object_fk"
                     referencedTableName="object"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
@@ -114,24 +114,6 @@
                 name="id" type="INT8">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="edge_pkey" />
-            </column>
-            <column name="entry" type="INT8">
-                <constraints foreignKeyName="edge_entry_fk"
-                    referencedTableName="edge"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="direct" type="INT8">
-                <constraints foreignKeyName="edge_direct_fk"
-                    referencedTableName="edge"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="exit" type="INT8">
-                <constraints foreignKeyName="edge_exit_fk"
-                    referencedTableName="edge"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
             </column>
             <column name="parent" type="INT8">
                 <constraints foreignKeyName="edge_parent_fk"
@@ -146,6 +128,9 @@
                     referencedTableSchemaName="delphinius" />
             </column>
             <column name="hops" type="INT">
+                <constraints nullable="false" />
+            </column>
+            <column name="del_mark" type="BOOLEAN" defaultValueBoolean="false">
                 <constraints nullable="false" />
             </column>
         </createTable>
