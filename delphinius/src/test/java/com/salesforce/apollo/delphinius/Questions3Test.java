@@ -32,7 +32,7 @@ public class Questions3Test {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
-        
+
         Oracle oracle = new Oracle(connection);
         oracle.addTuple("foo", "A", "r", "B");
     }

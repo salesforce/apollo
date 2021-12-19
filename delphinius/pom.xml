@@ -13,10 +13,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>stereotomy</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
         </dependency>

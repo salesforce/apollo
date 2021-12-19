@@ -18,8 +18,10 @@
                 <constraints nullable="false" />
             </column>
         </createTable>
+
         <addUniqueConstraint columnNames="name"
             tableName="namespace" schemaName="delphinius" />
+
         <createTable tableName="object"
             schemaName="delphinius">
             <column autoIncrement="true" generationType="ALWAYS"
@@ -38,23 +40,11 @@
                 <constraints nullable="false" />
             </column>
         </createTable>
+
         <addUniqueConstraint
             columnNames="namespace, name" tableName="object"
             schemaName="delphinius" />
-        <createTable tableName="subject"
-            schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" primaryKeyName="subject_pkey" />
-            </column>
-            <column name="name" type="VARCHAR(256)">
-                <constraints nullable="false"
-                    primaryKey="true" />
-            </column>
-        </createTable>
-        <addUniqueConstraint columnNames="name"
-            tableName="subject" schemaName="delphinius" />
+
         <createTable tableName="relation"
             schemaName="delphinius">
             <column autoIncrement="true" generationType="ALWAYS"
@@ -65,18 +55,59 @@
             <column name="namespace" type="INT8">
                 <constraints nullable="false"
                     foreignKeyName="relation_namespace_fk"
-                    primaryKey="true" referencedTableName="namespace"
+                    referencedTableName="namespace"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
-            <column name="name" type="VARCHAR">
-                <constraints nullable="false"
-                    primaryKey="true" />
+            <column name="name" type="VARCHAR(256)">
+                <constraints nullable="false" />
             </column>
         </createTable>
+
         <addUniqueConstraint
             columnNames="namespace, name" tableName="relation"
             schemaName="delphinius" />
+
+        <createTable tableName="subject"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="subject_pkey" />
+            </column>
+            <column name="name" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addUniqueConstraint columnNames="name"
+            tableName="subject" schemaName="delphinius" />
+
+        <createTable tableName="tuple"
+            schemaName="delphinius">
+            <column name="object" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="tuple_object_fk"
+                    referencedTableName="object"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="relation" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="tuple_relation_fk"
+                    referencedTableName="relation"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="subject" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="tuple_subject_fk"
+                    referencedTableName="subject"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+        </createTable>
+
         <createTable tableName="edge"
             schemaName="delphinius">
             <column autoIncrement="true" generationType="ALWAYS"
@@ -125,29 +156,6 @@
                 <constraints nullable="false" />
             </column>
         </createTable>
-        <createTable tableName="tuple"
-            schemaName="delphinius">
-            <column name="object" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_object_fk"
-                    referencedTableName="object"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="relation" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_relation_fk"
-                    referencedTableName="relation"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="subject" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_subject_fk"
-                    referencedTableName="subject"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-        </createTable>
+
     </changeSet>
 </databaseChangeLog>
