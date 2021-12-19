@@ -115,17 +115,17 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="edge_pkey" />
             </column>
+            <column name="parent_type" type="CHAR(1)">
+                <constraints nullable="false" />
+            </column>
             <column name="parent" type="INT8">
-                <constraints foreignKeyName="edge_parent_fk"
-                    referencedTableName="subject"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
+                <constraints nullable="false" />
+            </column>
+            <column name="child_type" type="CHAR(1)">
+                <constraints nullable="false" />
             </column>
             <column name="child" type="INT8">
-                <constraints foreignKeyName="edge_child_fk"
-                    referencedTableName="subject"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
+                <constraints nullable="false" />
             </column>
             <column name="hops" type="INT">
                 <constraints nullable="false" />
