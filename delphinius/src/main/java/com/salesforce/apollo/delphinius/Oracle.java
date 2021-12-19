@@ -69,8 +69,8 @@ public class Oracle {
                                            .and(EDGE.CHILD.eq(child)))) {
                 throw new SQLException(String.format("Cycle inserting: %s rel: %s to: %s", parent, relation, child));
             }
-            var id = context.insertInto(EDGE).columns(EDGE.PARENT, EDGE.RELATION, EDGE.CHILD, EDGE.HOPS)
-                            .values(parent, relation, child, 0).returning().fetchOne().getId();
+            var id = context.insertInto(EDGE).columns(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).values(parent, child, 0)
+                            .returning().fetchOne().getId();
 
             context.update(EDGE).set(EDGE.ENTRY, id).set(EDGE.EXIT, id).set(EDGE.DIRECT, id).where(EDGE.ID.eq(id))
                    .execute();
@@ -79,22 +79,19 @@ public class Oracle {
 
             // step 1: parent's incoming edges to child
             var edgeAsChild = EDGE.as("child");
-            context.insertInto(EDGE)
-                   .columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.RELATION, EDGE.CHILD, EDGE.HOPS)
-                   .select(context.select(edgeAsChild.ID, DSL.val(id), DSL.val(id), edgeAsChild.PARENT,
-                                          edgeAsChild.RELATION, DSL.val(child), edgeAsChild.HOPS.plus(1))
-                                  .from(edgeAsChild).where(edgeAsChild.CHILD.eq(parent))
-                                  .and(edgeAsChild.RELATION.eq(relation)))
+            context.insertInto(EDGE).columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
+                   .select(context.select(edgeAsChild.ID, DSL.val(id), DSL.val(id), edgeAsChild.PARENT, DSL.val(child),
+                                          edgeAsChild.HOPS.plus(1))
+                                  .from(edgeAsChild).where(edgeAsChild.CHILD.eq(parent)))
                    .execute();
 
             dump(context, String.format("Parent incoming to child: %s-%s-%s", p, r, c));
 
             // step 2: parent to child's outgoing edges
-            context.insertInto(EDGE)
-                   .columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.RELATION, EDGE.CHILD, EDGE.HOPS)
-                   .select(context.select(DSL.val(id), DSL.val(id), EDGE.EXIT, DSL.val(parent), EDGE.RELATION,
-                                          EDGE.CHILD, EDGE.HOPS.plus(1))
-                                  .from(EDGE).where(EDGE.PARENT.eq(child).and(EDGE.RELATION.eq(relation))))
+            context.insertInto(EDGE).columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
+                   .select(context.select(DSL.val(id), DSL.val(id), EDGE.EXIT, DSL.val(parent), EDGE.CHILD,
+                                          EDGE.HOPS.plus(1))
+                                  .from(EDGE).where(EDGE.PARENT.eq(child)))
                    .execute();
 
             dump(context, String.format("Parent to child's outgoing: %s-%s-%s", p, r, c));
@@ -102,12 +99,9 @@ public class Oracle {
             // step 3: parent's incoming edges to end vertex of child's outgoing edges
             var A = EDGE.as("parent");
             var B = EDGE.as("child");
-            context.insertInto(EDGE)
-                   .columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.RELATION, EDGE.CHILD, EDGE.HOPS)
-                   .select(context.select(A.ENTRY, DSL.val(id), B.EXIT, A.PARENT, A.RELATION, B.CHILD,
-                                          A.HOPS.plus(B.HOPS).plus(2))
-                                  .from(A).crossJoin(B).where(A.CHILD.eq(parent)).and(A.RELATION.eq(relation))
-                                  .and(B.PARENT.eq(child)).and(B.RELATION.eq(relation)))
+            context.insertInto(EDGE).columns(EDGE.ENTRY, EDGE.DIRECT, EDGE.EXIT, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
+                   .select(context.select(A.ENTRY, DSL.val(id), B.EXIT, A.PARENT, B.CHILD, A.HOPS.plus(B.HOPS).plus(2))
+                                  .from(A).crossJoin(B).where(A.CHILD.eq(parent)).and(B.PARENT.eq(child)))
                    .execute();
             dump(context, String.format("Parent's incoming to end vertex of child's outgoing: %s-%s-%s", p, r, c));
         });
@@ -125,11 +119,10 @@ public class Oracle {
             }
 
             var parent = resolved.value1();
-            var relation = resolved.value2();
             var child = resolved.value3();
 
-            var idR = context.select(EDGE.ID).from(EDGE).where(EDGE.PARENT.eq(parent))
-                             .and(EDGE.RELATION.eq(relation).and(EDGE.CHILD.eq(child)).and(EDGE.HOPS.eq(0))).fetchOne();
+            var idR = context.select(EDGE.ID).from(EDGE).where(EDGE.PARENT.eq(parent)).and(EDGE.CHILD.eq(child))
+                             .and(EDGE.HOPS.eq(0)).fetchOne();
             if (idR == null) {
                 throw new SQLException(String.format("Edge object: %s:%s rel: %s subject: %s does not exist", namespace,
                                                      p, r, c));
@@ -169,12 +162,8 @@ public class Oracle {
         var pa = SUBJECT.as("parent");
         var ch = SUBJECT.as("child");
         System.out.println(string);
-        System.out.println(context.select(pa.NAME.as("parent"), RELATION.NAME.as("relation"), ch.NAME.as("child"),
-                                          EDGE.HOPS)
-                                  .from(pa, RELATION, ch).join(EDGE)
-                                  .on(EDGE.PARENT.eq(pa.ID).and(EDGE.RELATION.eq(RELATION.ID))
-                                                 .and(EDGE.CHILD.eq(ch.ID)))
-                                  .fetch());
+        System.out.println(context.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.HOPS).from(pa, ch).join(EDGE)
+                                  .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID))).fetch());
         System.out.println();
         System.out.println();
     }

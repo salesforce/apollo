@@ -62,11 +62,7 @@ public class Questions3Test {
         var dsl = DSL.using(connection);
         Subject pa = SUBJECT.as("parent");
         Subject ch = SUBJECT.as("child");
-        System.out.println(dsl.select(pa.NAME.as("parent"), RELATION.NAME.as("relation"), ch.NAME.as("child"),
-                                          EDGE.HOPS)
-                                  .from(pa, RELATION, ch).join(EDGE)
-                                  .on(EDGE.PARENT.eq(pa.ID).and(EDGE.RELATION.eq(RELATION.ID))
-                                                 .and(EDGE.CHILD.eq(ch.ID)))
-                                  .fetch());
+        System.out.println(dsl.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.HOPS).from(pa, ch).join(EDGE)
+                              .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID))).fetch());
     }
 }
