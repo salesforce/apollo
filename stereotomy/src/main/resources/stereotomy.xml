@@ -20,7 +20,7 @@
 			</column>
 		</createTable>
 
-		<addUniqueConstraint columnNames="id, prefix"
+		<addUniqueConstraint columnNames="prefix"
 			tableName="identifier" schemaName="stereotomy_kerl" />
 
 		<createTable tableName="coordinates"

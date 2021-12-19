@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+    <changeSet author="hhildebrand" id="1">
+        <sql>create schema if not exists delphinius</sql>
+        <createTable tableName="namespace"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="namespace_pkey" />
+            </column>
+            <column name="name" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <addUniqueConstraint columnNames="name"
+            tableName="namespace" schemaName="delphinius" />
+        <createTable tableName="object"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="object_pkey" />
+            </column>
+            <column name="namespace" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="object_namespace_fk"
+                    referencedTableName="namespace"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="name" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            columnNames="namespace, name" tableName="object"
+            schemaName="delphinius" />
+        <createTable tableName="subject"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="subject_pkey" />
+            </column>
+            <column name="name" type="VARCHAR(256)">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+        </createTable>
+        <addUniqueConstraint columnNames="name"
+            tableName="subject" schemaName="delphinius" />
+        <createTable tableName="relation"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="relation_pkey" />
+            </column>
+            <column name="namespace" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="relation_namespace_fk"
+                    primaryKey="true" referencedTableName="namespace"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="name" type="VARCHAR">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            columnNames="namespace, name" tableName="relation"
+            schemaName="delphinius" />
+        <createTable tableName="edge"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="edge_pkey" />
+            </column>
+            <column name="entry" type="INT8">
+                <constraints foreignKeyName="edge_entry_fk"
+                    referencedTableName="edge"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="direct" type="INT8">
+                <constraints foreignKeyName="edge_direct_fk"
+                    referencedTableName="edge"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="exit" type="INT8">
+                <constraints foreignKeyName="edge_exit_fk"
+                    referencedTableName="edge"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="parent" type="INT8">
+                <constraints foreignKeyName="edge_parent_fk"
+                    referencedTableName="subject"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="relation" type="INT8">
+                <constraints
+                    foreignKeyName="edge_relation_fk"
+                    referencedTableName="relation"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="child" type="INT8">
+                <constraints foreignKeyName="edge_child_fk"
+                    referencedTableName="subject"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="hops" type="INT">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <createTable tableName="tuple"
+            schemaName="delphinius">
+            <column name="object" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_object_fk"
+                    referencedTableName="object"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="relation" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_relation_fk"
+                    referencedTableName="relation"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="subject" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_subject_fk"
+                    referencedTableName="subject"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
