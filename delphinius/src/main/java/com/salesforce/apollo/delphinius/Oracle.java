@@ -153,9 +153,9 @@ public class Oracle {
         var o = resolveObject(tuple.object, true);
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.mergeInto(TUPLE).using(context.selectOne()).on(TUPLE.SUBJECT.eq(s)).and(TUPLE.OBJECT.eq(o.id))
+            context.mergeInto(TUPLE).using(context.selectOne()).on(TUPLE.SUBJECT.eq(s.id)).and(TUPLE.OBJECT.eq(o.id))
                    .and(TUPLE.RELATION.eq(r.id)).whenNotMatchedThenInsert(TUPLE.OBJECT, TUPLE.RELATION, TUPLE.SUBJECT)
-                   .values(o.id, r.id, s).execute();
+                   .values(o.id, r.id, s.id).execute();
         });
     }
 
@@ -166,7 +166,7 @@ public class Oracle {
         if (s == null || r == null || o == null) {
             return false;
         }
-        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(o.id, r.id, s)));
+        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(o.id, r.id, s.id)));
     }
 
     public void delete(Object object) {
@@ -190,7 +190,7 @@ public class Oracle {
     }
 
     public void map(Subject parent, Subject child) throws SQLException {
-        mapSubject(resolveSubject(parent, true), resolveSubject(child, true));
+        mapSubject(resolveSubject(parent, true).id, resolveSubject(child, true).id);
     }
 
     private void addEdge(Type type, Long parent, Long child) throws SQLException {
@@ -340,14 +340,20 @@ public class Oracle {
         return new NamespacedId(namespace.value1(), id.value1());
     }
 
-    private Long resolveSubject(Subject subject, boolean add) throws SQLException {
+    private NamespacedId resolveSubject(Subject subject, boolean add) throws SQLException {
         if (add) {
             add(subject);
         }
-        Record1<Long> id = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAME.eq(subject.name)).fetchOne();
+        var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(subject.namespace.name))
+                              .fetchOne();
+        if (!add && namespace == null) {
+            return null;
+        }
+        var id = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAMESPACE.eq(namespace.value1()))
+                       .and(SUBJECT.NAME.eq(subject.name)).fetchOne();
         if (!add && id == null) {
             return null;
         }
-        return id.value1();
+        return new NamespacedId(namespace.value1(), id.value1());
     }
 }
