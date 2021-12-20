@@ -14,7 +14,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="namespace_pkey" />
             </column>
-            <column name="name" type="VARCHAR(256)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -36,7 +36,7 @@
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
-            <column name="name" type="VARCHAR(256)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -59,7 +59,7 @@
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
-            <column name="name" type="VARCHAR(256)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -75,7 +75,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="subject_pkey" />
             </column>
-            <column name="name" type="VARCHAR(256)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -115,25 +115,52 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="edge_pkey" />
             </column>
-            <column name="parent_type" type="CHAR(1)">
+            <column name="type" type="CHAR(1)">
                 <constraints nullable="false" />
             </column>
             <column name="parent" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="child_type" type="CHAR(1)">
-                <constraints nullable="false" />
-            </column>
             <column name="child" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="hops" type="INT">
+            <column name="hops" type="BOOLEAN">
                 <constraints nullable="false" />
             </column>
-            <column name="del_mark" type="BOOLEAN" defaultValueBoolean="false">
+            <column name="del_mark" type="BOOLEAN"
+                defaultValueBoolean="false">
                 <constraints nullable="false" />
             </column>
         </createTable>
+
+        <sql>alter table delphinius.edge add constraint
+            edge_validate
+            check (type in ('s', 'r', 'o'))
+        </sql>
+
+        <createIndex clustered="true"
+            indexName="forward_edge" schemaName="delphinius"
+            tableName="edge">
+            <column name="parent" />
+            <column name="child" />
+        </createIndex>
+
+        <createIndex clustered="false"
+            indexName="reverse_edge" schemaName="delphinius"
+            tableName="edge">
+            <column name="child" />
+            <column name="parent" />
+        </createIndex>
+
+        <createIndex clustered="false" indexName="edge_hops"
+            schemaName="delphinius" tableName="edge">
+            <column name="hops" />
+        </createIndex>
+
+        <createIndex clustered="false" indexName="edge_type"
+            schemaName="delphinius" tableName="edge">
+            <column name="type" />
+        </createIndex>
 
     </changeSet>
 </databaseChangeLog>
