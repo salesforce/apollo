@@ -18,6 +18,8 @@ import java.sql.SQLException;
 
 import org.jooq.DSLContext;
 import org.jooq.Field;
+import org.jooq.Record1;
+import org.jooq.SelectJoinStep;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
 
@@ -60,9 +62,13 @@ public class Oracle {
         public Relation relation(String name) {
             return new Relation(this, name);
         }
+
+        public Subject subject(String name) {
+            return new Subject(this, name);
+        }
     }
 
-    public record Subject(String name) {}
+    public record Subject(Namespace namespace, String name) {}
 
     public record Object(Namespace namespace, String name) {}
 
@@ -74,18 +80,6 @@ public class Oracle {
 
     public static Namespace namespace(String name) {
         return new Namespace(name);
-    }
-
-    public static Object object(String namespace, String name) {
-        return new Object(new Namespace(namespace), name);
-    }
-
-    public static Relation relation(String namespace, String name) {
-        return new Relation(new Namespace(namespace), name);
-    }
-
-    public static Subject subject(String name) {
-        return new Subject(name);
     }
 
     public static Tuple tuple(Object object, Relation relation, Subject subject) {
@@ -142,22 +136,37 @@ public class Oracle {
     public void add(Subject subject) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
+            context.mergeInto(NAMESPACE).using(context.selectOne()).on(NAMESPACE.NAME.eq(subject.namespace.name))
+                   .whenNotMatchedThenInsert(NAMESPACE.NAME).values(subject.namespace.name).execute();
+            var namespace = context.select(NAMESPACE.ID).from(NAMESPACE)
+                                   .where(NAMESPACE.NAME.eq(subject.namespace.name)).fetchOne().value1();
 
-            context.mergeInto(SUBJECT).using(context.selectOne()).on(SUBJECT.NAME.eq(subject.name))
-                   .whenNotMatchedThenInsert(SUBJECT.NAME).values(subject.name).execute();
+            context.mergeInto(SUBJECT).using(context.selectOne()).on(SUBJECT.NAMESPACE.eq(namespace))
+                   .and(SUBJECT.NAME.eq(subject.name)).whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME)
+                   .values(namespace, subject.name).execute();
         });
     }
 
     public void add(Tuple tuple) throws SQLException {
-        var s = resolveSubject(tuple.subject);
-        var r = resolveRelation(tuple.relation);
-        var o = resolveObject(tuple.object);
+        var s = resolveSubject(tuple.subject, true);
+        var r = resolveRelation(tuple.relation, true);
+        var o = resolveObject(tuple.object, true);
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             context.mergeInto(TUPLE).using(context.selectOne()).on(TUPLE.SUBJECT.eq(s)).and(TUPLE.OBJECT.eq(o.id))
                    .and(TUPLE.RELATION.eq(r.id)).whenNotMatchedThenInsert(TUPLE.OBJECT, TUPLE.RELATION, TUPLE.SUBJECT)
                    .values(o.id, r.id, s).execute();
         });
+    }
+
+    public boolean check(Tuple tuple) throws SQLException {
+        var s = resolveSubject(tuple.subject, false);
+        var r = resolveRelation(tuple.relation, false);
+        var o = resolveObject(tuple.object, false);
+        if (s == null || r == null || o == null) {
+            return false;
+        }
+        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(o.id, r.id, s)));
     }
 
     public void delete(Object object) {
@@ -173,15 +182,15 @@ public class Oracle {
     }
 
     public void map(Object parent, Object child) throws SQLException {
-        mapObject(resolveObject(parent).id, resolveObject(child).id);
+        mapObject(resolveObject(parent, true).id, resolveObject(child, true).id);
     }
 
     public void map(Relation parent, Relation child) throws SQLException {
-        mapRelation(resolveRelation(parent).id, resolveRelation(child).id);
+        mapRelation(resolveRelation(parent, true).id, resolveRelation(child, true).id);
     }
 
     public void map(Subject parent, Subject child) throws SQLException {
-        mapSubject(resolveSubject(parent), resolveSubject(child));
+        mapSubject(resolveSubject(parent, true), resolveSubject(child, true));
     }
 
     private void addEdge(Type type, Long parent, Long child) throws SQLException {
@@ -261,6 +270,29 @@ public class Oracle {
         System.out.println();
     }
 
+    private SelectJoinStep<?> grants(Long o, Long r, Long s) throws SQLException {
+        var ACL = TUPLE.as("ACL");
+        Table<Record1<Long>> subject = dslCtx.select(EDGE.CHILD.as("subject_id")).from(EDGE)
+                                             .where(EDGE.TYPE.eq(Type.SUBJECT.type())).and(EDGE.PARENT.eq(s))
+                                             .union(dslCtx.select(DSL.val(s).as("subject_id"))).asTable();
+        Field<Long> subjectId = subject.field("subject_id", Long.class);
+
+        Table<Record1<Long>> relation = dslCtx.select(EDGE.CHILD.as("relation_id")).from(EDGE)
+                                              .where(EDGE.TYPE.eq(Type.RELATION.type())).and(EDGE.PARENT.eq(r))
+                                              .union(DSL.select(DSL.val(r).as("relation_id"))).asTable();
+        Field<Long> relationId = relation.field("relation_id", Long.class);
+
+        Table<Record1<Long>> object = dslCtx.select(EDGE.CHILD.as("object_id")).from(EDGE)
+                                            .where(EDGE.TYPE.eq(Type.OBJECT.type())).and(EDGE.PARENT.eq(o))
+                                            .union(DSL.select(DSL.val(o).as("object_id"))).asTable();
+        Field<Long> objectId = object.field("object_id", Long.class);
+
+        return dslCtx.select(subjectId, relationId, objectId)
+                     .from(subject.crossJoin(relation).crossJoin(object).innerJoin(ACL)
+                                  .on(subjectId.eq(ACL.SUBJECT)
+                                               .and(relationId.eq(ACL.RELATION).and(objectId.eq(ACL.RELATION)))));
+    }
+
     private void mapObject(Long parent, Long child) throws SQLException {
         addEdge(Type.OBJECT, parent, child);
     }
@@ -273,27 +305,49 @@ public class Oracle {
         addEdge(Type.SUBJECT, parent, child);
     }
 
-    private NamespacedId resolveObject(Object object) throws SQLException {
-        add(object);
+    private NamespacedId resolveObject(Object object, boolean add) throws SQLException {
+        if (add) {
+            add(object);
+        }
         var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(object.namespace.name))
                               .fetchOne();
+        if (!add && namespace == null) {
+            return null;
+        }
         var id = dslCtx.select(OBJECT.ID).from(OBJECT)
                        .where(OBJECT.NAMESPACE.eq(namespace.value1()).and(OBJECT.NAME.eq(object.name))).fetchOne();
+        if (!add && id == null) {
+            return null;
+        }
         return new NamespacedId(namespace.value1(), id.value1());
     }
 
-    private NamespacedId resolveRelation(Relation relation) throws SQLException {
-        add(relation);
+    private NamespacedId resolveRelation(Relation relation, boolean add) throws SQLException {
+        if (add) {
+            add(relation);
+        }
         var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(relation.namespace.name))
                               .fetchOne();
+        if (!add && namespace == null) {
+            return null;
+        }
         var id = dslCtx.select(RELATION.ID).from(RELATION)
                        .where(RELATION.NAMESPACE.eq(namespace.value1()).and(RELATION.NAME.eq(relation.name)))
                        .fetchOne();
+        if (!add && id == null) {
+            return null;
+        }
         return new NamespacedId(namespace.value1(), id.value1());
     }
 
-    private Long resolveSubject(Subject subject) throws SQLException {
-        add(subject);
-        return dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAME.eq(subject.name)).fetchOne().value1();
+    private Long resolveSubject(Subject subject, boolean add) throws SQLException {
+        if (add) {
+            add(subject);
+        }
+        Record1<Long> id = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAME.eq(subject.name)).fetchOne();
+        if (!add && id == null) {
+            return null;
+        }
+        return id.value1();
     }
 }

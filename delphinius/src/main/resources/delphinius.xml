@@ -75,20 +75,28 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="subject_pkey" />
             </column>
+            <column name="namespace" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="subject_namespace_fk"
+                    referencedTableName="namespace"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
             <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
 
-        <addUniqueConstraint columnNames="name"
-            tableName="subject" schemaName="delphinius" />
+        <addUniqueConstraint
+            columnNames="namespace, name" tableName="subject"
+            schemaName="delphinius" />
 
         <createTable tableName="tuple"
             schemaName="delphinius">
-            <column name="subject" type="INT8">
+            <column name="object" type="INT8">
                 <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_subject_fk"
-                    referencedTableName="subject"
+                    primaryKey="true" foreignKeyName="tuple_object_fk"
+                    referencedTableName="object"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
@@ -99,10 +107,10 @@
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
-            <column name="object" type="INT8">
+            <column name="subject" type="INT8">
                 <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_object_fk"
-                    referencedTableName="object"
+                    primaryKey="true" foreignKeyName="tuple_subject_fk"
+                    referencedTableName="subject"
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>

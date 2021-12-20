@@ -6,9 +6,11 @@
  */
 package com.salesforce.apollo.delphinius;
 
-import static com.salesforce.apollo.delphinius.Oracle.subject;
 import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
 import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
+import static com.salesforce.apollo.delphinius.schema.tables.Tuple.TUPLE;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Properties;
 import java.util.Random;
@@ -40,29 +42,42 @@ public class Questions3Test {
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
 
+        var foo = Oracle.namespace("foo");
         Oracle oracle = new Oracle(connection);
-        oracle.map(subject("HelpDesk"), subject("Admins"));
-        oracle.map(subject("Ali"), subject("Admins"));
-        oracle.map(subject("Ali"), subject("Users"));
-        oracle.map(subject("Burcu"), subject("Users"));
-        oracle.map(subject("Can"), subject("Users"));
-        oracle.map(subject("Managers"), subject("Users"));
-        oracle.map(subject("Technicians"), subject("Users"));
-        oracle.map(subject("Demet"), subject("HelpDesk"));
-        oracle.map(subject("Egin"), subject("HelpDesk"));
-        oracle.map(subject("Egin"), subject("Users"));
-        oracle.map(subject("Fuat"), subject("Managers"));
-        oracle.map(subject("G l"), subject("Managers"));
-        oracle.map(subject("Hakan"), subject("Technicians"));
-        oracle.map(subject("Irmak"), subject("Technicians"));
-        oracle.map(subject("ABCTechnicians"), subject("Technicians"));
-        oracle.map(subject("Jale"), subject("ABCTechnicians"));
+        oracle.map(foo.subject("HelpDesk"), foo.subject("Admins"));
+        oracle.map(foo.subject("Ali"), foo.subject("Admins"));
+        oracle.map(foo.subject("Ali"), foo.subject("Users"));
+        oracle.map(foo.subject("Burcu"), foo.subject("Users"));
+        oracle.map(foo.subject("Can"), foo.subject("Users"));
+        oracle.map(foo.subject("Managers"), foo.subject("Users"));
+        oracle.map(foo.subject("Technicians"), foo.subject("Users"));
+        oracle.map(foo.subject("Demet"), foo.subject("HelpDesk"));
+        oracle.map(foo.subject("Egin"), foo.subject("HelpDesk"));
+        oracle.map(foo.subject("Egin"), foo.subject("Users"));
+        oracle.map(foo.subject("Fuat"), foo.subject("Managers"));
+        oracle.map(foo.subject("G l"), foo.subject("Managers"));
+        oracle.map(foo.subject("Hakan"), foo.subject("Technicians"));
+        oracle.map(foo.subject("Irmak"), foo.subject("Technicians"));
+        oracle.map(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
+        oracle.map(foo.subject("Jale"), foo.subject("ABCTechnicians"));
 
         var dsl = DSL.using(connection);
+
         com.salesforce.apollo.delphinius.schema.tables.Subject pa = SUBJECT.as("parent");
         com.salesforce.apollo.delphinius.schema.tables.Subject ch = SUBJECT.as("child");
-        System.out.println(dsl.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.HOPS).from(pa, ch).join(EDGE)
-                              .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.HOPS).from(pa, ch)
+                              .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
                               .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
+
+        var object = foo.object("Doc");
+        var relation = foo.relation("Viewer");
+        var subject = foo.subject("Users");
+        oracle.add(Oracle.tuple(object, relation, subject));
+
+        System.out.println("Tuples:\n" + dsl.selectFrom(TUPLE).fetch());
+
+        assertTrue(oracle.check(Oracle.tuple(object, relation, foo.subject("Jale"))));
+        assertTrue(oracle.check(Oracle.tuple(object, relation, foo.subject("Egin"))));
+        assertFalse(oracle.check(Oracle.tuple(object, relation, foo.subject("HelpDesk"))));
     }
 }
