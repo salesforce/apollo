@@ -19,6 +19,8 @@ import org.h2.jdbc.JdbcConnection;
 import org.jooq.impl.DSL;
 import org.junit.Test;
 
+import com.salesforce.apollo.delphinius.Oracle.Tuple;
+
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
 import liquibase.resource.ClassLoaderResourceAccessor;
@@ -31,13 +33,13 @@ public class Questions3Test {
 
     @Test
     public void smokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+        final var url = String.format("jdbc:h2:mem:test_engine-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/delphinius.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("initialize.xml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
@@ -72,12 +74,29 @@ public class Questions3Test {
         var object = foo.object("Doc");
         var relation = foo.relation("Viewer");
         var subject = foo.subject("Users");
-        oracle.add(Oracle.tuple(object, relation, subject));
+        Tuple tuple = object.tuple(relation, subject);
+        oracle.add(tuple);
 
         System.out.println("Tuples:\n" + dsl.selectFrom(TUPLE).fetch());
 
-        assertTrue(oracle.check(Oracle.tuple(object, relation, foo.subject("Jale"))));
-        assertTrue(oracle.check(Oracle.tuple(object, relation, foo.subject("Egin"))));
-        assertFalse(oracle.check(Oracle.tuple(object, relation, foo.subject("HelpDesk"))));
+        assertTrue(oracle.check(object.tuple(relation, foo.subject("Jale"))));
+        assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
+        
+        oracle.remove(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
+        
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("Jale"))));
+        assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
+        
+        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.HOPS).from(pa, ch)
+                           .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+                           .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
+
+        oracle.delete(tuple);
+
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("Jale"))));
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("Egin"))));
+        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
     }
 }

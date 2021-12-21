@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+    <changeSet author="hhildebrand" id="2">
+
+        <sql>create trigger delphinius.delete_object
+            after delete on
+            delphinius.object for each row
+            call
+            "com.salesforce.apollo.delphinius.DomainMaintenance"
+        </sql>
+
+        <sql>create trigger delphinius.delete_relation
+            after delete on
+            delphinius.relation for each row
+            call
+            "com.salesforce.apollo.delphinius.DomainMaintenance"
+        </sql>
+
+        <sql>create trigger delphinius.delete_subject
+            after delete on
+            delphinius.subject for each row
+            call
+            "com.salesforce.apollo.delphinius.DomainMaintenance"
+        </sql>
+
+    </changeSet>
+</databaseChangeLog>

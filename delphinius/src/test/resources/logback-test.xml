@@ -13,6 +13,11 @@
             </Pattern>
         </encoder>
     </appender>
+
+    <logger name="org.jooq.Constants" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     
     <logger name="liquibase" level="warn"
         additivity="false">
@@ -23,6 +28,8 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
+    
+    
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
