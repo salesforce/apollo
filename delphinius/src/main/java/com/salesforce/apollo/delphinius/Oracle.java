@@ -18,11 +18,14 @@ import java.sql.SQLException;
 
 import org.jooq.DSLContext;
 import org.jooq.Field;
+import org.jooq.Name;
 import org.jooq.Record;
 import org.jooq.Record1;
 import org.jooq.SelectJoinStep;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
+
+import com.salesforce.apollo.delphinius.schema.tables.Edge;
 
 /**
  * An Access Control Oracle
@@ -60,11 +63,29 @@ public class Oracle {
 
     private record NamespacedId(Long namespace, Long id) {}
 
-    public static final String OBJECT_TYPE = "o";
+    static final String OBJECT_TYPE   = "o";
+    static final String RELATION_TYPE = "r";
+    static final String SUBJECT_TYPE  = "s";
 
-    public static final String RELATION_TYPE = "r";
-
-    public static final String SUBJECT_TYPE = "s";
+    private static final Edge                   A          = EDGE.as("A");
+    private static final Edge                   B          = EDGE.as("B");
+    private static final Table<org.jooq.Record> candidates = DSL.table(DSL.name("candidates"));
+    private static final Field<Long>            cChild     = DSL.field(DSL.name("candidates", "child"), Long.class);
+    private static final Field<Long>            cParent    = DSL.field(DSL.name("candidates", "parent"), Long.class);
+    private static final Edge                   E          = EDGE.as("E");
+    private static final Name                   ROWZ       = DSL.name("rowz");
+    private static final Table<Record>          rowzTable  = DSL.table(ROWZ);
+    private static final Table<Record>          s1         = rowzTable.as("S1");
+    private static final Field<Long>            s1Child    = DSL.field(DSL.name("S1", "child"), Long.class);
+    private static final Field<Long>            s1Parent   = DSL.field(DSL.name("S1", "parent"), Long.class);
+    private static final Table<Record>          s2         = rowzTable.as("S2");
+    private static final Field<Long>            s2Child    = DSL.field(DSL.name("S2", "child"), Long.class);
+    private static final Field<Long>            s2Parent   = DSL.field(DSL.name("S2", "parent"), Long.class);
+    private static final Table<Record>          s3         = rowzTable.as("S3");
+    private static final Field<Long>            s3Child    = DSL.field(DSL.name("S3", "child"), Long.class);
+    private static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "parent"), Long.class);
+    private static final Field<Long>            sChild     = DSL.field(DSL.name("C", "child"), Long.class);
+    private static final Field<Long>            sParent    = DSL.field(DSL.name("C", "parent"), Long.class);
 
     public static Namespace namespace(String name) {
         return new Namespace(name);
@@ -73,10 +94,6 @@ public class Oracle {
     static void addEdge(DSLContext dslCtx, String type, Long parent, Long child) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            Table<org.jooq.Record> candidates = DSL.table(DSL.name("candidates"));
-            Field<Long> cParent = DSL.field(DSL.name("candidates", "parent"), Long.class);
-            Field<Long> cChild = DSL.field(DSL.name("candidates", "child"), Long.class);
-
             try {
                 if (context.fetchExists(context.select(EDGE.ID).from(EDGE).where(EDGE.TYPE.eq(type))
                                                .and(EDGE.PARENT.eq(parent)).and(EDGE.CHILD.eq(child))
@@ -91,8 +108,6 @@ public class Oracle {
 
                 context.createTemporaryTable(candidates).column(cParent).column(cChild).execute();
 
-                var A = EDGE.as("A");
-                var B = EDGE.as("B");
                 context.insertInto(candidates)
                        .select(context.select(EDGE.PARENT, DSL.val(child)).from(EDGE).where(EDGE.CHILD.eq(parent))
                                       .and(EDGE.TYPE.eq(type))
@@ -107,7 +122,6 @@ public class Oracle {
                 context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
                        .values(DSL.value(type), DSL.value(parent), DSL.value(child), DSL.value(false)).execute();
 
-                var E = EDGE.as("E");
                 context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
                        .select(context.select(DSL.val(type), cParent, cChild, DSL.val(true)).from(candidates)
                                       .whereNotExists(context.select(E.HOPS).from(E).where(E.PARENT.eq(cParent))
@@ -126,57 +140,42 @@ public class Oracle {
                        .and(EDGE.CHILD.eq(child)).execute() == 0) {
                 return; // Does not exist
             }
-            var A = EDGE.as("A");
-            var B = EDGE.as("B");
 
-            Field<Long> sParent = DSL.field(DSL.name("C", "parent"), Long.class);
-            Field<Long> sChild = DSL.field(DSL.name("C", "child"), Long.class);
+            context.update(EDGE).set(EDGE.DEL_MARK, true)
+                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE)
+                                            .join(context.select(EDGE.PARENT, DSL.val(child).as(EDGE.CHILD)).from(EDGE)
+                                                         .where(EDGE.CHILD.eq(parent))
 
-            context.update(EDGE).set(EDGE.DEL_MARK, true).where(EDGE.HOPS.isTrue())
-                   .and(EDGE.ID.in(context.select(EDGE.ID).from(EDGE)
-                                          .join(context.select(EDGE.PARENT, DSL.val(child).as(EDGE.CHILD)).from(EDGE)
-                                                       .where(EDGE.CHILD.eq(parent))
+                                                         .union(context.select(DSL.val(parent),
+                                                                               EDGE.CHILD.as(EDGE.CHILD))
+                                                                       .from(EDGE).where(EDGE.PARENT.eq(child)))
 
-                                                       .union(context.select(DSL.val(parent), EDGE.CHILD.as(EDGE.CHILD))
-                                                                     .from(EDGE).where(EDGE.PARENT.eq(child)))
-
-                                                       .union(context.select(A.PARENT, B.CHILD).from(A).crossJoin(B)
-                                                                     .where(A.CHILD.eq(parent)).and(B.PARENT.eq(child)))
-                                                       .asTable("C"))
-                                          .on(sParent.eq(EDGE.PARENT)).and(sChild.eq(EDGE.CHILD))))
-                   .execute();
-
-            var ROWZ = DSL.name("rowz");
-            Table<Record> rowzTable = DSL.table(ROWZ);
-            Table<Record> s1 = rowzTable.as("S1");
-            Field<Long> s1Parent = DSL.field(DSL.name("S1", "parent"), Long.class);
-            Field<Long> s1Child = DSL.field(DSL.name("S1", "child"), Long.class);
-            Table<Record> s2 = rowzTable.as("S2");
-            Field<Long> s2Parent = DSL.field(DSL.name("S2", "parent"), Long.class);
-            Field<Long> s2Child = DSL.field(DSL.name("S2", "child"), Long.class);
-            Table<Record> s3 = rowzTable.as("S3");
-            Field<Long> s3Parent = DSL.field(DSL.name("S3", "parent"), Long.class);
-            Field<Long> s3Child = DSL.field(DSL.name("S3", "child"), Long.class);
-
-            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.DEL_MARK.isFalse()))
-                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false)).where(EDGE.DEL_MARK.isTrue())
-                   .and(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
-                                          .innerJoin(s2).on(s1Child.eq(s2Parent)).and(s2Child.eq(EDGE.CHILD))))
+                                                         .union(context.select(A.PARENT, B.CHILD).from(A).crossJoin(B)
+                                                                       .where(A.CHILD.eq(parent))
+                                                                       .and(B.PARENT.eq(child)))
+                                                         .asTable("C"))
+                                            .on(sParent.eq(EDGE.PARENT)).and(sChild.eq(EDGE.CHILD)))
+                                 .and(EDGE.HOPS.isTrue()))
                    .execute();
 
             context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.DEL_MARK.isFalse()))
-                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false)).where(EDGE.DEL_MARK.isTrue())
-                   .and(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
-                                          .innerJoin(s2).on(s1Child.eq(s2Parent)).innerJoin(s3).on(s2Child.eq(s3Parent))
-                                          .and(s3Child.eq(EDGE.CHILD))))
-                   .execute();
+                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false))
+                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
+                                            .innerJoin(s2).on(s1Child.eq(s2Parent)).and(s2Child.eq(EDGE.CHILD))))
+                   .and(EDGE.DEL_MARK.isTrue()).execute();
+
+            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.DEL_MARK.isFalse()))
+                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false))
+                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
+                                            .innerJoin(s2).on(s1Child.eq(s2Parent)).innerJoin(s3)
+                                            .on(s2Child.eq(s3Parent)).and(s3Child.eq(EDGE.CHILD))))
+                   .and(EDGE.DEL_MARK.isTrue()).execute();
 
             context.deleteFrom(EDGE).where(EDGE.DEL_MARK.isTrue()).execute();
         });
     }
 
     static SelectJoinStep<?> grants(DSLContext ctx, Long o, Long r, Long s) throws SQLException {
-        var ACL = TUPLE.as("ACL");
         Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("subject_id")).from(EDGE)
                                           .where(EDGE.TYPE.eq(SUBJECT_TYPE)).and(EDGE.PARENT.eq(s))
                                           .union(ctx.select(DSL.val(s).as("subject_id"))).asTable();
@@ -193,9 +192,9 @@ public class Oracle {
         Field<Long> objectId = object.field("object_id", Long.class);
 
         return ctx.select(subjectId, relationId, objectId)
-                  .from(subject.crossJoin(relation).crossJoin(object).innerJoin(ACL)
-                               .on(subjectId.eq(ACL.SUBJECT)
-                                            .and(relationId.eq(ACL.RELATION).and(objectId.eq(ACL.RELATION)))));
+                  .from(subject.crossJoin(relation).crossJoin(object).innerJoin(TUPLE)
+                               .on(subjectId.eq(TUPLE.SUBJECT)
+                                            .and(relationId.eq(TUPLE.RELATION).and(objectId.eq(TUPLE.OBJECT)))));
     }
 
     private final DSLContext dslCtx;
