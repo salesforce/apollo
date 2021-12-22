@@ -318,8 +318,9 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void execute(int i, Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                up.getExecutor().execute(i, tx, onComplete);
+            public void execute(int i, Digest hash, Transaction tx,
+                                @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                up.getExecutor().execute(i, hash, tx, onComplete);
             }
 
             @Override

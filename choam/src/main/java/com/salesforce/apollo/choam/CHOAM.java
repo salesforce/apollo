@@ -237,55 +237,15 @@ public class CHOAM {
         }
     }
 
+    @FunctionalInterface
     public interface TransactionExecutor {
         default void beginBlock(long height, Digest hash) {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(int index, Transaction tx, CompletableFuture onComplete);
+        void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
         default void genesis(long height, Digest hash, List<Transaction> initialization) {
-        }
-    }
-
-    /** a member of the current committee */
-    class Associate extends Administration {
-
-        private final Producer    producer;
-        private final ViewContext viewContext;
-
-        Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
-            super(validators,
-                  new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
-                                                           : viewChange.block.getReconfigure().getId()));
-            var context = Committee.viewFor(viewId, params.context());
-            context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
-            validators.keySet().forEach(m -> context.activate(m));
-            log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
-                      params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
-                      params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
-                      params.member());
-            Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
-            viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), comm);
-            producer.start();
-        }
-
-        @Override
-        public void assembled() {
-            producer.assembled();
-        }
-
-        @Override
-        public void complete() {
-            producer.stop();
-        }
-
-        @Override
-        public SubmitResult submit(SubmitTransaction request) {
-//            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
-//                      params().member());
-            return producer.submit(request.getTransaction());
         }
     }
 
@@ -371,6 +331,47 @@ public class CHOAM {
         @Override
         public boolean validate(HashedCertifiedBlock hb) {
             return validate(hb, validators);
+        }
+    }
+
+    /** a member of the current committee */
+    private class Associate extends Administration {
+
+        private final Producer    producer;
+        private final ViewContext viewContext;
+
+        Associate(HashedCertifiedBlock viewChange, Map<Member, Verifier> validators, nextView nextView) {
+            super(validators,
+                  new Digest(viewChange.block.hasGenesis() ? viewChange.block.getGenesis().getInitialView().getId()
+                                                           : viewChange.block.getReconfigure().getId()));
+            var context = Committee.viewFor(viewId, params.context());
+            context.allMembers().filter(m -> !validators.containsKey(m)).forEach(m -> context.offline(m));
+            validators.keySet().forEach(m -> context.activate(m));
+            log.trace("Using consensus key: {} sig: {} for view: {} on: {}",
+                      params.digestAlgorithm().digest(nextView.consensusKeyPair.getPublic().getEncoded()),
+                      params.digestAlgorithm().digest(nextView.member.getSignature().toByteString()), viewId,
+                      params.member());
+            Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
+            viewContext = new ViewContext(context, params, signer, validators, constructBlock());
+            producer = new Producer(viewContext, head.get(), comm);
+            producer.start();
+        }
+
+        @Override
+        public void assembled() {
+            producer.assembled();
+        }
+
+        @Override
+        public void complete() {
+            producer.stop();
+        }
+
+        @Override
+        public SubmitResult submit(SubmitTransaction request) {
+//            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
+//                      params().member());
+            return producer.submit(request.getTransaction());
         }
     }
 
@@ -887,7 +888,9 @@ public class CHOAM {
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
-                params.processor().execute(i, exec, stxn == null ? null : stxn.onCompletion());
+
+                params.processor().execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                                           stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
                           params.member());

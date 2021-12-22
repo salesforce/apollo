@@ -229,7 +229,7 @@ public class MembershipTests {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(int index, Transaction t, CompletableFuture f) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.completeAsync(() -> new Object(), clients);

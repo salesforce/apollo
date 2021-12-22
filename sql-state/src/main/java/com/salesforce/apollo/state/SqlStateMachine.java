@@ -187,7 +187,8 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void execute(int index, Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+        public void execute(int index, Digest hash, Transaction tx,
+                            @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
                 closed = connection().isClosed();
@@ -205,7 +206,7 @@ public class SqlStateMachine {
                 return;
             }
             withContext(() -> {
-                SqlStateMachine.this.execute(txn, onComplete);
+                SqlStateMachine.this.execute(index, hash, txn, onComplete);
             });
 
         }
@@ -219,7 +220,7 @@ public class SqlStateMachine {
             });
             int i = 0;
             for (Transaction txn : initialization) {
-                execute(i++, txn, null);
+                execute(i, Digest.NONE, txn, null);
             }
             log.debug("Genesis executed on: {}", url);
         }
@@ -725,7 +726,7 @@ public class SqlStateMachine {
     private void beginBlock(long height, Digest hash) {
         begin(height, hash);
         withContext(() -> {
-            updateCurrent(height, hash, 0, Digest.NONE);
+            updateCurrent(height, hash, -1, Digest.NONE);
             log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
         });
     }
@@ -830,9 +831,11 @@ public class SqlStateMachine {
         }
     }
 
-    private void execute(Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
+    private void execute(int index, Digest hash, Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
         log.debug("executing: {}", tx.getExecutionCase());
-
+        var c = currentBlock.get();
+        updateCurrent(c.height, c.blkHash, index, hash);
+        
         clock.incrementTxn();
         ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
 

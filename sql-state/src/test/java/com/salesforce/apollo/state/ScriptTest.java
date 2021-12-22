@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Utils;
 
@@ -45,7 +46,8 @@ public class ScriptTest {
                                                                              Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(0, Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
+        machine.getExecutor().execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(),
+                                      completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

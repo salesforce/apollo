@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
@@ -57,7 +58,7 @@ public class UpdaterTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(0, transaction, null);
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());
