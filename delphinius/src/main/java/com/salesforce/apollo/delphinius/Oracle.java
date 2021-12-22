@@ -73,11 +73,11 @@ public class Oracle {
 
     private record NamespacedId(Long namespace, Long id, Long relation) {}
 
+    public static final Assertion NO_ASSERTION;
     public static final Namespace NO_NAMESPACE;
     public static final Object    NO_OBJECT;
     public static final Relation  NO_RELATION;
     public static final Subject   NO_SUBJECT;
-    public static final Assertion NO_TUPLE;
 
     static final String OBJECT_TYPE   = "o";
     static final String RELATION_TYPE = "r";
@@ -108,7 +108,7 @@ public class Oracle {
         NO_RELATION = new Relation(NO_NAMESPACE, "");
         NO_SUBJECT = new Subject(NO_NAMESPACE, "", NO_RELATION);
         NO_OBJECT = new Object(NO_NAMESPACE, "", NO_RELATION);
-        NO_TUPLE = new Assertion(NO_SUBJECT, NO_OBJECT);
+        NO_ASSERTION = new Assertion(NO_SUBJECT, NO_OBJECT);
     }
 
     public static Namespace namespace(String name) {
