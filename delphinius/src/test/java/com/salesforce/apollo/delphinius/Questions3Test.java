@@ -20,6 +20,7 @@ import org.jooq.impl.DSL;
 import org.junit.Test;
 
 import com.salesforce.apollo.delphinius.Oracle.Tuple;
+import com.salesforce.apollo.delphinius.schema.tables.Subject;
 
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
@@ -65,8 +66,8 @@ public class Questions3Test {
 
         var dsl = DSL.using(connection);
 
-        com.salesforce.apollo.delphinius.schema.tables.Subject pa = SUBJECT.as("parent");
-        com.salesforce.apollo.delphinius.schema.tables.Subject ch = SUBJECT.as("child");
+        Subject pa = SUBJECT.as("parent");
+        Subject ch = SUBJECT.as("child");
         System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.HOPS).from(pa, ch)
                               .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
                               .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
