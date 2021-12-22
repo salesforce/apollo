@@ -99,9 +99,7 @@ public class Questions3Test {
 
     private void dumpEdges(DSLContext dsl) {
         var pa = SUBJECT.as("parent");
-        var rp = RELATION.as("rp");
         var ch = SUBJECT.as("child");
-        var rc = RELATION.as("rc");
         System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
                               .from(pa, ch).join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
                               .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE).fetch());
