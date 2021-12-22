@@ -215,7 +215,7 @@ public class TestCHOAM {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(Transaction t, CompletableFuture f) {
+                public void execute(int index, Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());

@@ -205,7 +205,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                    maxCheckpointSegments = 200;
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
-        private TransactionExecutor                    processor             = (t, f) -> {
+        private TransactionExecutor                    processor             = (i, t, f) -> {
                                                                              };
         private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
         private int                                    regenerationCycles    = 20;

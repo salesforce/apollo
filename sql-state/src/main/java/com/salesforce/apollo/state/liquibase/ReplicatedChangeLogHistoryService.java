@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.state.liquibase;
 
-import java.util.Date;
-
 import org.h2.util.DateTimeUtils;
 
 import liquibase.Scope;

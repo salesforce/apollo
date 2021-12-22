@@ -60,17 +60,19 @@ public class MigrationTest {
 
         Migration migration = Migration.newBuilder().setTag("test-1").build();
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
 
         executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
-        
+
         migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml")).build();
 
         success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
@@ -92,7 +94,7 @@ public class MigrationTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(transaction, null);
+        updater.getExecutor().execute(0, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());
@@ -108,13 +110,14 @@ public class MigrationTest {
         success = new CompletableFuture<>();
 
         executor.beginBlock(2, DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
-        
-        executor.execute(Transaction.newBuilder()
+
+        executor.execute(1,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
 
-        success.get(1, TimeUnit.SECONDS); 
+        success.get(1, TimeUnit.SECONDS);
 
         statement = connection.createStatement();
         try {
@@ -136,7 +139,8 @@ public class MigrationTest {
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
@@ -158,7 +162,7 @@ public class MigrationTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(transaction, null);
+        updater.getExecutor().execute(1, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());

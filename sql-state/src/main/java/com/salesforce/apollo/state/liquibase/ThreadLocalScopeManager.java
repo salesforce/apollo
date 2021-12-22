@@ -9,7 +9,6 @@ package com.salesforce.apollo.state.liquibase;
 import liquibase.Liquibase;
 import liquibase.Scope;
 import liquibase.ScopeManager;
-import liquibase.changelog.ChangeLogHistoryServiceFactory;
 import liquibase.database.core.MockDatabase;
 import liquibase.exception.LiquibaseException;
 

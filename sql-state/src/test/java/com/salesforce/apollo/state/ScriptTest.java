@@ -35,16 +35,17 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                                                       new File("target/chkpoints"));
-        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList()); 
+        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
         Txn txn = Txn.newBuilder()
-                     .setScript(new Mutator(null, machine.getSession()).callScript("test.DbAccess", "call",
-                                           Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
+                     .setScript(new Mutator(null,
+                                            machine.getSession()).callScript("test.DbAccess", "call",
+                                                                             Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
+        machine.getExecutor().execute(0, Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

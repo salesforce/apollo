@@ -242,7 +242,7 @@ public class CHOAM {
         }
 
         @SuppressWarnings("rawtypes")
-        void execute(Transaction tx, CompletableFuture onComplete);
+        void execute(int index, Transaction tx, CompletableFuture onComplete);
 
         default void genesis(long height, Digest hash, List<Transaction> initialization) {
         }
@@ -882,16 +882,17 @@ public class CHOAM {
         log.info("Executing transactions for block: {} height: {} txns: {} on: {}", h.hash, h.height(), execs.size(),
                  params.member());
         params.processor().beginBlock(h.height(), h.hash);
-        execs.forEach(exec -> {
+        for (int i = 0; i < execs.size(); i++) {
+            var exec = execs.get(i);
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
-                params.processor().execute(exec, stxn == null ? null : stxn.onCompletion());
+                params.processor().execute(i, exec, stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
                           params.member());
             }
-        });
+        }
     }
 
     private CheckpointSegments fetch(CheckpointReplication request, Digest from) {
@@ -1023,8 +1024,7 @@ public class CHOAM {
         log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
                  validators.entrySet().stream()
                            .map(e -> String.format("id: %s key: %s", e.getKey(),
-                                                   params.digestAlgorithm()
-                                                         .digest(e.toString())))
+                                                   params.digestAlgorithm().digest(e.toString())))
                            .toList(),
                  params.member());
     }

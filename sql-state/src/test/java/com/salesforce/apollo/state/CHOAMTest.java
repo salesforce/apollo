@@ -373,9 +373,9 @@ public class CHOAMTest {
                                    }
 
                                    @Override
-                                   public void execute(Transaction tx,
+                                   public void execute(int i, Transaction tx,
                                                        @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                                       up.getExecutor().execute(tx, onComplete);
+                                       up.getExecutor().execute(i, tx, onComplete);
                                    }
 
                                    @Override

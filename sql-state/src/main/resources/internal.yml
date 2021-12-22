@@ -4,12 +4,9 @@ databaseChangeLog:
       author: hhildebrand
       changes:
       -  sql:  
-            endDelimiter:  \nGO  
-            splitStatements:  true  
-            sql:  create schema apollo_internal  
-            stripComments:  true
+            sql:  create schema apollo_internal
       -  createTable:
-            tableName: current_block
+            tableName: current
             schemaName: apollo_internal
             columns:
             -  column:
@@ -19,7 +16,13 @@ databaseChangeLog:
                   name: height
                   type: INT8
             -  column:
-                  name: hash
+                  name: block_hash
+                  type: VARCHAR(256)
+            -  column:
+                  name: transaction
+                  type: INT
+            -  column:
+                  name: transaction_hash
                   type: VARCHAR(256)
       -  createTable:
             tableName: trampoline
@@ -27,7 +30,7 @@ databaseChangeLog:
             columns:
             -  column:
                   name: id
-                  type: INT
+                  type: INT8
                   constraints:
                      primaryKey: true
             -  column:
@@ -38,7 +41,7 @@ databaseChangeLog:
                   type: JSON
       -  addAutoIncrement:  
             columnName: id
-            columnDataType: int
+            columnDataType: INT8
             generationType: ALWAYS  
             incrementBy: 1  
             schemaName: apollo_internal

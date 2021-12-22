@@ -123,7 +123,7 @@ public class SqlStateMachine {
         }
     }
 
-    public record CurrentBlock(Digest hash, long height) {}
+    public record Current(long height, Digest blkHash, int txn, Digest txnHash) {}
 
     public static class Event {
         public final JsonNode body;
@@ -187,7 +187,7 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void execute(Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+        public void execute(int index, Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
                 closed = connection().isClosed();
@@ -215,10 +215,11 @@ public class SqlStateMachine {
             begin(height, hash);
             withContext(() -> {
                 initializeState();
-                updateCurrentBlock(height, hash);
+                updateCurrent(height, hash, -1, Digest.NONE);
             });
+            int i = 0;
             for (Transaction txn : initialization) {
-                execute(txn, null);
+                execute(i++, txn, null);
             }
             log.debug("Genesis executed on: {}", url);
         }
@@ -275,7 +276,7 @@ public class SqlStateMachine {
     private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    private static final String                    UPDATE_CURRENT                         = "MERGE INTO APOLLO_INTERNAL.CURRENT(_U, HEIGHT, BLOCK_HASH, TRANSACTION, TRANSACTION_HASH) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -308,7 +309,7 @@ public class SqlStateMachine {
     private final BlockClock                    clock        = new BlockClock();
     private final ScriptCompiler                compiler     = new ScriptCompiler();
     private volatile JdbcConnection             connection;
-    private final AtomicReference<CurrentBlock> currentBlock = new AtomicReference<>();
+    private final AtomicReference<Current>      currentBlock = new AtomicReference<>();
     private final AtomicReference<SecureRandom> entropy      = new AtomicReference<>();
     private final TxnExec                       executor     = new TxnExec();
     private final Properties                    info;
@@ -415,7 +416,7 @@ public class SqlStateMachine {
         };
     }
 
-    public CurrentBlock getCurrentBlock() {
+    public Current getCurrentBlock() {
         return currentBlock.get();
     }
 
@@ -704,27 +705,27 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void begin(long height, Digest hash) {
+    private void begin(long height, Digest blkHash) {
         final var session = getSession();
         if (session == null) {
             return;
         }
-        session.getRandom().setSeed(new DigestHasher(hash, height).identityHash());
+        session.getRandom().setSeed(new DigestHasher(blkHash, height).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(hash.getBytes());
+            secureEntropy.setSeed(blkHash.getBytes());
             entropy.set(secureEntropy);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
-        currentBlock.set(new CurrentBlock(hash, height));
+        currentBlock.set(new Current(height, blkHash, 0, Digest.NONE));
         clock.incrementHeight();
     }
 
     private void beginBlock(long height, Digest hash) {
         begin(height, hash);
         withContext(() -> {
-            updateCurrentBlock(height, hash);
+            updateCurrent(height, hash, 0, Digest.NONE);
             log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
         });
     }
@@ -957,15 +958,18 @@ public class SqlStateMachine {
         }
     }
 
-    private void updateCurrentBlock(long height, Digest hash) {
+    private void updateCurrent(long height, Digest blkHash, int txn, Digest txnHash) {
         try {
-            execute(UPDATE_CURRENT_BLOCK, exec -> {
+            execute(UPDATE_CURRENT, exec -> {
                 try {
                     exec.setLong(1, height);
-                    exec.setString(2, QualifiedBase64.qb64(hash));
+                    exec.setString(2, QualifiedBase64.qb64(blkHash));
+                    exec.setLong(3, txn);
+                    exec.setString(4, QualifiedBase64.qb64(txnHash));
                     exec.execute();
                 } catch (SQLException e) {
-                    log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
+                    log.debug("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash,
+                              txn, txnHash, url);
                     throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
                 } finally {
                     try {
@@ -978,8 +982,9 @@ public class SqlStateMachine {
                 return null;
             });
         } catch (SQLException e) {
-            log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
-            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
+            log.debug("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash, txn,
+                      txnHash, url);
+            throw new IllegalStateException("Cannot update the CURRENT {block, txn} on: " + url, e);
         }
         commit();
     }

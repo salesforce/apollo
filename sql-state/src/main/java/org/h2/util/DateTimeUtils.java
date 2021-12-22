@@ -7,7 +7,6 @@
  */
 package org.h2.util;
 
-import java.time.Clock;
 import java.time.Instant;
 
 import org.h2.api.ErrorCode;
