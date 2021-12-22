@@ -5,9 +5,9 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
       http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
     <changeSet author="hhildebrand" id="1">
-    
+
         <sql>create schema if not exists delphinius</sql>
-        
+
         <createTable tableName="namespace"
             schemaName="delphinius">
             <column autoIncrement="true" generationType="ALWAYS"
@@ -23,28 +23,9 @@
         <addUniqueConstraint columnNames="name"
             tableName="namespace" schemaName="delphinius" />
 
-        <createTable tableName="object"
-            schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" primaryKeyName="object_pkey" />
-            </column>
-            <column name="namespace" type="INT8">
-                <constraints nullable="false"
-                    foreignKeyName="object_namespace_fk"
-                    referencedTableName="namespace"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="name" type="VARCHAR(1024)">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
-        <addUniqueConstraint
-            columnNames="namespace, name" tableName="object"
-            schemaName="delphinius" />
+        <!-- The NULL namespace -->
+        <sql>insert into delphinius.namespace (id, name) values (0, '')
+        </sql>
 
         <createTable tableName="relation"
             schemaName="delphinius">
@@ -53,7 +34,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="relation_pkey" />
             </column>
-            <column name="namespace" type="INT8">
+            <column name="namespace" type="INT8" defaultValue="0">
                 <constraints nullable="false"
                     foreignKeyName="relation_namespace_fk"
                     referencedTableName="namespace"
@@ -69,6 +50,46 @@
             columnNames="namespace, name" tableName="relation"
             schemaName="delphinius" />
 
+        <!-- The NULL relation -->
+        <sql>insert into delphinius.relation (id, namespace, name)
+            values (0, 0, '')
+        </sql>
+
+        <createTable tableName="object"
+            schemaName="delphinius">
+            <column autoIncrement="true" generationType="ALWAYS"
+                name="id" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="object_pkey" />
+            </column>
+            <column name="namespace" type="INT8" defaultValue="0">
+                <constraints nullable="false"
+                    foreignKeyName="object_namespace_fk"
+                    referencedTableName="namespace"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+            <column name="name" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+            <column name="relation" type="INT8">
+                <constraints nullable="false"
+                    foreignKeyName="object_relation_fk"
+                    referencedTableName="relation"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            columnNames="namespace, name, relation" tableName="object"
+            schemaName="delphinius" />
+            
+        <!-- The NULL object -->
+        <sql>insert into delphinius.object (id, namespace, name, relation)
+            values (0, 0, '', 0)
+        </sql>
+
         <createTable tableName="subject"
             schemaName="delphinius">
             <column autoIncrement="true" generationType="ALWAYS"
@@ -76,7 +97,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="subject_pkey" />
             </column>
-            <column name="namespace" type="INT8">
+            <column name="namespace" type="INT8" defaultValue="0">
                 <constraints nullable="false"
                     foreignKeyName="subject_namespace_fk"
                     referencedTableName="namespace"
@@ -86,11 +107,23 @@
             <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
+            <column name="relation" type="INT8" defaultValue="0">
+                <constraints nullable="false"
+                    foreignKeyName="subject_relation_fk"
+                    referencedTableName="relation"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
         </createTable>
 
         <addUniqueConstraint
-            columnNames="namespace, name" tableName="subject"
+            columnNames="namespace, name, relation" tableName="subject"
             schemaName="delphinius" />
+            
+        <!-- The NULL subject -->
+        <sql>insert into delphinius.subject (id, namespace, name, relation)
+            values (0, 0, '', 0)
+        </sql>
 
         <createTable tableName="tuple"
             schemaName="delphinius">
@@ -116,6 +149,11 @@
                     referencedTableSchemaName="delphinius" />
             </column>
         </createTable>
+            
+        <!-- The NULL tuple -->
+        <sql>insert into delphinius.tuple (object, relation, subject)
+            values (0, 0, 0)
+        </sql>
 
         <createTable tableName="edge"
             schemaName="delphinius">
@@ -168,6 +206,5 @@
             schemaName="delphinius" tableName="edge">
             <column name="type" />
         </createIndex>
-
     </changeSet>
 </databaseChangeLog>

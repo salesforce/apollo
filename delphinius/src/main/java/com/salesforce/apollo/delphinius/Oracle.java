@@ -34,10 +34,10 @@ import com.salesforce.apollo.delphinius.schema.tables.Edge;
  *
  */
 public class Oracle {
-
     public record Namespace(String name) {
-        public Object object(String name) {
-            return new Object(this, name);
+
+        public Object object(String name, Relation relation) {
+            return new Object(this, name, relation);
         }
 
         public Relation relation(String name) {
@@ -45,23 +45,37 @@ public class Oracle {
         }
 
         public Subject subject(String name) {
-            return new Subject(this, name);
+            return new Subject(this, name, NO_RELATION);
+        }
+
+        public Subject subject(String name, Relation relation) {
+            return new Subject(this, name, relation);
         }
     }
 
-    public record Subject(Namespace namespace, String name) {}
+    public record Subject(Namespace namespace, String name, Relation relation) {
+        public Tuple tuple(Relation relation, Object object) {
+            return new Tuple(this, relation, object);
+        }
+    }
 
-    public record Object(Namespace namespace, String name) {
+    public record Object(Namespace namespace, String name, Relation relation) {
         public Tuple tuple(Relation relation, Subject subject) {
-            return new Tuple(this, relation, subject);
+            return new Tuple(subject, relation, this);
         }
     }
 
     public record Relation(Namespace namespace, String name) {}
 
-    public record Tuple(Object object, Relation relation, Subject subject) {}
+    public record Tuple(Subject subject, Relation relation, Object object) {}
 
     private record NamespacedId(Long namespace, Long id) {}
+
+    public static final Namespace NO_NAMESPACE;
+    public static final Object    NO_OBJECT;
+    public static final Relation  NO_RELATION;
+    public static final Subject   NO_SUBJECT;
+    public static final Tuple     NO_TUPLE;
 
     static final String OBJECT_TYPE   = "o";
     static final String RELATION_TYPE = "r";
@@ -86,6 +100,14 @@ public class Oracle {
     private static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "parent"), Long.class);
     private static final Field<Long>            sChild     = DSL.field(DSL.name("C", "child"), Long.class);
     private static final Field<Long>            sParent    = DSL.field(DSL.name("C", "parent"), Long.class);
+
+    static {
+        NO_NAMESPACE = new Namespace("");
+        NO_RELATION = new Relation(NO_NAMESPACE, "");
+        NO_SUBJECT = new Subject(NO_NAMESPACE, "", NO_RELATION);
+        NO_OBJECT = new Object(NO_NAMESPACE, "", NO_RELATION);
+        NO_TUPLE = new Tuple(NO_SUBJECT, NO_RELATION, NO_OBJECT);
+    }
 
     public static Namespace namespace(String name) {
         return new Namespace(name);
@@ -219,14 +241,15 @@ public class Oracle {
     public void add(Object object) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.mergeInto(NAMESPACE).using(context.selectOne()).on(NAMESPACE.NAME.eq(object.namespace.name))
-                   .whenNotMatchedThenInsert(NAMESPACE.NAME).values(object.namespace.name).execute();
+            add(object.namespace);
             var namespace = context.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(object.namespace.name))
                                    .fetchOne().value1();
+            var relation = resolve(object.relation, true);
 
             context.mergeInto(OBJECT).using(context.selectOne()).on(OBJECT.NAMESPACE.eq(namespace))
-                   .and(OBJECT.NAME.eq(object.name)).whenNotMatchedThenInsert(OBJECT.NAMESPACE, OBJECT.NAME)
-                   .values(namespace, object.name).execute();
+                   .and(OBJECT.NAME.eq(object.name)).and(OBJECT.RELATION.eq(relation.id))
+                   .whenNotMatchedThenInsert(OBJECT.NAMESPACE, OBJECT.NAME, OBJECT.RELATION)
+                   .values(namespace, object.name, relation.id).execute();
         });
     }
 

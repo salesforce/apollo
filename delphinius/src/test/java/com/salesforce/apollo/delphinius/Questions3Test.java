@@ -71,8 +71,8 @@ public class Questions3Test {
                               .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
                               .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
 
-        var object = foo.object("Doc");
-        var relation = foo.relation("Viewer");
+        var relation = foo.relation("View");
+        var object = foo.object("Doc", foo.relation("Viewer"));
         var subject = foo.subject("Users");
         Tuple tuple = object.tuple(relation, subject);
         oracle.add(tuple);
@@ -82,16 +82,16 @@ public class Questions3Test {
         assertTrue(oracle.check(object.tuple(relation, foo.subject("Jale"))));
         assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
         assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
-        
+
         oracle.remove(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
-        
+
         assertFalse(oracle.check(object.tuple(relation, foo.subject("Jale"))));
         assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
         assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
-        
+
         System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.HOPS).from(pa, ch)
-                           .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
-                           .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
+                              .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
 
         oracle.delete(tuple);
 
