@@ -177,10 +177,10 @@
             <column name="child" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="hops" type="BOOLEAN">
+            <column name="transitive" type="BOOLEAN">
                 <constraints nullable="false" />
             </column>
-            <column name="del_mark" type="BOOLEAN"
+            <column name="mark" type="BOOLEAN"
                 defaultValueBoolean="false">
                 <constraints nullable="false" />
             </column>
@@ -203,9 +203,9 @@
             <column name="parent" />
         </createIndex>
 
-        <createIndex indexName="edge_hops"
+        <createIndex indexName="edge_transitive"
             schemaName="delphinius" tableName="edge">
-            <column name="hops" />
+            <column name="transitive" />
         </createIndex>
 
         <createIndex indexName="edge_type"

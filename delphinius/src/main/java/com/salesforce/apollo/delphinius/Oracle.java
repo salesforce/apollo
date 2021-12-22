@@ -121,7 +121,7 @@ public class Oracle {
             try {
                 if (context.fetchExists(context.select(EDGE.ID).from(EDGE).where(EDGE.TYPE.eq(type))
                                                .and(EDGE.PARENT.eq(parent)).and(EDGE.CHILD.eq(child))
-                                               .and(EDGE.HOPS.isFalse()))) {
+                                               .and(EDGE.TRANSITIVE.isFalse()))) {
                     return;
                 }
                 if (parent == child ||
@@ -143,13 +143,13 @@ public class Oracle {
                                                     .and(A.TYPE.eq(type)).and(B.TYPE.eq(type))))
                        .execute();
 
-                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
+                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
                        .values(DSL.value(type), DSL.value(parent), DSL.value(child), DSL.value(false)).execute();
 
-                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.HOPS)
+                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
                        .select(context.select(DSL.val(type), cParent, cChild, DSL.val(true)).from(candidates)
-                                      .whereNotExists(context.select(E.HOPS).from(E).where(E.PARENT.eq(cParent))
-                                                             .and(E.CHILD.eq(cChild)).and(E.HOPS.isTrue())))
+                                      .whereNotExists(context.select(E.TRANSITIVE).from(E).where(E.PARENT.eq(cParent))
+                                                             .and(E.CHILD.eq(cChild)).and(E.TRANSITIVE.isTrue())))
                        .execute();
             } finally {
                 context.dropTable(candidates).execute();
@@ -160,12 +160,12 @@ public class Oracle {
     static void deleteEdge(DSLContext c, String type, Long parent, Long child) throws SQLException {
         c.transaction(ctx -> {
             var context = DSL.using(ctx);
-            if (context.deleteFrom(EDGE).where(EDGE.HOPS.isFalse()).and(EDGE.TYPE.eq(type).and(EDGE.PARENT.eq(parent)))
-                       .and(EDGE.CHILD.eq(child)).execute() == 0) {
+            if (context.deleteFrom(EDGE).where(EDGE.TRANSITIVE.isFalse())
+                       .and(EDGE.TYPE.eq(type).and(EDGE.PARENT.eq(parent))).and(EDGE.CHILD.eq(child)).execute() == 0) {
                 return; // Does not exist
             }
 
-            context.update(EDGE).set(EDGE.DEL_MARK, true)
+            context.update(EDGE).set(EDGE.MARK, true)
                    .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE)
                                             .join(context.select(EDGE.PARENT, DSL.val(child).as(EDGE.CHILD)).from(EDGE)
                                                          .where(EDGE.CHILD.eq(parent))
@@ -179,23 +179,23 @@ public class Oracle {
                                                                        .and(B.PARENT.eq(child)))
                                                          .asTable("C"))
                                             .on(sParent.eq(EDGE.PARENT)).and(sChild.eq(EDGE.CHILD)))
-                                 .and(EDGE.HOPS.isTrue()))
+                                 .and(EDGE.TRANSITIVE.isTrue()))
                    .execute();
 
-            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.DEL_MARK.isFalse()))
-                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false))
+            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
+                   .update(EDGE).set(EDGE.MARK, DSL.val(false))
                    .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
                                             .innerJoin(s2).on(s1Child.eq(s2Parent)).and(s2Child.eq(EDGE.CHILD))))
-                   .and(EDGE.DEL_MARK.isTrue()).execute();
+                   .and(EDGE.MARK.isTrue()).execute();
 
-            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.DEL_MARK.isFalse()))
-                   .update(EDGE).set(EDGE.DEL_MARK, DSL.val(false))
+            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
+                   .update(EDGE).set(EDGE.MARK, DSL.val(false))
                    .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
                                             .innerJoin(s2).on(s1Child.eq(s2Parent)).innerJoin(s3)
                                             .on(s2Child.eq(s3Parent)).and(s3Child.eq(EDGE.CHILD))))
-                   .and(EDGE.DEL_MARK.isTrue()).execute();
+                   .and(EDGE.MARK.isTrue()).execute();
 
-            context.deleteFrom(EDGE).where(EDGE.DEL_MARK.isTrue()).execute();
+            context.deleteFrom(EDGE).where(EDGE.MARK.isTrue()).execute();
         });
     }
 
@@ -399,8 +399,8 @@ public class Oracle {
         var pa = SUBJECT.as("parent");
         var ch = SUBJECT.as("child");
         System.out.println(string);
-        System.out.println(context.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.HOPS).from(pa, ch).join(EDGE)
-                                  .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID))).fetch());
+        System.out.println(context.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.TRANSITIVE).from(pa, ch)
+                                  .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID))).fetch());
         System.out.println();
         System.out.println();
     }
