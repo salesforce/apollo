@@ -274,10 +274,12 @@ public class Oracle {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             var namespace = resolve(subject.namespace, true);
+            var relation = resolve(subject.relation, true);
 
             context.mergeInto(SUBJECT).using(context.selectOne()).on(SUBJECT.NAMESPACE.eq(namespace))
-                   .and(SUBJECT.NAME.eq(subject.name)).whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME)
-                   .values(namespace, subject.name).execute();
+                   .and(SUBJECT.NAME.eq(subject.name)).and(SUBJECT.RELATION.eq(relation.id))
+                   .whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME, SUBJECT.RELATION)
+                   .values(namespace, subject.name, relation.id).execute();
         });
     }
 

@@ -8,6 +8,7 @@ package com.salesforce.apollo.delphinius;
 
 import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
 import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
+import static com.salesforce.apollo.delphinius.schema.tables.Relation.RELATION;
 import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -16,11 +17,11 @@ import java.util.Properties;
 import java.util.Random;
 
 import org.h2.jdbc.JdbcConnection;
+import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.junit.Test;
 
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
-import com.salesforce.apollo.delphinius.schema.tables.Subject;
 
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
@@ -45,58 +46,64 @@ public class Questions3Test {
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
 
-        var foo = Oracle.namespace("foo");
+        var ns = Oracle.namespace("MyOrg");
+        var member = ns.relation("member");
+
         Oracle oracle = new Oracle(connection);
-        oracle.map(foo.subject("HelpDesk"), foo.subject("Admins"));
-        oracle.map(foo.subject("Ali"), foo.subject("Admins"));
-        oracle.map(foo.subject("Ali"), foo.subject("Users"));
-        oracle.map(foo.subject("Burcu"), foo.subject("Users"));
-        oracle.map(foo.subject("Can"), foo.subject("Users"));
-        oracle.map(foo.subject("Managers"), foo.subject("Users"));
-        oracle.map(foo.subject("Technicians"), foo.subject("Users"));
-        oracle.map(foo.subject("Demet"), foo.subject("HelpDesk"));
-        oracle.map(foo.subject("Egin"), foo.subject("HelpDesk"));
-        oracle.map(foo.subject("Egin"), foo.subject("Users"));
-        oracle.map(foo.subject("Fuat"), foo.subject("Managers"));
-        oracle.map(foo.subject("G l"), foo.subject("Managers"));
-        oracle.map(foo.subject("Hakan"), foo.subject("Technicians"));
-        oracle.map(foo.subject("Irmak"), foo.subject("Technicians"));
-        oracle.map(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
-        oracle.map(foo.subject("Jale"), foo.subject("ABCTechnicians"));
+        oracle.map(ns.subject("HelpDesk", member), ns.subject("Admins", member));
+        oracle.map(ns.subject("Ali"), ns.subject("Admins", member));
+        oracle.map(ns.subject("Ali"), ns.subject("Users", member));
+        oracle.map(ns.subject("Burcu"), ns.subject("Users", member));
+        oracle.map(ns.subject("Can"), ns.subject("Users", member));
+        oracle.map(ns.subject("Managers", member), ns.subject("Users", member));
+        oracle.map(ns.subject("Technicians", member), ns.subject("Users", member));
+        oracle.map(ns.subject("Demet"), ns.subject("HelpDesk", member));
+        oracle.map(ns.subject("Egin"), ns.subject("HelpDesk", member));
+        oracle.map(ns.subject("Egin"), ns.subject("Users", member));
+        oracle.map(ns.subject("Fuat"), ns.subject("Managers", member));
+        oracle.map(ns.subject("G l"), ns.subject("Managers", member));
+        oracle.map(ns.subject("Hakan"), ns.subject("Technicians", member));
+        oracle.map(ns.subject("Irmak"), ns.subject("Technicians", member));
+        oracle.map(ns.subject("ABCTechnicians", member), ns.subject("Technicians", member));
+        oracle.map(ns.subject("Jale"), ns.subject("ABCTechnicians", member));
 
         var dsl = DSL.using(connection);
 
-        Subject pa = SUBJECT.as("parent");
-        Subject ch = SUBJECT.as("child");
-        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
-                              .from(pa, ch).join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
-                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE).fetch());
+        dumpEdges(dsl);
 
-        var object = foo.object("Doc", foo.relation("View"));
-        var subject = foo.subject("Users");
-        Assertion tuple = object.assertion(subject);
+        var object = ns.object("Doc", ns.relation("View"));
+        var subject = ns.subject("Users", member);
+        Assertion tuple = subject.assertion(object);
         oracle.add(tuple);
 
         System.out.println("Tuples:\n" + dsl.selectFrom(ASSERTION).fetch());
 
-        assertTrue(oracle.check(object.assertion(foo.subject("Jale"))));
-        assertTrue(oracle.check(object.assertion(foo.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
+        assertTrue(oracle.check(object.assertion(ns.subject("Jale"))));
+        assertTrue(oracle.check(object.assertion(ns.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
 
-        oracle.remove(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
+        oracle.remove(ns.subject("ABCTechnicians", member), ns.subject("Technicians", member));
 
-        assertFalse(oracle.check(object.assertion(foo.subject("Jale"))));
-        assertTrue(oracle.check(object.assertion(foo.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("Jale"))));
+        assertTrue(oracle.check(object.assertion(ns.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
 
-        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
-                              .from(pa, ch).join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
-                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE).fetch());
+        dumpEdges(dsl);
 
         oracle.delete(tuple);
 
-        assertFalse(oracle.check(object.assertion(foo.subject("Jale"))));
-        assertFalse(oracle.check(object.assertion(foo.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("Jale"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
+    }
+
+    private void dumpEdges(DSLContext dsl) {
+        var pa = SUBJECT.as("parent");
+        var rp = RELATION.as("rp");
+        var ch = SUBJECT.as("child");
+        var rc = RELATION.as("rc");
+        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
+                              .from(pa, ch).join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE).fetch());
     }
 }
