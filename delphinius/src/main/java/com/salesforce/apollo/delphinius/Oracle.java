@@ -100,8 +100,9 @@ public class Oracle {
     private static final Table<Record>          s3         = rowzTable.as("S3");
     private static final Field<Long>            s3Child    = DSL.field(DSL.name("S3", "child"), Long.class);
     private static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "parent"), Long.class);
-    private static final Field<Long>            sChild     = DSL.field(DSL.name("C", "child"), Long.class);
-    private static final Field<Long>            sParent    = DSL.field(DSL.name("C", "parent"), Long.class);
+    private static final Field<Long>            sChild     = DSL.field(DSL.name("suspect", "child"), Long.class);
+    private static final Field<Long>            sParent    = DSL.field(DSL.name("suspect", "parent"), Long.class);
+    private static final Name                   suspect    = DSL.name("suspect");
 
     static {
         NO_NAMESPACE = new Namespace("");
@@ -177,7 +178,7 @@ public class Oracle {
                                                          .union(context.select(A.PARENT, B.CHILD).from(A).crossJoin(B)
                                                                        .where(A.CHILD.eq(parent))
                                                                        .and(B.PARENT.eq(child)))
-                                                         .asTable("C"))
+                                                         .asTable(suspect))
                                             .on(sParent.eq(EDGE.PARENT)).and(sChild.eq(EDGE.CHILD)))
                                  .and(EDGE.TRANSITIVE.isTrue()))
                    .execute();
