@@ -6,15 +6,17 @@
  */
 package com.salesforce.apollo.delphinius;
 
+import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
 import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
 import static com.salesforce.apollo.delphinius.schema.tables.Namespace.NAMESPACE;
 import static com.salesforce.apollo.delphinius.schema.tables.Object.OBJECT;
 import static com.salesforce.apollo.delphinius.schema.tables.Relation.RELATION;
 import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
-import static com.salesforce.apollo.delphinius.schema.tables.Tuple.TUPLE;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
 
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -54,28 +56,28 @@ public class Oracle {
     }
 
     public record Subject(Namespace namespace, String name, Relation relation) {
-        public Tuple tuple(Relation relation, Object object) {
-            return new Tuple(this, relation, object);
+        public Assertion assertion(Object object) {
+            return new Assertion(this, object);
         }
     }
 
     public record Object(Namespace namespace, String name, Relation relation) {
-        public Tuple tuple(Relation relation, Subject subject) {
-            return new Tuple(subject, relation, this);
+        public Assertion assertion(Subject subject) {
+            return new Assertion(subject, this);
         }
     }
 
     public record Relation(Namespace namespace, String name) {}
 
-    public record Tuple(Subject subject, Relation relation, Object object) {}
+    public record Assertion(Subject subject, Object object) {}
 
-    private record NamespacedId(Long namespace, Long id) {}
+    private record NamespacedId(Long namespace, Long id, Long relation) {}
 
     public static final Namespace NO_NAMESPACE;
     public static final Object    NO_OBJECT;
     public static final Relation  NO_RELATION;
     public static final Subject   NO_SUBJECT;
-    public static final Tuple     NO_TUPLE;
+    public static final Assertion NO_TUPLE;
 
     static final String OBJECT_TYPE   = "o";
     static final String RELATION_TYPE = "r";
@@ -106,7 +108,7 @@ public class Oracle {
         NO_RELATION = new Relation(NO_NAMESPACE, "");
         NO_SUBJECT = new Subject(NO_NAMESPACE, "", NO_RELATION);
         NO_OBJECT = new Object(NO_NAMESPACE, "", NO_RELATION);
-        NO_TUPLE = new Tuple(NO_SUBJECT, NO_RELATION, NO_OBJECT);
+        NO_TUPLE = new Assertion(NO_SUBJECT, NO_OBJECT);
     }
 
     public static Namespace namespace(String name) {
@@ -197,26 +199,20 @@ public class Oracle {
         });
     }
 
-    static SelectJoinStep<?> grants(DSLContext ctx, Long o, Long r, Long s) throws SQLException {
+    static SelectJoinStep<?> grants(DSLContext ctx, Long o, Long s) throws SQLException {
         Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("subject_id")).from(EDGE)
                                           .where(EDGE.TYPE.eq(SUBJECT_TYPE)).and(EDGE.PARENT.eq(s))
                                           .union(ctx.select(DSL.val(s).as("subject_id"))).asTable();
         Field<Long> subjectId = subject.field("subject_id", Long.class);
-
-        Table<Record1<Long>> relation = ctx.select(EDGE.CHILD.as("relation_id")).from(EDGE)
-                                           .where(EDGE.TYPE.eq(RELATION_TYPE)).and(EDGE.PARENT.eq(r))
-                                           .union(DSL.select(DSL.val(r).as("relation_id"))).asTable();
-        Field<Long> relationId = relation.field("relation_id", Long.class);
 
         Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("object_id")).from(EDGE).where(EDGE.TYPE.eq(OBJECT_TYPE))
                                          .and(EDGE.PARENT.eq(o)).union(DSL.select(DSL.val(o).as("object_id")))
                                          .asTable();
         Field<Long> objectId = object.field("object_id", Long.class);
 
-        return ctx.select(subjectId, relationId, objectId)
-                  .from(subject.crossJoin(relation).crossJoin(object).innerJoin(TUPLE)
-                               .on(subjectId.eq(TUPLE.SUBJECT)
-                                            .and(relationId.eq(TUPLE.RELATION).and(objectId.eq(TUPLE.OBJECT)))));
+        return ctx.select(subjectId, objectId)
+                  .from(subject.crossJoin(object).innerJoin(ASSERTION)
+                               .on(subjectId.eq(ASSERTION.SUBJECT).and(objectId.eq(ASSERTION.OBJECT))));
     }
 
     private final DSLContext dslCtx;
@@ -227,6 +223,17 @@ public class Oracle {
 
     public Oracle(DSLContext dslCtx) {
         this.dslCtx = dslCtx;
+    }
+
+    public void add(Assertion assertion) throws SQLException {
+        var s = resolve(assertion.subject, true);
+        var o = resolve(assertion.object, true);
+        dslCtx.transaction(ctx -> {
+            var context = DSL.using(ctx);
+            context.mergeInto(ASSERTION).using(context.selectOne()).on(ASSERTION.SUBJECT.eq(s.id))
+                   .and(ASSERTION.OBJECT.eq(o.id)).whenNotMatchedThenInsert(ASSERTION.OBJECT, ASSERTION.SUBJECT)
+                   .values(o.id, s.id).execute();
+        });
     }
 
     public void add(Namespace namespace) throws SQLException {
@@ -241,10 +248,8 @@ public class Oracle {
     public void add(Object object) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            add(object.namespace);
-            var namespace = context.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(object.namespace.name))
-                                   .fetchOne().value1();
             var relation = resolve(object.relation, true);
+            var namespace = resolve(object.namespace, true);
 
             context.mergeInto(OBJECT).using(context.selectOne()).on(OBJECT.NAMESPACE.eq(namespace))
                    .and(OBJECT.NAME.eq(object.name)).and(OBJECT.RELATION.eq(relation.id))
@@ -256,10 +261,7 @@ public class Oracle {
     public void add(Relation relation) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.mergeInto(NAMESPACE).using(context.selectOne()).on(NAMESPACE.NAME.eq(relation.namespace.name))
-                   .whenNotMatchedThenInsert(NAMESPACE.NAME).values(relation.namespace.name).execute();
-            var namespace = context.select(NAMESPACE.ID).from(NAMESPACE)
-                                   .where(NAMESPACE.NAME.eq(relation.namespace.name)).fetchOne().value1();
+            var namespace = resolve(relation.namespace, true);
 
             context.mergeInto(RELATION).using(context.selectOne()).on(RELATION.NAMESPACE.eq(namespace))
                    .and(RELATION.NAME.eq(relation.name)).whenNotMatchedThenInsert(RELATION.NAMESPACE, RELATION.NAME)
@@ -270,10 +272,7 @@ public class Oracle {
     public void add(Subject subject) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.mergeInto(NAMESPACE).using(context.selectOne()).on(NAMESPACE.NAME.eq(subject.namespace.name))
-                   .whenNotMatchedThenInsert(NAMESPACE.NAME).values(subject.namespace.name).execute();
-            var namespace = context.select(NAMESPACE.ID).from(NAMESPACE)
-                                   .where(NAMESPACE.NAME.eq(subject.namespace.name)).fetchOne().value1();
+            var namespace = resolve(subject.namespace, true);
 
             context.mergeInto(SUBJECT).using(context.selectOne()).on(SUBJECT.NAMESPACE.eq(namespace))
                    .and(SUBJECT.NAME.eq(subject.name)).whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME)
@@ -281,48 +280,57 @@ public class Oracle {
         });
     }
 
-    public void add(Tuple tuple) throws SQLException {
-        var s = resolve(tuple.subject, true);
-        var r = resolve(tuple.relation, true);
-        var o = resolve(tuple.object, true);
-        dslCtx.transaction(ctx -> {
-            var context = DSL.using(ctx);
-            context.mergeInto(TUPLE).using(context.selectOne()).on(TUPLE.SUBJECT.eq(s.id)).and(TUPLE.OBJECT.eq(o.id))
-                   .and(TUPLE.RELATION.eq(r.id)).whenNotMatchedThenInsert(TUPLE.OBJECT, TUPLE.RELATION, TUPLE.SUBJECT)
-                   .values(o.id, r.id, s.id).execute();
-        });
-    }
-
-    public boolean check(Tuple tuple) throws SQLException {
-        var s = resolve(tuple.subject, false);
-        var r = resolve(tuple.relation, false);
-        var o = resolve(tuple.object, false);
-        if (s == null || r == null || o == null) {
+    public boolean check(Assertion assertion) throws SQLException {
+        var s = resolve(assertion.subject, false);
+        var o = resolve(assertion.object, false);
+        if (s == null || o == null) {
             return false;
         }
-        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(dslCtx, o.id, r.id, s.id)));
+        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(dslCtx, o.id, s.id)));
     }
 
-    public void delete(Object object) {
-    }
-
-    public void delete(Relation relation) {
-    }
-
-    public void delete(Subject subject) {
-    }
-
-    public void delete(Tuple tuple) throws SQLException {
-        var s = resolve(tuple.subject, false);
-        var r = resolve(tuple.relation, false);
-        var o = resolve(tuple.object, false);
-        if (s == null || r == null || o == null) {
+    public void delete(Assertion assertion) throws SQLException {
+        var s = resolve(assertion.subject, false);
+        var o = resolve(assertion.object, false);
+        if (s == null || o == null) {
             return;
         }
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.deleteFrom(TUPLE).where(TUPLE.OBJECT.eq(o.id)).and(TUPLE.RELATION.eq(r.id))
-                   .and(TUPLE.SUBJECT.eq(s.id)).execute();
+            context.deleteFrom(ASSERTION).where(ASSERTION.OBJECT.eq(o.id)).and(ASSERTION.SUBJECT.eq(s.id)).execute();
+        });
+    }
+
+    public void delete(Object object) throws SQLException {
+        var resolved = resolve(object, false);
+        if (resolved == null) {
+            return;
+        }
+        dslCtx.transaction(ctx -> {
+            var context = DSL.using(ctx);
+            context.deleteFrom(OBJECT).where(OBJECT.ID.eq(resolved.id)).execute();
+        });
+    }
+
+    public void delete(Relation relation) throws SQLException {
+        var resolved = resolve(relation, false);
+        if (resolved == null) {
+            return;
+        }
+        dslCtx.transaction(ctx -> {
+            var context = DSL.using(ctx);
+            context.deleteFrom(RELATION).where(RELATION.ID.eq(resolved.id)).execute();
+        });
+    }
+
+    public void delete(Subject subject) throws SQLException {
+        var resolved = resolve(subject, false);
+        if (resolved == null) {
+            return;
+        }
+        dslCtx.transaction(ctx -> {
+            var context = DSL.using(ctx);
+            context.deleteFrom(SUBJECT).where(SUBJECT.ID.eq(resolved.id)).execute();
         });
     }
 
@@ -336,6 +344,18 @@ public class Oracle {
 
     public void map(Subject parent, Subject child) throws SQLException {
         addEdge(dslCtx, SUBJECT_TYPE, resolve(parent, true).id, resolve(child, true).id);
+    }
+
+    public List<Assertion> read(Namespace namespace, String objectName) {
+        return Collections.emptyList();
+    }
+
+    public List<Assertion> read(Object object) {
+        return Collections.emptyList();
+    }
+
+    public List<Assertion> read(Relation predicate, Object object) {
+        return Collections.emptyList();
     }
 
     public void remove(Object parent, Object child) throws SQLException {
@@ -385,55 +405,74 @@ public class Oracle {
         System.out.println();
     }
 
+    private Long resolve(Namespace namespace, boolean add) throws SQLException {
+        if (add) {
+            add(namespace);
+        }
+        Record1<Long> resolved = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(namespace.name))
+                                       .fetchOne();
+        if (!add && resolved == null) {
+            return null;
+        }
+        return resolved.value1();
+    }
+
     private NamespacedId resolve(Object object, boolean add) throws SQLException {
         if (add) {
             add(object);
         }
-        var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(object.namespace.name))
-                              .fetchOne();
+        var namespace = resolve(object.namespace, add);
         if (!add && namespace == null) {
             return null;
         }
-        var id = dslCtx.select(OBJECT.ID).from(OBJECT)
-                       .where(OBJECT.NAMESPACE.eq(namespace.value1()).and(OBJECT.NAME.eq(object.name))).fetchOne();
-        if (!add && id == null) {
+        var relation = resolve(object.relation, add);
+        if (!add && relation == null) {
             return null;
         }
-        return new NamespacedId(namespace.value1(), id.value1());
+
+        var resolved = dslCtx.select(OBJECT.ID).from(OBJECT)
+                             .where(OBJECT.NAMESPACE.eq(namespace).and(OBJECT.NAME.eq(object.name))
+                                                    .and(OBJECT.RELATION.eq(relation.id)))
+                             .fetchOne();
+        if (!add && resolved == null) {
+            return null;
+        }
+        return new NamespacedId(namespace, resolved.value1(), relation.id);
     }
 
     private NamespacedId resolve(Relation relation, boolean add) throws SQLException {
         if (add) {
             add(relation);
         }
-        var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(relation.namespace.name))
-                              .fetchOne();
+        var namespace = resolve(relation.namespace, add);
         if (!add && namespace == null) {
             return null;
         }
-        var id = dslCtx.select(RELATION.ID).from(RELATION)
-                       .where(RELATION.NAMESPACE.eq(namespace.value1()).and(RELATION.NAME.eq(relation.name)))
-                       .fetchOne();
-        if (!add && id == null) {
+        var resolved = dslCtx.select(RELATION.ID).from(RELATION)
+                             .where(RELATION.NAMESPACE.eq(namespace).and(RELATION.NAME.eq(relation.name))).fetchOne();
+        if (!add && resolved == null) {
             return null;
         }
-        return new NamespacedId(namespace.value1(), id.value1());
+        return new NamespacedId(namespace, resolved.value1(), 0L);
     }
 
     private NamespacedId resolve(Subject subject, boolean add) throws SQLException {
         if (add) {
             add(subject);
         }
-        var namespace = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(subject.namespace.name))
-                              .fetchOne();
+        var namespace = resolve(subject.namespace, add);
         if (!add && namespace == null) {
             return null;
         }
-        var id = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAMESPACE.eq(namespace.value1()))
-                       .and(SUBJECT.NAME.eq(subject.name)).fetchOne();
-        if (!add && id == null) {
+        var relation = resolve(subject.relation, add);
+        if (!add && relation == null) {
             return null;
         }
-        return new NamespacedId(namespace.value1(), id.value1());
+        var resolved = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAMESPACE.eq(namespace))
+                             .and(SUBJECT.NAME.eq(subject.name)).and(SUBJECT.RELATION.eq(relation.id)).fetchOne();
+        if (!add && resolved == null) {
+            return null;
+        }
+        return new NamespacedId(namespace, resolved.value1(), relation.id);
     }
 }

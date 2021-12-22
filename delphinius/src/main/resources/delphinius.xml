@@ -84,9 +84,15 @@
         <addUniqueConstraint
             columnNames="namespace, name, relation" tableName="object"
             schemaName="delphinius" />
-            
+
+        <createIndex indexName="object_name"
+            schemaName="delphinius" tableName="object">
+            <column name="name" />
+        </createIndex>
+
         <!-- The NULL object -->
-        <sql>insert into delphinius.object (id, namespace, name, relation)
+        <sql>insert into delphinius.object (id, namespace, name,
+            relation)
             values (0, 0, '', 0)
         </sql>
 
@@ -119,28 +125,20 @@
         <addUniqueConstraint
             columnNames="namespace, name, relation" tableName="subject"
             schemaName="delphinius" />
-            
+
+        <createIndex indexName="subject_name"
+            schemaName="delphinius" tableName="subject">
+            <column name="name" />
+        </createIndex>
+
         <!-- The NULL subject -->
-        <sql>insert into delphinius.subject (id, namespace, name, relation)
+        <sql>insert into delphinius.subject (id, namespace, name,
+            relation)
             values (0, 0, '', 0)
         </sql>
 
-        <createTable tableName="tuple"
+        <createTable tableName="assertion"
             schemaName="delphinius">
-            <column name="object" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_object_fk"
-                    referencedTableName="object"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="relation" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_relation_fk"
-                    referencedTableName="relation"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
             <column name="subject" type="INT8">
                 <constraints nullable="false"
                     primaryKey="true" foreignKeyName="tuple_subject_fk"
@@ -148,11 +146,19 @@
                     referencedColumnNames="id"
                     referencedTableSchemaName="delphinius" />
             </column>
+            <column name="object" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" foreignKeyName="tuple_object_fk"
+                    referencedTableName="object"
+                    referencedColumnNames="id"
+                    referencedTableSchemaName="delphinius" />
+            </column>
         </createTable>
-            
-        <!-- The NULL tuple -->
-        <sql>insert into delphinius.tuple (object, relation, subject)
-            values (0, 0, 0)
+
+        <!-- The NULL assertion -->
+        <sql>insert into delphinius.assertion (subject, object)
+            values
+            (0, 0)
         </sql>
 
         <createTable tableName="edge"

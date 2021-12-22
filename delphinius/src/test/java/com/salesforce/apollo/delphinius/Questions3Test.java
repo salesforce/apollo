@@ -6,9 +6,9 @@
  */
 package com.salesforce.apollo.delphinius;
 
+import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
 import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
 import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
-import static com.salesforce.apollo.delphinius.schema.tables.Tuple.TUPLE;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -19,7 +19,7 @@ import org.h2.jdbc.JdbcConnection;
 import org.jooq.impl.DSL;
 import org.junit.Test;
 
-import com.salesforce.apollo.delphinius.Oracle.Tuple;
+import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.delphinius.schema.tables.Subject;
 
 import liquibase.Liquibase;
@@ -72,23 +72,22 @@ public class Questions3Test {
                               .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
                               .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.HOPS).fetch());
 
-        var relation = foo.relation("View");
-        var object = foo.object("Doc", foo.relation("Viewer"));
+        var object = foo.object("Doc", foo.relation("View"));
         var subject = foo.subject("Users");
-        Tuple tuple = object.tuple(relation, subject);
+        Assertion tuple = object.assertion(subject);
         oracle.add(tuple);
 
-        System.out.println("Tuples:\n" + dsl.selectFrom(TUPLE).fetch());
+        System.out.println("Tuples:\n" + dsl.selectFrom(ASSERTION).fetch());
 
-        assertTrue(oracle.check(object.tuple(relation, foo.subject("Jale"))));
-        assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
+        assertTrue(oracle.check(object.assertion(foo.subject("Jale"))));
+        assertTrue(oracle.check(object.assertion(foo.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
 
         oracle.remove(foo.subject("ABCTechnicians"), foo.subject("Technicians"));
 
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("Jale"))));
-        assertTrue(oracle.check(object.tuple(relation, foo.subject("Egin"))));
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("Jale"))));
+        assertTrue(oracle.check(object.assertion(foo.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
 
         System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.HOPS).from(pa, ch)
                               .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
@@ -96,8 +95,8 @@ public class Questions3Test {
 
         oracle.delete(tuple);
 
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("Jale"))));
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("Egin"))));
-        assertFalse(oracle.check(object.tuple(relation, foo.subject("HelpDesk"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("Jale"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("Egin"))));
+        assertFalse(oracle.check(object.assertion(foo.subject("HelpDesk"))));
     }
 }
