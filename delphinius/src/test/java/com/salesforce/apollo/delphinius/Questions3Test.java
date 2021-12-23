@@ -8,18 +8,19 @@ package com.salesforce.apollo.delphinius;
 
 import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
 import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
-import static com.salesforce.apollo.delphinius.schema.tables.Relation.RELATION;
 import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
 
 import org.h2.jdbc.JdbcConnection;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 
@@ -45,63 +46,100 @@ public class Questions3Test {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
+        Oracle oracle = new Oracle(connection);
 
         var ns = Oracle.namespace("MyOrg");
         var member = ns.relation("member");
+        var flag = ns.relation("flag");
+        var view = ns.relation("View");
 
-        Oracle oracle = new Oracle(connection);
-        oracle.map(ns.subject("HelpDesk", member), ns.subject("Admins", member));
-        oracle.map(ns.subject("Ali"), ns.subject("Admins", member));
-        oracle.map(ns.subject("Ali"), ns.subject("Users", member));
-        oracle.map(ns.subject("Burcu"), ns.subject("Users", member));
-        oracle.map(ns.subject("Can"), ns.subject("Users", member));
-        oracle.map(ns.subject("Managers", member), ns.subject("Users", member));
-        oracle.map(ns.subject("Technicians", member), ns.subject("Users", member));
-        oracle.map(ns.subject("Demet"), ns.subject("HelpDesk", member));
-        oracle.map(ns.subject("Egin"), ns.subject("HelpDesk", member));
-        oracle.map(ns.subject("Egin"), ns.subject("Users", member));
-        oracle.map(ns.subject("Fuat"), ns.subject("Managers", member));
-        oracle.map(ns.subject("G l"), ns.subject("Managers", member));
-        oracle.map(ns.subject("Hakan"), ns.subject("Technicians", member));
-        oracle.map(ns.subject("Irmak"), ns.subject("Technicians", member));
-        oracle.map(ns.subject("ABCTechnicians", member), ns.subject("Technicians", member));
-        oracle.map(ns.subject("Jale"), ns.subject("ABCTechnicians", member));
+        var users = ns.subject("Users", member);
+        var admins = ns.subject("Admins", member);
+        var helpDesk = ns.subject("HelpDesk", member);
+        var managers = ns.subject("Managers", member);
+        var technicians = ns.subject("Technicians", member);
+        var abcTech = ns.subject("ABCTechnicians", member);
+
+        var egin = ns.subject("Egin", flag);
+        var ali = ns.subject("Ali", flag);
+        var gl = ns.subject("G l", flag);
+        var fuat = ns.subject("Fuat", flag);
+
+        var jale = ns.subject("Jale");
+        var irmak = ns.subject("Irmak");
+        var hakan = ns.subject("Hakan");
+        var demet = ns.subject("Demet");
+        var can = ns.subject("Can");
+        var burcu = ns.subject("Burcu");
+
+        var object = ns.object("Doc", view);
+
+        oracle.map(helpDesk, admins);
+        oracle.map(ali, admins);
+        oracle.map(ali, users);
+        oracle.map(burcu, users);
+        oracle.map(can, users);
+        oracle.map(managers, users);
+        oracle.map(technicians, users);
+        oracle.map(demet, helpDesk);
+        oracle.map(egin, helpDesk);
+        oracle.map(egin, users);
+        oracle.map(fuat, managers);
+        oracle.map(gl, managers);
+        oracle.map(hakan, technicians);
+        oracle.map(irmak, technicians);
+        oracle.map(abcTech, technicians);
+        oracle.map(jale, abcTech);
 
         var dsl = DSL.using(connection);
 
         dumpEdges(dsl);
 
-        var object = ns.object("Doc", ns.relation("View"));
-        var subject = ns.subject("Users", member);
-        Assertion tuple = subject.assertion(object);
+        Assertion tuple = users.assertion(object);
         oracle.add(tuple);
 
-        System.out.println("Tuples:\n" + dsl.selectFrom(ASSERTION).fetch());
+        var viewers = oracle.read(object);
+        assertEquals(13, viewers.size());
+        for (var s : Arrays.asList(ali, jale, egin, irmak, hakan, gl, fuat, can, burcu, managers, technicians, abcTech,
+                                   users)) {
+            assertTrue(viewers.contains(s), "Should contain: " + s);
+        }
 
-        assertTrue(oracle.check(object.assertion(ns.subject("Jale"))));
-        assertTrue(oracle.check(object.assertion(ns.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
+        var flaggedViewers = oracle.read(flag, object);
+        assertEquals(4, flaggedViewers.size());
+        for (var s : Arrays.asList(egin, ali, gl, fuat)) {
+            assertTrue(flaggedViewers.contains(s), "Should contain: " + s);
+        }
 
-        oracle.remove(ns.subject("ABCTechnicians", member), ns.subject("Technicians", member));
+        System.out.println("Assertions:\n" + dsl.selectFrom(ASSERTION).fetch());
 
-        assertFalse(oracle.check(object.assertion(ns.subject("Jale"))));
-        assertTrue(oracle.check(object.assertion(ns.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
+        assertTrue(oracle.check(object.assertion(jale)));
+        assertTrue(oracle.check(object.assertion(egin)));
+        assertFalse(oracle.check(object.assertion(helpDesk)));
+
+        oracle.remove(abcTech, technicians);
+
+        assertFalse(oracle.check(object.assertion(jale)));
+        assertTrue(oracle.check(object.assertion(egin)));
+        assertFalse(oracle.check(object.assertion(helpDesk)));
 
         dumpEdges(dsl);
 
         oracle.delete(tuple);
 
-        assertFalse(oracle.check(object.assertion(ns.subject("Jale"))));
-        assertFalse(oracle.check(object.assertion(ns.subject("Egin"))));
-        assertFalse(oracle.check(object.assertion(ns.subject("HelpDesk", member))));
+        assertFalse(oracle.check(object.assertion(jale)));
+        assertFalse(oracle.check(object.assertion(egin)));
+        assertFalse(oracle.check(object.assertion(helpDesk)));
     }
 
     private void dumpEdges(DSLContext dsl) {
         var pa = SUBJECT.as("parent");
         var ch = SUBJECT.as("child");
         System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
-                              .from(pa, ch).join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
-                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE).fetch());
+                              .from(pa, ch)
+                              .join(EDGE)
+                              .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
+                              .fetch());
     }
 }

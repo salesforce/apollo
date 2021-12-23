@@ -85,9 +85,9 @@
             columnNames="namespace, name, relation" tableName="object"
             schemaName="delphinius" />
 
-        <createIndex indexName="object_name"
+        <createIndex indexName="object_relation"
             schemaName="delphinius" tableName="object">
-            <column name="name" />
+            <column name="relation" />
         </createIndex>
 
         <!-- The NULL object -->
@@ -126,9 +126,9 @@
             columnNames="namespace, name, relation" tableName="subject"
             schemaName="delphinius" />
 
-        <createIndex indexName="subject_name"
+        <createIndex indexName="subject_relation"
             schemaName="delphinius" tableName="subject">
-            <column name="name" />
+            <column name="relation" />
         </createIndex>
 
         <!-- The NULL subject -->

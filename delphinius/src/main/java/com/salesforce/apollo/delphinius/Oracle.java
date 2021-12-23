@@ -23,6 +23,7 @@ import org.jooq.Field;
 import org.jooq.Name;
 import org.jooq.Record;
 import org.jooq.Record1;
+import org.jooq.Record2;
 import org.jooq.SelectJoinStep;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
@@ -36,6 +37,7 @@ import com.salesforce.apollo.delphinius.schema.tables.Edge;
  *
  */
 public class Oracle {
+    /** A Namespace **/
     public record Namespace(String name) {
 
         public Object object(String name, Relation relation) {
@@ -55,24 +57,45 @@ public class Oracle {
         }
     }
 
+    /** A Subject **/
     public record Subject(Namespace namespace, String name, Relation relation) {
         public Assertion assertion(Object object) {
             return new Assertion(this, object);
         }
+
+        public String toString() {
+            return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
+        }
     }
 
+    /** An Object **/
     public record Object(Namespace namespace, String name, Relation relation) {
         public Assertion assertion(Subject subject) {
             return new Assertion(subject, this);
         }
+
+        public String toString() {
+            return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
+        }
     }
 
-    public record Relation(Namespace namespace, String name) {}
+    /** A Relation **/
+    public record Relation(Namespace namespace, String name) {
+        public String toString() {
+            return namespace.name + ":" + name;
+        }
+    }
 
-    public record Assertion(Subject subject, Object object) {}
+    /** An Assertion **/
+    public record Assertion(Subject subject, Object object) {
+        public String toString() {
+            return subject + "@" + object;
+        }
+    }
 
     private record NamespacedId(Long namespace, Long id, Long relation) {}
 
+    /** Grounding for all the domains */
     public static final Assertion NO_ASSERTION;
     public static final Namespace NO_NAMESPACE;
     public static final Object    NO_OBJECT;
@@ -116,41 +139,61 @@ public class Oracle {
         return new Namespace(name);
     }
 
-    static void addEdge(DSLContext dslCtx, String type, Long parent, Long child) throws SQLException {
+    static void addEdge(DSLContext dslCtx, Long parent, String type, Long child) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             try {
-                if (context.fetchExists(context.select(EDGE.ID).from(EDGE).where(EDGE.TYPE.eq(type))
-                                               .and(EDGE.PARENT.eq(parent)).and(EDGE.CHILD.eq(child))
+                if (context.fetchExists(context.select(EDGE.ID)
+                                               .from(EDGE)
+                                               .where(EDGE.TYPE.eq(type))
+                                               .and(EDGE.PARENT.eq(parent))
+                                               .and(EDGE.CHILD.eq(child))
                                                .and(EDGE.TRANSITIVE.isFalse()))) {
                     return;
                 }
-                if (parent == child ||
-                    context.fetchExists(context.select(EDGE.ID).from(EDGE).where(EDGE.TYPE.eq(type))
-                                               .and(EDGE.PARENT.eq(parent)).and(EDGE.CHILD.eq(child)))) {
+                if (parent == child || context.fetchExists(context.select(EDGE.ID)
+                                                                  .from(EDGE)
+                                                                  .where(EDGE.TYPE.eq(type))
+                                                                  .and(EDGE.PARENT.eq(parent))
+                                                                  .and(EDGE.CHILD.eq(child)))) {
                     throw new SQLException(String.format("Cycle inserting: %s to: %s", parent, child));
                 }
 
                 context.createTemporaryTable(candidates).column(cParent).column(cChild).execute();
 
+                // Candidates via direct transitive edges
                 context.insertInto(candidates)
-                       .select(context.select(EDGE.PARENT, DSL.val(child)).from(EDGE).where(EDGE.CHILD.eq(parent))
+                       .select(context.select(EDGE.PARENT, DSL.val(child))
+                                      .from(EDGE)
+                                      .where(EDGE.CHILD.eq(parent))
                                       .and(EDGE.TYPE.eq(type))
-                                      .union(context.select(DSL.val(parent), EDGE.CHILD).from(EDGE)
+                                      .union(context.select(DSL.val(parent), EDGE.CHILD)
+                                                    .from(EDGE)
                                                     .where(EDGE.TYPE.eq(DSL.value(type)))
                                                     .and(EDGE.PARENT.eq(DSL.value(child))))
-                                      .union(context.select(A.PARENT, B.CHILD).from(A.crossJoin(B))
-                                                    .where(A.CHILD.eq(parent)).and(B.PARENT.eq(child))
-                                                    .and(A.TYPE.eq(type)).and(B.TYPE.eq(type))))
+                                      .union(context.select(A.PARENT, B.CHILD)
+                                                    .from(A.crossJoin(B))
+                                                    .where(A.CHILD.eq(parent))
+                                                    .and(B.PARENT.eq(child))
+                                                    .and(A.TYPE.eq(type))
+                                                    .and(B.TYPE.eq(type))))
+                       .execute();
+                // Direct edge
+                context.insertInto(EDGE)
+                       .columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
+                       .values(DSL.value(type), DSL.value(parent), DSL.value(child), DSL.value(false))
                        .execute();
 
-                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
-                       .values(DSL.value(type), DSL.value(parent), DSL.value(child), DSL.value(false)).execute();
-
-                context.insertInto(EDGE).columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
-                       .select(context.select(DSL.val(type), cParent, cChild, DSL.val(true)).from(candidates)
-                                      .whereNotExists(context.select(E.TRANSITIVE).from(E).where(E.PARENT.eq(cParent))
-                                                             .and(E.CHILD.eq(cChild)).and(E.TRANSITIVE.isTrue())))
+                // Transitive edges
+                context.insertInto(EDGE)
+                       .columns(EDGE.TYPE, EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
+                       .select(context.select(DSL.val(type), cParent, cChild, DSL.val(true))
+                                      .from(candidates)
+                                      .whereNotExists(context.select(E.TRANSITIVE)
+                                                             .from(E)
+                                                             .where(E.PARENT.eq(cParent))
+                                                             .and(E.CHILD.eq(cChild))
+                                                             .and(E.TRANSITIVE.isTrue())))
                        .execute();
             } finally {
                 context.dropTable(candidates).execute();
@@ -158,61 +201,96 @@ public class Oracle {
         });
     }
 
-    static void deleteEdge(DSLContext c, String type, Long parent, Long child) throws SQLException {
+    static void deleteEdge(DSLContext c, Long parent, String type, Long child) throws SQLException {
         c.transaction(ctx -> {
             var context = DSL.using(ctx);
-            if (context.deleteFrom(EDGE).where(EDGE.TRANSITIVE.isFalse())
-                       .and(EDGE.TYPE.eq(type).and(EDGE.PARENT.eq(parent))).and(EDGE.CHILD.eq(child)).execute() == 0) {
+            if (context.deleteFrom(EDGE)
+                       .where(EDGE.TRANSITIVE.isFalse())
+                       .and(EDGE.TYPE.eq(type).and(EDGE.PARENT.eq(parent)))
+                       .and(EDGE.CHILD.eq(child))
+                       .execute() == 0) {
                 return; // Does not exist
             }
 
-            context.update(EDGE).set(EDGE.MARK, true)
-                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE)
-                                            .join(context.select(EDGE.PARENT, DSL.val(child).as(EDGE.CHILD)).from(EDGE)
+            context.update(EDGE)
+                   .set(EDGE.MARK, true)
+                   .where(EDGE.ID.in(context.select(EDGE.ID)
+                                            .from(EDGE)
+                                            .join(context.select(EDGE.PARENT, DSL.val(child).as(EDGE.CHILD))
+                                                         .from(EDGE)
                                                          .where(EDGE.CHILD.eq(parent))
 
                                                          .union(context.select(DSL.val(parent),
                                                                                EDGE.CHILD.as(EDGE.CHILD))
-                                                                       .from(EDGE).where(EDGE.PARENT.eq(child)))
+                                                                       .from(EDGE)
+                                                                       .where(EDGE.PARENT.eq(child)))
 
-                                                         .union(context.select(A.PARENT, B.CHILD).from(A).crossJoin(B)
+                                                         .union(context.select(A.PARENT, B.CHILD)
+                                                                       .from(A)
+                                                                       .crossJoin(B)
                                                                        .where(A.CHILD.eq(parent))
                                                                        .and(B.PARENT.eq(child)))
                                                          .asTable(suspect))
-                                            .on(sParent.eq(EDGE.PARENT)).and(sChild.eq(EDGE.CHILD)))
+                                            .on(sParent.eq(EDGE.PARENT))
+                                            .and(sChild.eq(EDGE.CHILD)))
                                  .and(EDGE.TRANSITIVE.isTrue()))
                    .execute();
 
-            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
-                   .update(EDGE).set(EDGE.MARK, DSL.val(false))
-                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
-                                            .innerJoin(s2).on(s1Child.eq(s2Parent)).and(s2Child.eq(EDGE.CHILD))))
-                   .and(EDGE.MARK.isTrue()).execute();
+            context.with(ROWZ)
+                   .as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
+                   .update(EDGE)
+                   .set(EDGE.MARK, DSL.val(false))
+                   .where(EDGE.ID.in(context.select(EDGE.ID)
+                                            .from(EDGE)
+                                            .innerJoin(s1)
+                                            .on(s1Parent.eq(EDGE.PARENT))
+                                            .innerJoin(s2)
+                                            .on(s1Child.eq(s2Parent))
+                                            .and(s2Child.eq(EDGE.CHILD))))
+                   .and(EDGE.MARK.isTrue())
+                   .execute();
 
-            context.with(ROWZ).as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
-                   .update(EDGE).set(EDGE.MARK, DSL.val(false))
-                   .where(EDGE.ID.in(context.select(EDGE.ID).from(EDGE).innerJoin(s1).on(s1Parent.eq(EDGE.PARENT))
-                                            .innerJoin(s2).on(s1Child.eq(s2Parent)).innerJoin(s3)
-                                            .on(s2Child.eq(s3Parent)).and(s3Child.eq(EDGE.CHILD))))
-                   .and(EDGE.MARK.isTrue()).execute();
+            context.with(ROWZ)
+                   .as(context.select(EDGE.PARENT, EDGE.CHILD).from(EDGE).where(EDGE.MARK.isFalse()))
+                   .update(EDGE)
+                   .set(EDGE.MARK, DSL.val(false))
+                   .where(EDGE.ID.in(context.select(EDGE.ID)
+                                            .from(EDGE)
+                                            .innerJoin(s1)
+                                            .on(s1Parent.eq(EDGE.PARENT))
+                                            .innerJoin(s2)
+                                            .on(s1Child.eq(s2Parent))
+                                            .innerJoin(s3)
+                                            .on(s2Child.eq(s3Parent))
+                                            .and(s3Child.eq(EDGE.CHILD))))
+                   .and(EDGE.MARK.isTrue())
+                   .execute();
 
             context.deleteFrom(EDGE).where(EDGE.MARK.isTrue()).execute();
         });
     }
 
-    static SelectJoinStep<?> grants(DSLContext ctx, Long o, Long s) throws SQLException {
-        Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("subject_id")).from(EDGE)
-                                          .where(EDGE.TYPE.eq(SUBJECT_TYPE)).and(EDGE.PARENT.eq(s))
-                                          .union(ctx.select(DSL.val(s).as("subject_id"))).asTable();
+    static SelectJoinStep<Record2<Long, Long>> grants(Long s, DSLContext ctx, Long o) throws SQLException {
+        Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("subject_id"))
+                                          .from(EDGE)
+                                          .where(EDGE.TYPE.eq(SUBJECT_TYPE))
+                                          .and(EDGE.PARENT.eq(s))
+                                          .union(ctx.select(DSL.val(s).as("subject_id")))
+                                          .asTable();
         Field<Long> subjectId = subject.field("subject_id", Long.class);
 
-        Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("object_id")).from(EDGE).where(EDGE.TYPE.eq(OBJECT_TYPE))
-                                         .and(EDGE.PARENT.eq(o)).union(DSL.select(DSL.val(o).as("object_id")))
+        Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("object_id"))
+                                         .from(EDGE)
+                                         .where(EDGE.TYPE.eq(OBJECT_TYPE))
+                                         .and(EDGE.PARENT.eq(o))
+                                         .union(DSL.select(DSL.val(o).as("object_id")))
                                          .asTable();
+
         Field<Long> objectId = object.field("object_id", Long.class);
 
         return ctx.select(subjectId, objectId)
-                  .from(subject.crossJoin(object).innerJoin(ASSERTION)
+                  .from(subject.crossJoin(object)
+                               .innerJoin(ASSERTION)
                                .on(subjectId.eq(ASSERTION.SUBJECT).and(objectId.eq(ASSERTION.OBJECT))));
     }
 
@@ -226,72 +304,117 @@ public class Oracle {
         this.dslCtx = dslCtx;
     }
 
+    /**
+     * Add an Assertion. The subject and object of the assertion will also be added
+     * if they do not exist
+     */
     public void add(Assertion assertion) throws SQLException {
         var s = resolve(assertion.subject, true);
         var o = resolve(assertion.object, true);
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
-            context.mergeInto(ASSERTION).using(context.selectOne()).on(ASSERTION.SUBJECT.eq(s.id))
-                   .and(ASSERTION.OBJECT.eq(o.id)).whenNotMatchedThenInsert(ASSERTION.OBJECT, ASSERTION.SUBJECT)
-                   .values(o.id, s.id).execute();
+            context.mergeInto(ASSERTION)
+                   .using(context.selectOne())
+                   .on(ASSERTION.SUBJECT.eq(s.id))
+                   .and(ASSERTION.OBJECT.eq(o.id))
+                   .whenNotMatchedThenInsert(ASSERTION.OBJECT, ASSERTION.SUBJECT)
+                   .values(o.id, s.id)
+                   .execute();
         });
     }
 
+    /**
+     * Add a Namespace.
+     */
     public void add(Namespace namespace) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
 
-            context.mergeInto(NAMESPACE).using(context.selectOne()).on(NAMESPACE.NAME.eq(namespace.name))
-                   .whenNotMatchedThenInsert(NAMESPACE.NAME).values(namespace.name).execute();
+            context.mergeInto(NAMESPACE)
+                   .using(context.selectOne())
+                   .on(NAMESPACE.NAME.eq(namespace.name))
+                   .whenNotMatchedThenInsert(NAMESPACE.NAME)
+                   .values(namespace.name)
+                   .execute();
         });
     }
 
+    /**
+     * Add an Object.
+     */
     public void add(Object object) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             var relation = resolve(object.relation, true);
             var namespace = resolve(object.namespace, true);
 
-            context.mergeInto(OBJECT).using(context.selectOne()).on(OBJECT.NAMESPACE.eq(namespace))
-                   .and(OBJECT.NAME.eq(object.name)).and(OBJECT.RELATION.eq(relation.id))
+            context.mergeInto(OBJECT)
+                   .using(context.selectOne())
+                   .on(OBJECT.NAMESPACE.eq(namespace))
+                   .and(OBJECT.NAME.eq(object.name))
+                   .and(OBJECT.RELATION.eq(relation.id))
                    .whenNotMatchedThenInsert(OBJECT.NAMESPACE, OBJECT.NAME, OBJECT.RELATION)
-                   .values(namespace, object.name, relation.id).execute();
+                   .values(namespace, object.name, relation.id)
+                   .execute();
         });
     }
 
+    /**
+     * Add a Relation
+     */
     public void add(Relation relation) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             var namespace = resolve(relation.namespace, true);
 
-            context.mergeInto(RELATION).using(context.selectOne()).on(RELATION.NAMESPACE.eq(namespace))
-                   .and(RELATION.NAME.eq(relation.name)).whenNotMatchedThenInsert(RELATION.NAMESPACE, RELATION.NAME)
-                   .values(namespace, relation.name).execute();
+            context.mergeInto(RELATION)
+                   .using(context.selectOne())
+                   .on(RELATION.NAMESPACE.eq(namespace))
+                   .and(RELATION.NAME.eq(relation.name))
+                   .whenNotMatchedThenInsert(RELATION.NAMESPACE, RELATION.NAME)
+                   .values(namespace, relation.name)
+                   .execute();
         });
     }
 
+    /**
+     * Add a Subject
+     */
     public void add(Subject subject) throws SQLException {
         dslCtx.transaction(ctx -> {
             var context = DSL.using(ctx);
             var namespace = resolve(subject.namespace, true);
             var relation = resolve(subject.relation, true);
 
-            context.mergeInto(SUBJECT).using(context.selectOne()).on(SUBJECT.NAMESPACE.eq(namespace))
-                   .and(SUBJECT.NAME.eq(subject.name)).and(SUBJECT.RELATION.eq(relation.id))
+            context.mergeInto(SUBJECT)
+                   .using(context.selectOne())
+                   .on(SUBJECT.NAMESPACE.eq(namespace))
+                   .and(SUBJECT.NAME.eq(subject.name))
+                   .and(SUBJECT.RELATION.eq(relation.id))
                    .whenNotMatchedThenInsert(SUBJECT.NAMESPACE, SUBJECT.NAME, SUBJECT.RELATION)
-                   .values(namespace, subject.name, relation.id).execute();
+                   .values(namespace, subject.name, relation.id)
+                   .execute();
         });
     }
 
+    /**
+     * Check the assertion.
+     * 
+     * @return true if the assertion is made, false if not
+     */
     public boolean check(Assertion assertion) throws SQLException {
         var s = resolve(assertion.subject, false);
         var o = resolve(assertion.object, false);
         if (s == null || o == null) {
             return false;
         }
-        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(dslCtx, o.id, s.id)));
+        return dslCtx.fetchExists(dslCtx.selectOne().from(grants(s.id, dslCtx, o.id)));
     }
 
+    /**
+     * Delete an assertion. Only the assertion is deleted, not the subject nor
+     * object of the assertion.
+     */
     public void delete(Assertion assertion) throws SQLException {
         var s = resolve(assertion.subject, false);
         var o = resolve(assertion.object, false);
@@ -304,6 +427,10 @@ public class Oracle {
         });
     }
 
+    /**
+     * Delete an Object. All dependant uses of the object (mappings, Assertions) are
+     * removed as well.
+     */
     public void delete(Object object) throws SQLException {
         var resolved = resolve(object, false);
         if (resolved == null) {
@@ -315,6 +442,10 @@ public class Oracle {
         });
     }
 
+    /**
+     * Delete an Relation. All dependant uses of the relation (mappings, Subject,
+     * Object and Assertions) are removed as well.
+     */
     public void delete(Relation relation) throws SQLException {
         var resolved = resolve(relation, false);
         if (resolved == null) {
@@ -326,6 +457,10 @@ public class Oracle {
         });
     }
 
+    /**
+     * Delete an Subject. All dependant uses of the subject (mappings and
+     * Assertions) are removed as well.
+     */
     public void delete(Subject subject) throws SQLException {
         var resolved = resolve(subject, false);
         if (resolved == null) {
@@ -337,30 +472,53 @@ public class Oracle {
         });
     }
 
+    /**
+     * Map the parent object to the child
+     */
     public void map(Object parent, Object child) throws SQLException {
-        addEdge(dslCtx, OBJECT_TYPE, resolve(parent, true).id, resolve(child, true).id);
+        addEdge(dslCtx, resolve(parent, true).id, OBJECT_TYPE, resolve(child, true).id);
     }
 
+    /**
+     * Map the parent relation to the child
+     */
     public void map(Relation parent, Relation child) throws SQLException {
-        addEdge(dslCtx, RELATION_TYPE, resolve(parent, true).id, resolve(child, true).id);
+        addEdge(dslCtx, resolve(parent, true).id, RELATION_TYPE, resolve(child, true).id);
     }
 
+    /**
+     * Map the parent subject to the child
+     */
     public void map(Subject parent, Subject child) throws SQLException {
-        addEdge(dslCtx, SUBJECT_TYPE, resolve(parent, true).id, resolve(child, true).id);
+        addEdge(dslCtx, resolve(parent, true).id, SUBJECT_TYPE, resolve(child, true).id);
     }
 
-    public List<Assertion> read(Namespace namespace, String objectName) {
-        return Collections.emptyList();
+    /**
+     * Answer the list of subjects, both direct and derived assertions, that map to
+     * the supplied object. The query only considers subjects with assertions that
+     * match the object completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Object object) throws SQLException {
+        return subjects(null, object);
     }
 
-    public List<Assertion> read(Object object) {
-        return Collections.emptyList();
+    /**
+     * Answer the list of subjects, both direct and derived assertion, that map to
+     * the object from subjects that have the supplied predicate as their relation.
+     * The query only considers assertions that match the object completely - i.e.
+     * {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Relation predicate, Object object) throws SQLException {
+        return subjects(predicate, object);
     }
 
-    public List<Assertion> read(Relation predicate, Object object) {
-        return Collections.emptyList();
-    }
-
+    /**
+     * Remove the mapping between the parent and the child objects
+     */
     public void remove(Object parent, Object child) throws SQLException {
         NamespacedId a = resolve(parent, false);
         if (a == null) {
@@ -370,9 +528,12 @@ public class Oracle {
         if (b == null) {
             return;
         }
-        deleteEdge(dslCtx, OBJECT_TYPE, a.id, b.id);
+        deleteEdge(dslCtx, a.id, OBJECT_TYPE, b.id);
     }
 
+    /**
+     * Remove the mapping between the parent and the child relations
+     */
     public void remove(Relation parent, Relation child) throws SQLException {
         NamespacedId a = resolve(parent, false);
         if (a == null) {
@@ -382,9 +543,12 @@ public class Oracle {
         if (b == null) {
             return;
         }
-        deleteEdge(dslCtx, RELATION_TYPE, a.id, b.id);
+        deleteEdge(dslCtx, a.id, RELATION_TYPE, b.id);
     }
 
+    /**
+     * Remove the mapping between the parent and the child subects
+     */
     public void remove(Subject parent, Subject child) throws SQLException {
         NamespacedId a = resolve(parent, false);
         if (a == null) {
@@ -394,7 +558,7 @@ public class Oracle {
         if (b == null) {
             return;
         }
-        deleteEdge(dslCtx, SUBJECT_TYPE, a.id, b.id);
+        deleteEdge(dslCtx, a.id, SUBJECT_TYPE, b.id);
     }
 
     @SuppressWarnings("unused")
@@ -402,8 +566,11 @@ public class Oracle {
         var pa = SUBJECT.as("parent");
         var ch = SUBJECT.as("child");
         System.out.println(string);
-        System.out.println(context.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.TRANSITIVE).from(pa, ch)
-                                  .join(EDGE).on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID))).fetch());
+        System.out.println(context.select(pa.NAME.as("parent"), ch.NAME.as("child"), EDGE.TRANSITIVE)
+                                  .from(pa, ch)
+                                  .join(EDGE)
+                                  .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
+                                  .fetch());
         System.out.println();
         System.out.println();
     }
@@ -412,7 +579,9 @@ public class Oracle {
         if (add) {
             add(namespace);
         }
-        Record1<Long> resolved = dslCtx.select(NAMESPACE.ID).from(NAMESPACE).where(NAMESPACE.NAME.eq(namespace.name))
+        Record1<Long> resolved = dslCtx.select(NAMESPACE.ID)
+                                       .from(NAMESPACE)
+                                       .where(NAMESPACE.NAME.eq(namespace.name))
                                        .fetchOne();
         if (!add && resolved == null) {
             return null;
@@ -433,8 +602,10 @@ public class Oracle {
             return null;
         }
 
-        var resolved = dslCtx.select(OBJECT.ID).from(OBJECT)
-                             .where(OBJECT.NAMESPACE.eq(namespace).and(OBJECT.NAME.eq(object.name))
+        var resolved = dslCtx.select(OBJECT.ID)
+                             .from(OBJECT)
+                             .where(OBJECT.NAMESPACE.eq(namespace)
+                                                    .and(OBJECT.NAME.eq(object.name))
                                                     .and(OBJECT.RELATION.eq(relation.id)))
                              .fetchOne();
         if (!add && resolved == null) {
@@ -451,8 +622,10 @@ public class Oracle {
         if (!add && namespace == null) {
             return null;
         }
-        var resolved = dslCtx.select(RELATION.ID).from(RELATION)
-                             .where(RELATION.NAMESPACE.eq(namespace).and(RELATION.NAME.eq(relation.name))).fetchOne();
+        var resolved = dslCtx.select(RELATION.ID)
+                             .from(RELATION)
+                             .where(RELATION.NAMESPACE.eq(namespace).and(RELATION.NAME.eq(relation.name)))
+                             .fetchOne();
         if (!add && resolved == null) {
             return null;
         }
@@ -471,11 +644,76 @@ public class Oracle {
         if (!add && relation == null) {
             return null;
         }
-        var resolved = dslCtx.select(SUBJECT.ID).from(SUBJECT).where(SUBJECT.NAMESPACE.eq(namespace))
-                             .and(SUBJECT.NAME.eq(subject.name)).and(SUBJECT.RELATION.eq(relation.id)).fetchOne();
+        var resolved = dslCtx.select(SUBJECT.ID)
+                             .from(SUBJECT)
+                             .where(SUBJECT.NAMESPACE.eq(namespace))
+                             .and(SUBJECT.NAME.eq(subject.name))
+                             .and(SUBJECT.RELATION.eq(relation.id))
+                             .fetchOne();
         if (!add && resolved == null) {
             return null;
         }
         return new NamespacedId(namespace, resolved.value1(), relation.id);
+    }
+
+    /**
+     * Answer the list of subjects, both direct and derived assertion, that map to
+     * the object from subjects that have the supplied predicate as their relation,
+     * if predicate is not null. The query only considers assertions that match the
+     * object completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    private List<Subject> subjects(Relation predicate, Object object) throws SQLException {
+        var resolved = resolve(object, false);
+        if (resolved == null) {
+            return Collections.emptyList();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(predicate, false);
+            if (relation == null) {
+                return Collections.emptyList();
+            }
+        }
+
+        Table<Record2<Long, Long>> subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
+                                                   .from(EDGE)
+                                                   .where(EDGE.TYPE.eq(SUBJECT_TYPE))
+                                                   .asTable("S");
+        Field<Long> direct = subject.field("direct", Long.class);
+        Field<Long> inferred = subject.field("inferred", Long.class);
+
+        Table<Record1<Long>> o = dslCtx.select(EDGE.CHILD.as("object_id"))
+                                       .from(EDGE)
+                                       .where(EDGE.TYPE.eq(OBJECT_TYPE))
+                                       .and(EDGE.PARENT.eq(resolved.id))
+                                       .union(DSL.select(DSL.val(resolved.id).as("object_id")))
+                                       .asTable();
+        Field<Long> objectId = o.field("object_id", Long.class);
+
+        var relNs = NAMESPACE.as("relNs");
+        var subNs = NAMESPACE.as("subNs");
+
+        var base = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
+                         .from(SUBJECT)
+                         .join(subNs)
+                         .on(subNs.ID.eq(SUBJECT.NAMESPACE))
+                         .join(RELATION)
+                         .on(RELATION.ID.eq(SUBJECT.RELATION))
+                         .join(relNs)
+                         .on(relNs.ID.eq(RELATION.NAMESPACE))
+                         .join(dslCtx.select(inferred, direct)
+                                     .from(subject.crossJoin(o)
+                                                  .innerJoin(ASSERTION)
+                                                  .on(direct.eq(ASSERTION.SUBJECT).and(objectId.eq(ASSERTION.OBJECT))))
+                                     .asTable("S"))
+                         .on(SUBJECT.ID.eq(inferred).or(SUBJECT.ID.eq(direct)));
+        var query = relation == null ? base : base.where(SUBJECT.RELATION.eq(relation.id));
+        return query.stream()
+                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
+                                          new Relation(new Namespace(r.value3()), r.value4())))
+                    .toList();
     }
 }
