@@ -15,8 +15,10 @@ import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -27,6 +29,8 @@ import org.jooq.Record2;
 import org.jooq.SelectJoinStep;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.delphinius.schema.tables.Edge;
 
@@ -37,6 +41,8 @@ import com.salesforce.apollo.delphinius.schema.tables.Edge;
  *
  */
 public class Oracle {
+    private static final Logger log = LoggerFactory.getLogger(Oracle.class);
+
     /** A Namespace **/
     public record Namespace(String name) {
 
@@ -473,6 +479,100 @@ public class Oracle {
     }
 
     /**
+     * Answer the list of direct Subjects that map to the supplied objects. The
+     * query only considers subjects with assertions that match the objects
+     * completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Object... objects) throws SQLException {
+        return Arrays.asList(objects).stream().flatMap(object -> {
+            try {
+                return directSubjects(null, object);
+            } catch (SQLException e) {
+                log.error("error getting direct subjects of: {}", object, e);
+                return null;
+            }
+        }).filter(s -> s != null).toList();
+    }
+
+    private Stream<Subject> directSubjects(Relation predicate, Object object) throws SQLException {
+        var resolved = resolve(object, false);
+        if (resolved == null) {
+            return new ArrayList<Subject>().stream();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(predicate, false);
+            if (relation == null) {
+                return new ArrayList<Subject>().stream();
+            }
+        }
+        var relNs = NAMESPACE.as("relNs");
+        var subNs = NAMESPACE.as("subNs");
+        var query = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
+                          .from(SUBJECT)
+                          .join(subNs)
+                          .on(subNs.ID.eq(SUBJECT.NAMESPACE))
+                          .join(RELATION)
+                          .on(RELATION.ID.eq(SUBJECT.RELATION))
+                          .join(relNs)
+                          .on(relNs.ID.eq(RELATION.NAMESPACE))
+                          .join(ASSERTION)
+                          .on(SUBJECT.ID.eq(ASSERTION.SUBJECT))
+                          .and(ASSERTION.OBJECT.eq(resolved.id));
+        if (relation != null) {
+            query = query.and(SUBJECT.RELATION.eq(relation.id));
+        }
+        return query.stream()
+                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
+                                          new Relation(new Namespace(r.value3()), r.value4())));
+    }
+
+    /**
+     * Answer the list of direct Subjects that map to the supplied objects. The
+     * query only considers subjects with assertions that match the objects
+     * completely - i.e. {namespace, name, relation} and only the subjects that have
+     * the matching predicate
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Relation predicate, Object... objects) throws SQLException {
+        return Arrays.asList(objects).stream().flatMap(object -> {
+            try {
+                return directSubjects(predicate, object);
+            } catch (SQLException e) {
+                log.error("error getting direct subjects (#{}) of: {}", predicate, object, e);
+                return null;
+            }
+        }).filter(s -> s != null).toList();
+    }
+
+    /**
+     * Answer the list of Subjects, both direct and transitive Subjects, that map to
+     * the supplied object. The query only considers subjects with assertions that
+     * match the object completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> expand(Object object) throws SQLException {
+        return subjects(null, object, true).toList();
+    }
+
+    /**
+     * Answer the list of Subjects, both direct and transitive Subjects, that map to
+     * the object from subjects that have the supplied predicate as their relation.
+     * The query only considers assertions that match the object completely - i.e.
+     * {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> expand(Relation predicate, Object object) throws SQLException {
+        return subjects(predicate, object, true).toList();
+    }
+
+    /**
      * Map the parent object to the child
      */
     public void map(Object parent, Object child) throws SQLException {
@@ -491,29 +591,6 @@ public class Oracle {
      */
     public void map(Subject parent, Subject child) throws SQLException {
         addEdge(dslCtx, resolve(parent, true).id, SUBJECT_TYPE, resolve(child, true).id);
-    }
-
-    /**
-     * Answer the list of subjects, both direct and derived assertions, that map to
-     * the supplied object. The query only considers subjects with assertions that
-     * match the object completely - i.e. {namespace, name, relation}
-     * 
-     * @throws SQLException
-     */
-    public List<Subject> read(Object object) throws SQLException {
-        return subjects(null, object);
-    }
-
-    /**
-     * Answer the list of subjects, both direct and derived assertion, that map to
-     * the object from subjects that have the supplied predicate as their relation.
-     * The query only considers assertions that match the object completely - i.e.
-     * {namespace, name, relation}
-     * 
-     * @throws SQLException
-     */
-    public List<Subject> read(Relation predicate, Object object) throws SQLException {
-        return subjects(predicate, object);
     }
 
     /**
@@ -657,41 +734,42 @@ public class Oracle {
     }
 
     /**
-     * Answer the list of subjects, both direct and derived assertion, that map to
-     * the object from subjects that have the supplied predicate as their relation,
-     * if predicate is not null. The query only considers assertions that match the
+     * Answer the list of direct subjects, and if transitive the derived subjects,
+     * that map to the object. These subjects are further filtered by the predicate
+     * Relation, if not null. The query only considers assertions that match the
      * object completely - i.e. {namespace, name, relation}
      * 
      * @throws SQLException
      */
-    private List<Subject> subjects(Relation predicate, Object object) throws SQLException {
+    private Stream<Subject> subjects(Relation predicate, Object object, boolean transitive) throws SQLException {
         var resolved = resolve(object, false);
         if (resolved == null) {
-            return Collections.emptyList();
+            return new ArrayList<Subject>().stream();
         }
 
         NamespacedId relation = null;
         if (predicate != null) {
             relation = resolve(predicate, false);
             if (relation == null) {
-                return Collections.emptyList();
+                return new ArrayList<Subject>().stream();
             }
         }
 
-        Table<Record2<Long, Long>> subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
-                                                   .from(EDGE)
-                                                   .where(EDGE.TYPE.eq(SUBJECT_TYPE))
-                                                   .asTable("S");
-        Field<Long> direct = subject.field("direct", Long.class);
-        Field<Long> inferred = subject.field("inferred", Long.class);
+        var subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
+                            .from(EDGE)
+                            .where(EDGE.TYPE.eq(SUBJECT_TYPE))
+                            .asTable("S");
 
-        Table<Record1<Long>> o = dslCtx.select(EDGE.CHILD.as("object_id"))
-                                       .from(EDGE)
-                                       .where(EDGE.TYPE.eq(OBJECT_TYPE))
-                                       .and(EDGE.PARENT.eq(resolved.id))
-                                       .union(DSL.select(DSL.val(resolved.id).as("object_id")))
-                                       .asTable();
-        Field<Long> objectId = o.field("object_id", Long.class);
+        var direct = subject.field("direct", Long.class);
+        var inferred = subject.field("inferred", Long.class);
+
+        var o = dslCtx.select(EDGE.CHILD.as("object_id"))
+                      .from(EDGE)
+                      .where(EDGE.TYPE.eq(OBJECT_TYPE))
+                      .and(EDGE.PARENT.eq(resolved.id))
+                      .union(DSL.select(DSL.val(resolved.id).as("object_id")))
+                      .asTable();
+        var objectId = o.field("object_id", Long.class);
 
         var relNs = NAMESPACE.as("relNs");
         var subNs = NAMESPACE.as("subNs");
@@ -707,13 +785,16 @@ public class Oracle {
                          .join(dslCtx.select(inferred, direct)
                                      .from(subject.crossJoin(o)
                                                   .innerJoin(ASSERTION)
-                                                  .on(direct.eq(ASSERTION.SUBJECT).and(objectId.eq(ASSERTION.OBJECT))))
+                                                  .on(direct.eq(ASSERTION.SUBJECT).or(inferred.eq(ASSERTION.SUBJECT)))
+                                                  .and(objectId.eq(ASSERTION.OBJECT)))
                                      .asTable("S"))
-                         .on(SUBJECT.ID.eq(inferred).or(SUBJECT.ID.eq(direct)));
+                         .on(SUBJECT.ID.eq(direct));
+        if (transitive) {
+            base = base.or(SUBJECT.ID.eq(inferred));
+        }
         var query = relation == null ? base : base.where(SUBJECT.RELATION.eq(relation.id));
         return query.stream()
                     .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
-                                          new Relation(new Namespace(r.value3()), r.value4())))
-                    .toList();
+                                          new Relation(new Namespace(r.value3()), r.value4())));
     }
 }
