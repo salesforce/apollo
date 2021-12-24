@@ -41,8 +41,6 @@ import com.salesforce.apollo.delphinius.schema.tables.Edge;
  *
  */
 public class Oracle {
-    private static final Logger log = LoggerFactory.getLogger(Oracle.class);
-
     /** A Namespace **/
     public record Namespace(String name) {
 
@@ -103,21 +101,23 @@ public class Oracle {
 
     /** Grounding for all the domains */
     public static final Assertion NO_ASSERTION;
+
     public static final Namespace NO_NAMESPACE;
     public static final Object    NO_OBJECT;
     public static final Relation  NO_RELATION;
     public static final Subject   NO_SUBJECT;
+    static final String           OBJECT_TYPE = "o";
 
-    static final String OBJECT_TYPE   = "o";
-    static final String RELATION_TYPE = "r";
-    static final String SUBJECT_TYPE  = "s";
+    static final String       RELATION_TYPE = "r";
+    static final String       SUBJECT_TYPE  = "s";
+    private static final Edge A             = EDGE.as("A");
 
-    private static final Edge                   A          = EDGE.as("A");
     private static final Edge                   B          = EDGE.as("B");
     private static final Table<org.jooq.Record> candidates = DSL.table(DSL.name("candidates"));
     private static final Field<Long>            cChild     = DSL.field(DSL.name("candidates", "child"), Long.class);
     private static final Field<Long>            cParent    = DSL.field(DSL.name("candidates", "parent"), Long.class);
     private static final Edge                   E          = EDGE.as("E");
+    private static final Logger                 log        = LoggerFactory.getLogger(Oracle.class);
     private static final Name                   ROWZ       = DSL.name("rowz");
     private static final Table<Record>          rowzTable  = DSL.table(ROWZ);
     private static final Table<Record>          s1         = rowzTable.as("S1");
@@ -479,77 +479,6 @@ public class Oracle {
     }
 
     /**
-     * Answer the list of direct Subjects that map to the supplied objects. The
-     * query only considers subjects with assertions that match the objects
-     * completely - i.e. {namespace, name, relation}
-     * 
-     * @throws SQLException
-     */
-    public List<Subject> read(Object... objects) throws SQLException {
-        return Arrays.asList(objects).stream().flatMap(object -> {
-            try {
-                return directSubjects(null, object);
-            } catch (SQLException e) {
-                log.error("error getting direct subjects of: {}", object, e);
-                return null;
-            }
-        }).filter(s -> s != null).toList();
-    }
-
-    private Stream<Subject> directSubjects(Relation predicate, Object object) throws SQLException {
-        var resolved = resolve(object, false);
-        if (resolved == null) {
-            return new ArrayList<Subject>().stream();
-        }
-
-        NamespacedId relation = null;
-        if (predicate != null) {
-            relation = resolve(predicate, false);
-            if (relation == null) {
-                return new ArrayList<Subject>().stream();
-            }
-        }
-        var relNs = NAMESPACE.as("relNs");
-        var subNs = NAMESPACE.as("subNs");
-        var query = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
-                          .from(SUBJECT)
-                          .join(subNs)
-                          .on(subNs.ID.eq(SUBJECT.NAMESPACE))
-                          .join(RELATION)
-                          .on(RELATION.ID.eq(SUBJECT.RELATION))
-                          .join(relNs)
-                          .on(relNs.ID.eq(RELATION.NAMESPACE))
-                          .join(ASSERTION)
-                          .on(SUBJECT.ID.eq(ASSERTION.SUBJECT))
-                          .and(ASSERTION.OBJECT.eq(resolved.id));
-        if (relation != null) {
-            query = query.and(SUBJECT.RELATION.eq(relation.id));
-        }
-        return query.stream()
-                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
-                                          new Relation(new Namespace(r.value3()), r.value4())));
-    }
-
-    /**
-     * Answer the list of direct Subjects that map to the supplied objects. The
-     * query only considers subjects with assertions that match the objects
-     * completely - i.e. {namespace, name, relation} and only the subjects that have
-     * the matching predicate
-     * 
-     * @throws SQLException
-     */
-    public List<Subject> read(Relation predicate, Object... objects) throws SQLException {
-        return Arrays.asList(objects).stream().flatMap(object -> {
-            try {
-                return directSubjects(predicate, object);
-            } catch (SQLException e) {
-                log.error("error getting direct subjects (#{}) of: {}", predicate, object, e);
-                return null;
-            }
-        }).filter(s -> s != null).toList();
-    }
-
-    /**
      * Answer the list of Subjects, both direct and transitive Subjects, that map to
      * the supplied object. The query only considers subjects with assertions that
      * match the object completely - i.e. {namespace, name, relation}
@@ -591,6 +520,43 @@ public class Oracle {
      */
     public void map(Subject parent, Subject child) throws SQLException {
         addEdge(dslCtx, resolve(parent, true).id, SUBJECT_TYPE, resolve(child, true).id);
+    }
+
+    /**
+     * Answer the list of direct Subjects that map to the supplied objects. The
+     * query only considers subjects with assertions that match the objects
+     * completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Object... objects) throws SQLException {
+        return Arrays.asList(objects).stream().flatMap(object -> {
+            try {
+                return directSubjects(null, object);
+            } catch (SQLException e) {
+                log.error("error getting direct subjects of: {}", object, e);
+                return null;
+            }
+        }).filter(s -> s != null).toList();
+    }
+
+    /**
+     * Answer the list of direct Subjects that map to the supplied objects. The
+     * query only considers subjects with assertions that match the objects
+     * completely - i.e. {namespace, name, relation} and only the subjects that have
+     * the matching predicate
+     * 
+     * @throws SQLException
+     */
+    public List<Subject> read(Relation predicate, Object... objects) throws SQLException {
+        return Arrays.asList(objects).stream().flatMap(object -> {
+            try {
+                return directSubjects(predicate, object);
+            } catch (SQLException e) {
+                log.error("error getting direct subjects (#{}) of: {}", predicate, object, e);
+                return null;
+            }
+        }).filter(s -> s != null).toList();
     }
 
     /**
@@ -636,6 +602,40 @@ public class Oracle {
             return;
         }
         deleteEdge(dslCtx, a.id, SUBJECT_TYPE, b.id);
+    }
+
+    private Stream<Subject> directSubjects(Relation predicate, Object object) throws SQLException {
+        var resolved = resolve(object, false);
+        if (resolved == null) {
+            return new ArrayList<Subject>().stream();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(predicate, false);
+            if (relation == null) {
+                return new ArrayList<Subject>().stream();
+            }
+        }
+        var relNs = NAMESPACE.as("relNs");
+        var subNs = NAMESPACE.as("subNs");
+        var query = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
+                          .from(SUBJECT)
+                          .join(subNs)
+                          .on(subNs.ID.eq(SUBJECT.NAMESPACE))
+                          .join(RELATION)
+                          .on(RELATION.ID.eq(SUBJECT.RELATION))
+                          .join(relNs)
+                          .on(relNs.ID.eq(RELATION.NAMESPACE))
+                          .join(ASSERTION)
+                          .on(SUBJECT.ID.eq(ASSERTION.SUBJECT))
+                          .and(ASSERTION.OBJECT.eq(resolved.id));
+        if (relation != null) {
+            query = query.and(SUBJECT.RELATION.eq(relation.id));
+        }
+        return query.stream()
+                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
+                                          new Relation(new Namespace(r.value3()), r.value4())));
     }
 
     @SuppressWarnings("unused")
