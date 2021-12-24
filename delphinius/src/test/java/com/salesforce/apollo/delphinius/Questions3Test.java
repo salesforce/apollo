@@ -117,8 +117,6 @@ public class Questions3Test {
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
         oracle.add(grantTechs);
 
-        System.out.println(dsl.selectFrom(ASSERTION).fetch());
-
         viewers = oracle.read(object123View);
         assertEquals(2, viewers.size());
         assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
@@ -149,15 +147,19 @@ public class Questions3Test {
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
-        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
-
-        dumpEdges(dsl);
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers))); 
 
         oracle.delete(tuple);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+        
+        oracle.delete(abcTechMembers);
+        oracle.delete(flaggedTechnicianMembers);
+        
+        System.out.println(dsl.selectFrom(ASSERTION).fetch());
+        dumpEdges(dsl);
     }
 
     private void dumpEdges(DSLContext dsl) {
