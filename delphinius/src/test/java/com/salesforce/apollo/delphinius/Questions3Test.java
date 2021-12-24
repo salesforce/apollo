@@ -46,7 +46,7 @@ public class Questions3Test {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");
-        Oracle oracle = new Oracle(connection);
+        ReadOracle oracle = new ReadOracle(connection);
 
         // Namespace
         var ns = Oracle.namespace("my-org");
