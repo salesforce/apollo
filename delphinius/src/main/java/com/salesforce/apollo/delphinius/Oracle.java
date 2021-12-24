@@ -15,7 +15,6 @@ import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
@@ -610,14 +609,14 @@ public class Oracle {
     private Stream<Subject> directSubjects(Relation predicate, Object object) throws SQLException {
         var resolved = resolve(object, false);
         if (resolved == null) {
-            return new ArrayList<Subject>().stream();
+            return Stream.empty();
         }
 
         NamespacedId relation = null;
         if (predicate != null) {
             relation = resolve(predicate, false);
             if (relation == null) {
-                return new ArrayList<Subject>().stream();
+                return Stream.empty();
             }
         }
         var relNs = NAMESPACE.as("relNs");
@@ -747,14 +746,14 @@ public class Oracle {
     private Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
         var resolved = resolve(object, false);
         if (resolved == null) {
-            return new ArrayList<Subject>().stream();
+            return Stream.empty();
         }
 
         NamespacedId relation = null;
         if (predicate != null) {
             relation = resolve(predicate, false);
             if (relation == null) {
-                return new ArrayList<Subject>().stream();
+                return Stream.empty();
             }
         }
 
