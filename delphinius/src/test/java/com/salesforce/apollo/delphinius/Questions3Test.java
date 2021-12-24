@@ -78,6 +78,7 @@ public class Questions3Test {
         var can = ns.subject("Can");
         var burcu = ns.subject("Burcu");
 
+        // Map direct edges. Transitive edges added as a side effect
         oracle.map(helpDeskMembers, adminMembers);
         oracle.map(ali, adminMembers);
         oracle.map(ali, userMembers);
@@ -107,25 +108,31 @@ public class Questions3Test {
         // Protected Object
         var object123View = docNs.object("123", view);
 
+        // Users can View Document 123
         Assertion tuple = userMembers.assertion(object123View);
         oracle.add(tuple);
 
+        // Direct subjects that can View the document
         var viewers = oracle.read(object123View);
         assertEquals(1, viewers.size());
         assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
 
+        // Flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
         oracle.add(grantTechs);
 
+        // Now have 2 direct subjects that can view the doc
         viewers = oracle.read(object123View);
         assertEquals(2, viewers.size());
         assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
         assertTrue(viewers.contains(flaggedTechnicianMembers), "Should contain: " + flaggedTechnicianMembers);
 
+        // Filter direct on flagged relation
         var flaggedViewers = oracle.read(flag, object123View);
         assertEquals(1, flaggedViewers.size());
         assertTrue(flaggedViewers.contains(flaggedTechnicianMembers), "Should contain: " + flaggedTechnicianMembers);
 
+        // Transitive subjects that can view the document
         var inferredViewers = oracle.expand(object123View);
         assertEquals(14, inferredViewers.size());
         for (var s : Arrays.asList(ali, jale, egin, irmak, hakan, gl, fuat, can, burcu, managerMembers,
@@ -133,31 +140,37 @@ public class Questions3Test {
             assertTrue(inferredViewers.contains(s), "Should contain: " + s);
         }
 
+        // Transitive subjects filtered by flag predicate
         var inferredFlaggedViewers = oracle.expand(flag, object123View);
         assertEquals(5, inferredFlaggedViewers.size());
         for (var s : Arrays.asList(egin, ali, gl, fuat, flaggedTechnicianMembers)) {
             assertTrue(inferredFlaggedViewers.contains(s), "Should contain: " + s);
         }
 
+        // Check some assertions
         assertTrue(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
+        // Remove them
         oracle.remove(abcTechMembers, technicianMembers);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
-        assertFalse(oracle.check(object123View.assertion(helpDeskMembers))); 
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
+        // Remove our assertion
         oracle.delete(tuple);
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
-        
+
+        // Some deletes
         oracle.delete(abcTechMembers);
         oracle.delete(flaggedTechnicianMembers);
-        
+
+        // Because I'm lazy
         System.out.println(dsl.selectFrom(ASSERTION).fetch());
         dumpEdges(dsl);
     }
