@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.delphinius.schema.tables.Edge;
 
 /**
- * An Access Control ReadOracle
+ * An Access Control Oracle
  * 
  * @author hal.hildebrand
  *
@@ -62,6 +62,154 @@ abstract public class ReadOracle implements Oracle {
     protected static final Field<Long>            sChild     = DSL.field(DSL.name("suspect", "child"), Long.class);
     protected static final Field<Long>            sParent    = DSL.field(DSL.name("suspect", "parent"), Long.class);
     protected static final Name                   suspect    = DSL.name("suspect");
+
+    public static void addAssertion(Connection connection, String subjectNamespace, String subjectName,
+                                    String subjectRelationNamespace, String subjectRelationName, String objectNamespace,
+                                    String objectName, String objectRelationNamespace,
+                                    String objectRelationName) throws SQLException {
+        var subject = new Subject(new Namespace(subjectNamespace), subjectName,
+                                  new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
+        var object = new Object(new Namespace(objectNamespace), objectName,
+                                new Relation(new Namespace(objectRelationNamespace), objectRelationName));
+        var assertion = subject.assertion(object);
+
+        add(DSL.using(connection), assertion);
+    }
+
+    public static void addNamespace(Connection connection, String name) throws SQLException {
+        var namespace = new Namespace(name);
+
+        add(DSL.using(connection), namespace);
+    }
+
+    public static void addObject(Connection connection, String objectNamespace, String objectName,
+                                 String objectRelationNamespace, String objectRelationName) throws SQLException {
+        var object = new Object(new Namespace(objectNamespace), objectName,
+                                new Relation(new Namespace(objectRelationNamespace), objectRelationName));
+
+        add(DSL.using(connection), object);
+    }
+
+    public static void addRelation(Connection connection, String relationNamespace,
+                                   String relationName) throws SQLException {
+        var relation = new Relation(new Namespace(relationNamespace), relationName);
+
+        add(DSL.using(connection), relation);
+    }
+
+    public static void addSubject(Connection connection, String subjectNamespace, String subjectName,
+                                  String subjectRelationNamespace, String subjectRelationName) throws SQLException {
+        var subject = new Subject(new Namespace(subjectNamespace), subjectName,
+                                  new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
+
+        add(DSL.using(connection), subject);
+    }
+
+    public static void deleteAssertion(Connection connection, String subjectNamespace, String subjectName,
+                                       String subjectRelationNamespace, String subjectRelationName,
+                                       String objectNamespace, String objectName, String objectRelationNamespace,
+                                       String objectRelationName) throws SQLException {
+        var subject = new Subject(new Namespace(subjectNamespace), subjectName,
+                                  new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
+        var object = new Object(new Namespace(objectNamespace), objectName,
+                                new Relation(new Namespace(objectRelationNamespace), objectRelationName));
+        var assertion = subject.assertion(object);
+
+        delete(DSL.using(connection), assertion);
+    }
+
+    public static void deleteNamespace(Connection connection, String name) throws SQLException {
+        var namespace = new Namespace(name);
+
+        delete(DSL.using(connection), namespace);
+    }
+
+    public static void deleteObject(Connection connection, String objectNamespace, String objectName,
+                                    String objectRelationNamespace, String objectRelationName) throws SQLException {
+        var object = new Object(new Namespace(objectNamespace), objectName,
+                                new Relation(new Namespace(objectRelationNamespace), objectRelationName));
+
+        delete(DSL.using(connection), object);
+    }
+
+    public static void deleteRelation(Connection connection, String relationNamespace,
+                                      String relationName) throws SQLException {
+        var relation = new Relation(new Namespace(relationNamespace), relationName);
+
+        delete(DSL.using(connection), relation);
+    }
+
+    public static void deleteSubject(Connection connection, String subjectNamespace, String subjectName,
+                                     String subjectRelationNamespace, String subjectRelationName) throws SQLException {
+        var subject = new Subject(new Namespace(subjectNamespace), subjectName,
+                                  new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
+
+        delete(DSL.using(connection), subject);
+    }
+
+    public static void mapObject(Connection connection, String parentNamespace, String parentName,
+                                 String parentRelationNamespace, String parentRelationName, String childNamespace,
+                                 String childName, String childRelationNamespace,
+                                 String childRelationName) throws SQLException {
+        var parent = new Object(new Namespace(parentNamespace), parentName,
+                                new Relation(new Namespace(parentRelationNamespace), parentRelationName));
+        var child = new Object(new Namespace(childNamespace), childName,
+                               new Relation(new Namespace(childRelationNamespace), childRelationName));
+
+        map(parent, DSL.using(connection), child);
+    }
+
+    public static void mapRelation(Connection connection, String parentNamespace, String parentName,
+                                   String childNamespace, String childName) throws SQLException {
+        var parent = new Relation(new Namespace(parentNamespace), parentName);
+        var child = new Relation(new Namespace(childNamespace), childName);
+
+        map(parent, DSL.using(connection), child);
+    }
+
+    public static void mapSubject(Connection connection, String parentNamespace, String parentName,
+                                  String parentRelationNamespace, String parentRelationName, String childNamespace,
+                                  String childName, String childRelationNamespace,
+                                  String childRelationName) throws SQLException {
+        var parent = new Subject(new Namespace(parentNamespace), parentName,
+                                 new Relation(new Namespace(parentRelationNamespace), parentRelationName));
+        var child = new Subject(new Namespace(childNamespace), childName,
+                                new Relation(new Namespace(childRelationNamespace), childRelationName));
+
+        map(parent, DSL.using(connection), child);
+    }
+
+    public static void removeObject(Connection connection, String parentNamespace, String parentName,
+                                    String parentRelationNamespace, String parentRelationName, String childNamespace,
+                                    String childName, String childRelationNamespace,
+                                    String childRelationName) throws SQLException {
+        var parent = new Object(new Namespace(parentNamespace), parentName,
+                                new Relation(new Namespace(parentRelationNamespace), parentRelationName));
+        var child = new Object(new Namespace(childNamespace), childName,
+                               new Relation(new Namespace(childRelationNamespace), childRelationName));
+
+        remove(parent, DSL.using(connection), child);
+    }
+
+    public static void removeRelation(Connection connection, String parentNamespace, String parentName,
+                                      String childNamespace, String childName) throws SQLException {
+        var parent = new Relation(new Namespace(parentNamespace), parentName);
+        var child = new Relation(new Namespace(childNamespace), childName);
+
+        remove(parent, DSL.using(connection), child);
+    }
+
+    public static void removeSubject(Connection connection, String parentNamespace, String parentName,
+                                     String parentRelationNamespace, String parentRelationName, String childNamespace,
+                                     String childName, String childRelationNamespace,
+                                     String childRelationName) throws SQLException {
+        var parent = new Subject(new Namespace(parentNamespace), parentName,
+                                 new Relation(new Namespace(parentRelationNamespace), parentRelationName));
+        var child = new Subject(new Namespace(childNamespace), childName,
+                                new Relation(new Namespace(childRelationNamespace), childRelationName));
+
+        remove(parent, DSL.using(connection), child);
+    }
 
     static void add(DSLContext context, Assertion assertion) throws SQLException {
         var s = resolve(context, assertion.subject());
@@ -190,6 +338,14 @@ abstract public class ReadOracle implements Oracle {
             return;
         }
         context.deleteFrom(ASSERTION).where(ASSERTION.OBJECT.eq(o.id())).and(ASSERTION.SUBJECT.eq(s.id())).execute();
+    }
+
+    static void delete(DSLContext context, Namespace namespace) throws SQLException {
+        var resolved = resolve(context, namespace);
+        if (resolved == null) {
+            return;
+        }
+        context.deleteFrom(NAMESPACE).where(NAMESPACE.ID.eq(resolved)).execute();
     }
 
     static void delete(DSLContext context, Object object) throws SQLException {
@@ -647,6 +803,70 @@ abstract public class ReadOracle implements Oracle {
         }).filter(s -> s != null).toList();
     }
 
+    /**
+     * Answer the list of direct and transitive subjects that map to the object.
+     * These subjects may be further filtered by the predicate Relation, if not
+     * null. The query only considers assertions that match the object completely -
+     * i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
+        var resolved = resolve(dslCtx, object);
+        if (resolved == null) {
+            return Stream.empty();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(dslCtx, predicate);
+            if (relation == null) {
+                return Stream.empty();
+            }
+        }
+
+        var subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
+                            .from(EDGE)
+                            .where(EDGE.TYPE.eq(SUBJECT_TYPE))
+                            .asTable("S");
+
+        var direct = subject.field("direct", Long.class);
+        var inferred = subject.field("inferred", Long.class);
+
+        var o = dslCtx.select(EDGE.CHILD.as("object_id"))
+                      .from(EDGE)
+                      .where(EDGE.TYPE.eq(OBJECT_TYPE))
+                      .and(EDGE.PARENT.eq(resolved.id()))
+                      .union(DSL.select(DSL.val(resolved.id()).as("object_id")))
+                      .asTable();
+        var objectId = o.field("object_id", Long.class);
+
+        var relNs = NAMESPACE.as("relNs");
+        var subNs = NAMESPACE.as("subNs");
+
+        var base = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
+                         .from(SUBJECT)
+                         .join(subNs)
+                         .on(subNs.ID.eq(SUBJECT.NAMESPACE))
+                         .join(RELATION)
+                         .on(RELATION.ID.eq(SUBJECT.RELATION))
+                         .join(relNs)
+                         .on(relNs.ID.eq(RELATION.NAMESPACE))
+                         .join(dslCtx.select(inferred, direct)
+                                     .from(subject.crossJoin(o)
+                                                  .innerJoin(ASSERTION)
+                                                  .on(direct.eq(ASSERTION.SUBJECT).or(inferred.eq(ASSERTION.SUBJECT)))
+                                                  .and(objectId.eq(ASSERTION.OBJECT)))
+                                     .asTable("S"))
+                         .on(SUBJECT.ID.eq(direct))
+                         .or(SUBJECT.ID.eq(inferred));
+        var query = relation == null ? base : base.where(SUBJECT.RELATION.eq(relation.id()));
+        return query.stream()
+                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
+                                          new Relation(new Namespace(r.value3()), r.value4())));
+    }
+
     private Stream<Object> directObjects(Relation predicate, Subject subject) throws SQLException {
         var resolved = resolve(dslCtx, subject);
         if (resolved == null) {
@@ -738,69 +958,5 @@ abstract public class ReadOracle implements Oracle {
         }
 
         return Stream.empty(); // my brain hurts too much currently to construct the sql
-    }
-
-    /**
-     * Answer the list of direct and transitive subjects that map to the object.
-     * These subjects may be further filtered by the predicate Relation, if not
-     * null. The query only considers assertions that match the object completely -
-     * i.e. {namespace, name, relation}
-     * 
-     * @throws SQLException
-     */
-    @Override
-    public Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
-        var resolved = resolve(dslCtx, object);
-        if (resolved == null) {
-            return Stream.empty();
-        }
-
-        NamespacedId relation = null;
-        if (predicate != null) {
-            relation = resolve(dslCtx, predicate);
-            if (relation == null) {
-                return Stream.empty();
-            }
-        }
-
-        var subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
-                            .from(EDGE)
-                            .where(EDGE.TYPE.eq(SUBJECT_TYPE))
-                            .asTable("S");
-
-        var direct = subject.field("direct", Long.class);
-        var inferred = subject.field("inferred", Long.class);
-
-        var o = dslCtx.select(EDGE.CHILD.as("object_id"))
-                      .from(EDGE)
-                      .where(EDGE.TYPE.eq(OBJECT_TYPE))
-                      .and(EDGE.PARENT.eq(resolved.id()))
-                      .union(DSL.select(DSL.val(resolved.id()).as("object_id")))
-                      .asTable();
-        var objectId = o.field("object_id", Long.class);
-
-        var relNs = NAMESPACE.as("relNs");
-        var subNs = NAMESPACE.as("subNs");
-
-        var base = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
-                         .from(SUBJECT)
-                         .join(subNs)
-                         .on(subNs.ID.eq(SUBJECT.NAMESPACE))
-                         .join(RELATION)
-                         .on(RELATION.ID.eq(SUBJECT.RELATION))
-                         .join(relNs)
-                         .on(relNs.ID.eq(RELATION.NAMESPACE))
-                         .join(dslCtx.select(inferred, direct)
-                                     .from(subject.crossJoin(o)
-                                                  .innerJoin(ASSERTION)
-                                                  .on(direct.eq(ASSERTION.SUBJECT).or(inferred.eq(ASSERTION.SUBJECT)))
-                                                  .and(objectId.eq(ASSERTION.OBJECT)))
-                                     .asTable("S"))
-                         .on(SUBJECT.ID.eq(direct))
-                         .or(SUBJECT.ID.eq(inferred));
-        var query = relation == null ? base : base.where(SUBJECT.RELATION.eq(relation.id()));
-        return query.stream()
-                    .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
-                                          new Relation(new Namespace(r.value3()), r.value4())));
     }
 }

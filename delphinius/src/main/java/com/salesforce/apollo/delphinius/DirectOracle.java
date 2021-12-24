@@ -86,6 +86,16 @@ public class DirectOracle extends ReadOracle {
     }
 
     /**
+     * Delete a Namespace. All objects, subjects, relations and assertions that
+     * reference this namespace will also be deleted.
+     */
+    public void delete(Namespace namespace) throws SQLException {
+        dslCtx.transaction(ctx -> {
+            delete(DSL.using(ctx), namespace);
+        });
+    }
+
+    /**
      * Delete an Object. All dependant uses of the object (mappings, Assertions) are
      * removed as well.
      */
