@@ -8,6 +8,7 @@ package com.salesforce.apollo.delphinius;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * @author hal.hildebrand
@@ -80,8 +81,8 @@ public interface Oracle {
     /** Grounding for all the domains */
     Namespace NO_NAMESPACE = new Namespace("");
     Relation  NO_RELATION  = new Relation(NO_NAMESPACE, "");
-    Object    NO_OBJECT    = new Object(NO_NAMESPACE, "", NO_RELATION);
     Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
+    Object    NO_OBJECT    = new Object(NO_NAMESPACE, "", NO_RELATION);
     Assertion NO_ASSERTION = new Assertion(NO_SUBJECT, NO_OBJECT);
 
     // Types for DAG
@@ -170,6 +171,25 @@ public interface Oracle {
     List<Subject> expand(Relation predicate, Object object) throws SQLException;
 
     /**
+     * Answer the list of direct and transitive Objects that map to the subject from
+     * objects that have the supplied predicate as their relation. The query only
+     * considers assertions that match the subject completely - i.e. {namespace,
+     * name, relation}
+     * 
+     * @throws SQLException
+     */
+    List<Object> expand(Relation predicate, Subject subject) throws SQLException;
+
+    /**
+     * Answer the list of direct and transitive Objects that map to the supplied
+     * subject. The query only considers objects with assertions that match the
+     * subject completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    List<Object> expand(Subject subject) throws SQLException;
+
+    /**
      * Map the parent object to the child
      */
     void map(Object parent, Object child) throws SQLException;
@@ -204,6 +224,25 @@ public interface Oracle {
     List<Subject> read(Relation predicate, Object... objects) throws SQLException;
 
     /**
+     * Answer the list of direct Objects that map to the supplied subjects. The
+     * query only considers objects with assertions that match the subjects
+     * completely - i.e. {namespace, name, relation} and only the objects that have
+     * the matching predicate
+     * 
+     * @throws SQLException
+     */
+    List<Object> read(Relation predicate, Subject... subjects) throws SQLException;
+
+    /**
+     * Answer the list of direct Objects that map to the supplied subjects. The
+     * query only considers objects with assertions that match the subjects
+     * completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    List<Object> read(Subject... subjects) throws SQLException;
+
+    /**
      * Remove the mapping between the parent and the child objects
      */
     void remove(Object parent, Object child) throws SQLException;
@@ -217,5 +256,15 @@ public interface Oracle {
      * Remove the mapping between the parent and the child subects
      */
     void remove(Subject parent, Subject child) throws SQLException;
+
+    /**
+     * Answer the list of direct and transitive subjects that map to the object.
+     * These subjects may be further filtered by the predicate Relation, if not
+     * null. The query only considers assertions that match the object completely -
+     * i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    Stream<Subject> subjects(Relation predicate, Object object) throws SQLException;
 
 }

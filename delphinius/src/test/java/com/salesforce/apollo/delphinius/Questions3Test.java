@@ -97,10 +97,6 @@ public class Questions3Test {
         oracle.map(flaggedTechnicianMembers, technicianMembers);
         oracle.map(jale, abcTechMembers);
 
-        var dsl = DSL.using(connection);
-
-        dumpEdges(dsl);
-
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
         // Permission
@@ -117,7 +113,12 @@ public class Questions3Test {
         assertEquals(1, viewers.size());
         assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
 
-        // Flagged technicians can directly view the document
+        // Direct objects that can User member can view
+        var viewable = oracle.read(userMembers);
+        assertEquals(1, viewable.size());
+        assertTrue(viewable.contains(object123View), "Should contain: " + object123View);
+
+        // Assert flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
         oracle.add(grantTechs);
 
@@ -126,6 +127,11 @@ public class Questions3Test {
         assertEquals(2, viewers.size());
         assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
         assertTrue(viewers.contains(flaggedTechnicianMembers), "Should contain: " + flaggedTechnicianMembers);
+
+        // flagged has direct view
+        viewable = oracle.read(flaggedTechnicianMembers);
+        assertEquals(1, viewable.size());
+        assertTrue(viewable.contains(object123View), "Should contain: " + object123View);
 
         // Filter direct on flagged relation
         var flaggedViewers = oracle.read(flag, object123View);
@@ -139,6 +145,11 @@ public class Questions3Test {
                                    technicianMembers, abcTechMembers, userMembers, flaggedTechnicianMembers)) {
             assertTrue(inferredViewers.contains(s), "Should contain: " + s);
         }
+
+        // Transitive grants to view the document
+//        var inferredViewable = oracle.expand(egin);
+//        assertEquals(1, inferredViewable.size());
+//        assertTrue(inferredViewable.contains(object123View), "Should contain: " + object123View);
 
         // Transitive subjects filtered by flag predicate
         var inferredFlaggedViewers = oracle.expand(flag, object123View);
@@ -169,10 +180,6 @@ public class Questions3Test {
         // Some deletes
         oracle.delete(abcTechMembers);
         oracle.delete(flaggedTechnicianMembers);
-
-        // Because I'm lazy
-        System.out.println(dsl.selectFrom(ASSERTION).fetch());
-        dumpEdges(dsl);
     }
 
     private void dumpEdges(DSLContext dsl) {

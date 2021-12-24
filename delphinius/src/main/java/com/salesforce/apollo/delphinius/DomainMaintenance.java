@@ -35,9 +35,9 @@ public class DomainMaintenance implements Trigger {
                      int type) throws SQLException {
         assert !before && type == DELETE : "this is an after delete trigger";
         this.type = switch (tableName.toLowerCase()) {
-        case "object" -> ReadOracle.OBJECT_TYPE;
-        case "relation" -> ReadOracle.RELATION_TYPE;
-        case "subject" -> ReadOracle.SUBJECT_TYPE;
+        case "object" -> Oracle.OBJECT_TYPE;
+        case "relation" -> Oracle.RELATION_TYPE;
+        case "subject" -> Oracle.SUBJECT_TYPE;
         default -> throw new IllegalArgumentException("Unexpected value: " + tableName.toLowerCase());
         };
     }

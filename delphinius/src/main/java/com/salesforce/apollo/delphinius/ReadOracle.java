@@ -524,9 +524,9 @@ abstract public class ReadOracle implements Oracle {
     }
 
     /**
-     * Answer the list of Subjects, both direct and transitive Subjects, that map to
-     * the supplied object. The query only considers subjects with assertions that
-     * match the object completely - i.e. {namespace, name, relation}
+     * Answer the list of direct and transitive Subjects that map to the supplied
+     * object. The query only considers subjects with assertions that match the
+     * object completely - i.e. {namespace, name, relation}
      * 
      * @throws SQLException
      */
@@ -535,15 +535,40 @@ abstract public class ReadOracle implements Oracle {
     }
 
     /**
-     * Answer the list of Subjects, both direct and transitive, that map to the
-     * object from subjects that have the supplied predicate as their relation. The
-     * query only considers assertions that match the object completely - i.e.
-     * {namespace, name, relation}
+     * Answer the list of direct and transitive Subjects that map to the object from
+     * subjects that have the supplied predicate as their relation. The query only
+     * considers assertions that match the object completely - i.e. {namespace,
+     * name, relation}
      * 
      * @throws SQLException
      */
     public List<Subject> expand(Relation predicate, Object object) throws SQLException {
         return subjects(predicate, object).toList();
+    }
+
+    /**
+     * Answer the list of direct and transitive Objects that map to the subject from
+     * objects that have the supplied predicate as their relation. The query only
+     * considers assertions that match the subject completely - i.e. {namespace,
+     * name, relation}
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public List<Object> expand(Relation predicate, Subject subject) throws SQLException {
+        return objects(predicate, subject).toList();
+    }
+
+    /**
+     * Answer the list of direct and transitive Objects that map to the supplied
+     * subject. The query only considers objects with assertions that match the
+     * subject completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public List<Object> expand(Subject subject) throws SQLException {
+        return objects(null, subject).toList();
     }
 
     /**
@@ -561,7 +586,7 @@ abstract public class ReadOracle implements Oracle {
                 log.error("error getting direct subjects of: {}", object, e);
                 return null;
             }
-        }).filter(s -> s != null).toList();
+        }).filter(o -> o != null).toList();
     }
 
     /**
@@ -581,6 +606,79 @@ abstract public class ReadOracle implements Oracle {
                 return null;
             }
         }).filter(s -> s != null).toList();
+    }
+
+    /**
+     * Answer the list of direct Objects that map to the supplied subjects. The
+     * query only considers objects with assertions that match the subjects
+     * completely - i.e. {namespace, name, relation} and only the objects that have
+     * the matching predicate
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public List<Object> read(Relation predicate, Subject... subjects) throws SQLException {
+        return Arrays.asList(subjects).stream().flatMap(subject -> {
+            try {
+                return directObjects(predicate, subject);
+            } catch (SQLException e) {
+                log.error("error getting direct objects (#{}) of: {}", predicate, subject, e);
+                return null;
+            }
+        }).filter(o -> o != null).toList();
+    }
+
+    /**
+     * Answer the list of direct Objects that map to the supplied subjects. The
+     * query only considers objects with assertions that match the subjects
+     * completely - i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public List<Object> read(Subject... subjects) throws SQLException {
+        return Arrays.asList(subjects).stream().flatMap(subject -> {
+            try {
+                return directObjects(null, subject);
+            } catch (SQLException e) {
+                log.error("error getting direct objects of: {}", subject, e);
+                return null;
+            }
+        }).filter(s -> s != null).toList();
+    }
+
+    private Stream<Object> directObjects(Relation predicate, Subject subject) throws SQLException {
+        var resolved = resolve(dslCtx, subject);
+        if (resolved == null) {
+            return Stream.empty();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(dslCtx, predicate);
+            if (relation == null) {
+                return Stream.empty();
+            }
+        }
+        var relNs = NAMESPACE.as("relNs");
+        var objNs = NAMESPACE.as("objNs");
+        var query = dslCtx.selectDistinct(objNs.NAME, OBJECT.NAME, relNs.NAME, RELATION.NAME)
+                          .from(OBJECT)
+                          .join(objNs)
+                          .on(objNs.ID.eq(OBJECT.NAMESPACE))
+                          .join(RELATION)
+                          .on(RELATION.ID.eq(OBJECT.RELATION))
+                          .join(relNs)
+                          .on(relNs.ID.eq(RELATION.NAMESPACE))
+                          .join(ASSERTION)
+                          .on(OBJECT.ID.eq(ASSERTION.OBJECT))
+                          .and(ASSERTION.SUBJECT.eq(resolved.id()));
+        if (relation != null) {
+            query = query.and(OBJECT.RELATION.eq(relation.id()));
+        }
+        return query.stream()
+                    .map(r -> new Object(new Namespace(r.value1()), r.value2(),
+                                         new Relation(new Namespace(r.value3()), r.value4())));
     }
 
     private Stream<Subject> directSubjects(Relation predicate, Object object) throws SQLException {
@@ -618,14 +716,40 @@ abstract public class ReadOracle implements Oracle {
     }
 
     /**
-     * Answer the list of direct and transitive subjects, that map to the object.
-     * These subjects are further filtered by the predicate Relation, if not null.
-     * The query only considers assertions that match the object completely - i.e.
+     * Answer the list of direct and transitive objects that map to the subject.
+     * These object may further filtered by the predicate Relation, if not null. The
+     * query only considers assertions that match the subject completely - i.e.
      * {namespace, name, relation}
      * 
      * @throws SQLException
      */
-    private Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
+    private Stream<Object> objects(Relation predicate, Subject subject) throws SQLException {
+        var resolved = resolve(dslCtx, subject);
+        if (resolved == null) {
+            return Stream.empty();
+        }
+
+        NamespacedId relation = null;
+        if (predicate != null) {
+            relation = resolve(dslCtx, predicate);
+            if (relation == null) {
+                return Stream.empty();
+            }
+        }
+
+        return Stream.empty(); // my brain hurts too much currently to construct the sql
+    }
+
+    /**
+     * Answer the list of direct and transitive subjects that map to the object.
+     * These subjects may be further filtered by the predicate Relation, if not
+     * null. The query only considers assertions that match the object completely -
+     * i.e. {namespace, name, relation}
+     * 
+     * @throws SQLException
+     */
+    @Override
+    public Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
         var resolved = resolve(dslCtx, object);
         if (resolved == null) {
             return Stream.empty();
