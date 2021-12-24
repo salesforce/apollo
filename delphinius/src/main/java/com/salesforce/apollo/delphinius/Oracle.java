@@ -35,6 +35,8 @@ public interface Oracle {
         }
     }
 
+    record NamespacedId(Long namespace, Long id, Long relation) {}
+
     /** A Subject **/
     public record Subject(Namespace namespace, String name, Relation relation) {
         public Assertion assertion(Object object) {
