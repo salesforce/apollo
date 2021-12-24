@@ -490,9 +490,9 @@ public class Oracle {
     }
 
     /**
-     * Answer the list of Subjects, both direct and transitive Subjects, that map to
-     * the object from subjects that have the supplied predicate as their relation.
-     * The query only considers assertions that match the object completely - i.e.
+     * Answer the list of Subjects, both direct and transitive, that map to the
+     * object from subjects that have the supplied predicate as their relation. The
+     * query only considers assertions that match the object completely - i.e.
      * {namespace, name, relation}
      * 
      * @throws SQLException

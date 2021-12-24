@@ -34,17 +34,18 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="relation_pkey" />
             </column>
-            <column name="namespace" type="INT8" defaultValue="0">
-                <constraints nullable="false"
-                    foreignKeyName="relation_namespace_fk"
-                    referencedTableName="namespace"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="namespace" type="INT8" defaultValue="0" />
             <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="relation" baseTableSchemaName="delphinius"
+            constraintName="relation_namespace_fk"
+            referencedTableName="namespace" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
 
         <addUniqueConstraint
             columnNames="namespace, name" tableName="relation"
@@ -62,24 +63,26 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="object_pkey" />
             </column>
-            <column name="namespace" type="INT8" defaultValue="0">
-                <constraints nullable="false"
-                    foreignKeyName="object_namespace_fk"
-                    referencedTableName="namespace"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="namespace" type="INT8" defaultValue="0" />
             <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
-            <column name="relation" type="INT8">
-                <constraints nullable="false"
-                    foreignKeyName="object_relation_fk"
-                    referencedTableName="relation"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="relation" type="INT8" />
         </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="object" baseTableSchemaName="delphinius"
+            constraintName="object_namespace_fk"
+            referencedTableName="namespace" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="relation"
+            baseTableName="object" baseTableSchemaName="delphinius"
+            constraintName="object_relation_fk"
+            referencedTableName="relation" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
 
         <addUniqueConstraint
             columnNames="namespace, name, relation" tableName="object"
@@ -103,24 +106,27 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="subject_pkey" />
             </column>
-            <column name="namespace" type="INT8" defaultValue="0">
-                <constraints nullable="false"
-                    foreignKeyName="subject_namespace_fk"
-                    referencedTableName="namespace"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="namespace" type="INT8" defaultValue="0" />
             <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
-            <column name="relation" type="INT8" defaultValue="0">
-                <constraints nullable="false"
-                    foreignKeyName="subject_relation_fk"
-                    referencedTableName="relation"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="relation" type="INT8" defaultValue="0" />
         </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="subject"
+            constraintName="subject_namespace_fk"
+            referencedTableName="namespace"
+            baseTableSchemaName="delphinius" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="relation"
+            baseTableName="subject" baseTableSchemaName="delphinius"
+            constraintName="subject_relation_fk"
+            referencedTableName="relation" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
 
         <addUniqueConstraint
             columnNames="namespace, name, relation" tableName="subject"
@@ -139,21 +145,23 @@
 
         <createTable tableName="assertion"
             schemaName="delphinius">
-            <column name="subject" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_subject_fk"
-                    referencedTableName="subject"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
-            <column name="object" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" foreignKeyName="tuple_object_fk"
-                    referencedTableName="object"
-                    referencedColumnNames="id"
-                    referencedTableSchemaName="delphinius" />
-            </column>
+            <column name="subject" type="INT8" />
+            <column name="object" type="INT8" />
         </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="subject"
+            baseTableName="assertion" baseTableSchemaName="delphinius"
+            constraintName="assertion_subject_fk"
+            referencedTableName="subject" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="object"
+            baseTableName="assertion" baseTableSchemaName="delphinius"
+            constraintName="assertion_object_fk"
+            referencedTableName="object" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
 
         <!-- The NULL assertion -->
         <sql>insert into delphinius.assertion (subject, object)
@@ -168,9 +176,6 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="edge_pkey" />
             </column>
-            <column name="type" type="CHAR(1)">
-                <constraints nullable="false" />
-            </column>
             <column name="parent" type="INT8">
                 <constraints nullable="false" />
             </column>
@@ -182,6 +187,9 @@
             </column>
             <column name="mark" type="BOOLEAN"
                 defaultValueBoolean="false">
+                <constraints nullable="false" />
+            </column>
+            <column name="type" type="CHAR(1)">
                 <constraints nullable="false" />
             </column>
         </createTable>
