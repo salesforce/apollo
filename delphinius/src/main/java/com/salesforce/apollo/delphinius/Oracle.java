@@ -67,6 +67,7 @@ public class Oracle {
             return new Assertion(this, object);
         }
 
+        @Override
         public String toString() {
             return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
         }
@@ -78,6 +79,7 @@ public class Oracle {
             return new Assertion(subject, this);
         }
 
+        @Override
         public String toString() {
             return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
         }
@@ -85,6 +87,7 @@ public class Oracle {
 
     /** A Relation **/
     public record Relation(Namespace namespace, String name) {
+        @Override
         public String toString() {
             return namespace.name + ":" + name;
         }
@@ -92,6 +95,7 @@ public class Oracle {
 
     /** An Assertion **/
     public record Assertion(Subject subject, Object object) {
+        @Override
         public String toString() {
             return subject + "@" + object;
         }
@@ -101,17 +105,16 @@ public class Oracle {
 
     /** Grounding for all the domains */
     public static final Assertion NO_ASSERTION;
-
     public static final Namespace NO_NAMESPACE;
     public static final Object    NO_OBJECT;
     public static final Relation  NO_RELATION;
     public static final Subject   NO_SUBJECT;
-    static final String           OBJECT_TYPE = "o";
 
-    static final String       RELATION_TYPE = "r";
-    static final String       SUBJECT_TYPE  = "s";
-    private static final Edge A             = EDGE.as("A");
+    static final String OBJECT_TYPE   = "o";
+    static final String RELATION_TYPE = "r";
+    static final String SUBJECT_TYPE  = "s";
 
+    private static final Edge                   A          = EDGE.as("A");
     private static final Edge                   B          = EDGE.as("B");
     private static final Table<org.jooq.Record> candidates = DSL.table(DSL.name("candidates"));
     private static final Field<Long>            cChild     = DSL.field(DSL.name("candidates", "child"), Long.class);
@@ -486,7 +489,7 @@ public class Oracle {
      * @throws SQLException
      */
     public List<Subject> expand(Object object) throws SQLException {
-        return subjects(null, object, true).toList();
+        return subjects(null, object).toList();
     }
 
     /**
@@ -498,7 +501,7 @@ public class Oracle {
      * @throws SQLException
      */
     public List<Subject> expand(Relation predicate, Object object) throws SQLException {
-        return subjects(predicate, object, true).toList();
+        return subjects(predicate, object).toList();
     }
 
     /**
@@ -734,14 +737,14 @@ public class Oracle {
     }
 
     /**
-     * Answer the list of direct subjects, and if transitive the derived subjects,
-     * that map to the object. These subjects are further filtered by the predicate
-     * Relation, if not null. The query only considers assertions that match the
-     * object completely - i.e. {namespace, name, relation}
+     * Answer the list of direct and transitive subjects, that map to the object.
+     * These subjects are further filtered by the predicate Relation, if not null.
+     * The query only considers assertions that match the object completely - i.e.
+     * {namespace, name, relation}
      * 
      * @throws SQLException
      */
-    private Stream<Subject> subjects(Relation predicate, Object object, boolean transitive) throws SQLException {
+    private Stream<Subject> subjects(Relation predicate, Object object) throws SQLException {
         var resolved = resolve(object, false);
         if (resolved == null) {
             return new ArrayList<Subject>().stream();
@@ -788,10 +791,8 @@ public class Oracle {
                                                   .on(direct.eq(ASSERTION.SUBJECT).or(inferred.eq(ASSERTION.SUBJECT)))
                                                   .and(objectId.eq(ASSERTION.OBJECT)))
                                      .asTable("S"))
-                         .on(SUBJECT.ID.eq(direct));
-        if (transitive) {
-            base = base.or(SUBJECT.ID.eq(inferred));
-        }
+                         .on(SUBJECT.ID.eq(direct))
+                         .or(SUBJECT.ID.eq(inferred));
         var query = relation == null ? base : base.where(SUBJECT.RELATION.eq(relation.id));
         return query.stream()
                     .map(r -> new Subject(new Namespace(r.value1()), r.value2(),
