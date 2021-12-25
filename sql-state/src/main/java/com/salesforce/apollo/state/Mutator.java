@@ -264,8 +264,10 @@ public class Mutator {
     }
 
     public BatchUpdate batchOf(String sql, List<List<Object>> batch) {
-        return batch(sql, batch.stream().map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
-                               .collect(Collectors.toList()));
+        return batch(sql,
+                     batch.stream()
+                          .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
+                          .collect(Collectors.toList()));
     }
 
     public Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Object... arguments) {
@@ -278,8 +280,12 @@ public class Mutator {
 
     public Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Value... arguments) {
         StreamTransfer tfr = new StreamTransfer(h2Session);
-        return Call.newBuilder().setSql(sql).setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
-                                                              .setArgs(tfr.write(Arrays.asList(arguments))))
+        return Call.newBuilder()
+                   .setExecution(execution)
+                   .setSql(sql)
+                   .setArgs(Arguments.newBuilder()
+                                     .setVersion(tfr.getVersion())
+                                     .setArgs(tfr.write(Arrays.asList(arguments))))
                    .build();
     }
 
@@ -289,8 +295,12 @@ public class Mutator {
 
     public Script callScript(String className, String method, String source, Value... args) {
         StreamTransfer tfr = new StreamTransfer(h2Session);
-        return Script.newBuilder().setClassName(className).setMethod(method).setSource(source)
-                     .setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
+        return Script.newBuilder()
+                     .setClassName(className)
+                     .setMethod(method)
+                     .setSource(source)
+                     .setArgs(Arguments.newBuilder()
+                                       .setVersion(tfr.getVersion())
                                        .setArgs(tfr.write(Arrays.asList(args))))
                      .build();
     }
@@ -344,8 +354,12 @@ public class Mutator {
 
     public Statement statement(EXECUTION execution, String sql, Value... args) {
         var tfr = new StreamTransfer(h2Session);
-        return Statement.newBuilder().setSql(sql).setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
-                                                                   .setArgs(tfr.write(Arrays.asList(args))))
+        return Statement.newBuilder()
+                        .setSql(sql)
+                        .setExecution(execution)
+                        .setArgs(Arguments.newBuilder()
+                                          .setVersion(tfr.getVersion())
+                                          .setArgs(tfr.write(Arrays.asList(args))))
                         .build();
     }
 
