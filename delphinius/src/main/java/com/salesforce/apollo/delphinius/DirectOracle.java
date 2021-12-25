@@ -10,18 +10,19 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class DirectOracle extends ReadOracle {
+public class DirectOracle extends AbstractOracle {
 
     private final DSLContext dslCtx;
 
     public DirectOracle(Connection connection) {
-        this(DSL.using(connection));
+        this(DSL.using(connection, SQLDialect.H2));
     }
 
     public DirectOracle(DSLContext dslCtx) {
@@ -89,6 +90,7 @@ public class DirectOracle extends ReadOracle {
      * Delete a Namespace. All objects, subjects, relations and assertions that
      * reference this namespace will also be deleted.
      */
+    @Override
     public void delete(Namespace namespace) throws SQLException {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), namespace);

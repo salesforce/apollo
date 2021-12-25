@@ -6,20 +6,16 @@
  */
 package com.salesforce.apollo.delphinius;
 
-import static com.salesforce.apollo.delphinius.schema.tables.Assertion.ASSERTION;
-import static com.salesforce.apollo.delphinius.schema.tables.Edge.EDGE;
-import static com.salesforce.apollo.delphinius.schema.tables.Subject.SUBJECT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
 
 import org.h2.jdbc.JdbcConnection;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
@@ -35,8 +31,25 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 public class Questions3Test {
 
     @Test
-    public void smokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+    public void callSmokin() throws Exception {
+        final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+                                      new Random().nextLong());
+        var connection = new JdbcConnection(url, new Properties(), "", "");
+
+        var database = new H2Database();
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        try (Liquibase liquibase = new Liquibase("initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+            liquibase.update((String) null);
+        }
+        connection = new JdbcConnection(url, new Properties(), "", "");
+        Oracle oracle = new CallOracle(connection);
+
+        smoke(oracle);
+    }
+
+    @Test
+    public void directSmokin() throws Exception {
+        final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
@@ -48,6 +61,10 @@ public class Questions3Test {
         connection = new JdbcConnection(url, new Properties(), "", "");
         Oracle oracle = new DirectOracle(connection);
 
+        smoke(oracle);
+    }
+
+    private void smoke(Oracle oracle) throws SQLException {
         // Namespace
         var ns = Oracle.namespace("my-org");
 
@@ -180,16 +197,5 @@ public class Questions3Test {
         // Some deletes
         oracle.delete(abcTechMembers);
         oracle.delete(flaggedTechnicianMembers);
-    }
-
-    private void dumpEdges(DSLContext dsl) {
-        var pa = SUBJECT.as("parent");
-        var ch = SUBJECT.as("child");
-        System.out.println(dsl.select(pa.NAME.as("parent"), pa.ID, ch.NAME.as("child"), ch.ID, EDGE.TRANSITIVE)
-                              .from(pa, ch)
-                              .join(EDGE)
-                              .on(EDGE.PARENT.eq(pa.ID).and(EDGE.CHILD.eq(ch.ID)))
-                              .orderBy(EDGE.PARENT, EDGE.CHILD, EDGE.TRANSITIVE)
-                              .fetch());
     }
 }

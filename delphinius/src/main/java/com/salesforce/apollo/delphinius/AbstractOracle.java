@@ -25,6 +25,7 @@ import org.jooq.Name;
 import org.jooq.Record;
 import org.jooq.Record1;
 import org.jooq.Record2;
+import org.jooq.SQLDialect;
 import org.jooq.SelectJoinStep;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
@@ -39,7 +40,7 @@ import com.salesforce.apollo.delphinius.schema.tables.Edge;
  * @author hal.hildebrand
  *
  */
-abstract public class ReadOracle implements Oracle {
+abstract public class AbstractOracle implements Oracle {
 
     protected static final Edge                   A          = EDGE.as("A");
     protected static final Edge                   B          = EDGE.as("B");
@@ -47,7 +48,7 @@ abstract public class ReadOracle implements Oracle {
     protected static final Field<Long>            cChild     = DSL.field(DSL.name("candidates", "child"), Long.class);
     protected static final Field<Long>            cParent    = DSL.field(DSL.name("candidates", "parent"), Long.class);
     protected static final Edge                   E          = EDGE.as("E");
-    protected static final Logger                 log        = LoggerFactory.getLogger(ReadOracle.class);
+    protected static final Logger                 log        = LoggerFactory.getLogger(AbstractOracle.class);
     protected static final Name                   ROWZ       = DSL.name("rowz");
     protected static final Table<Record>          rowzTable  = DSL.table(ROWZ);
     protected static final Table<Record>          s1         = rowzTable.as("S1");
@@ -73,13 +74,13 @@ abstract public class ReadOracle implements Oracle {
                                 new Relation(new Namespace(objectRelationNamespace), objectRelationName));
         var assertion = subject.assertion(object);
 
-        add(DSL.using(connection), assertion);
+        add(DSL.using(connection, SQLDialect.H2), assertion);
     }
 
     public static void addNamespace(Connection connection, String name) throws SQLException {
         var namespace = new Namespace(name);
 
-        add(DSL.using(connection), namespace);
+        add(DSL.using(connection, SQLDialect.H2), namespace);
     }
 
     public static void addObject(Connection connection, String objectNamespace, String objectName,
@@ -87,14 +88,14 @@ abstract public class ReadOracle implements Oracle {
         var object = new Object(new Namespace(objectNamespace), objectName,
                                 new Relation(new Namespace(objectRelationNamespace), objectRelationName));
 
-        add(DSL.using(connection), object);
+        add(DSL.using(connection, SQLDialect.H2), object);
     }
 
     public static void addRelation(Connection connection, String relationNamespace,
                                    String relationName) throws SQLException {
         var relation = new Relation(new Namespace(relationNamespace), relationName);
 
-        add(DSL.using(connection), relation);
+        add(DSL.using(connection, SQLDialect.H2), relation);
     }
 
     public static void addSubject(Connection connection, String subjectNamespace, String subjectName,
@@ -102,7 +103,7 @@ abstract public class ReadOracle implements Oracle {
         var subject = new Subject(new Namespace(subjectNamespace), subjectName,
                                   new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
 
-        add(DSL.using(connection), subject);
+        add(DSL.using(connection, SQLDialect.H2), subject);
     }
 
     public static void deleteAssertion(Connection connection, String subjectNamespace, String subjectName,
@@ -115,13 +116,13 @@ abstract public class ReadOracle implements Oracle {
                                 new Relation(new Namespace(objectRelationNamespace), objectRelationName));
         var assertion = subject.assertion(object);
 
-        delete(DSL.using(connection), assertion);
+        delete(DSL.using(connection, SQLDialect.H2), assertion);
     }
 
     public static void deleteNamespace(Connection connection, String name) throws SQLException {
         var namespace = new Namespace(name);
 
-        delete(DSL.using(connection), namespace);
+        delete(DSL.using(connection, SQLDialect.H2), namespace);
     }
 
     public static void deleteObject(Connection connection, String objectNamespace, String objectName,
@@ -129,14 +130,14 @@ abstract public class ReadOracle implements Oracle {
         var object = new Object(new Namespace(objectNamespace), objectName,
                                 new Relation(new Namespace(objectRelationNamespace), objectRelationName));
 
-        delete(DSL.using(connection), object);
+        delete(DSL.using(connection, SQLDialect.H2), object);
     }
 
     public static void deleteRelation(Connection connection, String relationNamespace,
                                       String relationName) throws SQLException {
         var relation = new Relation(new Namespace(relationNamespace), relationName);
 
-        delete(DSL.using(connection), relation);
+        delete(DSL.using(connection, SQLDialect.H2), relation);
     }
 
     public static void deleteSubject(Connection connection, String subjectNamespace, String subjectName,
@@ -144,7 +145,7 @@ abstract public class ReadOracle implements Oracle {
         var subject = new Subject(new Namespace(subjectNamespace), subjectName,
                                   new Relation(new Namespace(subjectRelationNamespace), subjectRelationName));
 
-        delete(DSL.using(connection), subject);
+        delete(DSL.using(connection, SQLDialect.H2), subject);
     }
 
     public static void mapObject(Connection connection, String parentNamespace, String parentName,
@@ -156,7 +157,7 @@ abstract public class ReadOracle implements Oracle {
         var child = new Object(new Namespace(childNamespace), childName,
                                new Relation(new Namespace(childRelationNamespace), childRelationName));
 
-        map(parent, DSL.using(connection), child);
+        map(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     public static void mapRelation(Connection connection, String parentNamespace, String parentName,
@@ -164,7 +165,7 @@ abstract public class ReadOracle implements Oracle {
         var parent = new Relation(new Namespace(parentNamespace), parentName);
         var child = new Relation(new Namespace(childNamespace), childName);
 
-        map(parent, DSL.using(connection), child);
+        map(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     public static void mapSubject(Connection connection, String parentNamespace, String parentName,
@@ -176,7 +177,7 @@ abstract public class ReadOracle implements Oracle {
         var child = new Subject(new Namespace(childNamespace), childName,
                                 new Relation(new Namespace(childRelationNamespace), childRelationName));
 
-        map(parent, DSL.using(connection), child);
+        map(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     public static void removeObject(Connection connection, String parentNamespace, String parentName,
@@ -188,7 +189,7 @@ abstract public class ReadOracle implements Oracle {
         var child = new Object(new Namespace(childNamespace), childName,
                                new Relation(new Namespace(childRelationNamespace), childRelationName));
 
-        remove(parent, DSL.using(connection), child);
+        remove(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     public static void removeRelation(Connection connection, String parentNamespace, String parentName,
@@ -196,7 +197,7 @@ abstract public class ReadOracle implements Oracle {
         var parent = new Relation(new Namespace(parentNamespace), parentName);
         var child = new Relation(new Namespace(childNamespace), childName);
 
-        remove(parent, DSL.using(connection), child);
+        remove(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     public static void removeSubject(Connection connection, String parentNamespace, String parentName,
@@ -208,7 +209,7 @@ abstract public class ReadOracle implements Oracle {
         var child = new Subject(new Namespace(childNamespace), childName,
                                 new Relation(new Namespace(childRelationNamespace), childRelationName));
 
-        remove(parent, DSL.using(connection), child);
+        remove(parent, DSL.using(connection, SQLDialect.H2), child);
     }
 
     static void add(DSLContext context, Assertion assertion) throws SQLException {
@@ -657,11 +658,11 @@ abstract public class ReadOracle implements Oracle {
 
     private final DSLContext dslCtx;
 
-    public ReadOracle(Connection connection) {
-        this(DSL.using(connection));
+    public AbstractOracle(Connection connection) {
+        this(DSL.using(connection, SQLDialect.H2));
     }
 
-    public ReadOracle(DSLContext dslCtx) {
+    public AbstractOracle(DSLContext dslCtx) {
         this.dslCtx = dslCtx;
     }
 

@@ -267,4 +267,10 @@ public interface Oracle {
      */
     Stream<Subject> subjects(Relation predicate, Object object) throws SQLException;
 
+    /**
+     * Delete a Namespace. All objects, subjects, relations and assertions that
+     * reference this namespace will also be deleted.
+     */
+    void delete(Namespace namespace) throws SQLException;
+
 }

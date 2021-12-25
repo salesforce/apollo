@@ -26,6 +26,82 @@
             call
             "com.salesforce.apollo.delphinius.DomainMaintenance"
         </sql>
+        
+        
+        
+        <!-- Add API -->
 
+        <sql>create alias delphinius.addAssertion for
+            "com.salesforce.apollo.delphinius.AbstractOracle.addAssertion"
+        </sql>
+
+        <sql>create alias delphinius.addNamespace for
+            "com.salesforce.apollo.delphinius.AbstractOracle.addNamespace"
+        </sql>
+
+        <sql>create alias delphinius.addObject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.addObject"
+        </sql>
+
+        <sql>create alias delphinius.addRelation for
+            "com.salesforce.apollo.delphinius.AbstractOracle.addRelation"
+        </sql>
+
+        <sql>create alias delphinius.addSubject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.addSubject"
+        </sql>
+
+
+        <!-- Delete API -->
+        
+        <sql>create alias delphinius.deleteAssertion for
+            "com.salesforce.apollo.delphinius.AbstractOracle.deleteAssertion"
+        </sql>
+
+        <sql>create alias delphinius.deleteNamespace for
+            "com.salesforce.apollo.delphinius.AbstractOracle.deleteNamespace"
+        </sql>
+
+        <sql>create alias delphinius.deleteObject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.deleteObject"
+        </sql>
+
+        <sql>create alias delphinius.deleteRelation for
+            "com.salesforce.apollo.delphinius.AbstractOracle.deleteRelation"
+        </sql>
+
+        <sql>create alias delphinius.deleteSubject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.deleteSubject"
+        </sql>
+
+
+        <!-- Map API -->
+
+        <sql>create alias delphinius.mapObject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.mapObject"
+        </sql>
+
+        <sql>create alias delphinius.mapRelation for
+            "com.salesforce.apollo.delphinius.AbstractOracle.mapRelation"
+        </sql>
+
+        <sql>create alias delphinius.mapSubject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.mapSubject"
+        </sql>
+
+
+        <!-- Remove API -->
+
+        <sql>create alias delphinius.removeObject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.removeObject"
+        </sql>
+
+        <sql>create alias delphinius.removeRelation for
+            "com.salesforce.apollo.delphinius.AbstractOracle.removeRelation"
+        </sql>
+
+        <sql>create alias delphinius.removeSubject for
+            "com.salesforce.apollo.delphinius.AbstractOracle.removeSubject"
+        </sql>
     </changeSet>
 </databaseChangeLog>
