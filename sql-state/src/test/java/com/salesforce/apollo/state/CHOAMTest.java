@@ -26,7 +26,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -172,7 +171,6 @@ public class CHOAMTest {
     private File                               checkpointDirBase;
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
-    private ExecutorService                    routerExec;
     private Map<Digest, Router>                routers;
     private ScheduledExecutorService           scheduler;
     private int                                toleranceLevel;
@@ -196,10 +194,6 @@ public class CHOAMTest {
             scheduler.shutdownNow();
             scheduler = null;
         }
-        if (routerExec != null) {
-            routerExec.shutdownNow();
-            routerExec = null;
-        }
         if (txScheduler != null) {
             txScheduler.shutdownNow();
             txScheduler = null;
@@ -219,12 +213,6 @@ public class CHOAMTest {
         toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        AtomicInteger exec = new AtomicInteger();
-        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
-            Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var params = Parameters.newBuilder()
@@ -258,13 +246,20 @@ public class CHOAMTest {
                            .peek(m -> context.activate(m))
                            .toList();
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(CARDINALITY)
-                                                                                             .setMetrics(params.getMetrics()),
-                                                                        routerExec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            AtomicInteger exec = new AtomicInteger();
+            var localRouter = new LocalRouter(prefix, m,
+                                              ServerConnectionCache.newBuilder()
+                                                                   .setTarget(30)
+                                                                   .setMetrics(params.getMetrics()),
+                                              Executors.newFixedThreadPool(2, r -> {
+                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
+                                                  + exec.getAndIncrement() + "]");
+                                                  thread.setDaemon(true);
+                                                  return thread;
+                                              }));
+            return localRouter;
+        }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             return createCHOAM(entropy, params, m);
         }));
@@ -272,7 +267,7 @@ public class CHOAMTest {
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        final Duration timeout = Duration.ofSeconds(6);
+        final Duration timeout = Duration.ofSeconds(3);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");

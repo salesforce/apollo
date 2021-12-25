@@ -133,14 +133,22 @@ public class MembershipTests {
     public void genesisBootstrap() throws Exception {
         SigningMember testSubject = initialize(2000, 5);
         System.out.println("Test subject: " + testSubject);
-        routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId()))
+        routers.entrySet()
+               .stream()
+               .filter(e -> !e.getKey().equals(testSubject.getId()))
                .forEach(r -> r.getValue().start());
-        choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId()))
+        choams.entrySet()
+              .stream()
+              .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
         final int expected = 23;
 
-        Utils.waitForCondition(30_000, 100, () -> blocks.values().stream().mapToInt(l -> l.size())
-                                                        .filter(s -> s >= expected).count() > toleranceLevel);
+        Utils.waitForCondition(30_000, 100,
+                               () -> blocks.values()
+                                           .stream()
+                                           .mapToInt(l -> l.size())
+                                           .filter(s -> s >= expected)
+                                           .count() > toleranceLevel);
         assertTrue(blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count() > toleranceLevel,
                    "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
@@ -152,7 +160,10 @@ public class MembershipTests {
         final int clientCount = 1;
         final int max = 1;
         for (int i = 0; i < clientCount; i++) {
-            choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
+            choams.entrySet()
+                  .stream()
+                  .filter(e -> !e.getKey().equals(testSubject.getId()))
+                  .map(e -> e.getValue())
                   .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler))
                   .forEach(e -> transactioneers.add(e));
         }
@@ -161,7 +172,8 @@ public class MembershipTests {
         boolean success;
         try {
             success = Utils.waitForCondition(30_000, 1_000,
-                                             () -> transactioneers.stream().filter(e -> e.completed.get() >= max)
+                                             () -> transactioneers.stream()
+                                                                  .filter(e -> e.completed.get() >= max)
                                                                   .count() == transactioneers.size());
         } finally {
             proceed.set(false);
@@ -186,37 +198,49 @@ public class MembershipTests {
         toleranceLevel = context.toleranceLevel();
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
-        AtomicInteger exec = new AtomicInteger();
-        Executor routerExec = Executors.newFixedThreadPool(cardinality, r -> {
-            Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
-
-        var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
+        var params = Parameters.newBuilder()
+                               .setContext(context)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
-                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
+                               .setBootstrap(BootstrapParameters.newBuilder()
+                                                                .setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000)
+                                                                .setMaxViewBlocks(1000)
+                                                                .build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(5)).setScheduler(scheduler)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+                               .setGossipDuration(Duration.ofMillis(5))
+                               .setScheduler(scheduler)
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
-                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize);
+                               .setTxnPermits(10_000)
+                               .setCheckpointBlockSize(checkpointBlockSize);
 
-        members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m)).toList();
+        members = IntStream.range(0, cardinality)
+                           .mapToObj(i -> Utils.getMember(i))
+                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .map(e -> (SigningMember) e)
+                           .peek(m -> context.activate(m))
+                           .toList();
         SigningMember testSubject = members.get(cardinality - 1);
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(cardinality)
-                                                                                             .setMetrics(params.getMetrics()),
-                                                                        routerExec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            AtomicInteger exec = new AtomicInteger();
+            var localRouter = new LocalRouter(prefix, m,
+                                              ServerConnectionCache.newBuilder()
+                                                                   .setTarget(cardinality)
+                                                                   .setMetrics(params.getMetrics()),
+                                              Executors.newFixedThreadPool(2, r -> {
+                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
+                                                  + exec.getAndIncrement() + "]");
+                                                  thread.setDaemon(true);
+                                                  return thread;
+                                              }));
+            return localRouter;
+        }));
         Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             blocks.put(m.getId(), new CopyOnWriteArrayList<>());
@@ -242,7 +266,9 @@ public class MembershipTests {
             } else {
                 params.setSynchronizationCycles(3);
             }
-            return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setProcessor(processor)
+            return new CHOAM(params.setMember(m)
+                                   .setCommunications(routers.get(m.getId()))
+                                   .setProcessor(processor)
                                    .build(),
                              MVStore.open(null));
         }));

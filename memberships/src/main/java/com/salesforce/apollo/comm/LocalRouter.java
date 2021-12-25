@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,12 +64,11 @@ public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
-        private final Limit  clientLimit;
-        private final String prefix;
+        private final Supplier<Limit> clientLimit;
+        private final String          prefix;
 
-        public LocalServerConnectionFactory(String prefix, Limit clientLimiter) {
-            this.clientLimit = WindowedLimit.newBuilder().minWindowTime(100, TimeUnit.MILLISECONDS).windowSize(10)
-                                            .build(clientLimiter);
+        public LocalServerConnectionFactory(String prefix, Supplier<Limit> clientLimit) {
+            this.clientLimit = clientLimit;
             this.prefix = prefix;
         }
 
@@ -90,11 +90,13 @@ public class LocalRouter extends Router {
                 }
             };
             final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
-            final InProcessChannelBuilder builder = InProcessChannelBuilder.forName(name).directExecutor()
-                                                                           .intercept(clientInterceptor,
-                                                                                      new ConcurrencyLimitClientInterceptor(new GrpcClientLimiterBuilder().limit(clientLimit)
-                                                                                                                                                          .blockOnLimit(false)
-                                                                                                                                                          .build()));
+            final InProcessChannelBuilder builder;
+            builder = InProcessChannelBuilder.forName(name)
+                                             .directExecutor()
+                                             .intercept(clientInterceptor,
+                                                        new ConcurrencyLimitClientInterceptor(new GrpcClientLimiterBuilder().limit(clientLimit.get())
+                                                                                                                            .blockOnLimit(false)
+                                                                                                                            .build()));
             disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
@@ -145,44 +147,50 @@ public class LocalRouter extends Router {
     private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
 
     public static Limit defaultClientLimit() {
-        return Gradient2Limit.newBuilder().build();
+        return WindowedLimit.newBuilder()
+                            .minWindowTime(500, TimeUnit.MILLISECONDS)
+                            .windowSize(1000)
+                            .build(Gradient2Limit.newBuilder().build());
     }
 
     public static Limit defaultServerLimit() {
-        return Gradient2Limit.newBuilder().build();
+        return WindowedLimit.newBuilder()
+                            .minWindowTime(500, TimeUnit.MILLISECONDS)
+                            .windowSize(1000)
+                            .build(Gradient2Limit.newBuilder().build());
     }
 
     private final Member member;
     private final Server server;
 
-    public LocalRouter(String prefix, Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
-                       Limit serverLimit, Executor executor) {
+    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+                       Supplier<Limit> serverLimit, Executor executor) {
         this(prefix, member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
     }
 
-    public LocalRouter(String prefix, Member member, Limit clientLimit, ServerConnectionCache.Builder builder,
-                       MutableHandlerRegistry registry, Limit serverLimit, Executor executor) {
+    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+                       MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit)).build(), registry);
         this.member = member;
         serverMembers.put(member.getId(), member);
 
         ConcurrencyLimitServerInterceptor limiter;
-        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(WindowedLimit.newBuilder()
-                                                                                                                 .minWindowTime(100,
-                                                                                                                                TimeUnit.MILLISECONDS)
-                                                                                                                 .windowSize(10)
-                                                                                                                 .build(serverLimit))
+        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit.get())
                                                                                              .build())
                                                    .build();
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
-        server = InProcessServerBuilder.forName(name).executor(executor).intercept(interceptor()).intercept(limiter)
-                                       .fallbackHandlerRegistry(registry).build();
+        server = InProcessServerBuilder.forName(name)
+                                       .executor(executor)
+                                       .intercept(interceptor())
+                                       .intercept(limiter)
+                                       .fallbackHandlerRegistry(registry)
+                                       .build();
         log.info("Created server: {} on: {}", name, member);
     }
 
     public LocalRouter(String prefix, Member member, ServerConnectionCache.Builder builder, Executor executor) {
-        this(prefix, member, defaultClientLimit(), builder, new MutableHandlerRegistry(), defaultServerLimit(),
-             executor);
+        this(prefix, member, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(),
+             () -> defaultServerLimit(), executor);
     }
 
     @Override
