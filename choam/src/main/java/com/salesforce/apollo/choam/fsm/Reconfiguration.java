@@ -17,6 +17,10 @@ import com.chiralbehaviors.tron.FsmExecutor;
 public interface Reconfiguration {
     /** Transition events for the view reconfiguration FSM **/
     interface Transitions extends FsmExecutor<Reconfiguration, Transitions> {
+        default Transitions assembled() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions complete() {
             throw fsm().invalidTransitionOn();
         }

@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import java.time.Duration;
-
-import com.google.common.util.concurrent.RateLimiter;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
@@ -37,14 +34,11 @@ public class TerminalServer extends TerminalImplBase {
     @SuppressWarnings("unused")
     private final ChoamMetrics               metrics;
     private final RoutableService<Concierge> router;
-    private final RateLimiter                submitRateLimiter;
 
-    public TerminalServer(ClientIdentity identity, ChoamMetrics metrics, RoutableService<Concierge> router,
-                          int txnPermits) {
+    public TerminalServer(ClientIdentity identity, ChoamMetrics metrics, RoutableService<Concierge> router) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;
-        submitRateLimiter = RateLimiter.create(txnPermits, Duration.ofSeconds(1));
     }
 
     @Override
@@ -92,11 +86,6 @@ public class TerminalServer extends TerminalImplBase {
     @Override
     public void submit(SubmitTransaction request, StreamObserver<SubmitResult> responseObserver) {
         router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
-            if (!submitRateLimiter.tryAcquire()) {
-                responseObserver.onNext(SubmitResult.newBuilder().setSuccess(false).build());
-                responseObserver.onCompleted();
-                return;
-            }
             Digest from = identity.getFrom();
             if (from == null) {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));

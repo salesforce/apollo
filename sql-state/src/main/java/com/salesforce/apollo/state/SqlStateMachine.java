@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.NULL_HANDLER;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -28,7 +26,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -40,12 +37,14 @@ import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
 import org.h2.api.ErrorCode;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 import org.h2.jdbc.JdbcSQLNonTransientException;
 import org.h2.message.DbException;
-import org.h2.store.Data;
+import org.h2.util.CloseWatcher;
+import org.h2.util.DateTimeUtils;
+import org.h2.util.JdbcUtils;
 import org.h2.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,12 +52,6 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Arguments;
@@ -73,9 +66,16 @@ import com.salesfoce.apollo.state.proto.Script;
 import com.salesfoce.apollo.state.proto.Statement;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.state.liquibase.LiquibaseConnection;
+import com.salesforce.apollo.state.liquibase.MigrationAccessor;
+import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
+import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
+import com.salesforce.apollo.state.liquibase.ThreadLocalScopeManager;
+import com.salesforce.apollo.utils.DelegatingJdbcConnector;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
@@ -83,6 +83,7 @@ import liquibase.CatalogAndSchema;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.changelog.ChangeLogHistoryServiceFactory;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
@@ -122,7 +123,7 @@ public class SqlStateMachine {
         }
     }
 
-    public record CurrentBlock(Digest hash, long height) {}
+    public record Current(long height, Digest blkHash, int txn, Digest txnHash) {}
 
     public static class Event {
         public final JsonNode body;
@@ -134,6 +135,51 @@ public class SqlStateMachine {
         }
     }
 
+    public static class ReadOnlyConnector extends DelegatingJdbcConnector {
+
+        private final CloseWatcher watcher;
+
+        public ReadOnlyConnector(Connection wrapped, org.h2.engine.Session session) throws SQLException {
+            super(wrapped);
+            wrapped.setReadOnly(true);
+            wrapped.setAutoCommit(false);
+            this.watcher = CloseWatcher.register(this, session, false);
+        }
+
+        @Override
+        public void close() throws SQLException {
+            CloseWatcher.unregister(watcher);
+        }
+
+        public boolean getAutoCommit() throws SQLException {
+            return false;
+        }
+
+        public boolean isWrapperFor(Class<?> iface) throws SQLException {
+            return false;
+        }
+
+        public void setAutoCommit(boolean autoCommit) throws SQLException {
+            if (autoCommit) {
+                throw new SQLException("Cannot set autocommit on this connection");
+            }
+        }
+
+        public void setReadOnly(boolean readOnly) throws SQLException {
+            if (!readOnly) {
+                throw new SQLException("This is a read only connection");
+            }
+        }
+
+        public void setTransactionIsolation(int level) throws SQLException {
+            throw new SQLException("Cannot set transaction isolation level on this connection");
+        }
+
+        public <T> T unwrap(Class<T> iface) throws SQLException {
+            throw new SQLException("Cannot unwrap: " + iface.getCanonicalName() + "on th connection");
+        }
+    }
+
     public class TxnExec implements TransactionExecutor {
         @Override
         public void beginBlock(long height, Digest hash) {
@@ -141,10 +187,11 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void execute(Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+        public void execute(int index, Digest hash, Transaction tx,
+                            @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
-                closed = connection.isClosed();
+                closed = connection().isClosed();
             } catch (SQLException e) {
                 return;
             }
@@ -158,17 +205,22 @@ public class SqlStateMachine {
                 log.warn("invalid txn", e);
                 return;
             }
-            SqlStateMachine.this.execute(txn, onComplete);
+            withContext(() -> {
+                SqlStateMachine.this.execute(index, hash, txn, onComplete);
+            });
 
         }
 
         @Override
         public void genesis(long height, Digest hash, List<Transaction> initialization) {
             begin(height, hash);
-            initializeState();
-            updateCurrentBlock(height, hash);
+            withContext(() -> {
+                initializeState();
+                updateCurrent(height, hash, -1, Digest.NONE);
+            });
+            int i = 0;
             for (Transaction txn : initialization) {
-                execute(txn, null);
+                execute(i, Digest.NONE, txn, null);
             }
             log.debug("Genesis executed on: {}", url);
         }
@@ -216,9 +268,8 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
-                                                                                     SqlStateMachine.class.getCanonicalName());
-
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+                                                                                                          SqlStateMachine.class.getCanonicalName());
     private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
     private static final RowSetFactory             factory;
     private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
@@ -226,7 +277,8 @@ public class SqlStateMachine {
     private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT_BLOCK                   = "MERGE INTO APOLLO_INTERNAL.CURRENT_BLOCK(_U, HEIGHT, HASH) KEY(_U) VALUES(1, ?1, ?2)";
+    private static final String                    UPDATE_CURRENT                         = "MERGE INTO APOLLO_INTERNAL.CURRENT(_U, HEIGHT, BLOCK_HASH, TRANSACTION, TRANSACTION_HASH) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+
     static {
         ThreadLocalScopeManager.initialize();
     }
@@ -254,18 +306,16 @@ public class SqlStateMachine {
         return true;
     }
 
-    private final LoadingCache<String, CallableStatement> callCache;
-    private final File                                    checkpointDirectory;
-    private final ScriptCompiler                          compiler     = new ScriptCompiler();
-    private final JdbcConnection                          connection;
-    private final AtomicReference<CurrentBlock>           currentBlock = new AtomicReference<>();
-    private final AtomicReference<SecureRandom>           entropy      = new AtomicReference<>();
-    private final TxnExec                                 executor     = new TxnExec();
-    private final Properties                              info;
-    private final LoadingCache<String, PreparedStatement> psCache;
-    private final EventTrampoline                         trampoline   = new EventTrampoline();
-
-    private final String url;
+    private final File                          checkpointDirectory;
+    private final BlockClock                    clock        = new BlockClock();
+    private final ScriptCompiler                compiler     = new ScriptCompiler();
+    private volatile JdbcConnection             connection;
+    private final AtomicReference<Current>      currentBlock = new AtomicReference<>();
+    private final AtomicReference<SecureRandom> entropy      = new AtomicReference<>();
+    private final TxnExec                       executor     = new TxnExec();
+    private final Properties                    info;
+    private final EventTrampoline               trampoline   = new EventTrampoline();
+    private final String                        url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -281,29 +331,15 @@ public class SqlStateMachine {
                 + checkpointDirectory.getAbsolutePath());
             }
         }
-        try {
-            connection = new JdbcConnection(url, info);
-        } catch (SQLException e) {
-            throw new IllegalStateException("Unable to create connection using " + url, e);
-        }
-        try {
-            connection.setAutoCommit(false);
-        } catch (SQLException e) {
-            log.error("Unable to set autocommit to false", e);
-        }
-        callCache = constructCallCache();
-        psCache = constructPsCache();
     }
 
     public void close() {
-        psCache.invalidateAll();
-        callCache.invalidateAll();
         try {
-            connection.rollback();
+            connection().rollback();
         } catch (SQLException e1) {
         }
         try {
-            connection.close();
+            connection().close();
         } catch (SQLException e) {
         }
     }
@@ -315,7 +351,7 @@ public class SqlStateMachine {
     public BiConsumer<Long, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
-            try (java.sql.Statement statement = connection.createStatement()) {
+            try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
                     state.assemble(temp);
@@ -342,7 +378,7 @@ public class SqlStateMachine {
     public Function<Long, File> getCheckpointer() {
         return height -> {
             String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
-            try (java.sql.Statement statement = connection.createStatement()) {
+            try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
                     statement.execute(String.format("SCRIPT DROP TO '%s'", temp.getAbsolutePath()));
@@ -381,7 +417,7 @@ public class SqlStateMachine {
         };
     }
 
-    public CurrentBlock getCurrentBlock() {
+    public Current getCurrentBlock() {
         return currentBlock.get();
     }
 
@@ -389,11 +425,15 @@ public class SqlStateMachine {
         return executor;
     }
 
+    public Mutator getMutator(Session session) {
+        return new Mutator(session, getSession());
+    }
+
     public Connection newConnection() {
         try {
-            return new JdbcConnection(url, info);
+            return new ReadOnlyConnector(new JdbcConnection(getSession(), "", url), getSession());
         } catch (SQLException e) {
-            throw new IllegalStateException("cannot get JDBC connection", e);
+            throw new IllegalStateException(e);
         }
     }
 
@@ -405,7 +445,7 @@ public class SqlStateMachine {
     void commit() {
         try {
             publishEvents();
-            connection.commit();
+            connection().commit();
             trampoline.evaluate();
         } catch (SQLException e) {
             log.trace("unable to commit connection", e);
@@ -414,28 +454,43 @@ public class SqlStateMachine {
 
     // Test accessible
     JdbcConnection connection() {
+        final var current = connection;
+        if (current == null) {
+            withContext(() -> {
+                try {
+                    connection = new JdbcConnection(url, info, "", "");
+                } catch (SQLException e) {
+                    throw new IllegalStateException("Unable to create connection using " + url, e);
+                }
+                try {
+                    connection().setAutoCommit(false);
+                } catch (SQLException e) {
+                    log.error("Unable to set autocommit to false", e);
+                }
+            });
+        }
         return connection;
+    }
+
+    SessionLocal getSession() {
+        return (SessionLocal) connection().getSession();
     }
 
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
 
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
-
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
-            statement = connection.createStatement();
+            statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
         } catch (SQLException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } catch (LiquibaseException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } finally {
-            secureRandom.set(prev);
             if (statement != null) {
                 try {
                     statement.close();
@@ -447,7 +502,7 @@ public class SqlStateMachine {
     }
 
     private int[] acceptBatch(Batch batch) throws SQLException {
-        try (java.sql.Statement exec = connection.createStatement()) {
+        try (java.sql.Statement exec = connection().createStatement()) {
             for (String sql : batch.getStatementsList()) {
                 exec.addBatch(sql);
             }
@@ -468,93 +523,78 @@ public class SqlStateMachine {
     }
 
     private int[] acceptBatchUpdate(BatchUpdate batchUpdate) throws SQLException {
-        PreparedStatement exec;
-        try {
-            exec = psCache.get(batchUpdate.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to get prepared update statement: " + batchUpdate.getSql(), e);
-        }
-        try {
-            for (Arguments args : batchUpdate.getBatchList()) {
-                int i = 0;
-                for (ByteString argument : args.getArgsList()) {
-                    Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-                    setArgument(exec, i++, data.readValue());
-                }
-                exec.addBatch();
-            }
-            return exec.executeBatch();
-        } finally {
+        return execute(batchUpdate.getSql(), exec -> {
             try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
+                for (Arguments args : batchUpdate.getBatchList()) {
+                    int i = 1;
+                    for (Value v : new StreamTransfer(getSession()).read(args.getArgs())) {
+                        setArgument(exec, i++, v);
+                    }
+                    exec.addBatch();
+                }
+                return exec.executeBatch();
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-        }
+        });
     }
 
     private CallResult acceptCall(Call call) throws SQLException {
-        List<ResultSet> results = new ArrayList<>();
-        CallableStatement exec;
-        try {
-            exec = callCache.get(call.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to get callable statement: " + call.getSql(), e);
-        }
-        try {
-            int i = 0;
-            for (ByteString argument : call.getArgsList()) {
-                Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-                setArgument(exec, i++, data.readValue());
-            }
-            for (int p = 0; p < call.getOutParametersCount(); p++) {
-                exec.registerOutParameter(p, call.getOutParameters(p));
-            }
-            List<Object> out = new ArrayList<>();
+        return call(call.getSql(), exec -> {
+            List<ResultSet> results = new ArrayList<>();
+            try {
+                int i = 1;
+                for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
+                                                                                                      .getArgs())) {
+                    setArgument(exec, i++, v);
+                }
+                for (int p = 0; p < call.getOutParametersCount(); p++) {
+                    exec.registerOutParameter(p, call.getOutParameters(p));
+                }
+                List<Object> out = new ArrayList<>();
 
-            switch (call.getExecution()) {
-            case EXECUTE:
-                exec.execute();
-                break;
-            case QUERY:
-                exec.executeQuery();
-                break;
-            case UPDATE:
-                exec.executeUpdate();
-                break;
-            default:
-                log.debug("Invalid statement execution enum: {}", call.getExecution());
-                return new CallResult(out, results);
-            }
-            CachedRowSet rowset = factory.createCachedRowSet();
+                switch (call.getExecution()) {
+                case EXECUTE:
+                    exec.execute();
+                    break;
+                case QUERY:
+                    exec.executeQuery();
+                    break;
+                case UPDATE:
+                    exec.executeUpdate();
+                    break;
+                default:
+                    log.debug("Invalid statement execution enum: {}", call.getExecution());
+                    return new CallResult(out, results);
+                }
+                CachedRowSet rowset = factory.createCachedRowSet();
 
-            rowset.populate(exec.getResultSet());
-            results.add(rowset);
-
-            while (exec.getMoreResults()) {
-                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
+                    rowset.populate(exec.getResultSet());
+                    results.add(rowset);
+                }
+                for (int j = 0; j < call.getOutParametersCount(); j++) {
+                    out.add(exec.getObject(j));
+                }
+                return new CallResult(out, results);
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-            for (int j = 0; j < call.getOutParametersCount(); j++) {
-                out.add(exec.getObject(j));
-            }
-            return new CallResult(out, results);
-        } finally {
-            try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
-            }
-        }
+        });
     }
 
     private Boolean acceptMigration(Migration migration) throws SQLException {
@@ -588,63 +628,50 @@ public class SqlStateMachine {
     }
 
     private List<ResultSet> acceptPreparedStatement(Statement statement) throws SQLException {
-        List<ResultSet> results = new ArrayList<>();
-        PreparedStatement exec;
-        try {
-            exec = psCache.get(statement.getSql());
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof SQLException) {
-                throw (SQLException) e.getCause();
-            }
-            throw new IllegalStateException("Unable to create prepared statement: " + statement.getSql(), e);
-        }
-        try {
-            switch (statement.getExecution()) {
-            case EXECUTE:
-                exec.execute();
-                break;
-            case QUERY:
-                exec.executeQuery();
-                break;
-            case UPDATE:
-                exec.executeUpdate();
-                break;
-            default:
-                log.debug("Invalid statement execution enum: {}", statement.getExecution());
-                return Collections.emptyList();
-            }
-            CachedRowSet rowset = factory.createCachedRowSet();
+        return execute(statement.getSql(), exec -> {
+            List<ResultSet> results = new ArrayList<>();
+            try {
+                switch (statement.getExecution()) {
+                case EXECUTE:
+                    exec.execute();
+                    break;
+                case QUERY:
+                    exec.executeQuery();
+                    break;
+                case UPDATE:
+                    exec.executeUpdate();
+                    break;
+                default:
+                    log.debug("Invalid statement execution enum: {}", statement.getExecution());
+                    return Collections.emptyList();
+                }
+                CachedRowSet rowset = factory.createCachedRowSet();
 
-            rowset.populate(exec.getResultSet());
-            results.add(rowset);
-
-            while (exec.getMoreResults()) {
-                rowset = factory.createCachedRowSet();
                 rowset.populate(exec.getResultSet());
                 results.add(rowset);
+
+                while (exec.getMoreResults()) {
+                    rowset = factory.createCachedRowSet();
+                    rowset.populate(exec.getResultSet());
+                    results.add(rowset);
+                }
+                return results;
+            } finally {
+                try {
+                    exec.clearBatch();
+                    exec.clearParameters();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    // ignore
+                }
             }
-            return results;
-        } finally {
-            try {
-                exec.clearBatch();
-                exec.clearParameters();
-            } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                // ignore
-            }
-        }
+        });
     }
 
     private Object acceptScript(Script script) throws SQLException {
 
         Object instance;
 
-        Value[] args = new Value[script.getArgsCount()];
-        int i = 1;
-        for (ByteString argument : script.getArgsList()) {
-            Data data = Data.create(NULL_HANDLER, argument.toByteArray(), false);
-            args[i++] = data.readValue();
-        }
-
+        Value[] args = new StreamTransfer(script.getArgs().getVersion(), getSession()).read(script.getArgs().getArgs());
         try {
             Class<?> clazz = compiler.getClass(script.getClassName(), script.getSource(), getClass().getClassLoader());
             instance = clazz.getConstructor().newInstance();
@@ -679,22 +706,44 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void begin(long height, Digest hash) {
-        getSession().getRandom().setSeed(new DigestHasher(hash, height).identityHash());
+    private void begin(long height, Digest blkHash) {
+        final var session = getSession();
+        if (session == null) {
+            return;
+        }
+        session.getRandom().setSeed(new DigestHasher(blkHash, height).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
-            secureEntropy.setSeed(hash.getBytes());
+            secureEntropy.setSeed(blkHash.getBytes());
             entropy.set(secureEntropy);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
-        currentBlock.set(new CurrentBlock(hash, height));
+        currentBlock.set(new Current(height, blkHash, 0, Digest.NONE));
+        clock.incrementHeight();
     }
 
     private void beginBlock(long height, Digest hash) {
         begin(height, hash);
-        updateCurrentBlock(height, hash);
-        log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
+        withContext(() -> {
+            updateCurrent(height, hash, -1, Digest.NONE);
+            log.debug("Begin block: {} hash: {} on: {}", height, hash, url);
+        });
+    }
+
+    private <T> T call(String sql, CheckedFunction<CallableStatement, T> execution) throws SQLException {
+        CallableStatement cs = null;
+        try {
+            cs = connection().prepareCall(sql);
+            return execution.apply(cs);
+        } finally {
+            if (cs != null) {
+                try {
+                    cs.close();
+                } catch (SQLException e) {
+                }
+            }
+        }
     }
 
     private void changeLogSync(ChangeLog changeLog) throws LiquibaseException {
@@ -708,7 +757,7 @@ public class SqlStateMachine {
 
     private void clearCheckSums() throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             liquibase.clearCheckSums();
         }
@@ -722,51 +771,9 @@ public class SqlStateMachine {
         onCompletion.complete(results);
     }
 
-    private LoadingCache<String, CallableStatement> constructCallCache() {
-        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, CallableStatement>() {
-            @Override
-            public void onRemoval(RemovalNotification<String, CallableStatement> notification) {
-                try {
-                    notification.getValue().close();
-                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                    // ignore
-                } catch (SQLException e) {
-                    log.error("Error closing cached statment: {}", notification.getKey(), e);
-                }
-            }
-        }).build(new CacheLoader<String, CallableStatement>() {
-            @Override
-            public CallableStatement load(String sql) throws Exception {
-                return connection.prepareCall(sql);
-            }
-        });
-    }
-
-    private LoadingCache<String, PreparedStatement> constructPsCache() {
-        return CacheBuilder.newBuilder().removalListener(new RemovalListener<String, PreparedStatement>() {
-            @Override
-            public void onRemoval(RemovalNotification<String, PreparedStatement> notification) {
-                try {
-                    notification.getValue().close();
-                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-                    // ignore
-                } catch (SQLException e) {
-                    log.error("Error closing cached statment: {}", notification.getKey(), e);
-                }
-            }
-        }).build(new CacheLoader<String, PreparedStatement>() {
-
-            @Override
-            public PreparedStatement load(String sql) throws Exception {
-                return connection.prepareStatement(sql);
-            }
-
-        });
-    }
-
     private void dropAll(Drop drop) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         if (StringUtil.trimToNull(drop.getSchemas()) != null) {
             List<String> schemaNames = StringUtil.splitAndTrim(drop.getSchemas(), ",");
             List<CatalogAndSchema> schemas = new ArrayList<>();
@@ -782,6 +789,28 @@ public class SqlStateMachine {
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
             onCompletion.completeExceptionally(e);
+        }
+    }
+
+    @FunctionalInterface
+    private interface CheckedFunction<A, B> {
+        B apply(A a) throws SQLException;
+    }
+
+    private <T> T execute(String sql, CheckedFunction<PreparedStatement, T> execution) throws SQLException {
+        PreparedStatement ps = null;
+        try {
+            ps = connection().prepareStatement(sql);
+            return execution.apply(ps);
+        } catch (JdbcSQLNonTransientException e) {
+            return null;
+        } finally {
+            if (ps != null) {
+                try {
+                    ps.close();
+                } catch (SQLException e) {
+                }
+            }
         }
     }
 
@@ -802,9 +831,14 @@ public class SqlStateMachine {
         }
     }
 
-    private void execute(Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
-        SecureRandom prev = SqlStateMachine.secureRandom.get();
-        SqlStateMachine.secureRandom.set(SqlStateMachine.this.entropy.get());
+    private void execute(int index, Digest hash, Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
+        log.debug("executing: {}", tx.getExecutionCase());
+        var c = currentBlock.get();
+        updateCurrent(c.height, c.blkHash, index, hash);
+        
+        clock.incrementTxn();
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
+
         try {
             Object results = switch (tx.getExecutionCase()) {
             case BATCH -> SqlStateMachine.this.acceptBatch(tx.getBatch());
@@ -823,73 +857,61 @@ public class SqlStateMachine {
             rollback();
             exception(onCompletion, e);
         } finally {
-            secureRandom.set(prev);
             commit();
         }
     }
 
-    private Session getSession() {
-        return (Session) connection.getSession();
-    }
-
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         var ra = new MigrationAccessor(changeLog.getResources());
         return new baseAndAccessor(new Liquibase(changeLog.getRoot(), ra, database), ra);
     }
 
     private void publishEvents() {
-        PreparedStatement exec;
         try {
-            exec = psCache.get(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof JdbcSQLNonTransientException ||
-                e.getCause() instanceof JdbcSQLNonTransientConnectionException) {
-                return;
-            }
-            log.error("Error publishing events", e.getCause());
-            throw new IllegalStateException("Cannot publish events", e.getCause());
-        }
-        try (ResultSet events = exec.executeQuery()) {
-            while (events.next()) {
-                String channel = events.getString(2);
-                JsonNode body;
-                try {
-                    body = MAPPER.readTree(events.getString(3));
-                } catch (JsonProcessingException e) {
-                    log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
-                    continue;
+            execute(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE, exec -> {
+                try (ResultSet events = exec.executeQuery()) {
+                    while (events.next()) {
+                        String channel = events.getString(2);
+                        JsonNode body;
+                        try {
+                            body = MAPPER.readTree(events.getString(3));
+                        } catch (JsonProcessingException e) {
+                            log.warn("cannot deserialize event: {} channel: {}", events.getInt(1), channel, e);
+                            continue;
+                        }
+                        trampoline.publish(new Event(channel, body));
+                    }
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    return null;
+                } catch (SQLException e) {
+                    log.error("Error retrieving published events", e.getCause());
+                    throw new IllegalStateException("Cannot retrieve published events", e.getCause());
                 }
-                trampoline.publish(new Event(channel, body));
-            }
-        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-            return;
-        } catch (SQLException e) {
-            log.error("Error retrieving published events", e.getCause());
-            throw new IllegalStateException("Cannot retrieve published events", e.getCause());
-        }
+                return null;
+            });
 
-        try {
-            exec = psCache.get(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-        } catch (ExecutionException e) {
-            log.error("Error publishing events", e.getCause());
-            throw new IllegalStateException("Cannot publish events", e.getCause());
-        }
-        try {
-            exec.execute();
-        } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
-            return;
+            execute(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE, exec -> {
+                try {
+                    exec.execute();
+                } catch (JdbcSQLNonTransientException | JdbcSQLNonTransientConnectionException e) {
+                    return null;
+                } catch (SQLException e) {
+                    log.error("Error cleaning published events", e);
+                    throw new IllegalStateException("Cannot clean published events", e);
+                }
+                return null;
+            });
         } catch (SQLException e) {
-            log.error("Error cleaning published events", e);
-            throw new IllegalStateException("Cannot clean published events", e);
+            throw new IllegalStateException("Cannot publish events", e);
         }
 
     }
 
     private void rollback() {
         try {
-            connection.rollback();
+            connection().rollback();
         } catch (SQLException e) {
             log.trace("unable to rollback connection", e);
         }
@@ -911,7 +933,7 @@ public class SqlStateMachine {
 
     private void setArgument(PreparedStatement exec, int i, Value value) {
         try {
-            value.set(exec, i + 1);
+            JdbcUtils.set(exec, i, value, connection());
         } catch (SQLException e) {
             throw new IllegalArgumentException("Illegal argument value: " + value);
         }
@@ -919,7 +941,7 @@ public class SqlStateMachine {
 
     private void tag(String tag) throws LiquibaseException {
         final var database = new H2Database();
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection)));
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase((String) null, new NullResourceAccessor(), database)) {
             liquibase.tag(tag);
         }
@@ -939,29 +961,47 @@ public class SqlStateMachine {
         }
     }
 
-    private void updateCurrentBlock(long height, Digest hash) {
-        PreparedStatement exec;
+    private void updateCurrent(long height, Digest blkHash, int txn, Digest txnHash) {
         try {
-            exec = psCache.get(UPDATE_CURRENT_BLOCK);
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("Unable to get prepared update statement: " + UPDATE_CURRENT_BLOCK, e);
-        }
-        try {
-            exec.setLong(1, height);
-            exec.setString(2, QualifiedBase64.qb64(hash));
-            exec.execute();
+            execute(UPDATE_CURRENT, exec -> {
+                try {
+                    exec.setLong(1, height);
+                    exec.setString(2, QualifiedBase64.qb64(blkHash));
+                    exec.setLong(3, txn);
+                    exec.setString(4, QualifiedBase64.qb64(txnHash));
+                    exec.execute();
+                } catch (SQLException e) {
+                    log.debug("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash,
+                              txn, txnHash, url);
+                    throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
+                } finally {
+                    try {
+                        exec.clearBatch();
+                        exec.clearParameters();
+                    } catch (SQLException e) {
+                        // ignore
+                    }
+                }
+                return null;
+            });
         } catch (SQLException e) {
-            log.debug("Failure to update current block: {} hash: {} on: {}", height, hash, url);
-            throw new IllegalStateException("Cannot update the CURRENT BLOCK on: " + url, e);
-        } finally {
-            try {
-                exec.clearBatch();
-                ;
-                exec.clearParameters();
-            } catch (SQLException e) {
-                // ignore
-            }
+            log.debug("Failure to update current block: {} hash: {} txn: {} hash: {} on: {}", height, blkHash, txn,
+                      txnHash, url);
+            throw new IllegalStateException("Cannot update the CURRENT {block, txn} on: " + url, e);
         }
         commit();
+    }
+
+    private void withContext(Runnable action) {
+        SecureRandom prev = secureRandom.get();
+        secureRandom.set(entropy.get());
+        BlockClock prevClock = DateTimeUtils.CLOCK.get();
+        DateTimeUtils.CLOCK.set(clock);
+        try {
+            action.run();
+        } finally {
+            secureRandom.set(prev);
+            DateTimeUtils.CLOCK.set(prevClock);
+        }
     }
 }

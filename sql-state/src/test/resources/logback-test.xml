@@ -12,14 +12,33 @@
   %msg%n
             </Pattern>
         </encoder>
-    </appender> 
+    </appender>
+
+    <logger name="org.jooq.Constants" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.chiralbehaviors.tron" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+	<logger name="h2database" level="TRACE">
+	    <appender-ref ref="STDOUT" />
+	</logger>
     
     <logger name="liquibase" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
+
+    <logger name="com.salesforce.apollo.ethereal.memberships.ContextGossiper" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>  
@@ -33,13 +52,38 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
+    
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    
+    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.Producer" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>  
 
     <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.tron" level="INFO"
+    <logger name="com.salesforce.apollo.ethereal" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -54,7 +98,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <root level="INFO">
+    <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
 

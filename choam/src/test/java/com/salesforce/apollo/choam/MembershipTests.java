@@ -8,9 +8,6 @@ package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +24,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -197,20 +193,6 @@ public class MembershipTests {
             return thread;
         });
 
-        Function<Long, File> checkpointer = h -> {
-            File cp;
-            try {
-                cp = File.createTempFile("cp-" + h, ".chk");
-                cp.deleteOnExit();
-                try (var os = new FileOutputStream(cp)) {
-                    os.write("Give me food or give me slack or kill me".getBytes());
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-            return cp;
-        };
-
         var params = Parameters.newBuilder().setContext(context).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
                                .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
@@ -221,8 +203,7 @@ public class MembershipTests {
                                                               .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize)
-                               .setCheckpointer(checkpointer);
+                               .setTxnPermits(10_000).setCheckpointBlockSize(checkpointBlockSize);
 
         members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
@@ -248,7 +229,7 @@ public class MembershipTests {
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(Transaction t, CompletableFuture f) {
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.completeAsync(() -> new Object(), clients);

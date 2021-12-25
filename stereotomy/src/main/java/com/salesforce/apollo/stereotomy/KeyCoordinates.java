@@ -12,9 +12,10 @@ import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyCoords;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 /**
+ * The coordinates of a key in the KEL
+ * 
  * @author hal.hildebrand
  *
  */
@@ -29,9 +30,7 @@ public class KeyCoordinates {
     private final int              keyIndex;
 
     public KeyCoords toKeyCoords() {
-        return KeyCoords.newBuilder()
-                        .setEstablishment(establishmentEvent.toEventCoords())
-                        .setKeyIndex(keyIndex)
+        return KeyCoords.newBuilder().setEstablishment(establishmentEvent.toEventCoords()).setKeyIndex(keyIndex)
                         .build();
     }
 

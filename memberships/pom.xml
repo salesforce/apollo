@@ -14,6 +14,10 @@
 			<groupId>com.salesforce.apollo</groupId>
 			<artifactId>protocols</artifactId>
 		</dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>stereotomy</artifactId>
+        </dependency>
 		<dependency>
 			<groupId>io.dropwizard</groupId>
 			<artifactId>dropwizard-metrics</artifactId>

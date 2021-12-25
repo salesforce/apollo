@@ -52,7 +52,6 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -639,8 +638,8 @@ public class Utils {
 
     public static CertificateWithPrivateKey getMember(Digest id) {
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        Date notBefore = Date.from(Instant.now());
-        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        var notBefore = Instant.now();
+        var notAfter = Instant.now().plusSeconds(10_000);
         X509Certificate generated = Certificates.selfSign(false,
                                                           encode(id, "localhost", allocatePort(), keyPair.getPublic()),
                                                           secureEntropy(), keyPair, notBefore, notAfter,
@@ -729,8 +728,8 @@ public class Utils {
      * @return
      */
     public static boolean isClosedConnection(IOException ioe) {
-        return ioe instanceof ClosedChannelException || "Broken pipe".equals(ioe.getMessage())
-        || "Connection reset by peer".equals(ioe.getMessage());
+        return ioe instanceof ClosedChannelException || "Broken pipe".equals(ioe.getMessage()) ||
+               "Connection reset by peer".equals(ioe.getMessage());
     }
 
     public static <T> T locked(Callable<T> call, final Lock lock) {

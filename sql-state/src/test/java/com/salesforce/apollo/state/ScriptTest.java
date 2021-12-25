@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.state;
 
-import static com.salesforce.apollo.state.Mutator.callScript;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Utils;
 
@@ -36,16 +36,18 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                                                       new File("target/chkpoints"));
-        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList()); 
+        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
         Txn txn = Txn.newBuilder()
-                     .setScript(callScript("test.DbAccess", "call",
-                                           Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
+                     .setScript(new Mutator(null,
+                                            machine.getSession()).callScript("test.DbAccess", "call",
+                                                                             Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
+        machine.getExecutor().execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(),
+                                      completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

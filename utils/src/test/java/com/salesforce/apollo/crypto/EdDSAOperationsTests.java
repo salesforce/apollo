@@ -32,7 +32,8 @@ public class EdDSAOperationsTests {
     @Test
     public void test_ED25519_encode() throws GeneralSecurityException {
         var point = new EdECPoint(false,
-                new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c", 16));
+                                  new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c",
+                                                 16));
         var keyFactory = KeyFactory.getInstance("Ed25519");
         var spec = new EdECPublicKeySpec(NamedParameterSpec.ED25519, point);
         var publicKey = (EdECPublicKey) keyFactory.generatePublic(spec);
@@ -55,7 +56,8 @@ public class EdDSAOperationsTests {
         assertEquals(NamedParameterSpec.ED25519.getName(), result.getParams().getName());
 
         var expectedPoint = new EdECPoint(false,
-                new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c", 16));
+                                          new BigInteger("791e61f6798344fc47c1112d1bd53c896b0a5f0fbcae6e3edf70b26c3507f0c",
+                                                         16));
         assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
         assertEquals(expectedPoint.getY(), result.getPoint().getY());
     }
@@ -98,7 +100,7 @@ public class EdDSAOperationsTests {
         var pkb = Hex.unhex("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c");
         var msg = Hex.unhex("72");
         var expectedSig = Hex.unhex("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da"
-                + "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00");
+        + "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00");
 
         var privateKeySpec = new EdECPrivateKeySpec(NamedParameterSpec.ED25519, skb);
         var kf = KeyFactory.getInstance("EdDSA");
@@ -107,7 +109,7 @@ public class EdDSAOperationsTests {
         var ops = SignatureAlgorithm.ED_25519;
         var sig = ops.sign(privateKey, msg);
 
-        assertArrayEquals(expectedSig, sig.getBytes());
+        assertArrayEquals(expectedSig, sig.getBytes()[0]);
 
         var publicKey = ops.publicKey(pkb);
         assertTrue(ops.verify(publicKey, sig, msg));
@@ -124,9 +126,9 @@ public class EdDSAOperationsTests {
 
     @Test
     public void test_ED448_encode() throws GeneralSecurityException {
-        var point = new EdECPoint(true, new BigInteger(
-                "c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
-                16));
+        var point = new EdECPoint(true,
+                                  new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
+                                                 16));
         var keyFactory = KeyFactory.getInstance("Ed448");
         var spec = new EdECPublicKeySpec(NamedParameterSpec.ED448, point);
         var publicKey = (EdECPublicKey) keyFactory.generatePublic(spec);
@@ -148,18 +150,17 @@ public class EdDSAOperationsTests {
         assertEquals("Ed448", result.getAlgorithm());
         assertEquals(NamedParameterSpec.ED448.getName(), result.getParams().getName());
 
-        var expectedPoint = new EdECPoint(true, new BigInteger(
-                "c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
-                16));
+        var expectedPoint = new EdECPoint(true,
+                                          new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
+                                                         16));
         assertEquals(expectedPoint.isXOdd(), result.getPoint().isXOdd());
         assertEquals(expectedPoint.getY(), result.getPoint().getY());
     }
 
     @Test
     public void test_ED448_encodeDecodeRoundtrip() throws GeneralSecurityException {
-        final var ecPointY = new BigInteger(
-                "c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
-                16);
+        final var ecPointY = new BigInteger("c5063dca640dca6f3db3b385626db1e6fc4265648de7d83f79a2fcf0db04a8f53796daeb18c3d622db05bd729945f14421f1b84b6af39baf",
+                                            16);
         var point = new EdECPoint(true, ecPointY);
         var keyFactory = KeyFactory.getInstance("Ed448");
         var spec = new EdECPublicKeySpec(NamedParameterSpec.ED448, point);
@@ -203,7 +204,7 @@ public class EdDSAOperationsTests {
         var ops = SignatureAlgorithm.ED_448;
         var sig = ops.sign(privateKey, msg);
 
-        assertArrayEquals(expectedSig, sig.getBytes());
+        assertArrayEquals(expectedSig, sig.getBytes()[0]);
 
         var publicKey = ops.publicKey(pkb);
         assertTrue(ops.verify(publicKey, sig, msg));

@@ -10,12 +10,12 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.Identifier.coordinateOrdering;
 import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptOrdering;
 import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptPrefix;
-import static com.salesforce.apollo.stereotomy.identifier.Identifier.signatures;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -23,30 +23,32 @@ import java.util.OptionalLong;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.WriteBuffer;
-import org.h2.mvstore.type.DataType;
+import org.h2.mvstore.type.BasicDataType;
 
 import com.google.protobuf.AbstractMessage;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -55,11 +57,16 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  */
 public class MvLog implements KERL {
 
-    private static class ProtobuffDataType implements DataType {
+    private static class ProtobuffDataType extends BasicDataType<Object> {
 
         @Override
         public int compare(Object a, Object b) {
             return 0;
+        }
+
+        @Override
+        public Object[] createStorage(int size) {
+            return new Object[size];
         }
 
         @Override
@@ -74,13 +81,6 @@ public class MvLog implements KERL {
                 return wrap(any.unpack(classOf(any)));
             } catch (IOException e) {
                 throw new IllegalStateException("Cannot read", e);
-            }
-        }
-
-        @Override
-        public void read(ByteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                obj[i] = read(buff);
             }
         }
 
@@ -105,19 +105,12 @@ public class MvLog implements KERL {
             }
         }
 
-        @Override
-        public void write(WriteBuffer buff, Object[] obj, int len, boolean key) {
-            for (int i = 0; i < len; i++) {
-                write(buff, obj[i]);
-            }
-        }
-
         private Class<? extends AbstractMessage> classOf(Any any) {
             if (any.is(com.salesfoce.apollo.stereotomy.event.proto.KeyState.class)) {
                 return com.salesfoce.apollo.stereotomy.event.proto.KeyState.class;
             }
-            if (any.is(Signatures.class)) {
-                return Signatures.class;
+            if (any.is(Sig.class)) {
+                return Sig.class;
             }
             if (any.is(InceptionEvent.class)) {
                 return InceptionEvent.class;
@@ -142,12 +135,12 @@ public class MvLog implements KERL {
             case "InceptionEvent": {
                 InceptionEvent event = (InceptionEvent) msg;
                 yield (event.hasDelegatingEvent()) ? new DelegatedInceptionEventImpl(event)
-                        : new InceptionEventImpl(event);
+                                                   : new InceptionEventImpl(event);
             }
             case "RotationEvent": {
                 RotationEvent event = (RotationEvent) msg;
                 yield (event.hasDelegatingSeal()) ? new DelegatedRotationEventImpl(event)
-                        : new RotationEventImpl(event);
+                                                  : new RotationEventImpl(event);
             }
             case "InteractionEvent": {
                 yield new InteractionEventImpl((InteractionEvent) msg);
@@ -170,10 +163,11 @@ public class MvLog implements KERL {
     private static final String RECEIPTS                = "RECEIPTS";
 
     // Order by <stateOrdering>
-    private final MVMap<String, Signatures> authentications;
-    private final DigestAlgorithm           digestAlgorithm;
+    private final MVMap<String, Sig> authentications;
+    private final DigestAlgorithm    digestAlgorithm;
     // Order by <stateOrdering>
-    private final MVMap<String, Signatures> endorsements;
+    @SuppressWarnings("unused")
+    private final MVMap<String, List<Sig>> endorsements;
     // Order by <stateOrdering>
     private final MVMap<String, KeyEvent> events;
     private final MVMap<String, String>   eventsByHash;
@@ -184,20 +178,21 @@ public class MvLog implements KERL {
     // Order by <stateOrdering>
     private final MVMap<String, Long>   lastReceipt;
     private final MVMap<String, String> locationToHash;
+    private final KeyEventProcessor     processor = new KeyEventProcessor(this);
     // Order by <receiptOrdering>
-    private final MVMap<String, Signatures> receipts;
+    private final MVMap<String, Sig> receipts;
 
     public MvLog(DigestAlgorithm digestAlgorithm, MVStore store) {
         this.digestAlgorithm = digestAlgorithm;
         ProtobuffDataType serializer = new ProtobuffDataType();
 
-        authentications = store.openMap(AUTHENTICATIONS, new MVMap.Builder<String, Signatures>().valueType(serializer));
+        authentications = store.openMap(AUTHENTICATIONS, new MVMap.Builder<String, Sig>().valueType(serializer));
         lastReceipt = store.openMap(LAST_RECEIPT);
-        endorsements = store.openMap(ENDORSEMENTS, new MVMap.Builder<String, Signatures>().valueType(serializer));
+        endorsements = store.openMap(ENDORSEMENTS, new MVMap.Builder<String, List<Sig>>().valueType(serializer));
         events = store.openMap(EVENTS, new MVMap.Builder<String, KeyEvent>().valueType(serializer));
         keyState = store.openMap(KEY_STATE, new MVMap.Builder<String, KeyState>().valueType(serializer));
         keyStateByIdentifier = store.openMap(KEY_STATE_BY_IDENTIFIER);
-        receipts = store.openMap(RECEIPTS, new MVMap.Builder<String, Signatures>().valueType(serializer));
+        receipts = store.openMap(RECEIPTS, new MVMap.Builder<String, Sig>().valueType(serializer));
         eventsByHash = store.openMap(EVENTS_BY_HASH);
         locationToHash = store.openMap(LOCATION_TO_HASH);
     }
@@ -210,14 +205,10 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public void append(KeyEvent event, KeyState newState) {
-        String coordinates = coordinateOrdering(event.getCoordinates());
-        events.put(coordinates, event);
-        String hashstring = qb64(newState.getDigest());
-        eventsByHash.put(hashstring, coordinates);
-        locationToHash.put(coordinates, hashstring);
-        keyState.put(coordinates, newState);
-        keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
+    public KeyState append(KeyEvent event) {
+        final var newState = processor.process(event);
+        append(event, newState);
+        return newState;
     }
 
     @Override
@@ -232,9 +223,11 @@ public class MvLog implements KERL {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIlk(),
-                coordinates.getIdentifier(), coordinates.getPreviousEvent().getDigest(),
-                coordinates.getSequenceNumber())));
+        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
+                                                                               coordinates.getSequenceNumber(),
+                                                                               coordinates.getPreviousEvent()
+                                                                                          .getDigest(),
+                                                                               coordinates.getIlk())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 
@@ -250,11 +243,6 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public Optional<String> getKeyEventHash(EventCoordinates coordinates) {
-        return Optional.of(locationToHash.get(coordinateOrdering(coordinates)));
-    }
-
-    @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
         return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
     }
@@ -266,15 +254,23 @@ public class MvLog implements KERL {
         return stateHash == null ? Optional.empty() : Optional.ofNullable(keyState.get(stateHash));
     }
 
-    private void appendAttachments(EventCoordinates coordinates, Map<Integer, JohnHancock> signatures,
-                                   Map<Integer, JohnHancock> receipts,
-                                   Map<EventCoordinates, Map<Integer, JohnHancock>> otherReceipts) {
+    private void append(KeyEvent event, KeyState newState) {
+        String coordinates = coordinateOrdering(event.getCoordinates());
+        events.put(coordinates, event);
+        String hashstring = qb64(newState.getDigest());
+        eventsByHash.put(hashstring, coordinates);
+        locationToHash.put(coordinates, hashstring);
+        keyState.put(coordinates, newState);
+        keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
+    }
+
+    private void appendAttachments(EventCoordinates coordinates, JohnHancock signatures, List<JohnHancock> list,
+                                   Map<EventCoordinates, JohnHancock> otherReceipts) {
         String coords = coordinateOrdering(coordinates);
-        authentications.put(coords, signatures(signatures));
-        endorsements.put(coords, signatures(receipts));
+        authentications.put(coords, signatures.toSig());
         for (var otherReceipt : otherReceipts.entrySet()) {
             var key = receiptOrdering(coordinates, otherReceipt.getKey());
-            this.receipts.put(key, signatures(otherReceipt.getValue()));
+            this.receipts.put(key, otherReceipt.getValue().toSig());
             lastReceipt.put(receiptPrefix(coordinates.getIdentifier(), otherReceipt.getKey().getIdentifier()),
                             coordinates.getSequenceNumber());
         }

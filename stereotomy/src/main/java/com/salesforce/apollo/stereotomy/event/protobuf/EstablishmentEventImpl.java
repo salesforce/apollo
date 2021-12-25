@@ -18,8 +18,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 
 /**
  * @author hal.hildebrand

@@ -7,11 +7,12 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_INCEPTION_TYPE;
+import static com.salesforce.apollo.stereotomy.event.KeyEvent.DELEGATED_ROTATION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INCEPTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.INTERACTION_TYPE;
 import static com.salesforce.apollo.stereotomy.event.KeyEvent.ROTATION_TYPE;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -19,18 +20,18 @@ import com.salesfoce.apollo.stereotomy.event.proto.Establishment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
+import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.Stereotomy.EventFactory;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -41,6 +42,21 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
+
+    public static KeyEvent toKeyEvent(byte[] event, String ilk) {
+        try {
+            return switch (ilk) {
+            case ROTATION_TYPE -> new RotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+            case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+            case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.parseFrom(event));
+            case INCEPTION_TYPE -> new InceptionEventImpl(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.parseFrom(event));
+            case INTERACTION_TYPE -> new InteractionEventImpl(InteractionEvent.parseFrom(event));
+            default -> null;
+            };
+        } catch (Throwable e) {
+            return null;
+        }
+    }
 
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
         if (signingThreshold.getWeightsCount() == 0) {
@@ -57,10 +73,7 @@ public class ProtobufEventFactory implements EventFactory {
                 @Override
                 public Weight[][] getWeights() {
                     Weight[][] weights = new Weight[signingThreshold.getWeightsCount()][];
-                    signingThreshold.getWeightsList()
-                                    .stream()
-                                    .map(w -> weightArrayFrom(w))
-                                    .collect(Collectors.toList())
+                    signingThreshold.getWeightsList().stream().map(w -> weightArrayFrom(w)).collect(Collectors.toList())
                                     .toArray(new Weight[signingThreshold.getWeightsCount()][]);
                     return weights;
                 }
@@ -119,32 +132,22 @@ public class ProtobufEventFactory implements EventFactory {
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
         var bs = identifierSpec(prefix, specification).toByteString();
-        var signature = specification.getSigner().sign(bs);
 
-        var common = EventCommon.newBuilder().putAllAuthentication(Map.of(0, signature.toSig()));
+        var common = EventCommon.newBuilder().setAuthentication(specification.getSigner().sign(bs).toSig());
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
 
-        return new InceptionEventImpl(
-                builder.setIdentifier(prefix.toIdent()).setCommon(common).setSpecification(inceptionStatement).build());
+        return new InceptionEventImpl(builder.setIdentifier(prefix.toIdent()).setCommon(common)
+                                             .setSpecification(inceptionStatement).build());
     }
 
     @Override
     public KeyEvent interaction(InteractionSpecification specification) {
         InteractionSpec ispec = interactionSpec(specification);
-        Map<Integer, JohnHancock> signatures = Map.of();
-
-        if (specification.getSigner() != null) {
-            var signature = specification.getSigner().sign(ispec.toByteString());
-            signatures = Map.of(0, signature);
-        }
-
-        var common = EventCommon.newBuilder()
-                                .setPrevious(specification.getPrevious().toEventCoords())
-                                .putAllAuthentication(signatures.entrySet()
-                                                                .stream()
-                                                                .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                          e -> e.getValue().toSig())));
+        final var bs = ispec.toByteString();
+        var signatures = specification.getSigner().sign(bs).toSig();
+        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+                                .setAuthentication(signatures);
         com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
@@ -152,20 +155,13 @@ public class ProtobufEventFactory implements EventFactory {
     @Override
     public RotationEvent rotation(RotationSpecification specification) {
         var rotationSpec = rotationSpec(specification.getIdentifier(), specification);
-        Map<Integer, JohnHancock> signatures = Map.of();
 
-        if (specification.getSigner() != null) {
-            var signature = specification.getSigner().sign(rotationSpec.toByteArray());
-            signatures = Map.of(0, signature);
-        }
+        final var bs = rotationSpec.toByteString();
+        var signatures = specification.getSigner().sign(bs).toSig();
 
-        var common = EventCommon.newBuilder()
-                                .setPrevious(specification.getPrevious().toEventCoords())
-                                .putAllAuthentication(signatures.entrySet()
-                                                                .stream()
-                                                                .collect(Collectors.toMap(e -> e.getKey(),
-                                                                                          e -> e.getValue().toSig())));
-        com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
+        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+                                .setAuthentication(signatures);
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
     }
 
@@ -176,50 +172,33 @@ public class ProtobufEventFactory implements EventFactory {
     private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toDigeste())
+                                                                                                 : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder()
-                           .setSequenceNumber(0)
-                           .setVersion(toVersion(specification.getVersion()))
-                           .setPriorEventDigest(Digest.NONE.toDigeste())
-                           .setIdentifier(identifier.toIdent())
+        var header = Header.newBuilder().setSequenceNumber(0).setVersion(toVersion(specification.getVersion()))
+                           .setPriorEventDigest(Digest.NONE.toDigeste()).setIdentifier(identifier.toIdent())
                            .setIlk(INCEPTION_TYPE);
 
-        return IdentifierSpec.newBuilder()
-                             .setHeader(header)
-                             .setEstablishment(establishment)
-                             .addAllWitnesses(specification.getWitnesses()
-                                                           .stream()
-                                                           .map(i -> i.toIdent())
+        return IdentifierSpec.newBuilder().setHeader(header).setEstablishment(establishment)
+                             .addAllWitnesses(specification.getWitnesses().stream().map(i -> i.toIdent())
                                                            .collect(Collectors.toList()))
-                             .addAllConfiguration(specification.getConfigurationTraits()
-                                                               .stream()
-                                                               .map(ct -> ct.name())
+                             .addAllConfiguration(specification.getConfigurationTraits().stream().map(ct -> ct.name())
                                                                .collect(Collectors.toList()))
                              .build();
     }
 
     private InteractionSpec interactionSpec(InteractionSpecification specification) {
 
-        Header header = Header.newBuilder()
-                              .setSequenceNumber(specification.getSequenceNumber())
+        Header header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
                               .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                        .name()))
-                              .setIdentifier(specification.getIdentifier().toIdent())
-                              .setIlk(INTERACTION_TYPE)
-                              .build();
+                              .setIdentifier(specification.getIdentifier().toIdent()).setIlk(INTERACTION_TYPE).build();
 
-        return InteractionSpec.newBuilder()
-                              .setHeader(header)
-                              .addAllSeals(specification.getSeals()
-                                                        .stream()
-                                                        .map(e -> e.toSealed())
+        return InteractionSpec.newBuilder().setHeader(header)
+                              .addAllSeals(specification.getSeals().stream().map(e -> e.toSealed())
                                                         .collect(Collectors.toList()))
                               .build();
     }
@@ -227,31 +206,21 @@ public class ProtobufEventFactory implements EventFactory {
     private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys()
-                                                                  .stream()
-                                                                  .map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
-                                                 : specification.getNextKeys()).toDigeste())
+                                                                                                 : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder()
-                           .setSequenceNumber(specification.getSequenceNumber())
+        var header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
                            .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                     .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
-                           .setIdentifier(identifier.toIdent())
-                           .setIlk(ROTATION_TYPE);
+                           .setIdentifier(identifier.toIdent()).setIlk(ROTATION_TYPE);
 
-        return RotationSpec.newBuilder()
-                           .setHeader(header)
-                           .setEstablishment(establishment)
-                           .addAllWitnessesAdded(specification.getAddedWitnesses()
-                                                              .stream()
-                                                              .map(i -> i.toIdent())
+        return RotationSpec.newBuilder().setHeader(header).setEstablishment(establishment)
+                           .addAllWitnessesAdded(specification.getAddedWitnesses().stream().map(i -> i.toIdent())
                                                               .collect(Collectors.toList()))
-                           .addAllWitnessesRemoved(specification.getRemovedWitnesses()
-                                                                .stream()
-                                                                .map(i -> i.toIdent())
+                           .addAllWitnessesRemoved(specification.getRemovedWitnesses().stream().map(i -> i.toIdent())
                                                                 .collect(Collectors.toList()))
                            .build();
     }

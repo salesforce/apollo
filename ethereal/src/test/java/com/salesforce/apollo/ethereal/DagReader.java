@@ -101,8 +101,9 @@ public class DagReader {
 
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
                                                DigestAlgorithm algo, Signer signer) {
-        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData);
+        byte[] salt = {};
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt );
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
-                           rsData, signature);
+                           rsData, signature, salt);
     }
 }

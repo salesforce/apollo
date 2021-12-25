@@ -13,7 +13,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +41,18 @@ import com.salesforce.apollo.utils.CapacityBatchingQueue;
  */
 public class TxDataSource implements DataSource {
 
+    private enum Mode {
+        CLOSED, DRAIN, UNIT, VALIDATIONS;
+    }
+
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
-    private final AtomicBoolean                      closed          = new AtomicBoolean();
     private final Member                             member;
+    private AtomicReference<Mode>                    mode        = new AtomicReference<>(Mode.UNIT);
     private final CapacityBatchingQueue<Transaction> processing;
-    private final BlockingQueue<Validate>            validations     = new LinkedBlockingQueue<>();
-    private final AtomicBoolean                      validationsOnly = new AtomicBoolean(false);
+    private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount) {
@@ -61,33 +64,47 @@ public class TxDataSource implements DataSource {
     }
 
     public void close() {
-        closed.set(true);
-        validationsOnly.set(false);
+        mode.set(Mode.CLOSED);
         final var current = blockingThread;
         if (current != null) {
             current.interrupt();
         }
         blockingThread = null;
-        log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size());
+        log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size(),
+                  member);
+    }
+
+    public void drain() {
+        log.trace("Setting data source mode to DRAIN on: {}", member);
+        mode.set(Mode.DRAIN);
     }
 
     @Override
     public ByteString getData() {
-        if (closed.get()) {
-            return ByteString.EMPTY;
-        }
-//        log.info("Requesting Unit data on: {}",  member);
         var builder = UnitData.newBuilder();
-
-        if (validationsOnly.get()) {
+        switch (mode.get()) {
+        case CLOSED:
+            return ByteString.EMPTY;
+        case DRAIN:
+        case UNIT:
+            log.trace("Requesting unit data on: {}", member);
+            Queue<Transaction> batch;
+            try {
+                batch = processing.blockingTakeWithTimeout(batchInterval, true);
+            } catch (InterruptedException e) {
+                return ByteString.EMPTY;
+            }
+            if (batch != null) {
+                builder.addAllTransactions(batch);
+            }
+            break;
+        case VALIDATIONS:
+            log.trace("Requesting validations only on: {}", member);
             blockingThread = Thread.currentThread();
             try {
                 Validate validation = validations.poll(1, TimeUnit.SECONDS);
-                while (!closed.get() && validation == null) {
+                while (validation == null) {
                     validation = validations.poll(2, TimeUnit.MILLISECONDS);
-                }
-                if (closed.get()) {
-                    return ByteString.EMPTY;
                 }
                 builder.addValidations(validation);
             } catch (InterruptedException e) {
@@ -95,16 +112,9 @@ public class TxDataSource implements DataSource {
             } finally {
                 blockingThread = null;
             }
-        } else {
-            Queue<Transaction> batch;
-            try {
-                batch = processing.blockingTakeWithTimeout(batchInterval);
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            }
-            if (batch != null) {
-                builder.addAllTransactions(batch);
-            }
+            break;
+        default:
+            break;
         }
 
         var vdx = new ArrayList<Validate>();
@@ -114,7 +124,7 @@ public class TxDataSource implements DataSource {
         final var data = builder.build();
         final var bs = data.toByteString();
 
-        log.trace("Unit data txns: {} validations: {} totalling: {} bytes  on: {}", data.getTransactionsCount(),
+        log.trace("Unit data: {} txns, {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
                   data.getValidationsCount(), bs.size(), member);
         return bs;
     }
@@ -132,10 +142,12 @@ public class TxDataSource implements DataSource {
     }
 
     public boolean offer(Transaction txn) {
-        if (closed.get() || validationsOnly.get()) {
+        switch (mode.get()) {
+        case UNIT:
+            return processing.offer(txn);
+        default:
             return false;
         }
-        return processing.offer(txn);
     }
 
     public void offer(Validate generateValidation) {
@@ -146,7 +158,8 @@ public class TxDataSource implements DataSource {
         processing.start(batchInterval, scheduler);
     }
 
-    public void validationsOnly(boolean only) {
-        validationsOnly.set(only);
+    public void validationsOnly() {
+        log.trace("Setting data source mode to VALIDATIONS on: {}", member);
+        mode.set(Mode.VALIDATIONS);
     }
 }

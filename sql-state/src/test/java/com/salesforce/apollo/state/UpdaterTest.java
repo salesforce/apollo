@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
@@ -57,7 +58,7 @@ public class UpdaterTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(transaction, null);
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from books");
         assertTrue(books.first());
@@ -108,12 +109,12 @@ public class UpdaterTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_curBlock", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        
+
         executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();
-        ResultSet cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT_BLOCK");
+        ResultSet cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(0, cb.getLong(2));
@@ -121,7 +122,7 @@ public class UpdaterTest {
         assertFalse(cb.next(), "Should be only 1 record");
 
         executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
-        cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT_BLOCK");
+        cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(1, cb.getLong(2));

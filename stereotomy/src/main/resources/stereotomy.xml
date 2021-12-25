@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+	<changeSet author="hhildebrand" id="1">
+		<sql>create schema if not exists stereotomy_kerl</sql>
+
+		<createTable tableName="identifier"
+			schemaName="stereotomy_kerl">
+			<column autoIncrement="true" generationType="ALWAYS" name="id"
+				type="INT8">
+				<constraints nullable="false" primaryKey="true"
+					primaryKeyName="identifier_pkey" />
+			</column>
+			<column name="prefix" type="VARBINARY">
+				<constraints nullable="false" />
+			</column>
+		</createTable>
+
+		<addUniqueConstraint columnNames="prefix"
+			tableName="identifier" schemaName="stereotomy_kerl" />
+
+		<createTable tableName="coordinates"
+			schemaName="stereotomy_kerl">
+			<column autoIncrement="true" generationType="ALWAYS" name="id"
+				type="INT8">
+				<constraints nullable="false" primaryKey="true"
+					primaryKeyName="coordinates_pkey" />
+			</column>
+			<column name="identifier" type="INT8">
+				<constraints nullable="false" />
+			</column>
+			<column name="digest" type="VARBINARY">
+				<constraints nullable="false" />
+			</column>
+			<column name="sequence_number" type="INT8">
+				<constraints nullable="false" />
+			</column>
+			<column name="ilk" type="VARCHAR(3)">
+				<constraints nullable="false" />
+			</column>
+		</createTable>
+
+		<sql>alter table stereotomy_kerl.coordinates add constraint
+			coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp', 'ixn',
+			'nan', 'rct', 'vrc', 'rot'))
+		</sql>
+
+		<addUniqueConstraint
+			columnNames="identifier, digest, sequence_number, ilk"
+			tableName="coordinates" schemaName="stereotomy_kerl" />
+
+		<createIndex tableName="coordinates"
+			schemaName="stereotomy_kerl" indexName="coordinates_identifier_idx">
+			<column name="identifier" />
+		</createIndex>
+
+		<createTable tableName="event"
+			schemaName="stereotomy_kerl">
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="event_coordinates_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="digest" type="VARBINARY">
+				<constraints nullable="false" />
+			</column>
+			<column name="content" type="VARBINARY">
+				<constraints nullable="false" />
+			</column>
+			<column name="previous" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="event_previous_fk"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="last_establishing_event" type="INT8">
+				<constraints nullable="true"
+					foreignKeyName="event_last_establishing_event_fk"
+					referencedTableName="event" referencedColumnNames="coordinates"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="current_state" type="VARBINARY" />
+			<column name="endorsements" type="VARBINARY" />
+			<column name="receipts" type="VARBINARY" />
+		</createTable>
+
+		<createTable tableName="current_key_state"
+			schemaName="stereotomy_kerl">
+			<column name="identifier" type="INT8">
+				<constraints nullable="false" primaryKey="true"
+					foreignKeyName="current_key_state_identifier_fk"
+					referencedTableName="identifier" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="current" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_key_state_current_fk"
+					referencedTableName="event" referencedColumnNames="coordinates"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+		</createTable>
+
+		<createTable tableName="current_receipts">
+			<column name="for" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_receipt_for_identifier_fk"
+					primaryKey="true" referencedTableName="coordinates"
+					referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="by" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_receipt_by_fk" primaryKey="true"
+					referencedTableName="coordinates" referencedColumnNames="id"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="coordinates" type="INT8">
+				<constraints nullable="false"
+					foreignKeyName="current_receipt_coordinates_fk" primaryKey="true"
+					referencedTableName="event" referencedColumnNames="coordinates"
+					referencedTableSchemaName="stereotomy_kerl" />
+			</column>
+			<column name="receipts" type="VARBINARY">
+				<constraints nullable="false" />
+			</column>
+		</createTable>
+
+	</changeSet>
+</databaseChangeLog>

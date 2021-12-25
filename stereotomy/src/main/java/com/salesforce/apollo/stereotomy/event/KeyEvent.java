@@ -6,11 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import java.util.Map;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -23,31 +22,32 @@ public interface KeyEvent {
     public static final String DELEGATED_ROTATION_TYPE        = "drt";
     public static final String INCEPTION_TYPE                 = "icp";
     public static final String INTERACTION_TYPE               = "ixn";
+    public static final String NONE                           = "nan";
     public static final String RECEIPT_FROM_BASIC_TYPE        = "rct";
     public static final String RECEIPT_FROM_TRANSFERABLE_TYPE = "vrc";
     public static final String ROTATION_TYPE                  = "rot";
 
-    default EventCoordinates getCoordinates() {
-        return new EventCoordinates(getIlk(), getIdentifier(), getPriorEventDigest(), getSequenceNumber());
-    }
+    JohnHancock getAuthentication();
 
-    Digest getPriorEventDigest();
+    byte[] getBytes();
+
+    default EventCoordinates getCoordinates() {
+        return new EventCoordinates(getIdentifier(), getSequenceNumber(), getPriorEventDigest(), getIlk());
+    }
 
     Format getFormat();
 
     Identifier getIdentifier();
 
+    String getIlk();
+
     EventCoordinates getPrevious();
+
+    Digest getPriorEventDigest();
 
     long getSequenceNumber();
 
     Version getVersion();
 
     Digest hash(DigestAlgorithm digest);
-
-    Map<Integer, JohnHancock> getAuthentication();
-
-    byte[] getBytes();
-
-    String getIlk();
 }

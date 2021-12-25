@@ -10,16 +10,13 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCommon;
 import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
@@ -42,11 +39,8 @@ abstract public class KeyEventImpl implements KeyEvent {
     }
 
     @Override
-    public Map<Integer, JohnHancock> getAuthentication() {
-        return common.getAuthenticationMap()
-                     .entrySet()
-                     .stream()
-                     .collect(Collectors.toMap(e -> e.getKey(), e -> signature(e.getValue())));
+    public JohnHancock getAuthentication() {
+        return signature(common.getAuthentication());
     }
 
     @Override

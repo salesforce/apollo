@@ -17,8 +17,8 @@ import java.util.stream.Stream;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
 import com.salesforce.apollo.utils.Hex;
 
 /**

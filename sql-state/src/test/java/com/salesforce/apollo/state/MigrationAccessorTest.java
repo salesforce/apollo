@@ -19,6 +19,7 @@ import org.bouncycastle.util.Strings;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.state.liquibase.MigrationAccessor;
 
 /**
  * @author hal.hildebrand

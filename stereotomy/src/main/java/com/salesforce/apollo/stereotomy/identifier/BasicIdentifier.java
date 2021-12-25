@@ -10,17 +10,21 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 
+import java.io.InputStream;
 import java.security.PublicKey;
 import java.util.Objects;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.utils.proto.PubKey;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class BasicIdentifier implements Identifier {
+public class BasicIdentifier implements Identifier, Verifier {
     private final PublicKey publicKey;
 
     public BasicIdentifier(PubKey pk) {
@@ -36,11 +40,15 @@ public class BasicIdentifier implements Identifier {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof BasicIdentifier)) {
+        if (!(obj instanceof BasicIdentifier other)) {
             return false;
         }
-        BasicIdentifier other = (BasicIdentifier) obj;
         return Objects.equals(publicKey, other.publicKey);
+    }
+
+    @Override
+    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return new Verifier.DefaultVerifier(publicKey).filtered(threshold, signature, message);
     }
 
     public PublicKey getPublicKey() {
@@ -63,12 +71,22 @@ public class BasicIdentifier implements Identifier {
     }
 
     @Override
-    public String toString() {
-        return "B[" + shortQb64(publicKey) + "]";
+    public Ident toIdent() {
+        return Ident.newBuilder().setBasic(bs(publicKey)).build();
     }
 
     @Override
-    public Ident toIdent() {
-        return Ident.newBuilder().setBasic(bs(publicKey)).build();
+    public String toString() {
+        return "B" + shortQb64(publicKey);
+    }
+
+    @Override
+    public boolean verify(JohnHancock signature, InputStream message) {
+        return new Verifier.DefaultVerifier(publicKey).verify(signature, message);
+    }
+
+    @Override
+    public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return new Verifier.DefaultVerifier(publicKey).verify(threshold, signature, message);
     }
 }

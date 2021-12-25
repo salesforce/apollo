@@ -80,7 +80,7 @@ public class CreatorTest {
 
     static {
         DEFAULT_KEYPAIR = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        DEFAULT_SIGNER = new SignerImpl(0, DEFAULT_KEYPAIR.getPrivate());
+        DEFAULT_SIGNER = new SignerImpl(DEFAULT_KEYPAIR.getPrivate());
     }
 
     public static Creator newCreator(Config cnf, Consumer<Unit> send) {
@@ -106,9 +106,10 @@ public class CreatorTest {
         if (t.height() != crown.heights()[t.creator()] + 1) {
             throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
         }
-        final var signature = PreUnit.sign(signer, id, crown, data, rsData);
-        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData,
-                           signature);
+        final var salt = new byte[] {};
+        final var signature = PreUnit.sign(signer, id, crown, data, rsData, salt);
+        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData, signature,
+                           salt);
     }
 
     private double bias = 3.0;
@@ -119,7 +120,7 @@ public class CreatorTest {
         var epoch = 7;
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair();
         var cnf = Config.Builder.empty().setSigner(DEFAULT_SIGNER).setnProc(nProc)
-                                .setSigner(new SignerImpl(0, keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
+                                .setSigner(new SignerImpl(keyPair.getPrivate())).setNumberOfEpochs(epoch + 1)
                                 .build();
 
         var unitRec = new ArrayBlockingQueue<Unit>(200);

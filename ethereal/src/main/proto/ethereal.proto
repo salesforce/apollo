@@ -41,7 +41,8 @@ message PreUnit_s {
     Crown_s crown = 2;
     bytes data = 3;
     bytes rsData = 4;
-    utils.Sig signature = 5;
+    bytes salt = 5;
+    utils.Sig signature = 6;
 }
 
 message Crown_s {

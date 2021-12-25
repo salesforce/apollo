@@ -13,8 +13,8 @@ import java.util.concurrent.TimeoutException;
 import com.google.protobuf.Any;
 import com.salesfoce.apollo.stereotomy.event.proto.Bound;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**

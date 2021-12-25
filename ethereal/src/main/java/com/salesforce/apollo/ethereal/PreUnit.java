@@ -24,6 +24,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -161,7 +162,7 @@ public interface PreUnit {
     }
 
     public record preUnit(short creator, int epoch, int height, Digest hash, Crown crown, ByteString data,
-                          byte[] rsData, JohnHancock signature)
+                          byte[] rsData, JohnHancock signature, byte[] salt)
                          implements PreUnit {
 
         @Override
@@ -223,7 +224,7 @@ public interface PreUnit {
             if (creator >= verifiers.length) {
                 return false;
             }
-            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData));
+            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData, salt));
         }
     }
 
@@ -238,11 +239,9 @@ public interface PreUnit {
         var decoded = decode(pu.getId());
         byte[] rsData = pu.getRsData().size() > 0 ? pu.getRsData().toByteArray() : null;
 
-        Crown crown = Crown.from(pu.getCrown());
-        ByteString data = pu.getData();
         final var signature = JohnHancock.from(pu.getSignature());
-        return new preUnit(decoded.creator, decoded.epoch, decoded.height, signature.toDigest(algo), crown, data,
-                           rsData, signature);
+        return new preUnit(decoded.creator, decoded.epoch, decoded.height, signature.toDigest(algo),
+                           Crown.from(pu.getCrown()), pu.getData(), rsData, signature, pu.getSalt().toByteArray());
     }
 
     public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
@@ -270,7 +269,7 @@ public interface PreUnit {
         return new DecodedId(height, creator, (int) (id >> 16));
     }
 
-    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] rsData) {
+    static List<ByteBuffer> forSigning(long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
         var buffers = new ArrayList<ByteBuffer>();
         ByteBuffer idBuff = ByteBuffer.allocate(8);
         idBuff.putLong(id);
@@ -291,6 +290,7 @@ public interface PreUnit {
             buffers.add(heightBuff);
         }
         buffers.add(crown.controlHash().toByteBuffer());
+        buffers.add(ByteBuffer.wrap(salt));
         return buffers;
     }
 
@@ -306,17 +306,19 @@ public interface PreUnit {
         var crown = crownFromParents(parents, algo);
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
-        var signature = sign(signer, id, crown, data, rsBytes);
+        var salt = new byte[algo.digestLength()];
+        Utils.secureEntropy().nextBytes(salt);
+        var signature = sign(signer, id, crown, data, rsBytes, salt);
         var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, rsBytes,
-                                         signature),
+                                         signature, salt),
                              parents, level, new HashMap<>());
         u.computeFloor();
         return u;
 
     }
 
-    static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData) {
-        return signer.sign(forSigning(id, crown, data, rsData));
+    static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
+        return signer.sign(forSigning(id, crown, data, rsData, salt));
     }
 
     short creator();

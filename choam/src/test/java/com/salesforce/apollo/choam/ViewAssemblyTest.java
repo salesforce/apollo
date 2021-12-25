@@ -114,7 +114,7 @@ public class ViewAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, 3_000),
+                                                                                                        null, r),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -144,6 +144,8 @@ public class ViewAssemblyTest {
         try {
             communications.values().forEach(r -> r.start());
             recons.values().forEach(r -> r.start());
+
+            recons.values().forEach(r -> r.assembled());
 
             complete.await(20, TimeUnit.SECONDS);
             assertEquals(committee.cardinality(), published.size());
@@ -238,7 +240,7 @@ public class ViewAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, 3_000),
+                                                                                                        null, r),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -248,7 +250,7 @@ public class ViewAssemblyTest {
             params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
                                                validators, reconfigure);
-            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), reconfigure, false));
+            recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), false));
         });
 
         try {

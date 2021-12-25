@@ -17,6 +17,8 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
+ * Produces signatures using a given key
+ * 
  * @author hal.hildebrand
  *
  */
@@ -27,11 +29,6 @@ public interface Signer {
         @Override
         public SignatureAlgorithm algorithm() {
             return SignatureAlgorithm.DEFAULT;
-        }
-
-        @Override
-        public int keyIndex() {
-            return 0;
         }
 
         @Override
@@ -62,13 +59,20 @@ public interface Signer {
 
     class SignerImpl implements Signer {
         private final SignatureAlgorithm algorithm;
-        private final int                keyIndex;
-        private final PrivateKey         privateKey;
+        private final PrivateKey[]       privateKeys;
 
-        public SignerImpl(int keyIndex, PrivateKey privateKey) {
-            this.keyIndex = keyIndex;
-            this.privateKey = requireNonNull(privateKey);
-            algorithm = SignatureAlgorithm.lookup(privateKey);
+        public SignerImpl(List<PrivateKey> privateKeys) {
+            this((PrivateKey[]) privateKeys.toArray());
+        }
+
+        public SignerImpl(PrivateKey privateKey) {
+            this(new PrivateKey[] { privateKey });
+        }
+
+        public SignerImpl(PrivateKey[] privateKeys) {
+            assert privateKeys.length > 0;
+            this.privateKeys = requireNonNull(privateKeys);
+            algorithm = SignatureAlgorithm.lookup(privateKeys[0]);
         }
 
         @Override
@@ -77,48 +81,33 @@ public interface Signer {
         }
 
         @Override
-        public int keyIndex() {
-            return keyIndex;
-        }
-
-        @Override
-        public JohnHancock sign(byte[]... bytes) {
-            return algorithm.sign(privateKey, bytes);
-        }
-
-        @Override
-        public JohnHancock sign(ByteBuffer... buffs) {
-            return algorithm.sign(privateKey, buffs);
-        }
-
-        @Override
-        public JohnHancock sign(ByteString... message) {
-            return algorithm.sign(privateKey, message);
-        }
-
-        @Override
         public JohnHancock sign(InputStream message) {
-            return algorithm.sign(privateKey, message);
-        }
-
-        @Override
-        public JohnHancock sign(List<ByteBuffer> buffers) {
-            return algorithm.sign(privateKey, BbBackedInputStream.aggregate(buffers));
+            return algorithm.sign(privateKeys, message);
         }
     }
 
     SignatureAlgorithm algorithm();
 
-    int keyIndex();
+    default JohnHancock sign(byte[]... bytes) {
+        return sign(BbBackedInputStream.aggregate(bytes));
+    }
 
-    JohnHancock sign(byte[]... bytes);
+    default JohnHancock sign(ByteBuffer... buffs) {
+        return sign(BbBackedInputStream.aggregate(buffs));
+    }
 
-    JohnHancock sign(ByteBuffer... buffs);
-
-    JohnHancock sign(ByteString... message);
+    default JohnHancock sign(ByteString... message) {
+        return sign(BbBackedInputStream.aggregate(message));
+    }
 
     JohnHancock sign(InputStream message);
 
-    JohnHancock sign(List<ByteBuffer> buffers);
+    default JohnHancock sign(List<ByteBuffer> buffers) {
+        return sign(BbBackedInputStream.aggregate(buffers));
+    }
+
+    default JohnHancock sign(String msg) {
+        return sign(BbBackedInputStream.aggregate(msg.getBytes()));
+    }
 
 }

@@ -17,13 +17,18 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
  */
 public interface InceptionEvent extends EstablishmentEvent {
     public enum ConfigurationTrait {
-        ESTABLISHMENT_EVENTS_ONLY, DO_NOT_DELEGATE,
+        DO_NOT_DELEGATE, ESTABLISHMENT_EVENTS_ONLY,
+    }
+
+    Set<ConfigurationTrait> getConfigurationTraits();
+
+    @Override
+    default String getIlk() {
+        return INCEPTION_TYPE;
     }
 
     byte[] getInceptionStatement();
 
     List<BasicIdentifier> getWitnesses();
-
-    Set<ConfigurationTrait> getConfigurationTraits();
 
 }

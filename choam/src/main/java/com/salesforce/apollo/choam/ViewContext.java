@@ -111,6 +111,10 @@ public class ViewContext {
         return validation;
     }
 
+    public Block genesis(Map<Member, Join> slate, Digest nextViewId, HashedBlock previous) {
+        return blockProducer.genesis(slate, nextViewId, previous);
+    }
+
     public Signer getSigner() {
         return signer;
     }
@@ -152,7 +156,7 @@ public class ViewContext {
         if (!valid) {
             log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
                       print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
-                      params.digestAlgorithm().digest(v.getPublicKey().getEncoded()), params.member());
+                      params.digestAlgorithm().digest(v.toString()), params.member());
         }
         return v == null ? false : valid;
     }

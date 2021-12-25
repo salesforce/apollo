@@ -12,4 +12,8 @@ package com.salesforce.apollo.stereotomy.event;
  */
 public interface DelegatedRotationEvent extends RotationEvent, DelegatedEstablishmentEvent {
 
+    @Override
+    default String getIlk() {
+        return DELEGATED_ROTATION_TYPE;
+    }
 }

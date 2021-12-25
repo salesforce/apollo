@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.processing;
 
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
 /**

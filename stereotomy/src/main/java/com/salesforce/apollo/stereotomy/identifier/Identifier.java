@@ -13,16 +13,12 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.Signatures;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**
@@ -55,7 +51,7 @@ public interface Identifier {
 
                                              @Override
                                              public String toString() {
-                                                 return "Identifier<NONE>";
+                                                 return "<NONE>";
                                              }
                                          };
     public static final Ident NONE_IDENT = Ident.newBuilder().setNONE(true).build();
@@ -136,15 +132,6 @@ public interface Identifier {
     static SelfSigningIdentifier selfSigning(ByteBuffer inceptionStatement, Signer signer) {
         var signature = signer.sign(inceptionStatement);
         return new SelfSigningIdentifier(signature);
-    }
-
-    static Signatures signatures(Map<Integer, JohnHancock> signatures) {
-        return Signatures.newBuilder()
-                         .putAllSignatures(signatures.entrySet()
-                                                     .stream()
-                                                     .collect(Collectors.toMap(e -> e.getKey(),
-                                                                               e -> e.getValue().toSig())))
-                         .build();
     }
 
     @Override

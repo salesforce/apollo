@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -55,8 +54,8 @@ public class RingTest {
         byte[] hash = PROTO.clone();
         hash[0] = (byte) i;
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        Date notBefore = Date.from(Instant.now());
-        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        var notBefore = Instant.now();
+        var notAfter = Instant.now().plusSeconds(10_000);
         Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
         X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, "foo.com", i, keyPair.getPublic()),
                                                           Utils.secureEntropy(), keyPair, notBefore, notAfter,
@@ -191,7 +190,8 @@ public class RingTest {
         for (double pByz : probabilityByzantine) {
             for (int card : cardinality) {
                 int t = Context.minMajority(pByz, card, epsilon);
-                System.out.println(String.format("Bias: 2 T: %s K: %s Pbyz: %s Cardinality: %s", t, (2 * t) + 1, pByz, card));
+                System.out.println(String.format("Bias: 2 T: %s K: %s Pbyz: %s Cardinality: %s", t, (2 * t) + 1, pByz,
+                                                 card));
             }
         }
     }
@@ -206,8 +206,8 @@ public class RingTest {
             for (int card : cardinality) {
                 try {
                     int t = Context.minMajority(pByz, card, epsilon, 3);
-                    System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1, pByz,
-                                                     card));
+                    System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
+                                                     pByz, card));
                 } catch (Exception e) {
                     System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
                 }

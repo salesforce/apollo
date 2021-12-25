@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.SigningThreshold;
 
 /**
  * @author hal.hildebrand

@@ -12,14 +12,15 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.Format;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
-import com.salesforce.apollo.stereotomy.event.SigningThreshold;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
+ * The state of a key in the KEL
+ * 
  * @author hal.hildebrand
  *
  */
@@ -29,6 +30,8 @@ public interface KeyState {
     Set<ConfigurationTrait> configurationTraits();
 
     <T> T convertTo(Format format);
+
+    byte[] getBytes();
 
     EventCoordinates getCoordinates();
 
@@ -63,8 +66,7 @@ public interface KeyState {
     }
 
     default boolean isTransferable() {
-        return this.getCoordinates().getIdentifier().isTransferable()
-                && this.getNextKeyConfigurationDigest().isPresent();
+        return this.getCoordinates().getIdentifier().isTransferable() &&
+               this.getNextKeyConfigurationDigest().isPresent();
     }
-
 }

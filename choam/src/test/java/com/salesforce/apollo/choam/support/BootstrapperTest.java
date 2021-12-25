@@ -71,7 +71,7 @@ public class BootstrapperTest {
         List<SigningMember> members = certs.values().stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
                                                                            c.getX509Certificate(), c.getPrivateKey(),
-                                                                           new SignerImpl(0, c.getPrivateKey()),
+                                                                           new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
                                            .peek(m -> context.activate(m)).collect(Collectors.toList());
 

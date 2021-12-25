@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
@@ -38,34 +39,38 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
  */
 public class Certificates {
     public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn,
-                                           BigInteger serialNumber, KeyPair keyPair, Date notBefore, Date notAfter,
-                                           List<CertExtension> extensions) {
+                                           BigInteger serialNumber, KeyPair keyPair, Instant notBefore,
+                                           Instant notAfter, List<CertExtension> extensions) {
         return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber, notBefore, notAfter, extensions, dn,
                     keyPair.getPublic());
     }
 
     public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn, SecureRandom entropy,
-                                           KeyPair keyPair, Date notBefore, Date notAfter,
+                                           KeyPair keyPair, Instant notBefore, Instant notAfter,
                                            List<CertExtension> extensions) {
         return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber(entropy), notBefore, notAfter, extensions, dn,
                     keyPair.getPublic());
     }
 
     public static X509Certificate sign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl signerDn,
-                                       KeyPair signerKeyPair, BigInteger serialNumber, Date notBefore, Date notAfter,
-                                       List<CertExtension> extensions, BcX500NameDnImpl dn, PublicKey signedKey) {
+                                       KeyPair signerKeyPair, BigInteger serialNumber, Instant notBefore,
+                                       Instant notAfter, List<CertExtension> extensions, BcX500NameDnImpl dn,
+                                       PublicKey signedKey) {
         try {
-            final ContentSigner sigGen = new JcaContentSignerBuilder(
-                    SignatureAlgorithm.lookup(signerKeyPair.getPrivate()).signatureInstanceName())
-                                                                                                  .build(signerKeyPair.getPrivate());
+            final ContentSigner sigGen = new JcaContentSignerBuilder(SignatureAlgorithm.lookup(signerKeyPair.getPrivate())
+                                                                                       .signatureInstanceName()).build(signerKeyPair.getPrivate());
 
             final SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(signedKey.getEncoded());
 
             final JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
             final X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder(signerDn.getX500Name(),
-                    serialNumber, Date.from(notBefore.toInstant()), Date.from(notAfter.toInstant()), dn.getX500Name(),
-                    subPubKeyInfo).addExtension(Extension.authorityKeyIdentifier, false,
-                                                extUtils.createAuthorityKeyIdentifier(signerKeyPair.getPublic()));
+                                                                                      serialNumber,
+                                                                                      Date.from(notBefore),
+                                                                                      Date.from(notAfter), dn
+                                                                                                             .getX500Name(),
+                                                                                      subPubKeyInfo).addExtension(Extension.authorityKeyIdentifier,
+                                                                                                                  false,
+                                                                                                                  extUtils.createAuthorityKeyIdentifier(signerKeyPair.getPublic()));
 
             if (useSubjectKeyIdentifier) {
                 certBuilder.addExtension(Extension.subjectKeyIdentifier, false,
@@ -84,7 +89,7 @@ public class Certificates {
 
             return cert;
         } catch (final OperatorCreationException | CertificateException | InvalidKeyException | NoSuchAlgorithmException
-                | NoSuchProviderException | SignatureException | CertIOException e) {
+        | NoSuchProviderException | SignatureException | CertIOException e) {
             throw new IllegalStateException(e);
         }
     }

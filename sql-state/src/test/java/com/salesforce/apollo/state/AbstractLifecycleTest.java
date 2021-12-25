@@ -7,7 +7,6 @@
 package com.salesforce.apollo.state;
 
 import static com.salesforce.apollo.state.Mutator.batch;
-import static com.salesforce.apollo.state.Mutator.batchOf;
 
 import java.io.File;
 import java.time.Duration;
@@ -20,6 +19,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -48,7 +49,6 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
-import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -75,24 +75,24 @@ abstract public class AbstractLifecycleTest {
         private final Timer                    latency;
         private final AtomicInteger            lineTotal;
         private final int                      max;
+        private final Mutator                  mutator;
         private final AtomicBoolean            proceed;
         private final ScheduledExecutorService scheduler;
-        private final Session                  session;
         private final Duration                 timeout;
         private final Counter                  timeouts;
 
-        public Transactioneer(CHOAM c, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
+        public Transactioneer(Mutator mutator, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
                               AtomicInteger lineTotal, int max, CountDownLatch countdown,
                               ScheduledExecutorService txScheduler) {
             this.latency = latency;
             this.proceed = proceed;
-            this.session = c.getSession();
             this.timeout = timeout;
             this.lineTotal = lineTotal;
             this.timeouts = timeouts;
             this.max = max;
             this.countdown = countdown;
             this.scheduler = txScheduler;
+            this.mutator = mutator;
         }
 
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
@@ -105,11 +105,17 @@ abstract public class AbstractLifecycleTest {
                     timeouts.inc();
                     var tc = latency.time();
                     failed.incrementAndGet();
+                    if (t instanceof CompletionException e) {
+                        if (!(e.getCause() instanceof TimeoutException)) {
+                            e.getCause().printStackTrace();
+                        }
+                    }
 
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
+                                                                     update(entropy, mutator), timeout, scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -129,7 +135,8 @@ abstract public class AbstractLifecycleTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler),
+                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
+                                                                     update(entropy, mutator), timeout, scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -146,7 +153,9 @@ abstract public class AbstractLifecycleTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(session.submit(ForkJoinPool.commonPool(), update(entropy), timeout, scheduler), time);
+                    decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                         scheduler),
+                             time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
@@ -257,7 +266,7 @@ abstract public class AbstractLifecycleTest {
                   .build();
     }
 
-    protected Txn update(Random entropy) {
+    protected Txn update(Random entropy, Mutator mutator) {
 
         List<List<Object>> batch = new ArrayList<>();
         for (int rep = 0; rep < 10; rep++) {
@@ -265,7 +274,7 @@ abstract public class AbstractLifecycleTest {
                 batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
             }
         }
-        return Txn.newBuilder().setBatchUpdate(batchOf("update books set qty = ? where id = ?", batch)).build();
+        return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject) {
@@ -309,12 +318,14 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void execute(Transaction tx, @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                up.getExecutor().execute(tx, onComplete);
+            public void execute(int i, Digest hash, Transaction tx,
+                                @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                up.getExecutor().execute(i, hash, tx, onComplete);
             }
 
             @Override
             public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                blocks.get(m.getId()).add(hash);
                 up.getExecutor().genesis(height, hash, initialization);
             }
         };
@@ -323,9 +334,14 @@ abstract public class AbstractLifecycleTest {
     private Function<Long, File> wrap(SqlStateMachine up) {
         final var checkpointer = up.getCheckpointer();
         return l -> {
-            final var check = checkpointer.apply(l);
-            checkpointOccurred.complete(true);
-            return check;
+            try {
+                final var check = checkpointer.apply(l);
+                checkpointOccurred.complete(true);
+                return check;
+            } catch (Throwable e) {
+                e.printStackTrace();
+                throw e;
+            }
         };
     }
 

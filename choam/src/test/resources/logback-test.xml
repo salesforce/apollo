@@ -6,7 +6,7 @@
 		class="ch.qos.logback.core.status.NopStatusListener" />
 
 	<appender name="STDOUT"
-		class="ch.qos.logback.core.ConsoleAppender">u
+		class="ch.qos.logback.core.ConsoleAppender">
 		<encoder>
 			<Pattern>
 				%d{mm:ss.SSS} [%thread] %-5level %logger{0} -
@@ -24,6 +24,18 @@
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.choam.Producer" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

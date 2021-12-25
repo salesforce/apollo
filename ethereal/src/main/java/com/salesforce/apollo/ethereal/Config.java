@@ -97,7 +97,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         public Builder addConsensusConfig() {
             canSkipLevel = false;
             orderStartLevel = 0;
-            crpFixedPrefix = 4;
+            crpFixedPrefix = 2;
             numberOfEpochs = 3;
             epochLength = 30;
             checks.addAll(Checks.ConsensusChecks);

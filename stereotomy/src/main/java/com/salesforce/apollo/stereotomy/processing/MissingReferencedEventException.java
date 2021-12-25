@@ -2,8 +2,8 @@ package com.salesforce.apollo.stereotomy.processing;
 
 import static java.util.Objects.requireNonNull;
 
+import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.EventCoordinates;
 
 public class MissingReferencedEventException extends AttachmentEventProcessingException {
 

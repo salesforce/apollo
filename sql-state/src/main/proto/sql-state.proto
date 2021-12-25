@@ -14,19 +14,20 @@ message Batch{
 }
 
 message Arguments {
-    repeated bytes args = 1;
+    int32 version = 1;
+    bytes args = 2;
 }
 
 message Statement {
     EXECUTION execution = 1;
     string sql = 2;
-    repeated bytes args = 3;
+    Arguments args = 3;
 }
 
 message Call {
     EXECUTION execution = 1;
     string sql = 2;
-    repeated bytes args = 3;
+    Arguments args = 3;
     repeated int32 outParameters = 4; // value is enum of java.sql.SQLType
 }
 
@@ -34,7 +35,7 @@ message Script {
     string source = 1;
     string className = 2;
     string method = 3;
-    repeated bytes args = 4;
+    Arguments args = 4;
 }
 
 enum EXECUTION {

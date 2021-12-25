@@ -1,8 +1,8 @@
 # Apollo Delphinius
-The Apollo Delphinius project aims for a distributed ledger platform based on a sea of DAG nodes.  As such, this project combines several interesting technologies.  The underlying membership of Apollo is managed by the Fireflies secure communication overlay.  The consensus layer is supplied by a green - i.e. non POW - async bft consensus protocol. At the top is a largely JDBC connectable replicated SQL store, supported by checkpointed CHOAM linear logs.
+The Apollo Delphinius project is a distibuted system platform. The underlying membership of Apollo is managed by the Fireflies secure communication overlay.  The consensus layer is supplied by an async bft consensus protocol. At the top is a largely JDBC connectable replicated SQL machine, supported by checkpointed CHOAM linear logs.
 
 ## Requirements
-Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above.  
+Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
@@ -14,6 +14,7 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
 * CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - distributed ledgers.  Built on Ethereal.
 * SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, Stored Procedures, functions.
+* Delphinius - Google Zanzibar RBAC clone. Provides RBAC for CHOAM SQL state machines.
 
 ## Not A Coin Platform(tm)
 Apollo isn't designed for coins, rather as essentially a distributed database.  Of course the systems of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.

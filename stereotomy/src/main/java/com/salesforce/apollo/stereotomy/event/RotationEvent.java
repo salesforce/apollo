@@ -16,8 +16,13 @@ import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
  */
 public interface RotationEvent extends EstablishmentEvent, SealingEvent {
 
-    List<BasicIdentifier> getWitnessesRemovedList();
+    @Override
+    default String getIlk() {
+        return ROTATION_TYPE;
+    }
 
     List<BasicIdentifier> getWitnessesAddedList();
+
+    List<BasicIdentifier> getWitnessesRemovedList();
 
 }

@@ -70,10 +70,13 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c, timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                               txScheduler))
-                  .forEach(e -> transactioneers.add(e));
+            updaters.entrySet().stream().map(e -> new Transactioneer(
+                                                                     e.getValue()
+                                                                      .getMutator(choams.get(e.getKey().getId())
+                                                                                        .getSession()),
+                                                                     timeout, timeouts, latency, proceed, lineTotal,
+                                                                     max, countdown, txScheduler))
+                    .forEach(e -> transactioneers.add(e));
         }
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");

@@ -9,89 +9,60 @@ package com.salesforce.apollo.crypto;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.security.PublicKey;
+import java.util.Arrays;
 import java.util.List;
 
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
+ * Verifies a signature using a given key
+ * 
  * @author hal.hildebrand
  *
  */
 public interface Verifier {
     class DefaultVerifier implements Verifier {
-        private final SignatureAlgorithm algo;
-        private final PublicKey          key;
+        private final PublicKey[] keys;
+
+        public DefaultVerifier(List<PublicKey> keys) {
+            this((PublicKey[]) keys.toArray());
+        }
 
         public DefaultVerifier(PublicKey key) {
-            this(SignatureAlgorithm.lookup(key), key);
+            this(new PublicKey[] { key });
         }
 
-        public DefaultVerifier(SignatureAlgorithm algo, PublicKey key) {
-            this.algo = algo;
-            this.key = key;
-        }
-
-        public SignatureAlgorithm getAlgorithm() {
-            return algo;
-        }
-
-        public PublicKey getKey() {
-            return key;
+        public DefaultVerifier(PublicKey[] keys) {
+            this.keys = keys;
         }
 
         @Override
-        public PublicKey getPublicKey() {
-            return key;
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return signature.filter(threshold, keys, message);
         }
 
         @Override
-        public boolean verify(JohnHancock signature, byte[]... message) {
-            return algo.verify(key, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteBuffer... message) {
-            return algo.verify(key, signature, message);
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteString... message) {
-            return algo.verify(key, signature, message);
+        public String toString() {
+            return "V[" + Arrays.asList(keys).stream().map(k -> ":" + k.getEncoded()).toList() + "]";
         }
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            return algo.verify(key, signature, message);
+            return verify(SigningThreshold.unweighted(keys.length), signature, message);
         }
 
         @Override
-        public boolean verify(JohnHancock signature, List<ByteBuffer> buffers) {
-            return algo.verify(key, signature, BbBackedInputStream.aggregate(buffers));
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return signature.verify(threshold, keys, message);
         }
-
     }
 
     class MockVerifier implements Verifier {
 
         @Override
-        public PublicKey getPublicKey() {
-            return null;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, byte[]... message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteBuffer... message) {
-            return true;
-        }
-
-        @Override
-        public boolean verify(JohnHancock signature, ByteString... message) {
-            return true;
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return new Filtered(true, signature);
         }
 
         @Override
@@ -100,21 +71,77 @@ public interface Verifier {
         }
 
         @Override
-        public boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
             return true;
         }
 
     }
 
-    PublicKey getPublicKey();
+    record Filtered(boolean verified, JohnHancock filtered) {}
 
-    boolean verify(JohnHancock signature, byte[]... message);
+    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, byte[]... message) {
+        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
 
-    boolean verify(JohnHancock signature, ByteBuffer... message);
+    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, ByteBuffer... message) {
+        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
 
-    boolean verify(JohnHancock signature, ByteString... message);
+    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, ByteString... message) {
+        return filtered(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message);
+
+    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, List<ByteBuffer> forSigning) {
+        return filtered(threshold, signature, BbBackedInputStream.aggregate(forSigning));
+    }
+
+    default Filtered filtered(SigningThreshold threshold, JohnHancock signature, String message) {
+        return filtered(threshold, signature, BbBackedInputStream.aggregate(message.getBytes()));
+    }
+
+    default boolean verify(JohnHancock signature, byte[]... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
+
+    default boolean verify(JohnHancock signature, ByteBuffer... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
+
+    default boolean verify(JohnHancock signature, ByteString... message) {
+        return verify(signature, BbBackedInputStream.aggregate(message));
+    }
 
     boolean verify(JohnHancock signature, InputStream message);
 
-    boolean verify(JohnHancock signature, List<ByteBuffer> forSigning);
+    default boolean verify(JohnHancock signature, List<ByteBuffer> forSigning) {
+        return verify(signature, BbBackedInputStream.aggregate(forSigning));
+    }
+
+    default boolean verify(JohnHancock signature, String message) {
+        return verify(signature, BbBackedInputStream.aggregate(message.getBytes()));
+    }
+
+    default boolean verify(SigningThreshold threshold, JohnHancock signature, byte[]... message) {
+        return verify(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    default boolean verify(SigningThreshold threshold, JohnHancock signature, ByteBuffer... message) {
+        return verify(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    default boolean verify(SigningThreshold threshold, JohnHancock signature, ByteString... message) {
+        return verify(threshold, signature, BbBackedInputStream.aggregate(message));
+    }
+
+    boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message);
+
+    default boolean verify(SigningThreshold threshold, JohnHancock signature, List<ByteBuffer> forSigning) {
+        return verify(threshold, signature, BbBackedInputStream.aggregate(forSigning));
+    }
+
+    default boolean verify(SigningThreshold threshold, JohnHancock signature, String message) {
+        return verify(threshold, signature, BbBackedInputStream.aggregate(message.getBytes()));
+    }
 }

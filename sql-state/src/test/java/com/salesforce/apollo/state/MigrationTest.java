@@ -30,6 +30,7 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.ChangeLog;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
@@ -60,15 +61,19 @@ public class MigrationTest {
 
         Migration migration = Migration.newBuilder().setTag("test-1").build();
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0, Digest.NONE,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
 
+        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
+
         migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml")).build();
 
         success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0, Digest.NONE,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
@@ -90,7 +95,7 @@ public class MigrationTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(transaction, null);
+        updater.getExecutor().execute(0, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());
@@ -104,7 +109,11 @@ public class MigrationTest {
                                                    .setTag("test-1"))
                              .build();
         success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+
+        executor.beginBlock(2, DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
+
+        executor.execute(1, Digest.NONE,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
@@ -131,7 +140,8 @@ public class MigrationTest {
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();
-        executor.execute(Transaction.newBuilder()
+        executor.execute(0, Digest.NONE,
+                         Transaction.newBuilder()
                                     .setContent(Txn.newBuilder().setMigration(migration).build().toByteString())
                                     .build(),
                          success);
@@ -153,7 +163,7 @@ public class MigrationTest {
                               .build().toByteString());
         Transaction transaction = builder.build();
 
-        updater.getExecutor().execute(transaction, null);
+        updater.getExecutor().execute(1, Digest.NONE, transaction, null);
 
         ResultSet books = statement.executeQuery("select * from test.books");
         assertTrue(books.first());

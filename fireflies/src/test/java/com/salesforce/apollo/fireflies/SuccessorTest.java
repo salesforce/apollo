@@ -84,7 +84,7 @@ public class SuccessorTest {
                                   .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
                                                                               cert.getPrivateKey(),
-                                                                              new SignerImpl(0, cert.getPrivateKey()),
+                                                                              new SignerImpl(cert.getPrivateKey()),
                                                                               cert.getX509Certificate().getPublicKey()),
                                                         parameters))
                                   .collect(Collectors.toList());

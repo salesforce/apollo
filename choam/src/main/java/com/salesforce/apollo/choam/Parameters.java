@@ -7,6 +7,8 @@
 package com.salesforce.apollo.choam;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,7 +106,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             private Config.Builder ethereal         = Config.deterministic();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
             private int            maxBatchByteSize = 256 * 1024;
-            private int            maxBatchCount    = 10_000;
+            private int            maxBatchCount    = 1_000;
             private Duration       maxGossipDelay   = Duration.ofSeconds(10);
 
             public ProducerParameters build() {
@@ -173,11 +175,23 @@ public record Parameters(Context<Member> context, Router communications, Signing
     }
 
     public static class Builder {
+        private final static Function<Long, File> NULL_CHECKPOINTER = h -> {
+            File cp;
+            try {
+                cp = File.createTempFile("cp-" + h, ".chk");
+                cp.deleteOnExit();
+                try (var os = new FileOutputStream(cp)) {
+                    os.write("Give me food or give me slack or kill me".getBytes());
+                }
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+            return cp;
+        };
+
         private BootstrapParameters                    bootstrap             = BootstrapParameters.newBuilder().build();
         private int                                    checkpointBlockSize   = 8192;
-        private Function<Long, File>                   checkpointer          = c -> {
-                                                                                 throw new IllegalStateException("No checkpointer defined");
-                                                                             };
+        private Function<Long, File>                   checkpointer          = NULL_CHECKPOINTER;
         private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
                                                                                                  .retryIf(s -> s.isOk());
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
@@ -188,10 +202,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private List<Transaction>                      genesisData           = new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
-        private int                                    maxCheckpointSegments = DEFAULT_MAX_SEGMENTS;
+        private int                                    maxCheckpointSegments = 200;
         private SigningMember                          member;
         private ChoamMetrics                           metrics;
-        private TransactionExecutor                    processor             = (t, f) -> {
+        private TransactionExecutor                    processor             = (i, h, t, f) -> {
                                                                              };
         private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
         private int                                    regenerationCycles    = 20;
@@ -470,8 +484,5 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
     }
-
-    public static final int DEFAULT_MAX_BLOCKS = 200;
-    public static final int DEFAULT_MAX_SEGMENTS = 200;
 
 }

@@ -16,7 +16,6 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
@@ -91,8 +90,8 @@ public class TestMtls {
 
     CertificateWithPrivateKey generate(BcX500NameDnImpl dn) {
         BigInteger sn = BigInteger.valueOf(Long.MAX_VALUE);
-        Date notBefore = Date.from(Instant.now());
-        Date notAfter = Date.from(Instant.now().plusSeconds(10_000));
+        var notBefore = Instant.now();
+        var notAfter = Instant.now().plusSeconds(10_000);
         List<CertExtension> extensions = Collections.emptyList();
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
         X509Certificate selfSignedCert = Certificates.selfSign(true, dn, sn, keyPair, notBefore, notAfter, extensions);
@@ -125,17 +124,12 @@ public class TestMtls {
 
     private CertificateValidator validator() {
         return new CertificateValidator() {
-
             @Override
             public void validateServer(X509Certificate[] chain) throws CertificateException {
-                // TODO Auto-generated method stub
-
             }
 
             @Override
             public void validateClient(X509Certificate[] chain) throws CertificateException {
-                // TODO Auto-generated method stub
-
             }
         };
     }

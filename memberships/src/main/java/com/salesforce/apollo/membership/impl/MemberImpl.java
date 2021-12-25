@@ -16,6 +16,7 @@ import java.security.cert.X509Certificate;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -85,7 +86,6 @@ public class MemberImpl implements Member {
         return id;
     }
 
-    @Override
     public PublicKey getPublicKey() {
         return signingKey;
     }
@@ -105,7 +105,17 @@ public class MemberImpl implements Member {
      */
     @Override
     public boolean verify(JohnHancock signature, InputStream message) {
-        return signatureAlgorithm.verify(signingKey, signature, message);
+        return new DefaultVerifier(new PublicKey[] { signingKey }).verify(signature, message);
     }
 
+    @Override
+    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return new DefaultVerifier(new PublicKey[] { signingKey }).filtered(threshold, signature, message);
+    }
+
+    @Override
+    public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return new DefaultVerifier(new PublicKey[] { signingKey }).verify(SigningThreshold.unweighted(1), signature,
+                                                                          message);
+    }
 }

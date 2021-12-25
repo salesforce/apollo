@@ -11,4 +11,10 @@ package com.salesforce.apollo.stereotomy.event;
  *
  */
 public interface InteractionEvent extends KeyEvent, SealingEvent {
+
+    @Override
+    default String getIlk() {
+        return INTERACTION_TYPE;
+    }
+
 }

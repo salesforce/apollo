@@ -9,9 +9,6 @@ package com.salesforce.apollo.choam;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +17,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -29,7 +25,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -189,29 +184,13 @@ public class TestCHOAM {
             return thread;
         });
 
-        Function<Long, File> checkpointer = h -> {
-            File cp;
-            try {
-                cp = File.createTempFile("cp-" + h, ".chk");
-                cp.deleteOnExit();
-                try (var os = new FileOutputStream(cp)) {
-                    os.write("Give me food or give me slack or kill me".getBytes());
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-            return cp;
-        };
-
         var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
                                .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(100))
-                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
-                                                              .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(1).setCheckpointer(checkpointer);
+                                                              .setBatchInterval(Duration.ofMillis(100)).build())
+                               .setTxnPermits(100).setCheckpointBlockSize(1);
         params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
@@ -231,13 +210,13 @@ public class TestCHOAM {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(hash);
+                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
-                public void execute(Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new CopyOnWriteArrayList<>()).add(t);
+                public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
+                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());
                     }

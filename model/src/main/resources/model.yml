@@ -6,11 +6,8 @@ databaseChangeLog:
       id: 1
       author: hhildebrand
       changes:
-      -  sql:  
-            endDelimiter:  \nGO  
-            splitStatements:  true  
-            sql:  create schema apollo_kernel  
-            stripComments:  true
+      -  sql:
+            sql:  create schema apollo_kernel 
       -  createTable:
             tableName: node
             schemaName: apollo_kernel

@@ -27,6 +27,7 @@ import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.fireflies.View.AccTag;
 import com.salesforce.apollo.membership.Member;
 
@@ -111,6 +112,11 @@ public class Participant implements Member {
     }
 
     @Override
+    public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return wrapped.filtered(threshold, signature, message);
+    }
+
+    @Override
     public X509Certificate getCertificate() {
         return wrapped.getCertificate();
     }
@@ -154,6 +160,11 @@ public class Participant implements Member {
     @Override
     public boolean verify(JohnHancock signature, InputStream message) {
         return wrapped.verify(signature, message);
+    }
+
+    @Override
+    public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+        return wrapped.verify(threshold, signature, message);
     }
 
     /**

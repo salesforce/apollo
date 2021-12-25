@@ -101,11 +101,6 @@ public class Node extends Participant implements SigningMember {
         return parameters;
     }
 
-    @Override
-    public int keyIndex() {
-        return wrapped.keyIndex();
-    }
-
     public JohnHancock sign(byte[] message) {
         return wrapped.sign(message);
     }
@@ -118,10 +113,6 @@ public class Node extends Participant implements SigningMember {
     @Override
     public String toString() {
         return "Node[" + getId() + "]";
-    }
-
-    public boolean verify(JohnHancock signature, byte[] message) {
-        return wrapped.verify(signature, message);
     }
 
     AccusationWrapper accuse(Participant m, int ringNumber) {

@@ -12,6 +12,8 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
+ * The Key Event Receipt Log
+ * 
  * @author hal.hildebrand
  *
  */

@@ -349,28 +349,29 @@ public class Orderer {
         Dag dg = newDag(config, epoch);
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
-        dg.afterInsert(u -> ext.chooseNextTimingUnits());
         dg.afterInsert(u -> {
             if (!started.get()) {
                 return;
             }
-            // don't put our own units on the unit belt, creator already knows about them.
-            if (u.creator() != config.pid()) {
-                try {
-                    executor.execute(() -> {
-                        if (!started.get()) {
-                            return;
-                        }
-                        currentThread = Thread.currentThread();
-                        try {
+            try {
+                executor.execute(() -> {
+                    if (!started.get()) {
+                        return;
+                    }
+                    currentThread = Thread.currentThread();
+                    try {
+                        ext.chooseNextTimingUnits();
+                        // don't put our own units on the unit belt, creator already knows about them.
+                        if (u.creator() != config.pid()) {
                             creator.consume(Collections.singletonList(u), lastTiming);
-                        } finally {
-                            currentThread = null;
                         }
-                    });
-                } catch (RejectedExecutionException e) {
-                    // ignored
-                }
+                        ;
+                    } finally {
+                        currentThread = null;
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                // ignored
             }
         });
         return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
