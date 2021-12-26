@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -41,7 +42,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     @Test
     public void checkpointBootstrap() throws Exception {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(6);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
@@ -93,13 +94,15 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         transactioneers.stream().forEach(e -> e.start());
         checkpointOccurred.whenComplete((s, t) -> {
             System.out.println("Starting late joining node");
-            choams.get(testSubject.getId()).start();
+            var choam = choams.get(testSubject.getId());
+            choam.context().activate(Collections.singletonList(testSubject));
+            choam.start();
             routers.get(testSubject.getId()).start();
         });
 
         try {
-            assertTrue(countdown.await(60, TimeUnit.SECONDS), "Did not complete transactions");
-            assertTrue(checkpointOccurred.get(10, TimeUnit.SECONDS), "Checkpoint did not occur");
+            assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
+            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS), "Checkpoint did not occur");
         } finally {
             proceed.set(false);
         }

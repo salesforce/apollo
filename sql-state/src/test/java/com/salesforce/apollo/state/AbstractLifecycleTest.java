@@ -94,6 +94,10 @@ abstract public class AbstractLifecycleTest {
             this.mutator = mutator;
         }
 
+        public int completed() {
+            return completed.get();
+        }
+
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
             fs.whenCompleteAsync((o, t) -> {
                 if (!proceed.get()) {
@@ -120,7 +124,7 @@ abstract public class AbstractLifecycleTest {
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     }
                 } else {
                     time.close();
@@ -142,7 +146,7 @@ abstract public class AbstractLifecycleTest {
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     } else if (complete == max) {
                         countdown.countDown();
                     }
@@ -160,7 +164,7 @@ abstract public class AbstractLifecycleTest {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+            }, entropy.nextInt(500), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -232,9 +236,10 @@ abstract public class AbstractLifecycleTest {
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
+                           .peek(m -> context.add(m))
                            .toList();
         final SigningMember testSubject = members.get(CARDINALITY - 1);
+        members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             AtomicInteger exec = new AtomicInteger();

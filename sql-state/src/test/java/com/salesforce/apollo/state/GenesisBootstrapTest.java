@@ -14,6 +14,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -40,7 +41,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
     @Test
     public void genesisBootstrap() throws Exception {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(6);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
@@ -82,6 +83,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         for (int i = 0; i < clientCount; i++) {
             updaters.entrySet()
                     .stream()
+                    .filter(e -> !e.getKey().equals(testSubject))
                     .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
                                                  timeout, timeouts, latency, proceed, lineTotal, max, countdown,
                                                  txScheduler))
@@ -93,12 +95,16 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
         Thread.sleep(5_000);
         System.out.println("Starting late joining node");
-        choams.get(testSubject.getId()).start();
+        var choam = choams.get(testSubject.getId());
+        choam.context().activate(Collections.singletonList(testSubject));
+        choam.start();
         routers.get(testSubject.getId()).start();
         Thread.sleep(1000);
 
         try {
-            assertTrue(countdown.await(60, TimeUnit.SECONDS), "Did not complete transactions");
+            success = countdown.await(60, TimeUnit.SECONDS);
+            assertTrue(success, "Did not complete transactions: "
+            + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
         } finally {
             proceed.set(false);
         }

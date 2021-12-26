@@ -313,8 +313,10 @@ public class CHOAM {
                 }
 //                log.trace("Submitting received txn: {} to: {} in: {} on: {}",
 //                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
-                return link.submit(SubmitTransaction.newBuilder().setContext(params.context().getId().toDigeste())
-                                                    .setTransaction(transaction).build());
+                return link.submit(SubmitTransaction.newBuilder()
+                                                    .setContext(params.context().getId().toDigeste())
+                                                    .setTransaction(transaction)
+                                                    .build());
             } catch (StatusRuntimeException e) {
                 SettableFuture<Status> f = SettableFuture.create();
                 f.set(e.getStatus());
@@ -496,7 +498,9 @@ public class CHOAM {
             }
             length = state.length();
         }
-        Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(blockSize)
+        Checkpoint.Builder builder = Checkpoint.newBuilder()
+                                               .setByteSize(length)
+                                               .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toDigeste());
         if (state != null) {
             byte[] buff = new byte[blockSize];
@@ -531,14 +535,20 @@ public class CHOAM {
 
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params, int checkpointTarget) {
-        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(id.toDigeste())
+        var builder = Reconfigure.newBuilder()
+                                 .setCheckpointTarget(checkpointTarget)
+                                 .setId(id.toDigeste())
                                  .setEpochLength(params.producer().ethereal().getEpochLength())
                                  .setNumberOfEpochs(params.producer().ethereal().getNumberOfEpochs());
 
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
 
-        remapped.keySet().stream().sorted().map(d -> remapped.get(d)).peek(m -> builder.addJoins(joins.get(m)))
+        remapped.keySet()
+                .stream()
+                .sorted()
+                .map(d -> remapped.get(d))
+                .peek(m -> builder.addJoins(joins.get(m)))
                 .forEach(m -> builder.addView(joins.get(m).getMember()));
 
         var reconfigure = builder.build();
@@ -556,7 +566,8 @@ public class CHOAM {
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
                                            lastViewChange.hash))
-                    .setReconfigure(reconfigure).build();
+                    .setReconfigure(reconfigure)
+                    .build();
     }
 
     public static Map<Digest, Member> rosterMap(Context<Member> baseContext, Collection<Member> members) {
@@ -575,8 +586,10 @@ public class CHOAM {
         var source = digestAlgo.getOrigin();
         SignerImpl signer = new SignerImpl(sigAlgo.generateKeyPair().getPrivate());
         AtomicInteger nonce = new AtomicInteger();
-        return initializationData.stream().map(m -> (Message) m)
-                                 .map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer)).toList();
+        return initializationData.stream()
+                                 .map(m -> (Message) m)
+                                 .map(m -> Session.transactionOf(source, nonce.incrementAndGet(), m, signer))
+                                 .toList();
     }
 
     private final Map<Long, CheckpointState>                            cachedCheckpoints     = new ConcurrentHashMap<>();
@@ -615,7 +628,9 @@ public class CHOAM {
             return thread;
         });
         nextView();
-        combine = new ReliableBroadcaster(params.combine().setMember(params.member()).setContext(params.context())
+        combine = new ReliableBroadcaster(params.combine()
+                                                .setMember(params.member())
+                                                .setContext(params.context())
                                                 .build(),
                                           params.communications());
         linear = Executors.newSingleThreadExecutor(r -> {
@@ -650,7 +665,7 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
-    public Context<? extends Member> context() {
+    public Context<Member> context() {
         return params.context();
     }
 
@@ -770,7 +785,8 @@ public class CHOAM {
         final Block block = Block.newBuilder()
                                  .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
                                                         c.height(), c.hash, v.height(), v.hash))
-                                 .setCheckpoint(cp).build();
+                                 .setCheckpoint(cp)
+                                 .build();
 
         HashedBlock hb = new HashedBlock(params.digestAlgorithm(), block);
         MVMap<Integer, byte[]> stored = store.putCheckpoint(height(block), state, cp);
@@ -850,18 +866,22 @@ public class CHOAM {
             public Block produce(Long height, Digest prev, Assemble assemble) {
                 final HashedCertifiedBlock v = view.get();
                 final HashedBlock c = checkpoint.get();
-                return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height,
-                                                                c.height(), c.hash, v.height(), v.hash))
-                            .setAssemble(assemble).build();
+                return Block.newBuilder()
+                            .setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height, c.height(), c.hash,
+                                                   v.height(), v.hash))
+                            .setAssemble(assemble)
+                            .build();
             }
 
             @Override
             public Block produce(Long height, Digest prev, Executions executions) {
                 final HashedCertifiedBlock c = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
-                return Block.newBuilder().setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height,
-                                                                c.height(), c.hash, v.height(), v.hash))
-                            .setExecutions(executions).build();
+                return Block.newBuilder()
+                            .setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height, c.height(),
+                                                   c.hash, v.height(), v.hash))
+                            .setExecutions(executions)
+                            .build();
             }
 
             @Override
@@ -889,8 +909,9 @@ public class CHOAM {
             var stxn = session.complete(hash);
             try {
 
-                params.processor().execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
-                                           stxn == null ? null : stxn.onCompletion());
+                params.processor()
+                      .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
+                               stxn == null ? null : stxn.onCompletion());
             } catch (Throwable t) {
                 log.error("Exception processing transaction: {} block: {} height: {} on: {}", hash, h.hash, h.height(),
                           params.member());
@@ -977,8 +998,11 @@ public class CHOAM {
         log.trace("Generated next view consensus key: {} sig: {} on: {}",
                   params.digestAlgorithm().digest(pubKey.getEncoded()),
                   params.digestAlgorithm().digest(signed.toSig().toByteString()), params.member());
-        next.set(new nextView(ViewMember.newBuilder().setId(params.member().getId().toDigeste()).setConsensusKey(pubKey)
-                                        .setSignature(signed.toSig()).build(),
+        next.set(new nextView(ViewMember.newBuilder()
+                                        .setId(params.member().getId().toDigeste())
+                                        .setConsensusKey(pubKey)
+                                        .setSignature(signed.toSig())
+                                        .build(),
                               keyPair));
     }
 
@@ -1025,7 +1049,8 @@ public class CHOAM {
             current.set(new Client(validators, getViewId()));
         }
         log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
-                 validators.entrySet().stream()
+                 validators.entrySet()
+                           .stream()
                            .map(e -> String.format("id: %s key: %s", e.getKey(),
                                                    params.digestAlgorithm().digest(e.toString())))
                            .toList(),
@@ -1119,8 +1144,10 @@ public class CHOAM {
     private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
             log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
-            return SubmitResult.newBuilder().setSuccess(false)
-                               .setStatus("Invalid transaction submission from non member").build();
+            return SubmitResult.newBuilder()
+                               .setSuccess(false)
+                               .setStatus("Invalid transaction submission from non member")
+                               .build();
         }
         final var c = current.get();
         if (c == null) {
