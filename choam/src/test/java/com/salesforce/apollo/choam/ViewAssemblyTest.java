@@ -222,7 +222,7 @@ public class ViewAssemblyTest {
 
             @Override
             public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return CHOAM.reconfigure(nextViewId, joining, previous, committee, previous, params.build(), previous);
+                return CHOAM.reconfigure(nextViewId, joining, previous, base, previous, params.build(), previous);
             }
         };
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
