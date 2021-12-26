@@ -201,7 +201,6 @@ public class TestCHOAM {
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.add(m))
                            .peek(m -> context.activate(m))
                            .toList();
         final var prefix = UUID.randomUUID().toString();

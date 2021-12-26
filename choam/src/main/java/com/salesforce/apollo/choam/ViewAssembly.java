@@ -131,8 +131,9 @@ public class ViewAssembly implements Reconfiguration {
                                                 new ArrayList<>(nextAssembly.values()), comms);
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
-        Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().memberCount(), 3);
-        view.context().allMembers().forEach(e -> reContext.add(e));
+        Context<Member> reContext = new Context<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
+                                                        view.context().memberCount(), view.context().getBias());
+        reContext.activate(view.context().activeMembers());
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, getStartState(), true);
         this.transitions = fsm.getTransitions();

@@ -98,7 +98,6 @@ public class EtherealTest {
 
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
         for (Member m : members) {
-            context.add(m);
             context.activate(m);
         }
         var builder = Config.deterministic().setnProc(nProc)

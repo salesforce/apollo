@@ -15,7 +15,12 @@
 		</encoder>
 	</appender> 
     
-	<logger name="com.salesforce.apollo" level="WARN"
+    <logger name="com.salesforce.apollo.fireflies" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    
+	<logger name="com.salesforce.apollo" level="warn"
 		additivity="false">
 		<appender-ref ref="STDOUT" />
 	</logger> 

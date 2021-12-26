@@ -144,10 +144,7 @@ public class RbcTest {
 
         Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
         parameters.setMetrics(metrics).setContext(context);
-        members.forEach(m -> {
-            context.add(m);
-            context.activate(m);
-        });
+        members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {

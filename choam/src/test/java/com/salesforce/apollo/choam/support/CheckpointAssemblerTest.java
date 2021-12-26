@@ -115,7 +115,7 @@ public class CheckpointAssemblerTest {
                                                                            c.getX509Certificate(), c.getPrivateKey(),
                                                                            new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.add(m))
+                                           .peek(m -> context.activate(m))
                                            .collect(Collectors.toList());
 
         Checkpoint checkpoint = HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);

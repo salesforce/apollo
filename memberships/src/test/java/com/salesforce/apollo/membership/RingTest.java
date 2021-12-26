@@ -73,7 +73,7 @@ public class RingTest {
         entropy.nextBytes(id);
         context = new Context<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
         ring = context.rings().findFirst().get();
-        members.forEach(m -> context.add(m));
+        members.forEach(m -> context.activate(m));
 
         Collections.sort(members, new Comparator<Member>() {
             @Override

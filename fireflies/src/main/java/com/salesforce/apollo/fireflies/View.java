@@ -1,5 +1,5 @@
 /*
-s * Copyright (c) 2019, salesforce.com, inc.
+ * Copyright (c) 2019, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -320,7 +320,7 @@ public class View {
                 m.setFailed(true);
                 context.offline(m);
             });
-            context.clear();
+            context.clear(); 
         }
 
         /**
@@ -754,7 +754,6 @@ public class View {
                                                              .toByteArray()))
                             .build();
         seed.setNote(new NoteWrapper(getDigestAlgorithm().digest(seedNote.toByteString()), seedNote));
-        context.add(seed);
         context.activate(seed);
     }
 
@@ -1175,7 +1174,6 @@ public class View {
      */
     void recover(Participant member) {
         if (context.isOffline(member)) {
-            context.add(member);
             context.activate(member);
             member.setFailed(false);
             log.info("Recovering: {}", member.getId());

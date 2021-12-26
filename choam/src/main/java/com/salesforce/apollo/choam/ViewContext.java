@@ -67,7 +67,7 @@ public class ViewContext {
         this.signer = signer;
         this.validators = validators;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
+        var remapped = CHOAM.rosterMap(params.context(), context.activeMembers());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);

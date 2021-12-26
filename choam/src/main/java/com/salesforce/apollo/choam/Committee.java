@@ -59,7 +59,6 @@ public interface Committee {
                                                 baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> {
-            newView.add(e);
             if (baseContext.isActive(e)) {
                 newView.activate(e);
             } else {

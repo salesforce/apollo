@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -76,7 +75,7 @@ public class ViewAssemblyTest {
                                         .map(e -> (Member) e)
                                         .toList();
         Context<Member> base = new Context<>(viewId, 0.1, members.size(), 3);
-        base.add(members);
+        base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         Map<Member, Verifier> validators = committee.allMembers().collect(Collectors.toMap(m -> m, m -> m));
@@ -127,7 +126,7 @@ public class ViewAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.allMembers().forEach(m -> {
+        committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -179,7 +178,7 @@ public class ViewAssemblyTest {
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        Map<Member, Verifier> validators = committee.allMembers().collect(Collectors.toMap(m -> m, m -> m));
+        Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));
 
         Parameters.Builder params = Parameters.newBuilder()
                                               .setScheduler(Executors.newScheduledThreadPool(cardinality))
@@ -261,7 +260,7 @@ public class ViewAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.allMembers().forEach(m -> {
+        committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -270,14 +269,12 @@ public class ViewAssemblyTest {
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), false));
         });
 
-        var toleranceLevel = params.build().toleranceLevel();
         try {
             communications.values().forEach(r -> r.start());
             recons.values().forEach(r -> r.start());
 
-            Utils.waitForCondition(20_000, () -> published.size() > toleranceLevel);
-            assertTrue(published.size() > toleranceLevel,
-                       "Expected: " + (toleranceLevel + 1) + " published: " + published.size());
+            Utils.waitForCondition(20_000, () -> published.size() == committee.activeMembers().size());
+            assertEquals(published.size(), committee.activeMembers().size());
         } finally {
             communications.values().forEach(r -> r.close());
             recons.values().forEach(r -> r.stop());

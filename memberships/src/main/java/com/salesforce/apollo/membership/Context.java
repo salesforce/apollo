@@ -256,10 +256,10 @@ public class Context<T extends Member> {
     }
 
     public void clear() {
-//        for (Ring<T> ring : rings) {
-//            ring.clear();
-//        }
-        members.values().forEach(e -> e.offline());
+        for (Ring<T> ring : rings) {
+            ring.clear();
+        }
+        members.clear();
     }
 
     /**
@@ -348,7 +348,7 @@ public class Context<T extends Member> {
         assert digest != null;
         var member = members.get(digest);
         if (member == null) {
-            return false;
+            return true;
         }
         return !member.isActive();
     }
@@ -357,7 +357,7 @@ public class Context<T extends Member> {
         assert m != null;
         var member = members.get(m.getId());
         if (member == null) {
-            return false;
+            return true;
         }
         return !member.isActive();
     }
