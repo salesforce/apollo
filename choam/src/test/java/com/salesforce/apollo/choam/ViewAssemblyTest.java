@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -69,20 +70,25 @@ public class ViewAssemblyTest {
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
 
-        List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
-                                        .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (Member) e).toList();
+        List<Member> members = IntStream.range(0, cardinality)
+                                        .mapToObj(i -> Utils.getMember(i))
+                                        .map(cpk -> new SigningMemberImpl(cpk))
+                                        .map(e -> (Member) e)
+                                        .toList();
         Context<Member> base = new Context<>(viewId, 0.1, members.size(), 3);
-        base.activate(members);
+        base.add(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));
+        Map<Member, Verifier> validators = committee.allMembers().collect(Collectors.toMap(m -> m, m -> m));
 
         final var executor = Executors.newCachedThreadPool();
-        Parameters.Builder params = Parameters.newBuilder().setScheduler(Executors.newScheduledThreadPool(cardinality))
+        Parameters.Builder params = Parameters.newBuilder()
+                                              .setScheduler(Executors.newScheduledThreadPool(cardinality))
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
-                                              .setGossipDuration(Duration.ofMillis(100)).setContext(base);
+                                              .setGossipDuration(Duration.ofMillis(100))
+                                              .setContext(base);
         List<Map<Member, Join>> published = new CopyOnWriteArrayList<>();
 
         Map<Member, ViewAssembly> recons = new HashMap<>();
@@ -95,8 +101,11 @@ public class ViewAssemblyTest {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     final PubKey consensus = bs(mbr.getPublicKey());
-                    return ViewMember.newBuilder().setId(mbr.getId().toDigeste()).setConsensusKey(consensus)
-                                     .setSignature(sm.sign(consensus.toByteString()).toSig()).build();
+                    return ViewMember.newBuilder()
+                                     .setId(mbr.getId().toDigeste())
+                                     .setConsensusKey(consensus)
+                                     .setSignature(sm.sign(consensus.toByteString()).toSig())
+                                     .build();
 
                 }
             });
@@ -118,7 +127,7 @@ public class ViewAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.activeMembers().forEach(m -> {
+        committee.allMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -161,19 +170,24 @@ public class ViewAssemblyTest {
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
 
-        List<Member> members = IntStream.range(0, cardinality).mapToObj(i -> Utils.getMember(i))
-                                        .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (Member) e).toList();
-        Context<Member> base = new Context<>(viewId, 0.33, members.size());
+        List<Member> members = IntStream.range(0, cardinality)
+                                        .mapToObj(i -> Utils.getMember(i))
+                                        .map(cpk -> new SigningMemberImpl(cpk))
+                                        .map(e -> (Member) e)
+                                        .toList();
+        Context<Member> base = new Context<>(viewId, 0.33, members.size(), 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        Map<Member, Verifier> validators = committee.activeMembers().stream().collect(Collectors.toMap(m -> m, m -> m));
+        Map<Member, Verifier> validators = committee.allMembers().collect(Collectors.toMap(m -> m, m -> m));
 
-        Parameters.Builder params = Parameters.newBuilder().setScheduler(Executors.newScheduledThreadPool(cardinality))
+        Parameters.Builder params = Parameters.newBuilder()
+                                              .setScheduler(Executors.newScheduledThreadPool(cardinality))
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
-                                              .setGossipDuration(Duration.ofMillis(100)).setContext(base);
+                                              .setGossipDuration(Duration.ofMillis(100))
+                                              .setContext(base);
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, ViewReconfiguration> recons = new HashMap<>();
@@ -221,8 +235,11 @@ public class ViewAssemblyTest {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
                     final PubKey consensus = bs(mbr.getPublicKey());
-                    return ViewMember.newBuilder().setId(mbr.getId().toDigeste()).setConsensusKey(consensus)
-                                     .setSignature(sm.sign(consensus.toByteString()).toSig()).build();
+                    return ViewMember.newBuilder()
+                                     .setId(mbr.getId().toDigeste())
+                                     .setConsensusKey(consensus)
+                                     .setSignature(sm.sign(consensus.toByteString()).toSig())
+                                     .build();
 
                 }
             });
@@ -244,7 +261,7 @@ public class ViewAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.activeMembers().forEach(m -> {
+        committee.allMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
@@ -253,12 +270,14 @@ public class ViewAssemblyTest {
             recons.put(m, new ViewReconfiguration(nextViewId, view, previous, comms.get(m), false));
         });
 
+        var toleranceLevel = params.build().toleranceLevel();
         try {
             communications.values().forEach(r -> r.start());
             recons.values().forEach(r -> r.start());
 
-            Utils.waitForCondition(20_000, () -> published.size() == committee.activeMembers().size());
-            assertEquals(published.size(), committee.activeMembers().size());
+            Utils.waitForCondition(20_000, () -> published.size() > toleranceLevel);
+            assertTrue(published.size() > toleranceLevel,
+                       "Expected: " + (toleranceLevel + 1) + " published: " + published.size());
         } finally {
             communications.values().forEach(r -> r.close());
             recons.values().forEach(r -> r.stop());

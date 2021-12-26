@@ -98,8 +98,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         });
 
         try {
-            assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
-            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS), "Checkpoint did not occur");
+            assertTrue(countdown.await(60, TimeUnit.SECONDS), "Did not complete transactions");
+            assertTrue(checkpointOccurred.get(10, TimeUnit.SECONDS), "Checkpoint did not occur");
         } finally {
             proceed.set(false);
         }

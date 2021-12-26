@@ -67,7 +67,7 @@ public class ViewContext {
         this.signer = signer;
         this.validators = validators;
 
-        var remapped = CHOAM.rosterMap(params.context(), context.activeMembers());
+        var remapped = CHOAM.rosterMap(params.context(), context.allMembers().toList());
         short pid = 0;
         for (Digest d : remapped.keySet().stream().sorted().toList()) {
             roster.put(remapped.get(d).getId(), pid++);
@@ -89,9 +89,12 @@ public class ViewContext {
             log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(), params.member());
             return null;
         }
-        var validation = Validate.newBuilder().setHash(block.hash.toDigeste())
-                                 .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
-                                                          .setSignature(signature.toSig()).build())
+        var validation = Validate.newBuilder()
+                                 .setHash(block.hash.toDigeste())
+                                 .setWitness(Certification.newBuilder()
+                                                          .setId(params.member().getId().toDigeste())
+                                                          .setSignature(signature.toSig())
+                                                          .build())
                                  .build();
         return validation;
     }
@@ -104,9 +107,12 @@ public class ViewContext {
         }
         log.trace("Signed view member: {} sig: {} on: {}", print(vm, params.digestAlgorithm()),
                   params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member());
-        var validation = Validate.newBuilder().setHash(vm.getId())
-                                 .setWitness(Certification.newBuilder().setId(params.member().getId().toDigeste())
-                                                          .setSignature(signature.toSig()).build())
+        var validation = Validate.newBuilder()
+                                 .setHash(vm.getId())
+                                 .setWitness(Certification.newBuilder()
+                                                          .setId(params.member().getId().toDigeste())
+                                                          .setSignature(signature.toSig())
+                                                          .build())
                                  .build();
         return validation;
     }

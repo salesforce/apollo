@@ -72,7 +72,9 @@ public class CheckpointAssemblerTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -107,12 +109,14 @@ public class CheckpointAssemblerTest {
         }
 
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
-        List<SigningMember> members = certs.values().stream()
+        List<SigningMember> members = certs.values()
+                                           .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
                                                                            c.getX509Certificate(), c.getPrivateKey(),
                                                                            new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.activate(m)).collect(Collectors.toList());
+                                           .peek(m -> context.add(m))
+                                           .collect(Collectors.toList());
 
         Checkpoint checkpoint = HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
 

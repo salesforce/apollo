@@ -15,10 +15,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -80,6 +80,21 @@ public class Context<T extends Member> {
         };
     }
 
+    private record Tracked<M> (M member, Digest[] hashes, AtomicBoolean active) {
+
+        private boolean isActive() {
+            return active.get();
+        }
+
+        private void offline() {
+            active.set(false);
+        }
+
+        private void activate() {
+            active.set(true);
+        }
+    }
+
     public static final ThreadLocal<MessageDigest> DIGEST_CACHE = ThreadLocal.withInitial(() -> {
         try {
             return MessageDigest.getInstance(Context.SHA_256);
@@ -89,6 +104,8 @@ public class Context<T extends Member> {
     });
 
     public static final String SHA_256 = "sha-256";
+
+    private static final Logger log = LoggerFactory.getLogger(Context.class);
 
     private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
@@ -134,15 +151,12 @@ public class Context<T extends Member> {
         return minMajority(pByz, cardinality, 0.99, bias);
     }
 
-    private final Map<Digest, T>               active              = new ConcurrentHashMap<>();
-    private final int                          bias;
-    private final Map<Digest, Digest[]>        hashes              = new ConcurrentHashMap<>();
-    private final Digest                       id;
-    private Logger                             log                 = LoggerFactory.getLogger(Context.class);
-    private final List<MembershipListener<T>>  membershipListeners = new CopyOnWriteArrayList<>();
-    private final ConcurrentHashMap<Digest, T> offline             = new ConcurrentHashMap<>();
-    private final double                       pByz;
-    private final Ring<T>[]                    rings;
+    private final int                                   bias;
+    private final Digest                                id;
+    private final ConcurrentHashMap<Digest, Tracked<T>> members             = new ConcurrentHashMap<>();
+    private final List<MembershipListener<T>>           membershipListeners = new CopyOnWriteArrayList<>();
+    private final double                                pByz;
+    private final Ring<T>[]                             rings;
 
     public Context(Digest id) {
         this(id, 1);
@@ -206,11 +220,8 @@ public class Context<T extends Member> {
      * Mark a member as active in the context
      */
     public void activate(T m) {
-        active.computeIfAbsent(m.getId(), id -> m);
-        offline.remove(m.getId());
-        for (Ring<T> ring : rings) {
-            ring.insert(m);
-        }
+        tracking(m).activate();
+
         membershipListeners.stream().forEach(l -> {
             try {
                 l.recover(m);
@@ -220,17 +231,16 @@ public class Context<T extends Member> {
         });
     }
 
-    public boolean activateIfOffline(Digest memberID) {
-        T offlined = offline.remove(memberID);
-        if (offlined == null) {
-            return false;
-        }
-        activate(offlined);
-        return true;
+    public int activeCount() {
+        return (int) members.values().stream().filter(e -> e.isActive()).count();
     }
 
     public List<T> activeMembers() {
-        return new ArrayList<>(active.values());
+        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member).toList();
+    }
+
+    public void add(Collection<T> members) {
+        members.forEach(m -> add(m));
     }
 
     public void add(T m) {
@@ -238,18 +248,18 @@ public class Context<T extends Member> {
     }
 
     public Stream<T> allMembers() {
-        return Arrays.asList(active.values(), offline.values()).stream().flatMap(c -> c.stream());
+        return members.values().stream().map(e -> e.member);
     }
 
     public int cardinality() {
-        return active.size() + offline.size();
+        return members.size();
     }
 
     public void clear() {
-        for (Ring<T> ring : rings) {
-            ring.clear();
-        }
-        hashes.clear();
+//        for (Ring<T> ring : rings) {
+//            ring.clear();
+//        }
+        members.values().forEach(e -> e.offline());
     }
 
     /**
@@ -287,11 +297,12 @@ public class Context<T extends Member> {
     }
 
     public Collection<T> getActive() {
-        return active.values();
+        return activeMembers();
     }
 
     public T getActiveMember(Digest memberID) {
-        return active.get(memberID);
+        var tracked = members.get(memberID);
+        return tracked == null ? null : tracked.member;
     }
 
     public int getBias() {
@@ -303,15 +314,12 @@ public class Context<T extends Member> {
     }
 
     public T getMember(Digest memberID) {
-        T member = active.get(memberID);
-        if (member == null) {
-            member = offline.get(memberID);
-        }
-        return member;
+        var tracked = members.get(memberID);
+        return tracked == null ? null : tracked.member;
     }
 
     public Collection<T> getOffline() {
-        return offline.values();
+        return members.values().stream().filter(e -> !e.isActive()).map(e -> e.member).toList();
     }
 
     public double getProbabilityByzantine() {
@@ -329,30 +337,48 @@ public class Context<T extends Member> {
 
     public boolean isActive(T m) {
         assert m != null;
-        return active.containsKey(m.getId());
+        var member = members.get(m.getId());
+        if (member == null) {
+            return false;
+        }
+        return member.isActive();
     }
 
     public boolean isOffline(Digest digest) {
-        return offline.containsKey(digest);
+        assert digest != null;
+        var member = members.get(digest);
+        if (member == null) {
+            return false;
+        }
+        return !member.isActive();
     }
 
     public boolean isOffline(T m) {
-        return offline.containsKey(m.getId());
+        assert m != null;
+        var member = members.get(m.getId());
+        if (member == null) {
+            return false;
+        }
+        return !member.isActive();
     }
 
     public int majority() {
         return getRingCount() - toleranceLevel();
     }
 
+    public int memberCount() {
+        return members.size();
+    }
+
+    public void offline(Collection<T> members) {
+        members.forEach(m -> offline(m));
+    }
+
     /**
      * Take a member offline
      */
     public void offline(T m) {
-        active.remove(m.getId());
-        offline.computeIfAbsent(m.getId(), id -> m);
-        for (Ring<T> ring : rings) {
-            ring.delete(m);
-        }
+        tracking(m).offline();
         membershipListeners.stream().forEach(l -> {
             try {
                 l.fail(m);
@@ -362,13 +388,8 @@ public class Context<T extends Member> {
         });
     }
 
-    public boolean offlineIfActive(Digest memberID) {
-        T activated = active.remove(memberID);
-        if (activated == null) {
-            return false;
-        }
-        offline(activated);
-        return true;
+    public int offlineCount() {
+        return (int) members.values().stream().filter(e -> !e.isActive()).count();
     }
 
     /**
@@ -419,17 +440,16 @@ public class Context<T extends Member> {
         membershipListeners.add(listener);
     }
 
+    public void remove(Collection<T> members) {
+        members.forEach(m -> remove(m));
+    }
+
     /**
      * remove a member from the receiving Context
      */
     public void remove(T m) {
-        Digest[] s = hashes.remove(m.getId());
-        if (s == null) {
-            return;
-        }
-        active.remove(m.getId());
-        offline.remove(m.getId());
-        for (int i = 0; i < s.length; i++) {
+        members.remove(m.getId());
+        for (int i = 0; i < rings.length; i++) {
             rings[i].delete(m);
         }
     }
@@ -532,18 +552,34 @@ public class Context<T extends Member> {
     }
 
     Digest hashFor(T m, int index) {
-        Digest[] hSet = hashes.computeIfAbsent(m.getId(), k -> {
-            Digest[] s = new Digest[rings.length];
-            for (int ring = 0; ring < rings.length; ring++) {
-                Digest key = m.getId();
-                s[ring] = key.getAlgorithm()
-                             .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
-            }
-            return s;
-        });
-        if (hSet == null) {
+        var tracked = members.get(m.getId());
+        if (tracked == null) {
             throw new IllegalArgumentException(m + " is not part of this group " + id);
         }
-        return hSet[index];
+        return tracked.hashes[index];
+    }
+
+    private Digest[] hashesFor(T m) {
+        Digest[] s = new Digest[rings.length];
+        for (int ring = 0; ring < rings.length; ring++) {
+            Digest key = m.getId();
+            s[ring] = key.getAlgorithm()
+                         .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
+        }
+        return s;
+    }
+
+    private Tracked<T> tracking(T m) {
+        var added = new AtomicBoolean();
+        var member = members.computeIfAbsent(m.getId(), id -> {
+            added.set(true);
+            return new Tracked<>(m, hashesFor(m), new AtomicBoolean());
+        });
+        if (added.get()) {
+            for (var ring : rings) {
+                ring.insert(m);
+            }
+        }
+        return member;
     }
 }

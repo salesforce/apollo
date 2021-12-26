@@ -124,14 +124,15 @@ public class ViewAssembly implements Reconfiguration {
         view = vc;
         this.nextViewId = nextViewId;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(nextViewId, params().context()).stream()
+        nextAssembly = Committee.viewMembersOf(nextViewId, params().context())
+                                .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
                                                 new ArrayList<>(nextAssembly.values()), comms);
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
-        Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().activeMembers().size());
-        reContext.activate(view.context().activeMembers());
+        Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().memberCount(), 3);
+        view.context().allMembers().forEach(e -> reContext.add(e));
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, getStartState(), true);
         this.transitions = fsm.getTransitions();
@@ -167,7 +168,8 @@ public class ViewAssembly implements Reconfiguration {
                                                          .addAllValidations(proposals.values().stream().map(p -> {
                                                              return view.generateValidation(p.vm);
                                                          }).toList()))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
     }
 
     @Override
@@ -177,8 +179,11 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void elect() {
-        proposals.values().stream().filter(p -> p.validations.size() > params().toleranceLevel())
-                 .sorted(Comparator.comparing(p -> p.member.getId())).forEach(p -> slate.put(p.member(), joinOf(p)));
+        proposals.values()
+                 .stream()
+                 .filter(p -> p.validations.size() > params().toleranceLevel())
+                 .sorted(Comparator.comparing(p -> p.member.getId()))
+                 .forEach(p -> slate.put(p.member(), joinOf(p)));
         if (slate.size() > params().toleranceLevel()) {
             log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
             transitions.complete();
@@ -195,8 +200,10 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void gather() {
-        JoinRequest request = JoinRequest.newBuilder().setContext(params().context().getId().toDigeste())
-                                         .setNextView(nextViewId.toDigeste()).build();
+        JoinRequest request = JoinRequest.newBuilder()
+                                         .setContext(params().context().getId().toDigeste())
+                                         .setNextView(nextViewId.toDigeste())
+                                         .build();
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicReference<Runnable> reiterate = new AtomicReference<>();
         AtomicInteger countDown = new AtomicInteger(1); // 1 rounds of attempts
@@ -223,10 +230,13 @@ public class ViewAssembly implements Reconfiguration {
                   proposals.values().stream().map(p -> p.member.getId()).toList(), params().member());
         ds.setValue(Reassemble.newBuilder()
                               .setViewMembers(ViewMembers.newBuilder()
-                                                         .addAllMembers(proposals.values().stream().map(p -> p.vm)
+                                                         .addAllMembers(proposals.values()
+                                                                                 .stream()
+                                                                                 .map(p -> p.vm)
                                                                                  .toList())
                                                          .build())
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
     }
 
     public Parameters params() {
@@ -419,10 +429,15 @@ public class ViewAssembly implements Reconfiguration {
     }
 
     private Join joinOf(Proposed candidate) {
-        final List<Certification> witnesses = candidate.validations.values().stream().map(v -> v.getWitness())
+        final List<Certification> witnesses = candidate.validations.values()
+                                                                   .stream()
+                                                                   .map(v -> v.getWitness())
                                                                    .sorted(Comparator.comparing(c -> new Digest(c.getId())))
                                                                    .collect(Collectors.toList());
-        return Join.newBuilder().setMember(candidate.vm).setView(nextViewId.toDigeste()).addAllEndorsements(witnesses)
+        return Join.newBuilder()
+                   .setMember(candidate.vm)
+                   .setView(nextViewId.toDigeste())
+                   .addAllEndorsements(witnesses)
                    .build();
     }
 

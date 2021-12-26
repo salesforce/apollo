@@ -57,7 +57,9 @@ public class BootstrapperTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -68,17 +70,35 @@ public class BootstrapperTest {
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
-        List<SigningMember> members = certs.values().stream()
+        List<SigningMember> members = certs.values()
+                                           .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
                                                                            c.getX509Certificate(), c.getPrivateKey(),
                                                                            new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.activate(m)).collect(Collectors.toList());
+                                           .peek(m -> context.add(m))
+                                           .collect(Collectors.toList());
 
         TestChain testChain = new TestChain(bootstrapStore);
-        testChain.genesis().userBlocks(10).viewChange().userBlocks(10).viewChange().userBlocks(10).viewChange()
-                 .userBlocks(10).viewChange().userBlocks(10).checkpoint().userBlocks(10).synchronizeView()
-                 .userBlocks(10).synchronizeCheckpoint().userBlocks(5).viewChange().userBlocks(20).anchor()
+        testChain.genesis()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .checkpoint()
+                 .userBlocks(10)
+                 .synchronizeView()
+                 .userBlocks(10)
+                 .synchronizeCheckpoint()
+                 .userBlocks(5)
+                 .viewChange()
+                 .userBlocks(20)
+                 .anchor()
                  .userBlocks(5);
 
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
@@ -97,7 +117,9 @@ public class BootstrapperTest {
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
-                                             Parameters.newBuilder().setContext(context).setMember(member)
+                                             Parameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setMember(member)
                                                        .setSynchronizeDuration(Duration.ofMillis(1000))
                                                        .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                        .build(),

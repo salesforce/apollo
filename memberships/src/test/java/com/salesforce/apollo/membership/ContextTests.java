@@ -30,7 +30,7 @@ public class ContextTests {
         for (int i = 0; i < 10; i++) {
             SigningMemberImpl m = new SigningMemberImpl(Utils.getMember(i));
             members.add(m);
-            context.activate(m);
+            context.add(m);
         }
 
         List<Member> predecessors = context.predecessors(members.get(0));

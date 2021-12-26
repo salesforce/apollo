@@ -78,7 +78,7 @@
         <appender-ref ref="STDOUT" />
     </logger>  
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
