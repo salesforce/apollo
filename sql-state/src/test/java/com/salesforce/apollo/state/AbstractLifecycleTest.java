@@ -242,7 +242,7 @@ abstract public class AbstractLifecycleTest {
                                               ServerConnectionCache.newBuilder()
                                                                    .setTarget(30)
                                                                    .setMetrics(params.getMetrics()),
-                                              Executors.newFixedThreadPool(2, r -> {
+                                              Executors.newFixedThreadPool(3, r -> {
                                                   Thread thread = new Thread(r, "Router exec" + m.getId() + "["
                                                   + exec.getAndIncrement() + "]");
                                                   thread.setDaemon(true);
@@ -312,11 +312,11 @@ abstract public class AbstractLifecycleTest {
                                .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024)
-                                                              .setMaxBatchCount(10000)
+                                                              .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(10_000)
+                               .setTxnPermits(1000)
                                .setCheckpointBlockSize(2);
         params.getClientBackoff()
               .setBase(20)

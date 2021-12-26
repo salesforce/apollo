@@ -63,7 +63,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
-        Thread.sleep(1000);
 
         var success = Utils.waitForCondition(30_000, 100,
                                              () -> members.stream()
