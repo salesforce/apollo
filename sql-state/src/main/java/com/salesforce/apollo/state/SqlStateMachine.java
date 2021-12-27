@@ -107,6 +107,11 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
+    /**
+     * 
+     */
+    private static final String SQL_STATE_INTERNAL = "/sql-state/internal.yml";
+
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -482,7 +487,7 @@ public class SqlStateMachine {
 
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
-        try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase(SQL_STATE_INTERNAL, new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
             statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
@@ -835,7 +840,7 @@ public class SqlStateMachine {
         log.debug("executing: {}", tx.getExecutionCase());
         var c = currentBlock.get();
         updateCurrent(c.height, c.blkHash, index, hash);
-        
+
         clock.incrementTxn();
         ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
 

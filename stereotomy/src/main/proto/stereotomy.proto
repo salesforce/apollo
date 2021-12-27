@@ -188,10 +188,19 @@ message KeyState {
     int32 witnessThreshold = 11; 
 }
 
-// A binding
+// A bound value
 message Bound {
+    message Endpoint {
+        string host = 1;
+        int32 port = 2;
+    }
     Ident prefix = 1;
-    google.protobuf.Any value = 2;
-    utils.Sig signature = 3;
-    bool timeout = 4;
+    oneof value {
+        Endpoint endpoint = 2;
+    }
+}
+
+message Binding {
+    Bound value = 1;
+    utils.Sig signature = 2;
 }

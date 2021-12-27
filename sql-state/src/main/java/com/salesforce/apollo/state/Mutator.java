@@ -16,6 +16,7 @@ import java.sql.SQLType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -289,8 +290,16 @@ public class Mutator {
                    .build();
     }
 
+    public Call call(String sql) {
+        return call(EXECUTION.EXECUTE, sql, null);
+    }
+
     public Call call(String sql, List<SQLType> outParameters, Object... arguments) {
         return call(EXECUTION.EXECUTE, sql, outParameters, arguments);
+    }
+
+    public Call call(String sql, Object... arguments) {
+        return call(EXECUTION.EXECUTE, sql, Collections.emptyList(), arguments);
     }
 
     public Script callScript(String className, String method, String source, Value... args) {
@@ -361,6 +370,10 @@ public class Mutator {
                                           .setVersion(tfr.getVersion())
                                           .setArgs(tfr.write(Arrays.asList(args))))
                         .build();
+    }
+
+    public Statement statement(String sql) {
+        return statement(EXECUTION.EXECUTE, sql, (Object[]) null);
     }
 
     public Statement statement(String sql, Object... args) {

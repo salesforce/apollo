@@ -58,7 +58,7 @@ public class TestUniKERL {
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "");

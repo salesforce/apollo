@@ -18,6 +18,7 @@
         <module>choam</module>
         <module>model</module>
         <module>delphinius</module>
+        <module>schemas</module>
     </modules>
 
     <properties>
@@ -154,7 +155,7 @@
             </dependency>
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
-                <artifactId>schema-tool</artifactId>
+                <artifactId>schemas</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

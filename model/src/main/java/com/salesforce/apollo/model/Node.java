@@ -6,9 +6,15 @@
  */
 package com.salesforce.apollo.model;
 
-import com.salesforce.apollo.comm.Router;
+import java.security.SecureRandom;
+import java.sql.SQLException;
+
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.stereotomy.Stereotomy;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
 
 /**
  * @author hal.hildebrand
@@ -17,15 +23,16 @@ import com.salesforce.apollo.stereotomy.Stereotomy;
 public class Node {
 
     private final Digest     id;
-    private final Shard      management;
-    private final Stereotomy stereotomy;
-    private final Router     router;
+    private final Shard      shard;
+    private final Stereotomy controller;
 
-    public Node(Digest id, Shard management, Stereotomy stereotomy, Router router) {
+    public Node(Digest id, Shard shard, StereotomyKeyStore keyStore, DigestAlgorithm digestAlgorithm,
+                SecureRandom entropy) throws SQLException {
         this.id = id;
-        this.management = management;
-        this.stereotomy = stereotomy;
-        this.router = router;
+        this.shard = shard;
+        this.controller = new StereotomyImpl(keyStore, new ShardedKERL(shard.createConnection(), shard.getMutator(),
+                                                                       digestAlgorithm),
+                                             entropy);
     }
 
     public Digest getId() {
