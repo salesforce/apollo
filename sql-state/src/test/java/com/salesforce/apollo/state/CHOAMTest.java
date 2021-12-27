@@ -276,7 +276,7 @@ public class CHOAMTest {
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
         final int clientCount = 1000;
-        final int max = 10;
+        final int max = 5;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");

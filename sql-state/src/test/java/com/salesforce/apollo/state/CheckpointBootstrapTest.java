@@ -49,9 +49,9 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 23;
-        final int clientCount = 10;
-        final int max = 15;
+        final int waitFor = 5;
+        final int clientCount = 5;
+        final int max = 5;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
 
         routers.entrySet()
@@ -115,7 +115,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                     .max()
                                     .getAsLong();
 
-        Utils.waitForCondition(10_000, 1000,
+        Utils.waitForCondition(30_000, 1000,
                                () -> members.stream()
                                             .map(m -> updaters.get(m))
                                             .map(ssm -> ssm.getCurrentBlock())

@@ -48,9 +48,9 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 23;
+        final int waitFor = 5;
         final int clientCount = 10;
-        final int max = 10;
+        final int max = 5;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
 
         routers.entrySet()
