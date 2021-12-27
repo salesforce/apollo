@@ -7,9 +7,6 @@
 package com.salesforce.apollo.stereotomy.mvlog;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static com.salesforce.apollo.stereotomy.identifier.Identifier.coordinateOrdering;
-import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptOrdering;
-import static com.salesforce.apollo.stereotomy.identifier.Identifier.receiptPrefix;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.io.IOException;
@@ -18,7 +15,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -162,6 +159,45 @@ public class MvLog implements KERL {
     private static final String LOCATION_TO_HASH        = "LOCATION_TO_HASH";
     private static final String RECEIPTS                = "RECEIPTS";
 
+    /**
+     * Ordering by
+     * 
+     * <pre>
+     * <coords.identifier, coords.sequenceNumber, coords.digest>
+     * </pre>
+     */
+    public static String coordinateOrdering(EventCoordinates coords) {
+        return qb64(coords.getIdentifier()) + ':' + coords.getSequenceNumber() + ':' + qb64(coords.getDigest());
+    }
+
+    public static String receiptDigestSuffix(EventCoordinates event, EventCoordinates signer) {
+        return qb64(event.getDigest()) + ':' + qb64(signer.getDigest());
+    }
+
+    /**
+     * Ordering by
+     * 
+     * <pre>
+     * <event.identifier, signer.identifier, event.sequenceNumber, signer.sequenceNumber, event.digest, signer.digest>
+     * </pre>
+     */
+    public static String receiptOrdering(EventCoordinates event, EventCoordinates signer) {
+        return MvLog.receiptPrefix(event, signer) + MvLog.receiptSequence(event, signer)
+        + receiptDigestSuffix(event, signer);
+    }
+
+    public static String receiptPrefix(EventCoordinates event, EventCoordinates signer) {
+        return MvLog.receiptPrefix(event.getIdentifier(), signer.getIdentifier());
+    }
+
+    public static String receiptPrefix(Identifier forIdentifier, Identifier forIdentifier2) {
+        return qb64(forIdentifier) + ':' + qb64(forIdentifier2) + '.';
+    }
+
+    public static String receiptSequence(EventCoordinates event, EventCoordinates signer) {
+        return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
+    }
+
     // Order by <stateOrdering>
     private final MVMap<String, Sig> authentications;
     private final DigestAlgorithm    digestAlgorithm;
@@ -171,14 +207,20 @@ public class MvLog implements KERL {
     // Order by <stateOrdering>
     private final MVMap<String, KeyEvent> events;
     private final MVMap<String, String>   eventsByHash;
+
     // Order by <stateOrdering>
     private final MVMap<String, KeyState> keyState;
+
     // Order by <identifier>
     private final MVMap<String, String> keyStateByIdentifier;
+
     // Order by <stateOrdering>
-    private final MVMap<String, Long>   lastReceipt;
+    private final MVMap<String, Long> lastReceipt;
+
     private final MVMap<String, String> locationToHash;
-    private final KeyEventProcessor     processor = new KeyEventProcessor(this);
+
+    private final KeyEventProcessor processor = new KeyEventProcessor(this);
+
     // Order by <receiptOrdering>
     private final MVMap<String, Sig> receipts;
 
@@ -205,15 +247,12 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public KeyState append(KeyEvent event) {
+    public CompletableFuture<KeyState> append(KeyEvent event) {
         final var newState = processor.process(event);
         append(event, newState);
-        return newState;
-    }
-
-    @Override
-    public OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier) {
-        return OptionalLong.of(lastReceipt.get(receiptPrefix(forIdentifier, byIdentifier)));
+        var f = new CompletableFuture<KeyState>();
+        f.complete(newState);
+        return f;
     }
 
     @Override
@@ -223,11 +262,11 @@ public class MvLog implements KERL {
 
     @Override
     public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        KeyEvent keyEvent = events.get(coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
-                                                                               coordinates.getSequenceNumber(),
-                                                                               coordinates.getPreviousEvent()
-                                                                                          .getDigest(),
-                                                                               coordinates.getIlk())));
+        KeyEvent keyEvent = events.get(MvLog.coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
+                                                                                     coordinates.getSequenceNumber(),
+                                                                                     coordinates.getPreviousEvent()
+                                                                                                .getDigest(),
+                                                                                     coordinates.getIlk())));
         return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
     }
 
@@ -239,12 +278,12 @@ public class MvLog implements KERL {
 
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
+        return Optional.ofNullable(events.get(MvLog.coordinateOrdering(coordinates)));
     }
 
     @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
+        return Optional.ofNullable(keyState.get(MvLog.coordinateOrdering(coordinates)));
     }
 
     @Override
@@ -255,7 +294,7 @@ public class MvLog implements KERL {
     }
 
     private void append(KeyEvent event, KeyState newState) {
-        String coordinates = coordinateOrdering(event.getCoordinates());
+        String coordinates = MvLog.coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
         String hashstring = qb64(newState.getDigest());
         eventsByHash.put(hashstring, coordinates);
@@ -266,10 +305,10 @@ public class MvLog implements KERL {
 
     private void appendAttachments(EventCoordinates coordinates, JohnHancock signatures, List<JohnHancock> list,
                                    Map<EventCoordinates, JohnHancock> otherReceipts) {
-        String coords = coordinateOrdering(coordinates);
+        String coords = MvLog.coordinateOrdering(coordinates);
         authentications.put(coords, signatures.toSig());
         for (var otherReceipt : otherReceipts.entrySet()) {
-            var key = receiptOrdering(coordinates, otherReceipt.getKey());
+            var key = MvLog.receiptOrdering(coordinates, otherReceipt.getKey());
             this.receipts.put(key, otherReceipt.getValue().toSig());
             lastReceipt.put(receiptPrefix(coordinates.getIdentifier(), otherReceipt.getKey().getIdentifier()),
                             coordinates.getSequenceNumber());

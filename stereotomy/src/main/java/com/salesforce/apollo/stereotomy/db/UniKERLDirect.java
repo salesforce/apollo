@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy.db;
 
 import java.sql.Connection;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -30,9 +31,11 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public KeyState append(KeyEvent event) {
+    public CompletableFuture<KeyState> append(KeyEvent event) {
         KeyState newState = processor.process(event);
         append(dsl, event, newState, digestAlgorithm);
-        return newState;
+        var f = new CompletableFuture<KeyState>();
+        f.complete(newState);
+        return f;
     }
 }

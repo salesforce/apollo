@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
@@ -418,12 +419,18 @@ public class StereotomyImpl implements Stereotomy {
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
-        specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
+        specification.addKey(initialKeyPair.getPublic())
+                     .setSigningThreshold(unweighted(1))
                      .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
 
         InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
-        KeyState state = kerl.append(event);
+        KeyState state;
+        try {
+            state = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (state == null) {
             log.warn("Invalid event produced creating: {}", identifier);
             return Optional.empty();
@@ -497,7 +504,7 @@ public class StereotomyImpl implements Stereotomy {
 
         var lastEstablishing = kerl.getKeyEvent(state.get().getLastEstablishmentEvent());
         if (lastEstablishing.isEmpty()) {
-            log.warn("Identifier cannot be rotated: {} estatblishment event missing: {}", identifier);
+            log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
             return Optional.empty();
         }
         EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
@@ -509,14 +516,23 @@ public class StereotomyImpl implements Stereotomy {
 
         KeyPair newNextKeyPair = spec.getSignatureAlgorithm().generateKeyPair(entropy);
 
-        specification.setSigningThreshold(unweighted(1)).setIdentifier(identifier)
-                     .setDigestAlgorithm(kerl.getDigestAlgorithm()).setCurrentCoords(state.get().getCoordinates())
-                     .setCurrentDigest(state.get().getDigest()).setKey(nextKeyPair.getPublic())
+        specification.setSigningThreshold(unweighted(1))
+                     .setIdentifier(identifier)
+                     .setDigestAlgorithm(kerl.getDigestAlgorithm())
+                     .setCurrentCoords(state.get().getCoordinates())
+                     .setCurrentDigest(state.get().getDigest())
+                     .setKey(nextKeyPair.getPublic())
                      .setNextKeys(List.of(newNextKeyPair.getPublic()))
                      .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
 
         RotationEvent event = eventFactory.rotation(specification.build());
-        KeyState newState = kerl.append(event);
+        KeyState newState;
+        try {
+            newState = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Identifier cannot be rotated: {} cannot append event", identifier, e);
+            return Optional.empty();
+        }
 
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
 
@@ -555,11 +571,22 @@ public class StereotomyImpl implements Stereotomy {
             log.warn("Key pair for identifier not found in keystore: {}", identifier);
         }
 
-        specification.setPriorEventDigest(state.get().getDigest()).setLastEvent(state.get().getLastEvent())
-                     .setIdentifier(identifier).setSigner(new SignerImpl(keyPair.get().getPrivate()));
+        specification.setPriorEventDigest(state.get().getDigest())
+                     .setLastEvent(state.get().getLastEvent())
+                     .setIdentifier(identifier)
+                     .setSigner(new SignerImpl(keyPair.get().getPrivate()));
 
         KeyEvent event = eventFactory.interaction(specification.build());
-        KeyState newKeyState = kerl.append(event);
+        KeyState newKeyState;
+        try {
+            newKeyState = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Cannot append seal event for: {}", identifier, e);
+            return Optional.empty();
+        }
+        if (newKeyState == null) {
+            return Optional.empty();
+        }
         return Optional.of(newKeyState);
     }
 
@@ -584,7 +611,8 @@ public class StereotomyImpl implements Stereotomy {
     private SignerImpl signerFor(Identifier identifier, Optional<KeyState> state, Optional<KeyEvent> lee) {
         return new SignerImpl((PrivateKey[]) IntStream.range(0, state.get().getKeys().size())
                                                       .mapToObj(i -> getKeyPair(identifier, i, state.get(), lee))
-                                                      .map(s -> s.isEmpty() ? null : s.get().getPrivate()).toArray());
+                                                      .map(s -> s.isEmpty() ? null : s.get().getPrivate())
+                                                      .toArray());
     }
 
     private Optional<KeyPair> getKeyPair(Identifier identifier, int keyIndex, KeyState state,

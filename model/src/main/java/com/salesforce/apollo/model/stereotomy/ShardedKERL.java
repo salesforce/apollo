@@ -11,11 +11,8 @@ import java.sql.Types;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -51,31 +48,24 @@ public class ShardedKERL extends UniKERL {
     }
 
     @Override
-    public KeyState append(KeyEvent event) {
+    public CompletableFuture<KeyState> append(KeyEvent event) {
         var call = mutator.call("{ ? = call stereotomy_kerl.append(?, ?, ?) }", Collections.singletonList(Types.BINARY),
                                 new Object[] { event.getBytes(), event.getIlk(),
                                                DigestAlgorithm.DEFAULT.digestCode() });
-        CallResult callResult = null;
         CompletableFuture<CallResult> submitted;
         try {
             submitted = mutator.execute(exec, call, timeout, scheduler);
         } catch (InvalidTransaction e) {
-            throw new IllegalStateException("Cannot append keystate, error submitting transaction", e);
+            var f = new CompletableFuture<KeyState>();
+            f.completeExceptionally(e);
+            return f;
         }
-        try {
-            callResult = submitted.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        byte[] keyState = (byte[]) callResult.outValues.get(0);
-        if (keyState == null) {
-            throw new IllegalStateException("Cannot append keystate");
-        }
-        try {
-            return new KeyStateImpl(keyState);
-        } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException("Cannot deserialize resulting keystate", e);
-        }
+        return submitted.thenApply(callResult -> (byte[]) callResult.outValues.get(0)).thenApply(b -> {
+            try {
+                return b == null ? (KeyState) null : new KeyStateImpl(b);
+            } catch (InvalidProtocolBufferException e) {
+                return null;
+            }
+        });
     }
 }

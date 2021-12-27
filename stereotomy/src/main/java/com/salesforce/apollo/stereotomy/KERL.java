@@ -6,10 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.OptionalLong;
-
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * The Key Event Receipt Log
@@ -18,8 +15,6 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public interface KERL extends KEL {
-
-    OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier);
 
     void append(AttachmentEvent event, KeyState newState);
 

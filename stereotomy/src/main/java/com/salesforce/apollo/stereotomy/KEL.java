@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -39,7 +40,7 @@ public interface KEL {
     /**
      * Append the event. The event will be validated before inserted.
      */
-    KeyState append(KeyEvent event);
+    CompletableFuture<KeyState> append(KeyEvent event);
 
     /**
      * The digest algorithm used
