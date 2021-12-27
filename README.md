@@ -42,3 +42,6 @@ I develop on an M1 MBP, and there is (currently) no _protoc-gen-grpc-java_ for t
 
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+
+## Build Flapping
+Am I right? At this point, there is no guarantee that if you have your IDE open on this repository that it will successfully build from the command line. Not sure completely why, but it's likely some stupid thing I'm doing, so there's that. In any event, if you want to run a complete build with tests, please do so without your IDE open.  Running tests in your IDE seems perfectly (and frustratingly) fine.
