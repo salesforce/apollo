@@ -179,7 +179,7 @@
                                 <excludes></excludes>
                                 <schemata>
                                     <schema>
-                                        <inputSchema>stereotomy_kerl</inputSchema>
+                                        <inputSchema>stereotomy</inputSchema>
                                     </schema>
                                 </schemata>
                             </database>

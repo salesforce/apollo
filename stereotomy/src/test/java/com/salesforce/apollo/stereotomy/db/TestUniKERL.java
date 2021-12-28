@@ -78,7 +78,7 @@ public class TestUniKERL {
     private byte[] append(KeyEvent event, Connection connection) {
         CallableStatement proc;
         try {
-            proc = connection.prepareCall("{ ? = call stereotomy_kerl.append(?, ?, ?) }");
+            proc = connection.prepareCall("{ ? = call stereotomy.append(?, ?, ?) }");
             proc.registerOutParameter(1, Types.BINARY);
             proc.setObject(2, event.getBytes());
             proc.setObject(3, event.getIlk());

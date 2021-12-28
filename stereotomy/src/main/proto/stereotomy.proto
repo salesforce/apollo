@@ -17,7 +17,6 @@ message Ident {
         utils.PubKey basic = 1; 
         utils.Digeste selfAddressing = 2;
         utils.Sig selfSigning = 3;
-        AID autonomous = 4;
         bool NONE = 5;
     }
 }
@@ -62,12 +61,6 @@ message Sealed {
     }
 }
 
-// Autonomous Identifier
-message AID {
-    Ident prefix = 1;
-    string url = 2;
-}
-
 // Common header for events
 message Header {
     int64 sequenceNumber = 1;
@@ -84,25 +77,10 @@ message EventCommon {
     utils.Sig authentication = 4;
 }
 
-// The interaction specification and common event structure
-message InteractionEvent {
-    InteractionSpec specification = 1;
-    EventCommon common = 2;
-}
-
 // Specification of an interaction
 message InteractionSpec {
     Header header = 1;
     repeated Sealed seals = 2;
-}
-
-// An attactment to an event in the KEL
-message AttachmentEvent {
-    Header header = 1;
-    EventCommon common = 2;
-    EventCoords coordinates = 3;
-    repeated utils.Sig endorsements = 5; 
-    repeated Receipt receipts = 6;
 }
 
 // The establishment criteria and record of a key
@@ -111,13 +89,6 @@ message Establishment {
     repeated utils.PubKey keys = 2;
     utils.Digeste nextKeysDigest = 3;
     int32 witnessThreshold = 4;
-}
-
-// The rotation of a key
-message RotationEvent {
-    RotationSpec specification = 1; 
-    EventCommon common = 2;
-    Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
 // The specification of the rotation of a key
@@ -129,21 +100,59 @@ message RotationSpec {
     repeated Sealed seals = 5;
 }
 
-// The birth of a key
-message InceptionEvent {
-    IdentifierSpec specification = 1;
-    EventCommon common = 2;
-    DelegatingEventCoords delegatingEvent = 3;
-    Ident identifier = 4;
-    Sealed delegatingSeal = 5; // Delegated inception event
-}
-
 // The specification of an identififer
 message IdentifierSpec {
     Header header = 1;
     Establishment establishment = 2;
     repeated Ident witnesses = 3;
     repeated string configuration = 4;
+}
+
+// The interaction specification and common event structure
+message InteractionEvent {
+    InteractionSpec specification = 1;
+    EventCommon common = 2;
+}
+
+// An attactment to an event in the KEL
+message AttachmentEvent {
+    Header header = 1;
+    EventCommon common = 2;
+    EventCoords coordinates = 3;
+    repeated utils.Sig endorsements = 5; 
+    repeated Receipt receipts = 6;
+}
+
+// The rotation of a key
+message RotationEvent {
+    RotationSpec specification = 1; 
+    EventCommon common = 2;
+    Sealed delegatingSeal = 3; // Delegated rotation event
+}
+
+// The birth of a key
+message InceptionEvent {
+    Ident identifier = 1;
+    IdentifierSpec specification = 2;
+    EventCommon common = 3;
+    DelegatingEventCoords delegatingEvent = 4;
+    Sealed delegatingSeal = 5; // Delegated inception event
+}
+
+message KeyEvent {
+    oneof event {
+        InceptionEvent inception = 1;
+        RotationEvent rotation = 2;
+        InteractionEvent interaction = 3;
+    }
+}
+
+message KEL {
+    repeated KeyEvent events = 1;
+}
+
+message KERL {
+    repeated AttachmentEvent events = 1;
 }
 
 message Receipt {
@@ -171,7 +180,7 @@ message Version {
     int32 minor = 3;
 }
 
-// This is the Jesus Nut.  KeyState represents the materialized 
+// KeyState represents the materialized 
 // state of an identifier and corresponding public/private keys,
 // KEL and KERL
 message KeyState {
@@ -190,17 +199,61 @@ message KeyState {
 
 // A bound value
 message Bound {
+    // Values are bound only to non transferable identifiers,
+    // so only the birth event is required as self certifying identity
+    InceptionEvent identifier = 1;
+    oneof value {
+        Endpoint endpoint = 2;
+        string uri = 3;
+    }
+
     message Endpoint {
         string host = 1;
         int32 port = 2;
     }
-    Ident prefix = 1;
-    oneof value {
-        Endpoint endpoint = 2;
-    }
 }
 
+// A signed bound value
 message Binding {
     Bound value = 1;
     utils.Sig signature = 2;
+}
+
+// Context routing for Resolver
+
+message IdentifierContext {
+    utils.Digeste context = 1;
+    Ident identifier = 2;
+}
+
+message EventContext {
+    utils.Digeste context = 1;
+    EventCoords coordinates = 2;
+}
+
+message KeyContext {
+    utils.Digeste context = 1;
+    KeyCoords coordinates = 2;
+}
+
+// Resolver API
+service Resolver { 
+    rpc kel (IdentifierContext) returns (KEL) {}
+    rpc kerl (IdentifierContext) returns (KERL) {}
+    
+    rpc lookup (IdentifierContext) returns (Binding) {}
+    
+    rpc resolve (IdentifierContext) returns (KeyState) {}
+    rpc resolveCoords (EventContext) returns (KeyState) {}
+}
+
+message BindContext {
+    utils.Digeste context = 1;
+    Binding binding = 2;
+}
+
+// Binding API for Resolver
+service Binder {
+    rpc bind(BindContext) returns(google.protobuf.Empty) {}
+    rpc unbind(IdentifierContext) returns(google.protobuf.Empty) {}
 }

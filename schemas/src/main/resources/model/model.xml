@@ -27,7 +27,7 @@
             baseTableName="member" baseTableSchemaName="apollo_kernel"
             constraintName="member_identifier_fk"
             referencedTableName="identifier" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy_kerl" />
+            referencedTableSchemaName="stereotomy" />
 
     </changeSet>
 </databaseChangeLog>

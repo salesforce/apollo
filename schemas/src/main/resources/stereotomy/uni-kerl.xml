@@ -6,15 +6,15 @@
 	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
       http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
 	<changeSet author="hhildebrand" id="uni-kerl-1">
-		<sql>create alias stereotomy_kerl.initialize for
+		<sql>create alias stereotomy.initialize for
 			"com.salesforce.apollo.stereotomy.db.UniKERL.initializeKERL"
 		</sql>
 
-		<sql>call stereotomy_kerl.initialize()</sql>
+		<sql>call stereotomy.initialize()</sql>
 
-		<sql>drop alias stereotomy_kerl.initialize</sql>
+		<sql>drop alias stereotomy.initialize</sql>
 
-		<sql>create alias stereotomy_kerl.append for
+		<sql>create alias stereotomy.append for
 			"com.salesforce.apollo.stereotomy.db.UniKERL.appendEvent"
 		</sql>
 
