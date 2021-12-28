@@ -83,8 +83,7 @@ message Checkpoint {
 }
 
 message Executions {
-    repeated Join joins = 1;
-    repeated Transaction executions = 2;
+    repeated Transaction executions = 1;
 }
 
 message Assemble {
