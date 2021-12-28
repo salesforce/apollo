@@ -859,7 +859,7 @@ public class CHOAM {
                 final HashedCertifiedBlock cp = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
                 return CHOAM.genesis(nextViewId, joining, previous, params.context(), v, params, cp,
-                                     params.genesisData());
+                                     params.genesisData().get());
             }
 
             @Override

@@ -221,7 +221,7 @@ public class CHOAMTest {
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(GENESIS_DATA)
+                               .setGenesisData(() -> GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()

@@ -17,6 +17,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
@@ -43,7 +44,7 @@ import io.grpc.Status;
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
                          ReliableBroadcaster.Parameters.Builder combine, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
-                         List<Transaction> genesisData, Digest genesisViewId, TransactionExecutor processor,
+                         Supplier<List<Transaction>> genesisData, Digest genesisViewId, TransactionExecutor processor,
                          Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
                          BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
                          ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
@@ -199,7 +200,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Context<Member>                        context;
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Executor                               exec                  = ForkJoinPool.commonPool();
-        private List<Transaction>                      genesisData           = new ArrayList<>();
+        private Supplier<List<Transaction>>            genesisData           = () -> new ArrayList<>();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
         private int                                    maxCheckpointSegments = 200;
@@ -267,7 +268,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return exec;
         }
 
-        public List<Transaction> getGenesisData() {
+        public Supplier<List<Transaction>> getGenesisData() {
             return genesisData;
         }
 
@@ -389,7 +390,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setGenesisData(List<Transaction> genesisData) {
+        public Builder setGenesisData(Supplier<List<Transaction>> genesisData) {
             this.genesisData = genesisData;
             return this;
         }
