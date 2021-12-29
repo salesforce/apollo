@@ -59,7 +59,6 @@ public class Producer {
 
         @Override
         public void assembled() {
-            ds.validationsOnly();
             final var slate = assembly.getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get()));
@@ -74,6 +73,10 @@ public class Producer {
 
         @Override
         public void checkAssembly() {
+            ds.validationsOnly();
+            if (ds.getRemaining() > 0) {
+                log.info("Assembling with: {} dropped batches on: {}", ds.getRemaining(), params().member());
+            }
             if (assembled.get()) {
                 assembled();
             }
@@ -109,7 +112,7 @@ public class Producer {
         public void drain() {
             draining.set(true);
             ds.drain();
-            log.debug("Draining with: {} remaining batches on: {}", ds.getRemaining(), params().member());
+            log.info("Draining with: {} remaining batches on: {}", ds.getRemaining(), params().member());
         }
 
         @Override
@@ -173,8 +176,8 @@ public class Producer {
         lastEpoch = ep.getNumberOfEpochs() - 1;
 
         // Number of rounds we can provide data for
-        final var blocks = ep.getEpochLength();
-        final int maxElements = blocks * ep.getNumberOfEpochs();
+        final var blocks = ep.getEpochLength() - 4;
+        final int maxElements = blocks * lastEpoch;
 
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount());

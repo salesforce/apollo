@@ -123,7 +123,6 @@ public class MembershipTests {
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private Map<Digest, Router>            routers;
-    private int                            toleranceLevel;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -162,13 +161,12 @@ public class MembershipTests {
                          .map(e -> e.getValue())
                          .mapToInt(l -> l.size())
                          .filter(s -> s >= expected)
-                         .count() > toleranceLevel,
+                         .count() == choams.size() - 1,
                    "Failed: " + blocks.entrySet()
                                       .stream()
                                       .filter(e -> !e.getKey().equals(testSubject.getId()))
                                       .map(e -> e.getValue())
                                       .map(l -> l.size())
-                                      .filter(s -> s >= expected)
                                       .toList());
 
         final Duration timeout = Duration.ofSeconds(2);
@@ -212,7 +210,6 @@ public class MembershipTests {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
-        toleranceLevel = context.toleranceLevel();
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
         var params = Parameters.newBuilder()
@@ -260,12 +257,13 @@ public class MembershipTests {
         }));
         Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            blocks.put(m.getId(), new CopyOnWriteArrayList<>());
+            List<Digest> recording = new CopyOnWriteArrayList<>();
+            blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
                 public void beginBlock(long height, Digest hash) {
-                    blocks.get(m.getId()).add(hash);
+                    recording.add(hash);
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })

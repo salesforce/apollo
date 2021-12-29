@@ -56,7 +56,7 @@ public enum Earner implements Driven.Transitions {
     },
     COMPLETE {
     },
-    DRAIN {
+    DRAIN { // currently unused.
 
         @Override
         public Transitions assembled() {
@@ -136,8 +136,8 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions newEpoch(int epoch, int lastEpoch) {
-            if (lastEpoch - 1 == epoch) {
-                return DRAIN;
+            if (lastEpoch == epoch) {
+                return AWAIT_VIEW;
             }
             return null;
         }
