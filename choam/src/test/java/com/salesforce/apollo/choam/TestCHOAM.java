@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -197,6 +196,8 @@ public class TestCHOAM {
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
+        params.getProducer().ethereal().setNumberOfEpochs(5);
+
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
@@ -317,7 +318,7 @@ public class TestCHOAM {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 23;
+        final int expected = 3;
         var session = choams.get(members.get(0).getId()).getSession();
 
         Utils.waitForCondition(30_000, 1_000,
@@ -331,24 +332,7 @@ public class TestCHOAM {
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, null, scheduler);
-        while (true) {
-            final var r = result;
-            Utils.waitForCondition(1_000, () -> r.isDone());
-            if (result.isDone()) {
-                if (result.isCompletedExceptionally()) {
-                    result.exceptionally(t -> {
-                        System.out.println("Failed with: " + t.toString());
-                        return null;
-                    });
-                    result = session.submit(ForkJoinPool.commonPool(), tx, null, scheduler);
-                } else {
-                    System.out.println("Success!!!!");
-                    var completion = result.get();
-                    assertNotNull(completion);
-                    break;
-                }
-            }
-        }
+        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(30), scheduler);
+        result.get(30, TimeUnit.SECONDS);
     }
 }

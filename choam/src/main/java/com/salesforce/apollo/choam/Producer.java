@@ -59,23 +59,17 @@ public class Producer {
 
         @Override
         public void assembled() {
-            assembly = new ViewReconfiguration(nextViewId, view, previousBlock.get(), comms, false) {
-                @Override
-                public void complete() {
-                    super.complete();
-                    log.debug("View assembly: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                              params().member());
-                    Producer.this.transitions.viewComplete();
-                }
-            };
-            assembly.start();
-            if (ds.getRemaining() > 0) {
-                log.warn("Awaiting assembly: {} dropped txns: {} on: {}", nextViewId, ds.getRemaining(),
-                         params().member());
-            } else {
-                log.debug("Awaiting assembly: {} dropped txns: {} on: {}", nextViewId, ds.getRemaining(),
-                          params().member());
-            }
+            ds.validationsOnly();
+            final var slate = assembly.getSlate();
+            var reconfiguration = new HashedBlock(params().digestAlgorithm(),
+                                                  view.reconfigure(slate, nextViewId, previousBlock.get()));
+            var validation = view.generateValidation(reconfiguration);
+            final var p = new PendingBlock(reconfiguration, new HashMap<>(), new AtomicBoolean());
+            pending.put(reconfiguration.hash, p);
+            p.witnesses.put(params().member(), validation);
+            ds.offer(validation);
+            log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
+                     reconfiguration.height(), params().member());
         }
 
         @Override
@@ -123,8 +117,20 @@ public class Producer {
         }
 
         @Override
-        public void markAssembled() {
-            assembled.set(true);
+        public void reconfigure() {
+            log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member());
+            assembly = new ViewAssembly(nextViewId, view, comms) {
+                @Override
+                public void complete() {
+                    super.complete();
+                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
+                              params().member());
+                    assembled.set(true);
+                    Producer.this.transitions.viewComplete();
+                }
+            };
+            assembly.start();
+            assembly.assembled();
         }
 
         @Override
@@ -135,9 +141,10 @@ public class Producer {
         }
     }
 
-    private static final Logger                     log           = LoggerFactory.getLogger(Producer.class);
+    private static final Logger log = LoggerFactory.getLogger(Producer.class);
+
     private final AtomicBoolean                     assembled     = new AtomicBoolean();
-    private volatile ViewReconfiguration            assembly;
+    private volatile ViewAssembly                   assembly;
     private final CommonCommunications<Terminal, ?> comms;
     private final Controller                        controller;
     private final ContextGossiper                   coordinator;
@@ -162,11 +169,11 @@ public class Producer {
         final var producerParams = params.producer();
         final Builder ep = producerParams.ethereal();
 
-        lastEpoch = ep.getNumberOfEpochs();
+        lastEpoch = ep.getNumberOfEpochs() - 1;
 
         // Number of rounds we can provide data for
-        final var blocks = ep.getEpochLength() - 4;
-        final int maxElements = blocks * lastEpoch;
+        final var blocks = ep.getEpochLength();
+        final int maxElements = blocks * ep.getNumberOfEpochs();
 
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount());
@@ -237,8 +244,10 @@ public class Producer {
         if (ds.offer(transaction)) {
             return SubmitResult.newBuilder().setSuccess(true).setStatus("OK").build();
         } else {
-            return SubmitResult.newBuilder().setSuccess(false)
-                               .setStatus("Transaction buffer full on: " + params().member().getId()).build();
+            return SubmitResult.newBuilder()
+                               .setSuccess(false)
+                               .setStatus("Transaction buffer full on: " + params().member().getId())
+                               .build();
         }
     }
 
@@ -252,9 +261,13 @@ public class Producer {
             }
         }).filter(e -> e != null).toList();
 
-        aggregate.stream().flatMap(e -> e.getValidationsList().stream()).map(witness -> validate(witness))
-                 .filter(p -> p != null).filter(p -> !p.published.get())
-                 .filter(p -> p.witnesses.size() > params().toleranceLevel()).forEach(p -> publish(p));
+        aggregate.stream()
+                 .flatMap(e -> e.getValidationsList().stream())
+                 .map(witness -> validate(witness))
+                 .filter(p -> p != null)
+                 .filter(p -> !p.published.get())
+                 .filter(p -> p.witnesses.size() > params().toleranceLevel())
+                 .forEach(p -> publish(p));
 
         HashedBlock lb = previousBlock.get();
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
@@ -292,7 +305,7 @@ public class Producer {
 
     private void newEpoch(Integer epoch) {
         log.trace("new epoch: {} on: {}", epoch, params().member());
-        if (epoch == 1) {
+        if (epoch == 0) {
             produceAssemble();
         }
         transitions.newEpoch(epoch, lastEpoch);
@@ -322,8 +335,11 @@ public class Producer {
         log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member());
         p.published.set(true);
         pending.remove(p.block.hash);
-        final var cb = CertifiedBlock.newBuilder().setBlock(p.block.block)
-                                     .addAllCertifications(p.witnesses.values().stream().map(v -> v.getWitness())
+        final var cb = CertifiedBlock.newBuilder()
+                                     .setBlock(p.block.block)
+                                     .addAllCertifications(p.witnesses.values()
+                                                                      .stream()
+                                                                      .map(v -> v.getWitness())
                                                                       .toList())
                                      .build();
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), cb));

@@ -176,12 +176,12 @@ public class AgeBatchingQueue<T> {
     }
 
     boolean reapCurrentBatch(String operatorName) {
+        if (total.get() > limit) {
+            return false;
+        }
         AgeBatch currentBatchRef = currentBatch.get();
         if (currentBatchRef.events.isEmpty()) {
             return true;
-        }
-        if (total.get() > limit) {
-            return false;
         }
         // We should not block here as the offer & reaper thread both does not block in
         // any condition.

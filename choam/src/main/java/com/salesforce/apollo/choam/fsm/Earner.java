@@ -32,8 +32,14 @@ public enum Earner implements Driven.Transitions {
         }
 
         @Override
-        public Transitions viewComplete() {
+        public Transitions lastBlock() {
             return COMPLETE;
+        }
+
+        @Override
+        public Transitions viewComplete() {
+            context().assembled();
+            return null;
         }
     },
     CHECKPOINTING {
@@ -54,7 +60,7 @@ public enum Earner implements Driven.Transitions {
 
         @Override
         public Transitions assembled() {
-            context().markAssembled();
+            context().reconfigure();
             return null;
         }
 
@@ -64,7 +70,12 @@ public enum Earner implements Driven.Transitions {
         }
 
         @Override
-        public Transitions lastBlock() {
+        public Transitions viewComplete() {
+            return null;
+        }
+
+        @Override
+        public Transitions newEpoch(int epoch, int lastEpoch) {
             return AWAIT_VIEW;
         }
     },
@@ -115,22 +126,12 @@ public enum Earner implements Driven.Transitions {
             log.error("Protocol failure", new Exception("Protocol failure at: " + fsm().getPreviousState()));
             context().fail();
         }
-
-        @Override
-        public Transitions viewComplete() {
-            return null;
-        }
     },
     SPICE {
         @Override
         public Transitions assembled() {
-            context().markAssembled();
+            context().reconfigure();
             return null;
-        }
-
-        @Override
-        public Transitions lastBlock() {
-            return AWAIT_VIEW;
         }
 
         @Override

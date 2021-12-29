@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -57,6 +58,7 @@ public class MembershipTests {
         private final static Random entropy = new Random();
 
         private final AtomicInteger            completed = new AtomicInteger();
+        private final CountDownLatch           countdown;
         private final AtomicInteger            failed    = new AtomicInteger();
         private final int                      max;
         private final AtomicBoolean            proceed;
@@ -68,12 +70,13 @@ public class MembershipTests {
                                                                       .build();
 
         Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max,
-                       ScheduledExecutorService scheduler) {
+                       ScheduledExecutorService scheduler, CountDownLatch countdown) {
             this.proceed = proceed;
             this.session = session;
             this.timeout = timeout;
             this.max = max;
             this.scheduler = scheduler;
+            this.countdown = countdown;
         }
 
         void decorate(CompletableFuture<?> fs) {
@@ -92,7 +95,9 @@ public class MembershipTests {
                         }
                     }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                 } else {
-                    if (completed.incrementAndGet() < max) {
+                    if (completed.incrementAndGet() == max) {
+                        countdown.countDown();
+                    } else {
                         try {
                             decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
@@ -159,22 +164,20 @@ public class MembershipTests {
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
+        final var countdown = new CountDownLatch(clientCount);
         for (int i = 0; i < clientCount; i++) {
             choams.entrySet()
                   .stream()
                   .filter(e -> !e.getKey().equals(testSubject.getId()))
                   .map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler, countdown))
                   .forEach(e -> transactioneers.add(e));
         }
 
         transactioneers.stream().forEach(e -> e.start());
         boolean success;
         try {
-            success = Utils.waitForCondition(30_000, 1_000,
-                                             () -> transactioneers.stream()
-                                                                  .filter(e -> e.completed.get() >= max)
-                                                                  .count() == transactioneers.size());
+            success = countdown.await(30, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
         }

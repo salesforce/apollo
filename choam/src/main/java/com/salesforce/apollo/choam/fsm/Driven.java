@@ -70,7 +70,7 @@ public interface Driven {
 
     void fail();
 
-    void markAssembled();
+    void reconfigure();
 
     void startProduction();
 }

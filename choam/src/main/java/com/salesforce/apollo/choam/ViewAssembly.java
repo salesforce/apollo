@@ -201,6 +201,7 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void gather() {
+        log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member());
         JoinRequest request = JoinRequest.newBuilder()
                                          .setContext(params().context().getId().toDigeste())
                                          .setNextView(nextViewId.toDigeste())

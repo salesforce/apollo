@@ -329,6 +329,8 @@ abstract public class AbstractLifecycleTest {
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
+
+        params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }
 

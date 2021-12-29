@@ -238,6 +238,8 @@ public class CHOAMTest {
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
+        
+        params.getProducer().ethereal().setNumberOfEpochs(4);
 
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> Utils.getMember(i))
@@ -276,7 +278,7 @@ public class CHOAMTest {
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
         final int clientCount = 1000;
-        final int max = 5;
+        final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
