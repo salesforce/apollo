@@ -109,6 +109,7 @@ public class Producer {
         public void drain() {
             draining.set(true);
             ds.drain();
+            log.debug("Draining with: {} remaining batches on: {}", ds.getRemaining(), params().member());
         }
 
         @Override

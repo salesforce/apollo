@@ -148,16 +148,24 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         final int expected = 23;
 
-        Utils.waitForCondition(30_000, 100,
-                               () -> blocks.values()
+        Utils.waitForCondition(30_000, 1000,
+                               () -> blocks.entrySet()
                                            .stream()
+                                           .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                           .map(e -> e.getValue())
                                            .mapToInt(l -> l.size())
                                            .filter(s -> s >= expected)
-                                           .count() > toleranceLevel);
-        assertTrue(blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count() > toleranceLevel,
+                                           .count() == choams.size() - 1);
+        assertTrue(blocks.entrySet()
+                         .stream()
+                         .filter(e -> !e.getKey().equals(testSubject.getId()))
+                         .map(e -> e.getValue())
+                         .mapToInt(l -> l.size())
+                         .filter(s -> s >= expected)
+                         .count() > toleranceLevel,
                    "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
-        final Duration timeout = Duration.ofSeconds(5);
+        final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
@@ -174,7 +182,7 @@ public class MembershipTests {
                   .forEach(e -> transactioneers.add(e));
         }
 
-        transactioneers.stream().forEach(e -> e.start());
+        transactioneers.forEach(e -> e.start());
         boolean success;
         try {
             success = countdown.await(30, TimeUnit.SECONDS);
@@ -183,11 +191,11 @@ public class MembershipTests {
         }
         assertTrue(success,
                    "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() >= max).count());
+        var target = blocks.values().stream().mapToInt(l -> l.size()).max().getAsInt() + 1;
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId())
-                                                             .size() >= blocks.get(members.get(0).getId()).size());
+        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId()).size() >= target);
         assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).size() + " expected >= "
         + blocks.get(members.get(0).getId()).size());
 

@@ -50,8 +50,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int waitFor = 5;
-        final int clientCount = 5;
-        final int max = 5;
+        final int clientCount = 1;
+        final int max = 1;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
 
         routers.entrySet()
