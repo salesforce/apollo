@@ -146,7 +146,7 @@ public class MembershipTests {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
-        final int expected = 23;
+        final int expected = 3;
 
         Utils.waitForCondition(30_000, 1000,
                                () -> blocks.entrySet()
@@ -163,7 +163,13 @@ public class MembershipTests {
                          .mapToInt(l -> l.size())
                          .filter(s -> s >= expected)
                          .count() > toleranceLevel,
-                   "Failed: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
+                   "Failed: " + blocks.entrySet()
+                                      .stream()
+                                      .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                      .map(e -> e.getValue())
+                                      .map(l -> l.size())
+                                      .filter(s -> s >= expected)
+                                      .toList());
 
         final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
