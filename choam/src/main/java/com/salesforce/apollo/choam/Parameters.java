@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -19,7 +20,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.salesfoce.apollo.choam.proto.FoundationSeal;
+import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesfoce.apollo.stereotomy.event.proto.KEL;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -44,13 +48,14 @@ import io.grpc.Status;
 public record Parameters(Context<Member> context, Router communications, SigningMember member,
                          ReliableBroadcaster.Parameters.Builder combine, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
-                         Supplier<List<Transaction>> genesisData, Digest genesisViewId, TransactionExecutor processor,
-                         Function<Long, File> checkpointer, File storeFile, int checkpointBlockSize,
+                         Function<Map<Member, Join>, List<Transaction>> genesisData, Digest genesisViewId,
+                         TransactionExecutor processor, Function<Long, File> checkpointer, int checkpointBlockSize,
                          BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
                          ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
                          int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec) {
+                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec, Supplier<KEL> kel,
+                         FoundationSeal foundation) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -190,46 +195,49 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return cp;
         };
 
-        private BootstrapParameters                    bootstrap             = BootstrapParameters.newBuilder().build();
-        private int                                    checkpointBlockSize   = 8192;
-        private Function<Long, File>                   checkpointer          = NULL_CHECKPOINTER;
-        private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
-                                                                                                 .retryIf(s -> s.isOk());
-        private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
-        private Router                                 communications;
-        private Context<Member>                        context;
-        private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Executor                               exec                  = ForkJoinPool.commonPool();
-        private Supplier<List<Transaction>>            genesisData           = () -> new ArrayList<>();
-        private Digest                                 genesisViewId;
-        private Duration                               gossipDuration        = Duration.ofSeconds(1);
-        private int                                    maxCheckpointSegments = 200;
-        private SigningMember                          member;
-        private ChoamMetrics                           metrics;
-        private TransactionExecutor                    processor             = (i, h, t, f) -> {
-                                                                             };
-        private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
-        private int                                    regenerationCycles    = 20;
-        private BiConsumer<Long, CheckpointState>      restorer              = (height, checkpointState) -> {
-                                                                             };
-        private ScheduledExecutorService               scheduler;
-        private File                                   storeFile;
-        private Duration                               submitTimeout         = Duration.ofSeconds(30);
-        private int                                    synchronizationCycles = 10;
-        private Duration                               synchronizeDuration   = Duration.ofMillis(500);
-        private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
-        private int                                    txnPermits            = 3_000;
-        private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private BootstrapParameters                            bootstrap             = BootstrapParameters.newBuilder()
+                                                                                                          .build();
+        private int                                            checkpointBlockSize   = 8192;
+        private Function<Long, File>                           checkpointer          = NULL_CHECKPOINTER;
+        private ExponentialBackoff.Builder<Status>             clientBackoff         = ExponentialBackoff.<Status>newBuilder()
+                                                                                                         .retryIf(s -> s.isOk());
+        private ReliableBroadcaster.Parameters.Builder         combineParams         = ReliableBroadcaster.Parameters.newBuilder();
+        private Router                                         communications;
+        private Context<Member>                                context;
+        private DigestAlgorithm                                digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private Executor                                       exec                  = ForkJoinPool.commonPool();
+        private FoundationSeal                                 foundation            = FoundationSeal.getDefaultInstance();
+        private Function<Map<Member, Join>, List<Transaction>> genesisData           = view -> new ArrayList<>();
+        private Digest                                         genesisViewId;
+        private Duration                                       gossipDuration        = Duration.ofSeconds(1);
+        private Supplier<KEL>                                  kel                   = () -> KEL.getDefaultInstance();
+        private int                                            maxCheckpointSegments = 200;
+        private SigningMember                                  member;
+        private ChoamMetrics                                   metrics;
+        private TransactionExecutor                            processor             = (i, h, t, f) -> {
+                                                                                     };
+        private ProducerParameters                             producer              = ProducerParameters.newBuilder()
+                                                                                                         .build();
+        private int                                            regenerationCycles    = 20;
+        private BiConsumer<Long, CheckpointState>              restorer              = (height, checkpointState) -> {
+                                                                                     };
+        private ScheduledExecutorService                       scheduler;
+        private Duration                                       submitTimeout         = Duration.ofSeconds(30);
+        private int                                            synchronizationCycles = 10;
+        private Duration                                       synchronizeDuration   = Duration.ofMillis(500);
+        private Duration                                       synchronizeTimeout    = Duration.ofSeconds(30);
+        private int                                            txnPermits            = 3_000;
+        private SignatureAlgorithm                             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build() {
             final double n = context.getRingCount();
             var toleranceLevel = Dag.minimalQuorum((short) n, 3);
             return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
                                   maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
-                                  checkpointer, storeFile, checkpointBlockSize, restorer, digestAlgorithm, metrics,
+                                  checkpointer, checkpointBlockSize, restorer, digestAlgorithm, metrics,
                                   viewSigAlgorithm, synchronizationCycles, synchronizeDuration, regenerationCycles,
                                   synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff,
-                                  exec);
+                                  exec, kel, foundation);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -268,7 +276,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return exec;
         }
 
-        public Supplier<List<Transaction>> getGenesisData() {
+        public FoundationSeal getFoundation() {
+            return foundation;
+        }
+
+        public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
             return genesisData;
         }
 
@@ -278,6 +290,10 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Duration getGossipDuration() {
             return gossipDuration;
+        }
+
+        public Supplier<KEL> getKel() {
+            return kel;
         }
 
         public int getMaxCheckpointSegments() {
@@ -310,10 +326,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public ScheduledExecutorService getScheduler() {
             return scheduler;
-        }
-
-        public File getStoreFile() {
-            return storeFile;
         }
 
         public Duration getSubmitTimeout() {
@@ -390,7 +402,12 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setGenesisData(Supplier<List<Transaction>> genesisData) {
+        public Builder setFoundation(FoundationSeal foundation) {
+            this.foundation = foundation;
+            return this;
+        }
+
+        public Builder setGenesisData(Function<Map<Member, Join>, List<Transaction>> genesisData) {
             this.genesisData = genesisData;
             return this;
         }
@@ -402,6 +419,11 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setGossipDuration(Duration gossipDuration) {
             this.gossipDuration = gossipDuration;
+            return this;
+        }
+
+        public Builder setKel(Supplier<KEL> kel) {
+            this.kel = kel;
             return this;
         }
 
@@ -442,11 +464,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Parameters.Builder setScheduler(ScheduledExecutorService scheduler) {
             this.scheduler = scheduler;
-            return this;
-        }
-
-        public Builder setStoreFile(File storeFile) {
-            this.storeFile = storeFile;
             return this;
         }
 

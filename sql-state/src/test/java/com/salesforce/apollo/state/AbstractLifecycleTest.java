@@ -312,7 +312,7 @@ abstract public class AbstractLifecycleTest {
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
                                .setSynchronizeDuration(Duration.ofMillis(10))
-                               .setGenesisData(() -> GENESIS_DATA)
+                               .setGenesisData(view -> GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()

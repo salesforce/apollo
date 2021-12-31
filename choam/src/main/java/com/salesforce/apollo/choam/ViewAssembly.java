@@ -17,13 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -46,6 +44,7 @@ import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfigure;
+import com.salesforce.apollo.choam.support.OneShot;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
@@ -77,28 +76,6 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class ViewAssembly implements Reconfiguration {
-
-    static class OneShot implements Supplier<ByteString> {
-        private CountDownLatch      latch = new CountDownLatch(1);
-        private volatile ByteString value;
-
-        @Override
-        public ByteString get() {
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            }
-            final var current = value;
-            value = null;
-            return current == null ? ByteString.EMPTY : current;
-        }
-
-        void setValue(ByteString value) {
-            this.value = value;
-            latch.countDown();
-        }
-    }
 
     record AJoin(Member m, Join j) {}
 
@@ -142,12 +119,15 @@ public class ViewAssembly implements Reconfiguration {
         Config.Builder config = params().producer().ethereal().clone();
 
         // Canonical assignment of members -> pid for Ethereal
-        Short pid = view.roster().get(params().member().getId());
-        if (pid == null) {
-            config.setPid((short) 0).setnProc((short) 1);
-        } else {
-            config.setPid(pid).setnProc((short) view.roster().size());
+        var remapped = CHOAM.rosterMap(reContext, reContext.activeMembers());
+        short pid = 0;
+        for (Digest d : remapped.keySet().stream().sorted().toList()) {
+            if (remapped.get(d).equals(params().member())) {
+                break;
+            }
+            pid++;
         }
+        config.setPid(pid).setnProc((short) view.roster().size());
         config.setEpochLength(7).setNumberOfEpochs(epochs());
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> process(preblock, last),

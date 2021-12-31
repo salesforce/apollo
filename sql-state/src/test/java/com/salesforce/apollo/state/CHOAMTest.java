@@ -221,7 +221,7 @@ public class CHOAMTest {
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(() -> GENESIS_DATA)
+                               .setGenesisData(view -> GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
@@ -238,7 +238,7 @@ public class CHOAMTest {
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
-        
+
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
         members = IntStream.range(0, CARDINALITY)

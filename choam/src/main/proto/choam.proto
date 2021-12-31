@@ -8,7 +8,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "util.proto";
-import "ethereal.proto";
+import "stereotomy.proto";
 
 package apollo.choam;
 
@@ -61,18 +61,17 @@ message Header {
     utils.Digeste bodyHash = 7;
 }
 
-message Genesis { 
-    Reconfigure initialView = 1;
-    repeated Transaction initialize = 2;
+message Genesis {
+    FoundationSeal foundation = 1;
+    Reconfigure initialView = 2;
+    repeated Transaction initialize = 3;
 }
 
 message Reconfigure {
     utils.Digeste id = 1;
-    int32 checkpointTarget = 2;
-    int32 numberOfEpochs = 3;
-    int32 epochLength = 4;
-    repeated ViewMember view = 5;
-    repeated Join joins = 6;
+    int32 checkpointTarget = 2; 
+    repeated ViewMember view = 3;
+    repeated Join joins = 4;
 }
 
 message Checkpoint { 
@@ -88,6 +87,17 @@ message Executions {
 
 message Assemble {
     utils.Digeste nextView = 1;
+}
+
+message Foundation {
+    repeated utils.Digeste membership = 1;
+    utils.Digeste authority = 2;
+    stereotomy.InceptionEvent validator = 3;
+}
+
+message FoundationSeal {
+    Foundation foundation = 1;
+    utils.Sig signature = 2;
 }
 
 message Transaction { 
@@ -106,6 +116,7 @@ message Join {
     utils.Digeste view = 1;
     ViewMember member = 2;
     repeated Certification endorsements = 3;
+    stereotomy.KEL kel = 4;
 }
 
 message ViewMember {

@@ -387,8 +387,8 @@ public class CHOAM {
 
     /** The Genesis formation comittee */
     private class Formation implements Committee {
-        private final Context<Member>     formation;
-        private final ViewReconfiguration reconfigure;
+        private final GenesisAssembly assembly;
+        private final Context<Member> formation;
 
         private Formation() {
             formation = Committee.viewFor(params.genesisViewId(), params.context());
@@ -399,10 +399,10 @@ public class CHOAM {
                           params.digestAlgorithm().digest(c.member.getSignature().toByteString()), params.member());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                reconfigure = new ViewReconfiguration(params.genesisViewId(), vc, head.get(), comm, true);
+                assembly = new GenesisAssembly(vc, comm, next.get().member);
                 nextViewId.set(params.genesisViewId());
             } else {
-                reconfigure = null;
+                assembly = null;
             }
         }
 
@@ -417,8 +417,8 @@ public class CHOAM {
 
         @Override
         public void complete() {
-            if (reconfigure != null) {
-                reconfigure.stop();
+            if (assembly != null) {
+                assembly.stop();
             }
         }
 
@@ -452,8 +452,8 @@ public class CHOAM {
 
         @Override
         public void regenerate() {
-            if (reconfigure != null) {
-                reconfigure.start();
+            if (assembly != null) {
+                assembly.start();
             }
         }
 
@@ -535,11 +535,7 @@ public class CHOAM {
 
     public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params, int checkpointTarget) {
-        var builder = Reconfigure.newBuilder()
-                                 .setCheckpointTarget(checkpointTarget)
-                                 .setId(id.toDigeste())
-                                 .setEpochLength(params.producer().ethereal().getEpochLength())
-                                 .setNumberOfEpochs(params.producer().ethereal().getNumberOfEpochs());
+        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(id.toDigeste());
 
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
@@ -859,7 +855,7 @@ public class CHOAM {
                 final HashedCertifiedBlock cp = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
                 return CHOAM.genesis(nextViewId, joining, previous, params.context(), v, params, cp,
-                                     params.genesisData().get());
+                                     params.genesisData().apply(joining));
             }
 
             @Override
