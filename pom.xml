@@ -29,7 +29,7 @@
         <jooq.version>3.15.5</jooq.version>
         <bc.version>1.69</bc.version>
         <logback.version>1.2.7</logback.version>
-        <grpc.version>1.42.1</grpc.version>
+        <grpc.version>1.43.1</grpc.version>
         <protobuf.version>3.19.1</protobuf.version>
         <liquibase.version>4.6.1</liquibase.version>
         <antlr4.version>4.9.3</antlr4.version>
