@@ -199,18 +199,8 @@ message KeyState {
 
 // A bound value
 message Bound {
-    // Values are bound only to non transferable identifiers,
-    // so only the birth event is required as self certifying identity
-    InceptionEvent identifier = 1;
-    oneof value {
-        Endpoint endpoint = 2;
-        string uri = 3;
-    }
-
-    message Endpoint {
-        string host = 1;
-        int32 port = 2;
-    }
+    InceptionEvent identifier = 1; 
+    string uri = 2;
 }
 
 // A signed bound value

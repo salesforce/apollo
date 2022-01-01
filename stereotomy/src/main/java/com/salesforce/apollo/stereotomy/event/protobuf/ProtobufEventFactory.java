@@ -73,7 +73,10 @@ public class ProtobufEventFactory implements EventFactory {
                 @Override
                 public Weight[][] getWeights() {
                     Weight[][] weights = new Weight[signingThreshold.getWeightsCount()][];
-                    signingThreshold.getWeightsList().stream().map(w -> weightArrayFrom(w)).collect(Collectors.toList())
+                    signingThreshold.getWeightsList()
+                                    .stream()
+                                    .map(w -> weightArrayFrom(w))
+                                    .collect(Collectors.toList())
                                     .toArray(new Weight[signingThreshold.getWeightsCount()][]);
                     return weights;
                 }
@@ -137,8 +140,10 @@ public class ProtobufEventFactory implements EventFactory {
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
 
-        return new InceptionEventImpl(builder.setIdentifier(prefix.toIdent()).setCommon(common)
-                                             .setSpecification(inceptionStatement).build());
+        return new InceptionEventImpl(builder.setIdentifier(prefix.toIdent())
+                                             .setCommon(common)
+                                             .setSpecification(inceptionStatement)
+                                             .build());
     }
 
     @Override
@@ -146,9 +151,10 @@ public class ProtobufEventFactory implements EventFactory {
         InteractionSpec ispec = interactionSpec(specification);
         final var bs = ispec.toByteString();
         var signatures = specification.getSigner().sign(bs).toSig();
-        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+        var common = EventCommon.newBuilder()
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
-        com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
 
@@ -159,7 +165,8 @@ public class ProtobufEventFactory implements EventFactory {
         final var bs = rotationSpec.toByteString();
         var signatures = specification.getSigner().sign(bs).toSig();
 
-        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+        var common = EventCommon.newBuilder()
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
         var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
         return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
@@ -172,55 +179,79 @@ public class ProtobufEventFactory implements EventFactory {
     private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder().setSequenceNumber(0).setVersion(toVersion(specification.getVersion()))
-                           .setPriorEventDigest(Digest.NONE.toDigeste()).setIdentifier(identifier.toIdent())
+        var header = Header.newBuilder()
+                           .setSequenceNumber(0)
+                           .setVersion(toVersion(specification.getVersion()))
+                           .setPriorEventDigest(Digest.NONE.toDigeste())
+                           .setIdentifier(identifier.toIdent())
                            .setIlk(INCEPTION_TYPE);
 
-        return IdentifierSpec.newBuilder().setHeader(header).setEstablishment(establishment)
-                             .addAllWitnesses(specification.getWitnesses().stream().map(i -> i.toIdent())
+        return IdentifierSpec.newBuilder()
+                             .setHeader(header)
+                             .setEstablishment(establishment)
+                             .addAllWitnesses(specification.getWitnesses()
+                                                           .stream()
+                                                           .map(i -> i.toIdent())
                                                            .collect(Collectors.toList()))
-                             .addAllConfiguration(specification.getConfigurationTraits().stream().map(ct -> ct.name())
+                             .addAllConfiguration(specification.getConfigurationTraits()
+                                                               .stream()
+                                                               .map(ct -> ct.name())
                                                                .collect(Collectors.toList()))
                              .build();
     }
 
     private InteractionSpec interactionSpec(InteractionSpecification specification) {
 
-        Header header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
+        Header header = Header.newBuilder()
+                              .setSequenceNumber(specification.getSequenceNumber())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
                               .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                        .name()))
-                              .setIdentifier(specification.getIdentifier().toIdent()).setIlk(INTERACTION_TYPE).build();
+                              .setIdentifier(specification.getIdentifier().toIdent())
+                              .setIlk(INTERACTION_TYPE)
+                              .build();
 
-        return InteractionSpec.newBuilder().setHeader(header)
-                              .addAllSeals(specification.getSeals().stream().map(e -> e.toSealed())
-                                                        .collect(Collectors.toList()))
+        return InteractionSpec.newBuilder()
+                              .setHeader(header)
+                              .addAllSeals(specification.getSeals().stream().map(e -> e.toSealed()).toList())
                               .build();
     }
 
     private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
+        var header = Header.newBuilder()
+                           .setSequenceNumber(specification.getSequenceNumber())
                            .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                     .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
-                           .setIdentifier(identifier.toIdent()).setIlk(ROTATION_TYPE);
+                           .setIdentifier(identifier.toIdent())
+                           .setIlk(ROTATION_TYPE);
 
-        return RotationSpec.newBuilder().setHeader(header).setEstablishment(establishment)
-                           .addAllWitnessesAdded(specification.getAddedWitnesses().stream().map(i -> i.toIdent())
+        return RotationSpec.newBuilder()
+                           .setHeader(header)
+                           .setEstablishment(establishment)
+                           .addAllWitnessesAdded(specification.getAddedWitnesses()
+                                                              .stream()
+                                                              .map(i -> i.toIdent())
                                                               .collect(Collectors.toList()))
-                           .addAllWitnessesRemoved(specification.getRemovedWitnesses().stream().map(i -> i.toIdent())
+                           .addAllWitnessesRemoved(specification.getRemovedWitnesses()
+                                                                .stream()
+                                                                .map(i -> i.toIdent())
                                                                 .collect(Collectors.toList()))
                            .build();
     }

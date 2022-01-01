@@ -135,7 +135,7 @@ public interface Validator {
                                                                                                 dee.getDelegatingSeal()
                                                                                                    .getCoordinates()));
 
-                this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
+                this.validate(containsSeal(delegatingEvent.getSeals(), dee),
                               "delegated establishment event seal must contain be contained in referenced delegating event");
             }
         } else if (event instanceof InteractionEvent) {

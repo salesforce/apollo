@@ -32,9 +32,11 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
+import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
 import com.salesforce.apollo.stereotomy.mvlog.MvLog;
 import com.salesforce.apollo.utils.Hex;
@@ -49,7 +51,7 @@ public class StereotomyTests {
     SecureRandom             secureRandom;
 
     @BeforeEach
-    public void beforeEachTest() throws Exception {
+    public void before() throws Exception {
         secureRandom = SecureRandom.getInstance("SHA1PRNG");
         secureRandom.setSeed(new byte[] { 0 });
         initializeKel();
@@ -60,7 +62,7 @@ public class StereotomyTests {
     public void identifierInteraction() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(Identifier.NONE).get();
+        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -68,21 +70,23 @@ public class StereotomyTests {
                             CoordinatesSeal.construct(event));
 
         i.rotate();
-        i.seal(List.of());
-        i.rotate(seals);
-        i.seal(seals);
+        i.seal(InteractionSpecification.newBuilder());
+        i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
+        i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
     }
 
     @Test
     public void identifierRotate() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(Identifier.NONE).get();
+        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
 
-        i.rotate(List.of(DigestSeal.construct(digest), DigestSeal.construct(digest), CoordinatesSeal.construct(event)));
+        i.rotate(RotationSpecification.newBuilder()
+                                      .addAllSeals(List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
+                                                           CoordinatesSeal.construct(event))));
 
         i.rotate();
     }
@@ -91,7 +95,7 @@ public class StereotomyTests {
     public void newIdentifier() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        ControllableIdentifier identifier = controller.newIdentifier(Identifier.NONE).get();
+        ControlledIdentifier identifier = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -121,7 +125,8 @@ public class StereotomyTests {
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest().get()
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
                                                                          .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
@@ -155,7 +160,7 @@ public class StereotomyTests {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
         KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
         BasicIdentifier aid = new BasicIdentifier(keyPair.getPublic());
-        ControllableIdentifier identifier = controller.newIdentifier(aid).get();
+        ControlledIdentifier identifier = controller.newIdentifier(aid, IdentifierSpecification.newBuilder()).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -185,7 +190,8 @@ public class StereotomyTests {
         assertTrue(keyStoreNextKeyPair.isPresent());
         var expectedNextKeys = KeyConfigurationDigester.digest(SigningThreshold.unweighted(1),
                                                                List.of(keyStoreNextKeyPair.get().getPublic()),
-                                                               identifier.getNextKeyConfigurationDigest().get()
+                                                               identifier.getNextKeyConfigurationDigest()
+                                                                         .get()
                                                                          .getAlgorithm());
         assertEquals(expectedNextKeys, identifier.getNextKeyConfigurationDigest().get());
 
@@ -217,7 +223,7 @@ public class StereotomyTests {
     @Test
     public void provision() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
-        var i = controller.newIdentifier(Identifier.NONE).get();
+        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
         provision(i, controller);
         i.rotate();
         provision(i, controller);
@@ -227,7 +233,7 @@ public class StereotomyTests {
         kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
-    private void provision(ControllableIdentifier i, Stereotomy controller) throws Exception {
+    private void provision(ControlledIdentifier i, Stereotomy controller) throws Exception {
         var now = Instant.now();
         var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
         var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();

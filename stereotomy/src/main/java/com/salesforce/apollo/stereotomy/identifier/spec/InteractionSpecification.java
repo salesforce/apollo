@@ -38,6 +38,11 @@ public class InteractionSpecification {
         public Builder() {
         }
 
+        public Builder addAllSeals(List<Seal> seals) {
+            this.seals.addAll(requireNonNull(seals));
+            return this;
+        }
+
         public InteractionSpecification build() {
             return new InteractionSpecification(this.format, identifier, lastEvent.getSequenceNumber() + 1, lastEvent,
                                                 signer, seals, version, priorEventDigest);
@@ -114,11 +119,6 @@ public class InteractionSpecification {
 
         public Builder setSeal(Seal seal) {
             seals.add(requireNonNull(seal));
-            return this;
-        }
-
-        public Builder setseals(List<Seal> seals) {
-            this.seals.addAll(requireNonNull(seals));
             return this;
         }
 

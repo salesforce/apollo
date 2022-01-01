@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.Version;
-import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
@@ -139,7 +138,7 @@ public interface Stereotomy {
     /**
      * Answer the Controllable identifier
      */
-    Optional<ControllableIdentifier> controlOf(Identifier identifier);
+    Optional<ControlledIdentifier> controlOf(Identifier identifier);
 
     /**
      * Answer the KeyState of the provided event coordinates
@@ -159,19 +158,14 @@ public interface Stereotomy {
     Optional<Verifier> getVerifier(KeyCoordinates coordinates);
 
     /**
-     * Answer a new delegating ControllableIdentifier for the delegated identifier
-     */
-    Optional<ControllableIdentifier> newDelegatedIdentifier(Identifier delegator);
-
-    /**
-     * Answer a new ControllableIdentifier created from the base identifier and the
-     * supplied witnesses
-     */
-    Optional<ControllableIdentifier> newIdentifier(Identifier identifier, BasicIdentifier... witnesses);
-
-    /**
-     * Answer a new ControllableIdentifier created from the base identifier and the
+     * Answer a new ControlledIdentifier created from the base identifier and the
      * supplied specification prototype
      */
-    Optional<ControllableIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec);
+    Optional<ControlledIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec);
+
+    /**
+     * Answer a new ControlledIdentifier created from the supplied specification
+     * prototype and Identifier.NONE as the base identifier
+     */
+    Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec);
 }

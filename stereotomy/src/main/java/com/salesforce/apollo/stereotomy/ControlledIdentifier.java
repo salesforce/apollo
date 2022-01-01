@@ -17,8 +17,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
@@ -29,7 +28,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  * @author hal.hildebrand
  *
  */
-public interface ControllableIdentifier extends BoundIdentifier {
+public interface ControlledIdentifier extends BoundIdentifier {
     /**
      * @return the binding of the identifier to the current key state
      */
@@ -39,6 +38,12 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * @return the Signer for the key state binding
      */
     Optional<Signer> getSigner();
+
+    /**
+     * Answer a new delegated ControlledIdentifier using the receiver as the
+     * delegator. The new identifier's KEL is stored with this controller's KEL.
+     */
+    Optional<ControlledIdentifier> newDelegatedIdentifier(IdentifierSpecification.Builder spec);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using
@@ -109,11 +114,6 @@ public interface ControllableIdentifier extends BoundIdentifier {
     void rotate();
 
     /**
-     * Rotate the current key state using the supplied seals
-     */
-    void rotate(List<Seal> seals);
-
-    /**
      * Rotate the current key state using the supplied specification
      */
     void rotate(RotationSpecification.Builder spec);
@@ -122,15 +122,5 @@ public interface ControllableIdentifier extends BoundIdentifier {
      * Publish the SealingEvent using the supplied specification
      */
     void seal(InteractionSpecification.Builder spec);
-
-    /**
-     * Publish the SealingEvent using the supplied seals
-     */
-    void seal(List<Seal> seals);
-
-    /**
-     * @return the EventSignature for the supplied event
-     */
-    Optional<EventSignature> sign(KeyEvent event);
 
 }

@@ -4,14 +4,19 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy;
+package com.salesforce.apollo.stereotomy.services;
 
+import java.net.URI;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.KEL;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.InceptionEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -20,30 +25,33 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  * @author hal.hildebrand
  *
  */
-public interface Resolver {
-
+public interface ResolverService {
     /**
      * Bindings may be made between non transferable identifiers and any of the
      * available Bound value types. Bindings are the signed Bound value by the key
      * of the identifier of the binding.
      */
-    interface Binder {
+    interface BinderService {
         void bind(Binding binding) throws TimeoutException;
 
         void unbind(Identifier identifier) throws TimeoutException;
     }
 
+    public record Binding(Bound value, JohnHancock signature) {}
+
+    public record Bound(InceptionEvent identifier, URI uri) {}
+
     /**
      * Answer the known extent of the key event log for the supplied identifier
      * prefix
      */
-    Optional<KEL> kel(Identifier prefix) throws TimeoutException;
+    Optional<List<KeyEvent>> kel(Identifier prefix) throws TimeoutException;
 
     /**
      * Answer the known extent of the key event receipt log for the supplied
      * identifier prefix
      */
-    Optional<KERL> kerl(Identifier prefix) throws TimeoutException;
+    Optional<List<AttachmentEvent>> kerl(Identifier prefix) throws TimeoutException;
 
     /**
      * Answer the binding associated with the non transferable identifier
