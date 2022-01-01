@@ -88,7 +88,7 @@ public class GenesisAssembly implements Genesis {
         this.genesisMember = genesisMember;
 
         // Create a new context for reconfiguration
-        final Digest reconPrefixed = params().digestAlgorithm().digest(params().foundation().toByteString());
+        final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
         Context<Member> reContext = new Context<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
                                                         view.context().memberCount(), view.context().getBias());
         reContext.activate(view.context().activeMembers());
