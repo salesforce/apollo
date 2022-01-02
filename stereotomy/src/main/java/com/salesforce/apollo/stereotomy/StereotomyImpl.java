@@ -23,7 +23,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +44,6 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -163,7 +161,7 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     private class BoundControllableIdentifier extends AbstractCtrlId implements BoundIdentifier {
-        private final KeyState state;
+        volatile KeyState state;
 
         public BoundControllableIdentifier(KeyState state) {
             this.state = state;
@@ -188,7 +186,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return StereotomyImpl.this.getVerifier(getIdentifier());
+            return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
         }
 
         @Override
@@ -211,12 +209,10 @@ public class StereotomyImpl implements Stereotomy {
 
     }
 
-    private class ControlledIdentifierImpl extends AbstractCtrlId implements ControlledIdentifier {
-
-        private volatile KeyState state;
+    private class ControlledIdentifierImpl extends BoundControllableIdentifier implements ControlledIdentifier {
 
         public ControlledIdentifierImpl(KeyState state) {
-            this.state = state;
+            super(state);
         }
 
         @Override
@@ -243,12 +239,12 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Signer> getSigner() {
-            return StereotomyImpl.this.getSigner(getIdentifier());
+            return StereotomyImpl.this.getSigner(state);
         }
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return StereotomyImpl.this.getVerifier(getIdentifier());
+            return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
         }
 
         @Override
@@ -261,8 +257,8 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<ControlledIdentifier> newDelegatedIdentifier(IdentifierSpecification.Builder spec) {
-            var result = StereotomyImpl.this.newDelegatedIdentifier(state, spec);
+        public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
+            var result = StereotomyImpl.this.newIdentifier(state, spec);
             if (result.isEmpty()) {
                 return Optional.empty();
             }
@@ -390,7 +386,43 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public Optional<ControlledIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
+    public Optional<ControlledIdentifier> newIdentifier() {
+        return newIdentifier(IdentifierSpecification.newBuilder());
+    }
+
+    @Override
+    public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
+        return newIdentifier(Identifier.NONE, spec);
+    }
+
+    private Optional<KeyPair> getKeyPair(KeyCoordinates keyCoords) {
+        return keyStore.getKey(keyCoords);
+    }
+
+    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex, Optional<KeyEvent> lastEstablishmentEvent) {
+        if (lastEstablishmentEvent.isEmpty()) {
+            return Optional.empty();
+        }
+        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), keyIndex);
+        return getKeyPair(keyCoords);
+    }
+
+    private Optional<Signer> getSigner(KeyState state) {
+        var identifier = state.getIdentifier();
+        PrivateKey[] signers = new PrivateKey[state.getKeys().size()];
+        for (int i = 0; i < signers.length; i++) {
+            Optional<KeyPair> keyPair = getKeyPair(state, i, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
+            if (keyPair.isEmpty()) {
+                log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
+                         state.getCoordinates(), state.getLastEstablishmentEvent());
+                return Optional.empty();
+            }
+            signers[i] = keyPair.get().getPrivate();
+        }
+        return Optional.of(new Signer.SignerImpl(signers));
+    }
+
+    private Optional<ControlledIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -408,6 +440,7 @@ public class StereotomyImpl implements Stereotomy {
         } catch (InterruptedException | ExecutionException e) {
             return Optional.empty();
         }
+
         if (state == null) {
             log.warn("Invalid event produced creating: {}", identifier);
             return Optional.empty();
@@ -425,46 +458,20 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(cid);
     }
 
-    @Override
-    public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-        return newIdentifier(Identifier.NONE, spec);
-    }
-
-    protected Optional<Signer> getSigner(Identifier identifier) {
-        Optional<KeyState> state = kerl.getKeyState(identifier);
-        if (state.isEmpty()) {
-            log.warn("Identifier not found in KEL: {}", identifier);
+    private Optional<IdentifierAndState> newIdentifier(KeyState state, IdentifierSpecification.Builder spec) {
+        var identifier = state.getIdentifier();
+        var newIdentifier = newIdentifier(identifier, spec);
+        if (newIdentifier.isEmpty()) {
             return Optional.empty();
         }
-        PrivateKey[] signers = new PrivateKey[state.get().getKeys().size()];
-        for (int i = 0; i < signers.length; i++) {
-            Optional<KeyPair> keyPair = getKeyPair(identifier, i, state.get(),
-                                                   kerl.getKeyEvent(state.get().getLastEstablishmentEvent()));
-            if (keyPair.isEmpty()) {
-                log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
-                         state.get().getCoordinates(), state.get().getLastEstablishmentEvent());
-                return Optional.empty();
-            }
-            signers[i] = keyPair.get().getPrivate();
-        }
-        return Optional.of(new Signer.SignerImpl(signers));
+        return Optional.of(new IdentifierAndState(state, newIdentifier.get()));
     }
 
-    protected Optional<Verifier> getVerifier(Identifier identifier) {
-        Optional<KeyState> state = kerl.getKeyState(identifier);
-        if (state.isEmpty()) {
-            log.warn("Identifier not found in KEL: {}", identifier);
-            return Optional.empty();
-        }
-
-        return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys()));
-    }
-
-    protected Optional<KeyState> rotate(KeyState state) {
+    private Optional<KeyState> rotate(KeyState state) {
         return rotate(state, RotationSpecification.newBuilder());
     }
 
-    protected Optional<KeyState> rotate(KeyState state, RotationSpecification.Builder spec) {
+    private Optional<KeyState> rotate(KeyState state, RotationSpecification.Builder spec) {
         RotationSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
 
@@ -520,7 +527,7 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(newState);
     }
 
-    protected Optional<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {
+    private Optional<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
         Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
@@ -554,48 +561,5 @@ public class StereotomyImpl implements Stereotomy {
             return Optional.empty();
         }
         return Optional.of(newKeyState);
-    }
-
-    protected Optional<KeyState> seal(KeyState state, List<Seal> seals) {
-        InteractionSpecification.Builder builder = InteractionSpecification.newBuilder();
-        builder.addAllSeals(seals);
-        return seal(state, builder);
-    }
-
-    protected Optional<EventSignature> sign(Identifier identifier, KeyEvent event) {
-        Optional<KeyState> state = kerl.getKeyState(identifier);
-        if (state.isEmpty()) {
-            return Optional.empty();
-        }
-        byte[] bs = event.getBytes();
-
-        var lee = kerl.getKeyEvent(state.get().getLastEstablishmentEvent());
-        var signer = signerFor(identifier, state, lee);
-        return Optional.of(new EventSignature(event.getCoordinates(), lee.get().getCoordinates(), signer.sign(bs)));
-    }
-
-    private Optional<KeyPair> getKeyPair(Identifier identifier, int keyIndex, KeyState state,
-                                         Optional<KeyEvent> lastEstablishmentEvent) {
-        if (lastEstablishmentEvent.isEmpty()) {
-            return Optional.empty();
-        }
-        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), keyIndex);
-        return getKeyPair(identifier, keyCoords);
-    }
-
-    private Optional<KeyPair> getKeyPair(Identifier identifier, KeyCoordinates keyCoords) {
-        return keyStore.getKey(keyCoords);
-    }
-
-    private Optional<IdentifierAndState> newDelegatedIdentifier(KeyState state, IdentifierSpecification.Builder spec) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    private SignerImpl signerFor(Identifier identifier, Optional<KeyState> state, Optional<KeyEvent> lee) {
-        return new SignerImpl((PrivateKey[]) IntStream.range(0, state.get().getKeys().size())
-                                                      .mapToObj(i -> getKeyPair(identifier, i, state.get(), lee))
-                                                      .map(s -> s.isEmpty() ? null : s.get().getPrivate())
-                                                      .toArray());
     }
 }

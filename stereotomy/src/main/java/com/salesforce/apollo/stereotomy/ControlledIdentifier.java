@@ -17,7 +17,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
@@ -40,10 +40,9 @@ public interface ControlledIdentifier extends BoundIdentifier {
     Optional<Signer> getSigner();
 
     /**
-     * Answer a new delegated ControlledIdentifier using the receiver as the
-     * delegator. The new identifier's KEL is stored with this controller's KEL.
+     * Create a new delegated identifier using the receiver as the base.
      */
-    Optional<ControlledIdentifier> newDelegatedIdentifier(IdentifierSpecification.Builder spec);
+    Optional<ControlledIdentifier> newIdentifier(Builder newBuilder);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using

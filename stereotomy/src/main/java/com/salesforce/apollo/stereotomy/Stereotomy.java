@@ -158,10 +158,10 @@ public interface Stereotomy {
     Optional<Verifier> getVerifier(KeyCoordinates coordinates);
 
     /**
-     * Answer a new ControlledIdentifier created from the base identifier and the
-     * supplied specification prototype
+     * Answer a new ControlledIdentifier created from the default specification
+     * prototype and Identifier.NONE as the base identifier
      */
-    Optional<ControlledIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec);
+    Optional<ControlledIdentifier> newIdentifier();
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification

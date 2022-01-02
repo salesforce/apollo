@@ -6,8 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
+import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
+import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toSigningThreshold;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.security.PublicKey;
@@ -19,11 +21,17 @@ import java.util.stream.Collectors;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.Format;
+import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
@@ -32,6 +40,48 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public class KeyStateImpl implements KeyState {
+
+    public static KeyState initialState(InceptionEvent event, DigestAlgorithm digestAlgo) {
+        var delegatingPrefix = event instanceof DelegatedInceptionEvent ? ((DelegatedEstablishmentEvent) event).getDelegatingSeal()
+                                                                                                               .getCoordinates()
+                                                                                                               .getIdentifier()
+                                                                        : null;
+
+        return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),
+                           event.getNextKeysDigest().orElse(null), event.getWitnessThreshold(), event.getWitnesses(),
+                           event.getConfigurationTraits(), event, event, delegatingPrefix,
+                           digestAlgo.digest(event.getBytes()));
+    }
+
+    public static KeyState newKeyState(Identifier identifier,
+                                       com.salesforce.apollo.crypto.SigningThreshold signingThreshold,
+                                       List<PublicKey> keys, Digest nextKeyConfiguration, int witnessThreshold,
+                                       List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
+                                       KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
+                                       Identifier delegatingPrefix, Digest digest) {
+        final var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder();
+        return new KeyStateImpl(builder.addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
+                                       .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
+                                                                                                   : nextKeyConfiguration.toDigeste())
+                                       .setSigningThreshold(toSigningThreshold(signingThreshold))
+                                       .addAllWitnesses(witnesses.stream()
+                                                                 .map(e -> e.toIdent())
+                                                                 .collect(Collectors.toList()))
+                                       .setWitnessThreshold(witnessThreshold)
+                                       .setDigest(digest.toDigeste())
+                                       .addAllConfigurationTraits(configurationTraits.stream()
+                                                                                     .map(e -> e.name())
+                                                                                     .collect(Collectors.toList()))
+                                       .setCoordinates(event.getCoordinates().toEventCoords())
+                                       .setDelegatingIdentifier(delegatingPrefix == null ? Identifier.NONE_IDENT
+                                                                                         : delegatingPrefix.toIdent())
+
+                                       .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
+                                                                                        .toEventCoords())
+                                       .setLastEvent(event.getCoordinates().toEventCoords())
+
+                                       .build());
+    }
 
     private final com.salesfoce.apollo.stereotomy.event.proto.KeyState state;
 
@@ -45,7 +95,9 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public Set<ConfigurationTrait> configurationTraits() {
-        return state.getConfigurationTraitsList().stream().map(s -> ConfigurationTrait.valueOf(s))
+        return state.getConfigurationTraitsList()
+                    .stream()
+                    .map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
     }
 
@@ -119,8 +171,13 @@ public class KeyStateImpl implements KeyState {
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return state.getWitnessesList().stream().map(s -> identifier(s)).filter(i -> i instanceof BasicIdentifier)
-                    .filter(i -> i != null).map(i -> (BasicIdentifier) i).collect(Collectors.toList());
+        return state.getWitnessesList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .filter(i -> i instanceof BasicIdentifier)
+                    .filter(i -> i != null)
+                    .map(i -> (BasicIdentifier) i)
+                    .collect(Collectors.toList());
     }
 
     @Override

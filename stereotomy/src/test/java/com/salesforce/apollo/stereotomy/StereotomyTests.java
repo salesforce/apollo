@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetSocketAddress;
-import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -62,7 +61,7 @@ public class StereotomyTests {
     public void identifierInteraction() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        var i = controller.newIdentifier().get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -79,7 +78,7 @@ public class StereotomyTests {
     public void identifierRotate() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        var i = controller.newIdentifier().get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -95,7 +94,7 @@ public class StereotomyTests {
     public void newIdentifier() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        ControlledIdentifier identifier = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        ControlledIdentifier identifier = controller.newIdentifier().get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -157,16 +156,17 @@ public class StereotomyTests {
 
     @Test
     public void newIdentifierFromIdentifier() throws Exception {
-        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
-        KeyPair keyPair = SignatureAlgorithm.DEFAULT.generateKeyPair(secureRandom);
-        BasicIdentifier aid = new BasicIdentifier(keyPair.getPublic());
-        ControlledIdentifier identifier = controller.newIdentifier(aid, IdentifierSpecification.newBuilder()).get();
+        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom); 
+        ControlledIdentifier base = controller.newIdentifier().get();
+        
+         
+        ControlledIdentifier identifier = base.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
-        assertEquals("a0c09574bf1ba5421b6a3cacb0884dc7389c4580d98c33c6b0736f64a0fd678e",
+        assertEquals("4d05d263a81ca4ce99f2c25db8f990714e27f49939a61f086da90a800c8c0924",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -223,7 +223,7 @@ public class StereotomyTests {
     @Test
     public void provision() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
-        var i = controller.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        var i = controller.newIdentifier().get();
         provision(i, controller);
         i.rotate();
         provision(i, controller);
