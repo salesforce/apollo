@@ -98,24 +98,11 @@ abstract public class UniKERL implements KERL {
                                   .fetchOne()
                                   .value1();
 
-            final var leCoords = newState.getLastEstablishmentEvent();
-
-            final var lastEstablishing = context.select(COORDINATES.ID)
-                                                .from(COORDINATES)
-                                                .where(COORDINATES.DIGEST.eq(leCoords.getDigest()
-                                                                                     .toDigeste()
-                                                                                     .toByteArray()))
-                                                .and(COORDINATES.IDENTIFIER.eq(preIdentifier))
-                                                .and(COORDINATES.SEQUENCE_NUMBER.eq(leCoords.getSequenceNumber()))
-                                                .and(COORDINATES.ILK.eq(leCoords.getIlk()))
-                                                .fetchOne();
             final var digest = event.hash(digestAlgorithm);
             context.insertInto(EVENT)
                    .set(EVENT.COORDINATES, id)
                    .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
                    .set(EVENT.CONTENT, compress(event.getBytes()))
-                   .set(EVENT.PREVIOUS, prev.value1())
-                   .set(EVENT.LAST_ESTABLISHING_EVENT, lastEstablishing == null ? id : lastEstablishing.value1())
                    .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
                    .execute();
 

@@ -78,12 +78,6 @@
             <column name="content" type="VARBINARY">
                 <constraints nullable="false" />
             </column>
-            <column name="previous" type="INT8">
-                <constraints nullable="false" />
-            </column>
-            <column name="last_establishing_event" type="INT8">
-                <constraints nullable="false" />
-            </column>
             <column name="current_state" type="VARBINARY" />
         </createTable>
 
@@ -92,21 +86,6 @@
             baseTableName="event" baseTableSchemaName="stereotomy"
             constraintName="event_coordinates_fk"
             referencedTableName="coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="previous"
-            baseTableName="event" baseTableSchemaName="stereotomy"
-            constraintName="event_previous_fk"
-            referencedTableName="coordinates" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="last_establishing_event"
-            baseTableName="event" baseTableSchemaName="stereotomy"
-            constraintName="event_last_establishing_event_fk"
-            referencedTableName="event"
-            referencedColumnNames="coordinates"
             referencedTableSchemaName="stereotomy" />
 
         <createTable tableName="current_key_state"
