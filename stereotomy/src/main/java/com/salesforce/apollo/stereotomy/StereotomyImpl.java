@@ -452,7 +452,7 @@ public class StereotomyImpl implements Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControlledIdentifier cid = new ControlledIdentifierImpl(state);
 
-        log.info("New {} Identifier: {} prefix: {} coordinates: {} cur key: {} next key: {}",
+        log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
                  specification.getWitnesses().isEmpty() ? "Private" : "Public", identifier, cid.getIdentifier(),
                  keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
         return Optional.of(cid);
@@ -520,9 +520,10 @@ public class StereotomyImpl implements Stereotomy {
         keyStore.removeKey(currentKeyCoordinates);
         keyStore.removeNextKey(currentKeyCoordinates);
 
-        log.info("Rotated Identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}", identifier,
-                 nextKeyCoordinates, shortQb64(nextKeyPair.getPublic()), shortQb64(newNextKeyPair.getPublic()),
-                 currentKeyCoordinates);
+        var delegator = newState.getDelegatingIdentifier();
+        log.info("Rotated{} identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}",
+                 delegator.isEmpty() ? "" : " delegator: " + delegator.get(), identifier, nextKeyCoordinates,
+                 shortQb64(nextKeyPair.getPublic()), shortQb64(newNextKeyPair.getPublic()), currentKeyCoordinates);
 
         return Optional.of(newState);
     }
@@ -545,7 +546,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         specification.setPriorEventDigest(state.getDigest())
-                     .setLastEvent(state.getLastEvent())
+                     .setLastEvent(state.getCoordinates())
                      .setIdentifier(identifier)
                      .setSigner(new SignerImpl(keyPair.get().getPrivate()));
 

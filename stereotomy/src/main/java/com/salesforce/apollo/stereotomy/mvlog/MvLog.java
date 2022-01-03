@@ -12,6 +12,10 @@ import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identif
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -28,12 +32,15 @@ import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
@@ -224,8 +231,7 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public void append(AttachmentEvent event, KeyState newState) {
-        append((KeyEvent) event, newState);
+    public void append(AttachmentEvent event) {
         appendAttachments(event.coordinates(), event.attachments());
     }
 
@@ -287,6 +293,31 @@ public class MvLog implements KERL {
     }
 
     private void appendAttachments(EventCoordinates coordinates, AttachmentEvent.Attachment attachment) {
-        receipts.put(MvLog.coordinateOrdering(coordinates), attachment);
+        var key = MvLog.coordinateOrdering(coordinates);
+        var previous = receipts.get(key);
+        receipts.put(key, combine(attachment, previous));
+    }
+
+    private Attachment combine(Attachment attachment, Attachment previous) {
+        if (previous == null) {
+            return attachment;
+        }
+        List<Seal> seals = new ArrayList<>(previous.seals());
+        seals.addAll(attachment.seals());
+        Map<Integer, JohnHancock> endorsements = new HashMap<>(previous.endorsements());
+        endorsements.putAll(attachment.endorsements());
+
+        return new AttachmentEvent.Attachment() {
+
+            @Override
+            public Map<Integer, JohnHancock> endorsements() {
+                return endorsements;
+            }
+
+            @Override
+            public List<Seal> seals() {
+                return seals;
+            }
+        };
     }
 }

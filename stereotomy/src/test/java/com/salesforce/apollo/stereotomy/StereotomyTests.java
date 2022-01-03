@@ -27,7 +27,6 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -142,12 +141,7 @@ public class StereotomyTests {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();
-        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
-        assertEquals(0, lastEvent.getSequenceNumber());
-        // TODO digest
-
-        assertEquals(lastEvent, lastEstablishmentEvent);
+        assertTrue(kel.getKeyEvent(identifier.getLastEvent()).isEmpty());
 
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
@@ -156,10 +150,9 @@ public class StereotomyTests {
 
     @Test
     public void newIdentifierFromIdentifier() throws Exception {
-        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom); 
+        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
         ControlledIdentifier base = controller.newIdentifier().get();
-        
-         
+
         ControlledIdentifier identifier = base.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         // identifier
@@ -208,16 +201,21 @@ public class StereotomyTests {
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
-        KeyEvent lastEvent = kel.getKeyEvent(identifier.getLastEvent()).get();
-        assertEquals(identifier.getIdentifier(), lastEvent.getIdentifier());
-        assertEquals(0, lastEvent.getSequenceNumber());
-        // TODO digest
-
-        assertEquals(lastEvent, lastEstablishmentEvent);
+        assertTrue(kel.getKeyEvent(identifier.getLastEvent()).isEmpty());
 
         // delegation
         assertFalse(identifier.getDelegatingIdentifier().isPresent());
         assertFalse(identifier.isDelegated());
+
+        var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
+        var event = EventCoordinates.of(kel.getKeyEvent(identifier.getLastEstablishmentEvent()).get());
+        var seals = List.of(DigestSeal.construct(digest), DigestSeal.construct(digest),
+                            CoordinatesSeal.construct(event));
+
+        identifier.rotate();
+        identifier.seal(InteractionSpecification.newBuilder());
+        identifier.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
+        identifier.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
     }
 
     @Test

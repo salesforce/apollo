@@ -78,7 +78,7 @@ public class KeyStateImpl implements KeyState {
 
                                        .setLastEstablishmentEvent(lastEstablishmentEvent.getCoordinates()
                                                                                         .toEventCoords())
-                                       .setLastEvent(event.getCoordinates().toEventCoords())
+                                       .setLastEvent(event.getPrevious().toEventCoords())
 
                                        .build());
     }

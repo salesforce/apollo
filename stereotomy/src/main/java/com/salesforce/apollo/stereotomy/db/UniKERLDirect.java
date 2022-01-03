@@ -25,7 +25,7 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public void append(AttachmentEvent event, KeyState newState) {
+    public void append(AttachmentEvent event) {
         // TODO Auto-generated method stub
 
     }

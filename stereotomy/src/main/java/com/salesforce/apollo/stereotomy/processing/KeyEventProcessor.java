@@ -32,33 +32,14 @@ public class KeyEventProcessor implements Validator, Verifier {
         this.keyStateProcessor = keyStateProcessor;
     }
 
-    public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
+    public Attachment process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
         KeyEvent event = kerl.getKeyEvent(attachmentEvent.coordinates())
                              .orElseThrow(() -> new MissingAttachmentEventException(attachmentEvent,
                                                                                     attachmentEvent.coordinates()));
         var state = kerl.getKeyState(attachmentEvent.coordinates())
                         .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
                                                                                attachmentEvent.coordinates()));
-
-        @SuppressWarnings("unused")
-        var attachments = verify(state, event, attachmentEvent.attachments());
-
-        // TODO remove invalid signatures before appending
-        kerl.append(attachmentEvent, state);
-    }
-
-    private Attachment verify(KeyState state, KeyEvent event, Attachment attachments) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
-
-        validateKeyEventData(previousState, event, kerl);
-
-        KeyState newState = keyStateProcessor.apply(previousState, event);
-
-        return newState;
+        return verify(state, event, attachmentEvent.attachments());
     }
 
     public KeyState process(KeyEvent event) throws KeyEventProcessingException {
@@ -70,5 +51,18 @@ public class KeyEventProcessor implements Validator, Verifier {
         }
 
         return process(previousState, event);
+    }
+
+    public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
+
+        validateKeyEventData(previousState, event, kerl);
+
+        KeyState newState = keyStateProcessor.apply(previousState, event);
+
+        return newState;
+    }
+
+    private Attachment verify(KeyState state, KeyEvent event, Attachment attachments) {
+        return attachments; // TODO
     }
 }

@@ -16,6 +16,6 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
  */
 public interface KERL extends KEL {
 
-    void append(AttachmentEvent event, KeyState newState);
+    void append(AttachmentEvent event);
 
 }
