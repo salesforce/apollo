@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.EventLoc;
 import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
 import com.salesforce.apollo.crypto.Digest;
@@ -19,7 +18,6 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface Seal {
     interface CoordinatesSeal extends Seal {
-        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 1 });
 
         static CoordinatesSeal construct(EventCoordinates coordinates) {
             return new CoordinatesSeal() {
@@ -27,11 +25,6 @@ public interface Seal {
                 @Override
                 public EventCoordinates getEvent() {
                     return coordinates;
-                }
-
-                @Override
-                public byte sealCode() {
-                    return 1;
                 }
 
                 @Override
@@ -45,7 +38,6 @@ public interface Seal {
     }
 
     interface DelegatingLocationSeal extends Seal {
-        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 2 });
 
         static DelegatingLocationSeal construct(DelegatingEventCoordinates coordinates) {
             return new DelegatingLocationSeal() {
@@ -53,11 +45,6 @@ public interface Seal {
                 @Override
                 public DelegatingEventCoordinates getCoordinates() {
                     return coordinates;
-                }
-
-                @Override
-                public byte sealCode() {
-                    return 2;
                 }
 
                 @Override
@@ -72,7 +59,6 @@ public interface Seal {
     }
 
     interface DigestSeal extends Seal {
-        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 3 });
 
         static DigestSeal construct(Digest digest) {
             return new DigestSeal() {
@@ -80,11 +66,6 @@ public interface Seal {
                 @Override
                 public Digest getDigest() {
                     return digest;
-                }
-
-                @Override
-                public byte sealCode() {
-                    return 3;
                 }
 
                 @Override
@@ -98,7 +79,6 @@ public interface Seal {
     }
 
     interface EventSeal extends Seal {
-        static final ByteString IDENTIFIER = ByteString.copyFrom(new byte[] { 4 });
 
         static EventSeal construct(Identifier prefix, Digest digest, long sequenceNumber) {
             return new EventSeal() {
@@ -116,11 +96,6 @@ public interface Seal {
                 @Override
                 public long getSequenceNumber() {
                     return sequenceNumber;
-                }
-
-                @Override
-                public byte sealCode() {
-                    return 4;
                 }
 
                 @Override
@@ -159,8 +134,6 @@ public interface Seal {
         }
         throw new IllegalArgumentException("Unknown seal type");
     }
-
-    byte sealCode();
 
     Sealed toSealed();
 }

@@ -24,7 +24,7 @@ message Ident {
 // Coordinates of an event
 message EventCoords {
     Ident identifier = 1;
-    int64 sequenceNumber = 2;
+    uint64 sequenceNumber = 2;
     string ilk = 3;
     utils.Digeste digest = 4;
 }
@@ -32,14 +32,14 @@ message EventCoords {
 // Location of an event
 message EventLoc {
     Ident identifier = 1;
-    int64 sequenceNumber = 2;
+    uint64 sequenceNumber = 2;
     utils.Digeste digest = 3;
 }
 
 // Location of the delegating event
 message DelegatingEventCoords {
     Ident identifier = 1;
-    int64 sequenceNumber = 2;
+    uint64 sequenceNumber = 2;
     EventCoords previous = 3;
     string ilk = 4;
 }
@@ -51,7 +51,7 @@ message KeyCoords {
 }
 
 // Sealed content for events
-message Sealed {
+message Sealed { 
     oneof type {
         EventCoords eventCoordinates = 1;
         DelegatingEventCoords delegatingLocation = 2;
@@ -63,7 +63,7 @@ message Sealed {
 
 // Common header for events
 message Header {
-    int64 sequenceNumber = 1;
+    uint64 sequenceNumber = 1;
     Ident identifier = 2;
     utils.Digeste priorEventDigest = 3;
     Version version = 4;
@@ -116,11 +116,9 @@ message InteractionEvent {
 
 // An attactment to an event in the KEL
 message AttachmentEvent {
-    Header header = 1;
-    EventCommon common = 2;
-    EventCoords coordinates = 3;
-    repeated utils.Sig endorsements = 5; 
-    repeated Receipt receipts = 6;
+    Version version = 1;
+    EventCoords coordinates = 2;
+    Attachment attachment = 3;
 }
 
 // The rotation of a key
@@ -145,19 +143,16 @@ message KeyEvent {
         RotationEvent rotation = 2;
         InteractionEvent interaction = 3;
     }
+    Attachment attachment = 4;
+}
+
+message Attachment {
+    map<int32, utils.Sig> endorsements = 1;
+    repeated Sealed seals = 2;
 }
 
 message KEL {
     repeated KeyEvent events = 1;
-}
-
-message KERL {
-    repeated AttachmentEvent events = 1;
-}
-
-message Receipt {
-    EventCoords coordinates = 1;
-    utils.Sig signatures = 2;
 }
 
 message Weight {
@@ -229,7 +224,6 @@ message KeyContext {
 // Resolver API
 service Resolver { 
     rpc kel (IdentifierContext) returns (KEL) {}
-    rpc kerl (IdentifierContext) returns (KERL) {}
     
     rpc lookup (IdentifierContext) returns (Binding) {}
     

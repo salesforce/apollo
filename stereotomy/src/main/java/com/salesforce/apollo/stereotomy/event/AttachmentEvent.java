@@ -16,9 +16,16 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
  * @author hal.hildebrand
  *
  */
-public interface AttachmentEvent extends KeyEvent {
+public interface AttachmentEvent {
+    interface Attachment {
+        Map<Integer, JohnHancock> endorsements();
 
-    List<JohnHancock> getEndorsements();
+        List<Seal> seals();
+    }
 
-    Map<EventCoordinates, JohnHancock> getReceipts();
+    Version version();
+
+    EventCoordinates coordinates();
+
+    Attachment attachments();
 }

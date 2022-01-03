@@ -115,7 +115,7 @@ abstract public class UniKERL implements KERL {
                    .set(EVENT.DIGEST, digest.toDigeste().toByteArray())
                    .set(EVENT.CONTENT, compress(event.getBytes()))
                    .set(EVENT.PREVIOUS, prev.value1())
-                   .set(EVENT.LAST_ESTABLISHING_EVENT, lastEstablishing == null ? null : lastEstablishing.value1())
+                   .set(EVENT.LAST_ESTABLISHING_EVENT, lastEstablishing == null ? id : lastEstablishing.value1())
                    .set(EVENT.CURRENT_STATE, compress(newState.getBytes()))
                    .execute();
 

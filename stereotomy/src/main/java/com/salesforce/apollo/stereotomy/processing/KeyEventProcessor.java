@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
@@ -32,22 +33,23 @@ public class KeyEventProcessor implements Validator, Verifier {
     }
 
     public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
-        KeyEvent event = kerl.getKeyEvent(attachmentEvent.getCoordinates())
-                             .orElseThrow(() -> new MissingEventException(attachmentEvent,
-                                                                          attachmentEvent.getCoordinates()));
-        var state = kerl.getKeyState(attachmentEvent.getCoordinates())
+        KeyEvent event = kerl.getKeyEvent(attachmentEvent.coordinates())
+                             .orElseThrow(() -> new MissingAttachmentEventException(attachmentEvent,
+                                                                                    attachmentEvent.coordinates()));
+        var state = kerl.getKeyState(attachmentEvent.coordinates())
                         .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
-                                                                               attachmentEvent.getCoordinates()));
+                                                                               attachmentEvent.coordinates()));
 
         @SuppressWarnings("unused")
-        var validControllerSignatures = verifyAuthentication(state, event, attachmentEvent.getAuthentication(), kerl);
-        @SuppressWarnings("unused")
-        var validWitnessReceipts = verifyEndorsements(state, event, attachmentEvent.getEndorsements());
-        @SuppressWarnings("unused")
-        var validOtherReceipts = verifyReceipts(event, attachmentEvent.getReceipts(), kerl);
+        var attachments = verify(state, event, attachmentEvent.attachments());
 
         // TODO remove invalid signatures before appending
         kerl.append(attachmentEvent, state);
+    }
+
+    private Attachment verify(KeyState state, KeyEvent event, Attachment attachments) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
