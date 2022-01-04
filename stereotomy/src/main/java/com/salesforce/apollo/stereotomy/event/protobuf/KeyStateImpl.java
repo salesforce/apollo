@@ -25,7 +25,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -42,9 +41,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class KeyStateImpl implements KeyState {
 
     public static KeyState initialState(InceptionEvent event, DigestAlgorithm digestAlgo) {
-        var delegatingPrefix = event instanceof DelegatedInceptionEvent ? ((DelegatedEstablishmentEvent) event).getDelegatingSeal()
-                                                                                                               .getCoordinates()
-                                                                                                               .getIdentifier()
+        var delegatingPrefix = event instanceof DelegatedInceptionEvent ? ((DelegatedInceptionEvent) event).getDelegatingPrefix()
                                                                         : null;
 
         return newKeyState(event.getIdentifier(), event.getSigningThreshold(), event.getKeys(),

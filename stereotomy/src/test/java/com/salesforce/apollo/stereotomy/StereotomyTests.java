@@ -159,7 +159,7 @@ public class StereotomyTests {
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
         var sap = (SelfAddressingIdentifier) identifier.getIdentifier();
         assertEquals(DigestAlgorithm.BLAKE2B_256, sap.getDigest().getAlgorithm());
-        assertEquals("4d05d263a81ca4ce99f2c25db8f990714e27f49939a61f086da90a800c8c0924",
+        assertEquals("2287a5841816c8c02d4e188376b1f1a50dfcdc9eaac17610deba4ae33bb617f4",
                      Hex.hex(sap.getDigest().getBytes()));
 
         assertEquals(1, ((Unweighted) identifier.getSigningThreshold()).getThreshold());
@@ -204,8 +204,8 @@ public class StereotomyTests {
         assertTrue(kel.getKeyEvent(identifier.getLastEvent()).isEmpty());
 
         // delegation
-        assertFalse(identifier.getDelegatingIdentifier().isPresent());
-        assertFalse(identifier.isDelegated());
+        assertTrue(identifier.getDelegatingIdentifier().isPresent());
+        assertTrue(identifier.isDelegated());
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kel.getKeyEvent(identifier.getLastEstablishmentEvent()).get());

@@ -213,7 +213,7 @@ public class TestUniKERL {
                .setKey(prevNext.getPublic()).setSigningThreshold(unweighted(1))
                .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(new SignerImpl(prevNext.getPrivate()));
 
-        RotationEvent rotation = factory.rotation(rotSpec.build());
+        RotationEvent rotation = factory.rotation(rotSpec.build(), false);
         return rotation;
     }
 }

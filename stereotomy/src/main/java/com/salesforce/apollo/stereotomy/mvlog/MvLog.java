@@ -43,11 +43,9 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedInceptionEventImpl;
-import com.salesforce.apollo.stereotomy.event.protobuf.DelegatedRotationEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
-import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 import com.salesforce.apollo.utils.BbBackedInputStream;
@@ -135,13 +133,8 @@ public class MvLog implements KERL {
             }
             case "InceptionEvent": {
                 InceptionEvent event = (InceptionEvent) msg;
-                yield (event.hasDelegatingEvent()) ? new DelegatedInceptionEventImpl(event)
-                                                   : new InceptionEventImpl(event);
-            }
-            case "RotationEvent": {
-                RotationEvent event = (RotationEvent) msg;
-                yield (event.hasDelegatingSeal()) ? new DelegatedRotationEventImpl(event)
-                                                  : new RotationEventImpl(event);
+                yield (event.hasDelegatingPrefix()) ? new DelegatedInceptionEventImpl(event)
+                                                    : new InceptionEventImpl(event);
             }
             case "InteractionEvent": {
                 yield new InteractionEventImpl((InteractionEvent) msg);

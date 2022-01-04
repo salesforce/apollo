@@ -17,6 +17,6 @@ public interface EventFactory {
 
     KeyEvent interaction(InteractionSpecification specification);
 
-    RotationEvent rotation(RotationSpecification specification);
+    RotationEvent rotation(RotationSpecification specification, boolean delegated);
 
 }

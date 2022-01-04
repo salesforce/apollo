@@ -7,8 +7,7 @@
 package com.salesforce.apollo.stereotomy.event.protobuf;
 
 import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.Seal.DelegatingLocationSeal;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -21,7 +20,7 @@ public class DelegatedInceptionEventImpl extends InceptionEventImpl implements D
     }
 
     @Override
-    public DelegatingLocationSeal getDelegatingSeal() { 
-        return (DelegatingLocationSeal) Seal.from(event.getDelegatingSeal());
+    public Identifier getDelegatingPrefix() {
+        return Identifier.from(event.getDelegatingPrefix());
     }
 }

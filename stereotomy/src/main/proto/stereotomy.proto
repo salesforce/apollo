@@ -125,7 +125,6 @@ message AttachmentEvent {
 message RotationEvent {
     RotationSpec specification = 1; 
     EventCommon common = 2;
-    Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
 // The birth of a key
@@ -133,8 +132,7 @@ message InceptionEvent {
     Ident identifier = 1;
     IdentifierSpec specification = 2;
     EventCommon common = 3;
-    DelegatingEventCoords delegatingEvent = 4;
-    Sealed delegatingSeal = 5; // Delegated inception event
+    Ident delegatingPrefix = 4; // Delegated inception event
 }
 
 message KeyEvent {

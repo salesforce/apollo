@@ -131,19 +131,24 @@ public class ProtobufEventFactory implements EventFactory {
 
     @Override
     public InceptionEvent inception(Identifier identifier, IdentifierSpecification specification) {
-        var inceptionStatement = identifierSpec(identifier, specification);
+        var delegated = !identifier.equals(Identifier.NONE);
+
+        var inceptionStatement = identifierSpec(identifier, specification, delegated);
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
-        var bs = identifierSpec(prefix, specification).toByteString();
+        var bs = identifierSpec(prefix, specification, delegated).toByteString();
 
         var common = EventCommon.newBuilder().setAuthentication(specification.getSigner().sign(bs).toSig());
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
-
-        return new InceptionEventImpl(builder.setIdentifier(prefix.toIdent())
-                                             .setCommon(common)
-                                             .setSpecification(inceptionStatement)
-                                             .build());
+        if (delegated) {
+            builder.setDelegatingPrefix(identifier.toIdent());
+        }
+        var event = builder.setIdentifier(prefix.toIdent())
+                           .setCommon(common)
+                           .setSpecification(inceptionStatement)
+                           .build();
+        return delegated ? new DelegatedInceptionEventImpl(event) : new InceptionEventImpl(event);
     }
 
     @Override
@@ -159,8 +164,8 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     @Override
-    public RotationEvent rotation(RotationSpecification specification) {
-        var rotationSpec = rotationSpec(specification.getIdentifier(), specification);
+    public RotationEvent rotation(RotationSpecification specification, boolean delegated) {
+        var rotationSpec = rotationSpec(specification.getIdentifier(), specification, delegated);
 
         final var bs = rotationSpec.toByteString();
         var signatures = specification.getSigner().sign(bs).toSig();
@@ -169,14 +174,16 @@ public class ProtobufEventFactory implements EventFactory {
                                 .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
         var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
-        return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
+        var event = builder.setSpecification(rotationSpec).setCommon(common).build();
+        return delegated ? new DelegatedRotationEventImpl(event) : new RotationEventImpl(event);
     }
 
     com.salesfoce.apollo.stereotomy.event.proto.Version.Builder toVersion(com.salesforce.apollo.stereotomy.event.Version version) {
         return Version.newBuilder().setMajor(version.getMajor()).setMinor(version.getMinor());
     }
 
-    private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
+    private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification,
+                                          boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                                          .addAllKeys(specification.getKeys()
@@ -191,7 +198,7 @@ public class ProtobufEventFactory implements EventFactory {
                            .setVersion(toVersion(specification.getVersion()))
                            .setPriorEventDigest(Digest.NONE.toDigeste())
                            .setIdentifier(identifier.toIdent())
-                           .setIlk(INCEPTION_TYPE);
+                           .setIlk(delegated ? DELEGATED_INCEPTION_TYPE : INCEPTION_TYPE);
 
         return IdentifierSpec.newBuilder()
                              .setHeader(header)
@@ -224,7 +231,7 @@ public class ProtobufEventFactory implements EventFactory {
                               .build();
     }
 
-    private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
+    private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification, boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                                          .addAllKeys(specification.getKeys()
@@ -240,7 +247,7 @@ public class ProtobufEventFactory implements EventFactory {
                                                                                                     .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
                            .setIdentifier(identifier.toIdent())
-                           .setIlk(ROTATION_TYPE);
+                           .setIlk(delegated ? DELEGATED_ROTATION_TYPE : ROTATION_TYPE);
 
         return RotationSpec.newBuilder()
                            .setHeader(header)

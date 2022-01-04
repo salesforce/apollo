@@ -258,12 +258,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-            var result = StereotomyImpl.this.newIdentifier(state, spec);
-            if (result.isEmpty()) {
-                return Optional.empty();
-            }
-            state = result.get().state;
-            return Optional.of(result.get().idenfifier);
+            return StereotomyImpl.this.newIdentifier(state, spec);
         }
 
         @Override
@@ -329,8 +324,6 @@ public class StereotomyImpl implements Stereotomy {
             return StereotomyImpl.this;
         }
     }
-
-    private record IdentifierAndState(KeyState state, ControlledIdentifier idenfifier) {}
 
     private static final Logger log = LoggerFactory.getLogger(StereotomyImpl.class);
 
@@ -458,13 +451,9 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(cid);
     }
 
-    private Optional<IdentifierAndState> newIdentifier(KeyState state, IdentifierSpecification.Builder spec) {
+    private Optional<ControlledIdentifier> newIdentifier(KeyState state, IdentifierSpecification.Builder spec) {
         var identifier = state.getIdentifier();
-        var newIdentifier = newIdentifier(identifier, spec);
-        if (newIdentifier.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(new IdentifierAndState(state, newIdentifier.get()));
+        return newIdentifier(identifier, spec);
     }
 
     private Optional<KeyState> rotate(KeyState state) {
@@ -503,7 +492,12 @@ public class StereotomyImpl implements Stereotomy {
                      .setNextKeys(List.of(newNextKeyPair.getPublic()))
                      .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
 
-        RotationEvent event = eventFactory.rotation(specification.build());
+        var delegatingIdentifier = state.getDelegatingIdentifier();
+        boolean delegated = false;
+        if (!delegatingIdentifier.isEmpty()) {
+            delegated = !delegatingIdentifier.get().equals(Identifier.NONE);
+        }
+        RotationEvent event = eventFactory.rotation(specification.build(), delegated);
         KeyState newState;
         try {
             newState = kerl.append(event).get();
