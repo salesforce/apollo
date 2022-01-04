@@ -119,10 +119,10 @@
         <createTable tableName="receipt"
             schemaName="stereotomy">
             <column name="for" type="INT8">
-                <constraints nullable="false" />
+                <constraints nullable="false" primaryKey="true"/>
             </column>
             <column name="witness" type="INT">
-                <constraints nullable="false" />
+                <constraints nullable="false"  primaryKey="true"/>
             </column>
             <column name="signature" type="VARBINARY">
                 <constraints nullable="false" />
@@ -158,6 +158,10 @@
             referencedTableName="event"
             referencedColumnNames="coordinates"
             referencedTableSchemaName="stereotomy" />
+
+        <addUniqueConstraint
+            columnNames="for, seal"
+            tableName="attachment" schemaName="stereotomy" />
 
         <createIndex tableName="attachment"
             schemaName="stereotomy" indexName="attachment_for_idx">

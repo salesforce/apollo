@@ -9,6 +9,8 @@ package com.salesforce.apollo.stereotomy.db;
 import java.sql.Connection;
 import java.util.concurrent.CompletableFuture;
 
+import org.jooq.impl.DSL;
+
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
@@ -26,14 +28,20 @@ public class UniKERLDirect extends UniKERL {
 
     @Override
     public CompletableFuture<Void> append(AttachmentEvent event) {
-        // TODO Auto-generated method stub
-        return new CompletableFuture<>();
+        dsl.transaction(ctx -> {
+            append(DSL.using(ctx), event);
+        });
+        var result = new CompletableFuture<Void>();
+        result.complete(null);
+        return result;
     }
 
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
         KeyState newState = processor.process(event);
-        append(dsl, event, newState, digestAlgorithm);
+        dsl.transaction(ctx -> {
+            append(DSL.using(ctx), event, newState, digestAlgorithm);
+        });
         var f = new CompletableFuture<KeyState>();
         f.complete(newState);
         return f;

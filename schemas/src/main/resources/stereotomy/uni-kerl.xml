@@ -18,5 +18,9 @@
 			"com.salesforce.apollo.stereotomy.db.UniKERL.appendEvent"
 		</sql>
 
+        <sql>create alias stereotomy.appendAttachment for
+            "com.salesforce.apollo.stereotomy.db.UniKERL.appendAttachment"
+        </sql>
+
 	</changeSet>
 </databaseChangeLog>
