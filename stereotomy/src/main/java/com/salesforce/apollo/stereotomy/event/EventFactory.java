@@ -6,12 +6,15 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 public interface EventFactory {
+
+    AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment);
 
     InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
 

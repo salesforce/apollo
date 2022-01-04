@@ -18,6 +18,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,6 +38,7 @@ import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -44,6 +46,7 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
+import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -53,7 +56,8 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Builder;
 
 /**
- * Default implementation of a Stereotomy controller
+ * Direct mode implementation of a Stereotomy controller. This controller keeps
+ * it's own KEL/KERL and does not cooperate with other controllers
  * 
  * @author hal.hildebrand
  *
@@ -258,7 +262,7 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-            return StereotomyImpl.this.newIdentifier(state, spec);
+            return StereotomyImpl.this.newIdentifier(this, spec);
         }
 
         @Override
@@ -385,7 +389,7 @@ public class StereotomyImpl implements Stereotomy {
 
     @Override
     public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-        return newIdentifier(Identifier.NONE, spec);
+        return newIdentifier(null, spec);
     }
 
     private Optional<KeyPair> getKeyPair(KeyCoordinates keyCoords) {
@@ -415,9 +419,11 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(new Signer.SignerImpl(signers));
     }
 
-    private Optional<ControlledIdentifier> newIdentifier(Identifier identifier, IdentifierSpecification.Builder spec) {
+    private Optional<ControlledIdentifier> newIdentifier(ControlledIdentifier delegator,
+                                                         IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
 
+        var delegatingdentifier = delegator == null ? Identifier.NONE : delegator.getIdentifier();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
@@ -426,7 +432,7 @@ public class StereotomyImpl implements Stereotomy {
                      .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
 
-        InceptionEvent event = this.eventFactory.inception(identifier, specification.build());
+        InceptionEvent event = this.eventFactory.inception(delegatingdentifier, specification.build());
         KeyState state;
         try {
             state = kerl.append(event).get();
@@ -435,7 +441,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         if (state == null) {
-            log.warn("Invalid event produced creating: {}", identifier);
+            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
             return Optional.empty();
         }
 
@@ -445,15 +451,27 @@ public class StereotomyImpl implements Stereotomy {
         keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControlledIdentifier cid = new ControlledIdentifierImpl(state);
 
-        log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
-                 specification.getWitnesses().isEmpty() ? "Private" : "Public", identifier, cid.getIdentifier(),
-                 keyCoordinates, shortQb64(initialKeyPair.getPublic()), shortQb64(nextKeyPair.getPublic()));
-        return Optional.of(cid);
-    }
+        if (delegator != null) {
+            delegator.seal(InteractionSpecification.newBuilder()
+                                                   .addAllSeals(Collections.singletonList(Seal.EventSeal.construct(cid.getIdentifier(),
+                                                                                                                   cid.getDigest(),
+                                                                                                                   cid.getSequenceNumber()))));
+            var attachment = new AttachmentImpl(Seal.EventSeal.construct(delegator.getIdentifier(),
+                                                                         delegator.getDigest(),
+                                                                         delegator.getSequenceNumber()));
+            var attachmentEvent = eventFactory.attachment(event, attachment);
+            try {
+                kerl.append(attachmentEvent).get();
+            } catch (InterruptedException | ExecutionException e) {
+                return Optional.empty();
+            }
+        }
 
-    private Optional<ControlledIdentifier> newIdentifier(KeyState state, IdentifierSpecification.Builder spec) {
-        var identifier = state.getIdentifier();
-        return newIdentifier(identifier, spec);
+        log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
+                 specification.getWitnesses().isEmpty() ? "Private" : "Public", delegatingdentifier,
+                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
+                 shortQb64(nextKeyPair.getPublic()));
+        return Optional.of(cid);
     }
 
     private Optional<KeyState> rotate(KeyState state) {

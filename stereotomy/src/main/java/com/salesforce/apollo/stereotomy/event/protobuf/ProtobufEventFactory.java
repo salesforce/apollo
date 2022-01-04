@@ -28,6 +28,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -127,6 +130,13 @@ public class ProtobufEventFactory implements EventFactory {
             }
         };
 
+    }
+
+    @Override
+    public AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment) {
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
+        builder.setAttachment(attachment.toAttachemente()).setCoordinates(event.getCoordinates().toEventCoords());
+        return new AttachmentEventImpl(builder.build());
     }
 
     @Override

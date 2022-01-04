@@ -31,10 +31,10 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
  */
 public class ShardedKERL extends UniKERL {
 
-    private final Mutator            mutator;
     private Executor                 exec;
-    private Duration                 timeout;
+    private final Mutator            mutator;
     private ScheduledExecutorService scheduler;
+    private Duration                 timeout;
 
     public ShardedKERL(Connection connection, Mutator mutator, DigestAlgorithm digestAlgorithm) {
         super(connection, digestAlgorithm);
@@ -42,9 +42,10 @@ public class ShardedKERL extends UniKERL {
     }
 
     @Override
-    public void append(AttachmentEvent event) {
-        // TODO Auto-generated method stub
-
+    public CompletableFuture<Void> append(AttachmentEvent event) {
+        var returned = new CompletableFuture<Void>();
+        returned.complete(null);
+        return returned;
     }
 
     @Override

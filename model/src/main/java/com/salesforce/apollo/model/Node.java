@@ -23,7 +23,9 @@ import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
 public class Node {
 
     private final Digest     id;
+    @SuppressWarnings("unused")
     private final Shard      shard;
+    @SuppressWarnings("unused")
     private final Stereotomy controller;
 
     public Node(Digest id, Shard shard, StereotomyKeyStore keyStore, DigestAlgorithm digestAlgorithm,

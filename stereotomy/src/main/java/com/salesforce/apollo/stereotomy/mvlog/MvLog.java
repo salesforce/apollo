@@ -224,8 +224,11 @@ public class MvLog implements KERL {
     }
 
     @Override
-    public void append(AttachmentEvent event) {
+    public CompletableFuture<Void> append(AttachmentEvent event) {
         appendAttachments(event.coordinates(), event.attachments());
+        var returned = new CompletableFuture<Void>();
+        returned.complete(null);
+        return returned;
     }
 
     @Override

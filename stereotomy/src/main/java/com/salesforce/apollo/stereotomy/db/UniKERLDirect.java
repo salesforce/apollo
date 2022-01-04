@@ -25,9 +25,9 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public void append(AttachmentEvent event) {
+    public CompletableFuture<Void> append(AttachmentEvent event) {
         // TODO Auto-generated method stub
-
+        return new CompletableFuture<>();
     }
 
     @Override
