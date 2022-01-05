@@ -17,7 +17,7 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,7 +45,7 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.Seal.EventSeal;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -326,6 +326,10 @@ public class StereotomyImpl implements Stereotomy {
         private StereotomyImpl getEnclosingInstance() {
             return StereotomyImpl.this;
         }
+
+        private void setState(KeyState delegatingState) {
+            this.state = delegatingState;
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(StereotomyImpl.class);
@@ -446,7 +450,7 @@ public class StereotomyImpl implements Stereotomy {
                      .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
 
-        InceptionEvent event = this.eventFactory.inception(delegatingIdentifier, specification.build());
+        InceptionEvent event = eventFactory.inception(delegatingIdentifier, specification.build());
 
         KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
 
@@ -455,38 +459,78 @@ public class StereotomyImpl implements Stereotomy {
         return event;
     }
 
+    private KeyEvent interaction(KeyState state, InteractionSpecification.Builder spec) {
+        InteractionSpecification.Builder specification = spec.clone();
+        var identifier = state.getIdentifier();
+        Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        if (lastEstablishmentEvent.isEmpty()) {
+            log.warn("missing establishment event: {} can't find: {}", kerl.getKeyEvent(state.getCoordinates()).get(),
+                     state.getLastEstablishmentEvent());
+            return null;
+        }
+        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
+
+        Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
+
+        if (keyPair.isEmpty()) {
+            log.warn("Key pair for identifier not found in keystore: {}", identifier);
+        }
+
+        specification.setPriorEventDigest(state.getDigest())
+                     .setLastEvent(state.getCoordinates())
+                     .setIdentifier(identifier)
+                     .setSigner(new SignerImpl(keyPair.get().getPrivate()));
+
+        KeyEvent event = eventFactory.interaction(specification.build());
+        return event;
+    }
+
     private Optional<ControlledIdentifier> newIdentifier(ControlledIdentifier delegator,
                                                          IdentifierSpecification.Builder spec) {
-        var delegatingIdentifier = delegator.getIdentifier();
+        // The delegated inception
+        var event = inception(delegator.getIdentifier(), spec);
 
-        InceptionEvent event = inception(delegatingIdentifier, spec);
+        // Seal we need to verify the inception, based on the delegated inception
+        // location
+        var seals = InteractionSpecification.newBuilder()
+                                            .addAllSeals(Arrays.asList(EventSeal.construct(event.getIdentifier(),
+                                                                                           event.hash(kerl.getDigestAlgorithm()),
+                                                                                           event.getSequenceNumber())));
 
-        KeyState state;
+        // Interaction event with the seal
+        var interaction = interaction(delegator, seals);
+
+        // Attachment of the interaction event, verifying the delegated inception
+        var attachment = eventFactory.attachment(event,
+                                                 new AttachmentImpl(EventSeal.construct(interaction.getIdentifier(),
+                                                                                        interaction.hash(kerl.getDigestAlgorithm()),
+                                                                                        interaction.getSequenceNumber())));
+
+        // Append the states - this is direct mode, all in our local KERL for now
+        List<KeyState> states;
         try {
-            state = kerl.append(event).get();
+            states = kerl.append(Arrays.asList(event, interaction), Arrays.asList(attachment)).get();
         } catch (InterruptedException | ExecutionException e) {
+            log.error("Unable to create new identifier", e);
             return Optional.empty();
         }
 
-        if (state == null) {
+        // The new key state for the delegated identifier
+        KeyState delegatedState = states.get(0);
+
+        if (delegatedState == null) {
             log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
             return Optional.empty();
         }
 
-        ControlledIdentifier cid = new ControlledIdentifierImpl(state);
-
-        delegator.seal(InteractionSpecification.newBuilder()
-                                               .addAllSeals(Collections.singletonList(Seal.EventSeal.construct(cid.getIdentifier(),
-                                                                                                               cid.getDigest(),
-                                                                                                               cid.getSequenceNumber()))));
-        var attachment = new AttachmentImpl(Seal.EventSeal.construct(delegator.getIdentifier(), delegator.getDigest(),
-                                                                     delegator.getSequenceNumber()));
-        var attachmentEvent = eventFactory.attachment(event, attachment);
-        try {
-            kerl.append(attachmentEvent).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
+        // Update delegating state. Bit of a hack at the moment
+        KeyState delegatingState = states.get(1);
+        if (delegator instanceof ControlledIdentifierImpl controller) {
+            controller.setState(delegatingState);
         }
+
+        // Finally, the new delegated identifier
+        ControlledIdentifier cid = new ControlledIdentifierImpl(delegatedState);
 
         log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
                  spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
@@ -590,33 +634,15 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     private Optional<KeyState> seal(KeyState state, InteractionSpecification.Builder spec) {
-        InteractionSpecification.Builder specification = spec.clone();
-        var identifier = state.getIdentifier();
-        Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
-        if (lastEstablishmentEvent.isEmpty()) {
-            log.warn("missing establishment event: {} can't find: {}", kerl.getKeyEvent(state.getCoordinates()).get(),
-                     state.getLastEstablishmentEvent());
+        KeyEvent event = interaction(state, spec);
+        if (event == null) {
             return Optional.empty();
         }
-        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
-
-        Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
-
-        if (keyPair.isEmpty()) {
-            log.warn("Key pair for identifier not found in keystore: {}", identifier);
-        }
-
-        specification.setPriorEventDigest(state.getDigest())
-                     .setLastEvent(state.getCoordinates())
-                     .setIdentifier(identifier)
-                     .setSigner(new SignerImpl(keyPair.get().getPrivate()));
-
-        KeyEvent event = eventFactory.interaction(specification.build());
         KeyState newKeyState;
         try {
             newKeyState = kerl.append(event).get();
         } catch (InterruptedException | ExecutionException e) {
-            log.warn("Cannot append seal event for: {}", identifier, e);
+            log.warn("Cannot append seal event for: {}", state.getIdentifier(), e);
             return Optional.empty();
         }
         if (newKeyState == null) {
