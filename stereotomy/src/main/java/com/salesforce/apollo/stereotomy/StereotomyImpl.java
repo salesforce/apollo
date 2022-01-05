@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-import static com.salesforce.apollo.crypto.QualifiedBase64.shortQb64;
 import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
@@ -389,7 +388,24 @@ public class StereotomyImpl implements Stereotomy {
 
     @Override
     public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-        return newIdentifier(null, spec);
+        var event = inception(Identifier.NONE, spec);
+        KeyState state;
+        try {
+            state = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
+
+        if (state == null) {
+            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
+            return Optional.empty();
+        }
+        ControlledIdentifier cid = new ControlledIdentifierImpl(state);
+
+        log.info("New {} identifier: {} coordinates: {} cur key: {} next key: {}",
+                 spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getIdentifier(), cid.getCoordinates());
+        return Optional.of(cid);
+
     }
 
     private Optional<KeyPair> getKeyPair(KeyCoordinates keyCoords) {
@@ -419,11 +435,9 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(new Signer.SignerImpl(signers));
     }
 
-    private Optional<ControlledIdentifier> newIdentifier(ControlledIdentifier delegator,
-                                                         IdentifierSpecification.Builder spec) {
+    private InceptionEvent inception(Identifier delegatingIdentifier, IdentifierSpecification.Builder spec) {
         IdentifierSpecification.Builder specification = spec.clone();
 
-        var delegatingdentifier = delegator == null ? Identifier.NONE : delegator.getIdentifier();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
@@ -432,7 +446,21 @@ public class StereotomyImpl implements Stereotomy {
                      .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
 
-        InceptionEvent event = this.eventFactory.inception(delegatingdentifier, specification.build());
+        InceptionEvent event = this.eventFactory.inception(delegatingIdentifier, specification.build());
+
+        KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
+
+        keyStore.storeKey(keyCoordinates, initialKeyPair);
+        keyStore.storeNextKey(keyCoordinates, nextKeyPair);
+        return event;
+    }
+
+    private Optional<ControlledIdentifier> newIdentifier(ControlledIdentifier delegator,
+                                                         IdentifierSpecification.Builder spec) {
+        var delegatingIdentifier = delegator.getIdentifier();
+
+        InceptionEvent event = inception(delegatingIdentifier, spec);
+
         KeyState state;
         try {
             state = kerl.append(event).get();
@@ -445,32 +473,24 @@ public class StereotomyImpl implements Stereotomy {
             return Optional.empty();
         }
 
-        KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
-
-        keyStore.storeKey(keyCoordinates, initialKeyPair);
-        keyStore.storeNextKey(keyCoordinates, nextKeyPair);
         ControlledIdentifier cid = new ControlledIdentifierImpl(state);
 
-        if (delegator != null) {
-            delegator.seal(InteractionSpecification.newBuilder()
-                                                   .addAllSeals(Collections.singletonList(Seal.EventSeal.construct(cid.getIdentifier(),
-                                                                                                                   cid.getDigest(),
-                                                                                                                   cid.getSequenceNumber()))));
-            var attachment = new AttachmentImpl(Seal.EventSeal.construct(delegator.getIdentifier(),
-                                                                         delegator.getDigest(),
-                                                                         delegator.getSequenceNumber()));
-            var attachmentEvent = eventFactory.attachment(event, attachment);
-            try {
-                kerl.append(attachmentEvent).get();
-            } catch (InterruptedException | ExecutionException e) {
-                return Optional.empty();
-            }
+        delegator.seal(InteractionSpecification.newBuilder()
+                                               .addAllSeals(Collections.singletonList(Seal.EventSeal.construct(cid.getIdentifier(),
+                                                                                                               cid.getDigest(),
+                                                                                                               cid.getSequenceNumber()))));
+        var attachment = new AttachmentImpl(Seal.EventSeal.construct(delegator.getIdentifier(), delegator.getDigest(),
+                                                                     delegator.getSequenceNumber()));
+        var attachmentEvent = eventFactory.attachment(event, attachment);
+        try {
+            kerl.append(attachmentEvent).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
         }
 
         log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
-                 specification.getWitnesses().isEmpty() ? "Private" : "Public", delegatingdentifier,
-                 cid.getIdentifier(), keyCoordinates, shortQb64(initialKeyPair.getPublic()),
-                 shortQb64(nextKeyPair.getPublic()));
+                 spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
+                 cid.getIdentifier(), cid.getCoordinates());
         return Optional.of(cid);
     }
 
@@ -479,18 +499,25 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     private Optional<KeyState> rotate(KeyState state, RotationSpecification.Builder spec) {
+        var delegatingIdentifier = state.getDelegatingIdentifier();
+        return (delegatingIdentifier.isEmpty() ||
+                delegatingIdentifier.get().equals(Identifier.NONE)) ? rotateUndelegated(state, spec)
+                                                                    : rotateDelegated(state, spec);
+    }
+
+    private RotationEvent rotate(RotationSpecification.Builder spec, KeyState state, boolean delegated) {
         RotationSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
 
         if (state.getNextKeyConfigurationDigest().isEmpty()) {
             log.warn("Identifier cannot be rotated: {}", identifier);
-            return Optional.empty();
+            return null;
         }
 
         var lastEstablishing = kerl.getKeyEvent(state.getLastEstablishmentEvent());
         if (lastEstablishing.isEmpty()) {
             log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
-            return Optional.empty();
+            return null;
         }
         EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
@@ -510,20 +537,7 @@ public class StereotomyImpl implements Stereotomy {
                      .setNextKeys(List.of(newNextKeyPair.getPublic()))
                      .setSigner(new SignerImpl(nextKeyPair.getPrivate()));
 
-        var delegatingIdentifier = state.getDelegatingIdentifier();
-        boolean delegated = false;
-        if (!delegatingIdentifier.isEmpty()) {
-            delegated = !delegatingIdentifier.get().equals(Identifier.NONE);
-        }
         RotationEvent event = eventFactory.rotation(specification.build(), delegated);
-        KeyState newState;
-        try {
-            newState = kerl.append(event).get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Identifier cannot be rotated: {} cannot append event", identifier, e);
-            return Optional.empty();
-        }
-
         KeyCoordinates nextKeyCoordinates = KeyCoordinates.of(event, 0);
 
         keyStore.storeKey(nextKeyCoordinates, nextKeyPair);
@@ -531,11 +545,46 @@ public class StereotomyImpl implements Stereotomy {
 
         keyStore.removeKey(currentKeyCoordinates);
         keyStore.removeNextKey(currentKeyCoordinates);
+        return event;
+    }
+
+    private Optional<KeyState> rotateDelegated(KeyState state, RotationSpecification.Builder spec) {
+        RotationEvent event = rotate(spec, state, true);
+        if (event == null) {
+            return Optional.empty();
+        }
+
+        KeyState newState;
+        try {
+            newState = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Identifier cannot be rotated: {} cannot append event", state.getIdentifier(), e);
+            return Optional.empty();
+        }
 
         var delegator = newState.getDelegatingIdentifier();
-        log.info("Rotated{} identifier: {} coordinates: {} cur key: {} next key: {} old coordinates: {}",
-                 delegator.isEmpty() ? "" : " delegator: " + delegator.get(), identifier, nextKeyCoordinates,
-                 shortQb64(nextKeyPair.getPublic()), shortQb64(newNextKeyPair.getPublic()), currentKeyCoordinates);
+        log.info("Rotated delegator: {} identifier: {} coordinates: {} old coordinates: {}", delegator.get(),
+                 state.getIdentifier(), newState.getCoordinates(), state.getCoordinates());
+
+        return Optional.of(newState);
+    }
+
+    private Optional<KeyState> rotateUndelegated(KeyState state, RotationSpecification.Builder spec) {
+        RotationEvent event = rotate(spec, state, false);
+        if (event == null) {
+            return Optional.empty();
+        }
+
+        KeyState newState;
+        try {
+            newState = kerl.append(event).get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Identifier cannot be rotated: {} cannot append event", state.getIdentifier(), e);
+            return Optional.empty();
+        }
+
+        log.info("Rotated identifier: {} coordinates: {} old coordinates: {}", state.getIdentifier(),
+                 newState.getCoordinates(), state.getCoordinates());
 
         return Optional.of(newState);
     }

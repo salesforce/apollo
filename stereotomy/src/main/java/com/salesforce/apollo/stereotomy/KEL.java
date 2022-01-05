@@ -6,12 +6,16 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.SealingEvent;
@@ -41,6 +45,19 @@ public interface KEL {
      * Append the event. The event will be validated before inserted.
      */
     CompletableFuture<KeyState> append(KeyEvent event);
+
+    /**
+     * Append the list of events. The events will be validated before inserted.
+     */
+    default CompletableFuture<List<KeyState>> append(KeyEvent... event) {
+        return append(Arrays.asList(event), Collections.emptyList());
+    }
+
+    /**
+     * Append the list of events and attachments. The events will be validated
+     * before inserted.
+     */
+    CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments);
 
     /**
      * The digest algorithm used

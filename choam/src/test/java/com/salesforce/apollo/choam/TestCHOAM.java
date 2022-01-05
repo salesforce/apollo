@@ -196,7 +196,7 @@ public class TestCHOAM {
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
-        params.getProducer().ethereal().setNumberOfEpochs(5);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> Utils.getMember(i))
@@ -283,7 +283,7 @@ public class TestCHOAM {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 5000;
+        final int clientCount = 5_000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);

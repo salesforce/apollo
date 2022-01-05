@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -238,6 +239,26 @@ public class MvLog implements KERL {
         var f = new CompletableFuture<KeyState>();
         f.complete(newState);
         return f;
+    }
+
+    @Override
+    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+        var states = events.stream().map(event -> {
+            try {
+                return append(event).get();
+            } catch (InterruptedException | ExecutionException e) {
+                return null;
+            }
+        }).toList();
+        attachments.forEach(attach -> {
+            try {
+                append(attach).get();
+            } catch (InterruptedException | ExecutionException e) {
+            }
+        });
+        var fs = new CompletableFuture<List<KeyState>>();
+        fs.complete(states);
+        return fs;
     }
 
     @Override

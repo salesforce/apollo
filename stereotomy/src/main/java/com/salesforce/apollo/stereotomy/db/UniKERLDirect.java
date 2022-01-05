@@ -7,6 +7,8 @@
 package com.salesforce.apollo.stereotomy.db;
 
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.jooq.impl.DSL;
@@ -45,5 +47,22 @@ public class UniKERLDirect extends UniKERL {
         var f = new CompletableFuture<KeyState>();
         f.complete(newState);
         return f;
+    }
+
+    @Override
+    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+        List<KeyState> states = new ArrayList<>();
+        dsl.transaction(ctx -> {
+            var context = DSL.using(ctx);
+            events.forEach(event -> {
+                KeyState newState = processor.process(event);
+                append(context, event, newState, digestAlgorithm);
+                states.add(newState);
+            });
+            attachments.forEach(attach -> append(context, attach));
+        });
+        var fs = new CompletableFuture<List<KeyState>>();
+        fs.complete(states);
+        return fs;
     }
 }
