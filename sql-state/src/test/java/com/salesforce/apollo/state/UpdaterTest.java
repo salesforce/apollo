@@ -23,6 +23,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,7 +42,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
 
@@ -55,7 +56,8 @@ public class UpdaterTest {
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                               "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                               "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
         Transaction transaction = builder.build();
 
         updater.getExecutor().execute(0, Digest.NONE, transaction, null);
@@ -73,7 +75,7 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.connection();
         SqlStateMachine.publish(connection, "test", json);
@@ -110,7 +112,7 @@ public class UpdaterTest {
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
 
-        executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();
@@ -121,7 +123,7 @@ public class UpdaterTest {
         assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
         assertFalse(cb.next(), "Should be only 1 record");
 
-        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
+        executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin());
         cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
 
         assertTrue(cb.next(), "Should exist");

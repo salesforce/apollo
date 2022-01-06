@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -262,7 +263,7 @@ public class MembershipTests {
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
-                public void beginBlock(long height, Digest hash) {
+                public void beginBlock(ULong height, Digest hash) {
                     recording.add(hash);
                 }
 

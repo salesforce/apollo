@@ -24,6 +24,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -100,12 +101,12 @@ public class GenesisAssemblyTest {
             }
 
             @Override
-            public Block produce(Long height, Digest prev, Assemble assemble) {
+            public Block produce(ULong height, Digest prev, Assemble assemble) {
                 return null;
             }
 
             @Override
-            public Block produce(Long height, Digest prev, Executions executions) {
+            public Block produce(ULong height, Digest prev, Executions executions) {
                 return null;
             }
 

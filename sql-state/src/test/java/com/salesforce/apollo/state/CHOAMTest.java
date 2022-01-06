@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -276,7 +277,7 @@ public class CHOAMTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 5;
+        final ULong waitFor = ULong.valueOf(5);
         final int clientCount = 1000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
@@ -290,8 +291,8 @@ public class CHOAMTest {
                                                           .map(m -> updaters.get(m))
                                                           .map(ssm -> ssm.getCurrentBlock())
                                                           .filter(cb -> cb != null)
-                                                          .mapToLong(cb -> cb.height())
-                                                          .filter(l -> l >= waitFor)
+                                                          .map(cb -> cb.height())
+                                                          .filter(l -> l.compareTo(waitFor) >= 0)
                                                           .count() > toleranceLevel);
         assertTrue(success,
                    "Results: " + members.stream()
@@ -299,7 +300,7 @@ public class CHOAMTest {
                                         .map(ssm -> ssm.getCurrentBlock())
                                         .filter(cb -> cb != null)
                                         .map(cb -> cb.height())
-                                        .filter(l -> l >= waitFor)
+                                        .filter(l -> l.compareTo(waitFor) >= 0)
                                         .toList());
 
         final var initial = choams.get(members.get(0).getId())
@@ -323,13 +324,13 @@ public class CHOAMTest {
             proceed.set(false);
         }
 
-        final long target = updaters.values()
-                                    .stream()
-                                    .map(ssm -> ssm.getCurrentBlock())
-                                    .filter(cb -> cb != null)
-                                    .mapToLong(cb -> cb.height())
-                                    .max()
-                                    .getAsLong();
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
 
         try {
             Utils.waitForCondition(20_000, 1000,
@@ -337,8 +338,8 @@ public class CHOAMTest {
                                                 .map(m -> updaters.get(m))
                                                 .map(ssm -> ssm.getCurrentBlock())
                                                 .filter(cb -> cb != null)
-                                                .mapToLong(cb -> cb.height())
-                                                .filter(l -> l >= target)
+                                                .map(cb -> cb.height())
+                                                .filter(l -> l.compareTo(target) >= 0)
                                                 .count() == members.size());
 
             record row(float price, int quantity) {}
@@ -403,7 +404,7 @@ public class CHOAMTest {
                                .setProcessor(new TransactionExecutor() {
 
                                    @Override
-                                   public void beginBlock(long height, Digest hash) {
+                                   public void beginBlock(ULong height, Digest hash) {
                                        blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
                                        up.getExecutor().beginBlock(height, hash);
                                    }
@@ -415,7 +416,7 @@ public class CHOAMTest {
                                    }
 
                                    @Override
-                                   public void genesis(long height, Digest hash, List<Transaction> initialization) {
+                                   public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
                                        blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
                                        up.getExecutor().genesis(height, hash, initialization);
                                    }

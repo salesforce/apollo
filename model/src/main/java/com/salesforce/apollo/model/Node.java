@@ -33,7 +33,7 @@ public class Node {
         this.id = id;
         this.shard = shard;
         this.controller = new StereotomyImpl(keyStore, new ShardedKERL(shard.createConnection(), shard.getMutator(),
-                                                                       digestAlgorithm),
+                                                                       null, null, digestAlgorithm, null),
                                              entropy);
     }
 

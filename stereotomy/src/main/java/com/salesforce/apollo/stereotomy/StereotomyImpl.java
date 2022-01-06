@@ -532,7 +532,7 @@ public class StereotomyImpl implements Stereotomy {
         // Finally, the new delegated identifier
         ControlledIdentifier cid = new ControlledIdentifierImpl(delegatedState);
 
-        log.info("New {} delegator: {} identifier: {} coordinates: {} cur key: {} next key: {}",
+        log.info("New {} delegator: {} identifier: {} coordinates: {}",
                  spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),
                  cid.getIdentifier(), cid.getCoordinates());
         return Optional.of(cid);

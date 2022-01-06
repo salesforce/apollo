@@ -20,6 +20,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.joou.ULong;
+
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -49,8 +51,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          ReliableBroadcaster.Parameters.Builder combine, ScheduledExecutorService scheduler,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
                          Function<Map<Member, Join>, List<Transaction>> genesisData, Digest genesisViewId,
-                         TransactionExecutor processor, Function<Long, File> checkpointer, int checkpointBlockSize,
-                         BiConsumer<Long, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
+                         TransactionExecutor processor, Function<ULong, File> checkpointer, int checkpointBlockSize,
+                         BiConsumer<ULong, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
                          ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
                          int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
@@ -181,7 +183,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
     }
 
     public static class Builder {
-        private final static Function<Long, File> NULL_CHECKPOINTER = h -> {
+        private final static Function<ULong, File> NULL_CHECKPOINTER = h -> {
             File cp;
             try {
                 cp = File.createTempFile("cp-" + h, ".chk");
@@ -198,7 +200,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private BootstrapParameters                            bootstrap             = BootstrapParameters.newBuilder()
                                                                                                           .build();
         private int                                            checkpointBlockSize   = 8192;
-        private Function<Long, File>                           checkpointer          = NULL_CHECKPOINTER;
+        private Function<ULong, File>                          checkpointer          = NULL_CHECKPOINTER;
         private ExponentialBackoff.Builder<Status>             clientBackoff         = ExponentialBackoff.<Status>newBuilder()
                                                                                                          .retryIf(s -> s.isOk());
         private ReliableBroadcaster.Parameters.Builder         combineParams         = ReliableBroadcaster.Parameters.newBuilder();
@@ -219,7 +221,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private ProducerParameters                             producer              = ProducerParameters.newBuilder()
                                                                                                          .build();
         private int                                            regenerationCycles    = 20;
-        private BiConsumer<Long, CheckpointState>              restorer              = (height, checkpointState) -> {
+        private BiConsumer<ULong, CheckpointState>             restorer              = (height, checkpointState) -> {
                                                                                      };
         private ScheduledExecutorService                       scheduler;
         private Duration                                       submitTimeout         = Duration.ofSeconds(30);
@@ -248,7 +250,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return checkpointBlockSize;
         }
 
-        public Function<Long, File> getCheckpointer() {
+        public Function<ULong, File> getCheckpointer() {
             return checkpointer;
         }
 
@@ -320,7 +322,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return regenerationCycles;
         }
 
-        public BiConsumer<Long, CheckpointState> getRestorer() {
+        public BiConsumer<ULong, CheckpointState> getRestorer() {
             return restorer;
         }
 
@@ -366,7 +368,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setCheckpointer(Function<Long, File> checkpointer) {
+        public Builder setCheckpointer(Function<ULong, File> checkpointer) {
             this.checkpointer = checkpointer;
             return this;
         }
@@ -457,7 +459,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setRestorer(BiConsumer<Long, CheckpointState> biConsumer) {
+        public Builder setRestorer(BiConsumer<ULong, CheckpointState> biConsumer) {
             this.restorer = biConsumer;
             return this;
         }

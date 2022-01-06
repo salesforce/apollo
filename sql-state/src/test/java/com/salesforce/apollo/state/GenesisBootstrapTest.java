@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.Counter;
@@ -48,7 +49,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 5;
+        final ULong waitFor = ULong.valueOf(5);
         final int clientCount = 1;
         final int max = 1;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
@@ -70,8 +71,8 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                                           .map(m -> updaters.get(m))
                                                           .map(ssm -> ssm.getCurrentBlock())
                                                           .filter(cb -> cb != null)
-                                                          .mapToLong(cb -> cb.height())
-                                                          .filter(l -> l >= waitFor)
+                                                          .map(cb -> cb.height())
+                                                          .filter(l -> l.compareTo(waitFor) >= 0)
                                                           .count() > toleranceLevel);
         assertTrue(success, "States: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
@@ -109,21 +110,21 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
             proceed.set(false);
         }
 
-        final long target = updaters.values()
-                                    .stream()
-                                    .map(ssm -> ssm.getCurrentBlock())
-                                    .filter(cb -> cb != null)
-                                    .mapToLong(cb -> cb.height())
-                                    .max()
-                                    .getAsLong();
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
 
         Utils.waitForCondition(30_000, 100,
                                () -> members.stream()
                                             .map(m -> updaters.get(m))
                                             .map(ssm -> ssm.getCurrentBlock())
                                             .filter(cb -> cb != null)
-                                            .mapToLong(cb -> cb.height())
-                                            .filter(l -> l >= target)
+                                            .map(cb -> cb.height())
+                                            .filter(l -> l.compareTo(target) >= 0)
                                             .count() == members.size());
 
         System.out.println("target: " + target + " results: "

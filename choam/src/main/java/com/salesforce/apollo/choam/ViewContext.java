@@ -11,6 +11,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,11 +130,11 @@ public class ViewContext {
         return params;
     }
 
-    public Block produce(long l, Digest hash, Assemble assemble) {
+    public Block produce(ULong l, Digest hash, Assemble assemble) {
         return blockProducer.produce(l, hash, assemble);
     }
 
-    public Block produce(long l, Digest hash, Executions executions) {
+    public Block produce(ULong l, Digest hash, Executions executions) {
         return blockProducer.produce(l, hash, executions);
     }
 

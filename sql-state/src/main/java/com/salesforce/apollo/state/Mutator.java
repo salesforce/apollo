@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -109,14 +108,14 @@ public class Mutator {
         public <T> CompletableFuture<T> submit(Executor exec, Duration timeout,
                                                ScheduledExecutorService scheduler) throws InvalidTransaction {
             return (CompletableFuture<T>) session.submit(exec, build(), timeout, scheduler)
-                                                 .whenComplete((BiConsumer<Object, Throwable>) (r, t) -> process(r, t));
+                                                 .whenComplete((r, t) -> process(r, t));
         }
 
         private Message build() {
             return batch.build();
         }
 
-        private void process(Object r, Throwable t) {
+        private <T> void process(T r, Throwable t) {
             if (t instanceof BatchedTransactionException) {
                 BatchedTransactionException e = (BatchedTransactionException) t;
                 completions.get(e.getIndex()).completeExceptionally(e.getCause());

@@ -33,6 +33,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -123,7 +124,8 @@ public class CheckpointAssemblerTest {
         SigningMember bootstrapping = members.get(0);
 
         Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(0, chkptFile, checkpoint));
+        CheckpointState state = new CheckpointState(checkpoint,
+                                                    store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
 
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
         testFile.deleteOnExit();
@@ -155,8 +157,8 @@ public class CheckpointAssemblerTest {
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.00125,
-                                                           DigestAlgorithm.DEFAULT);
+        CheckpointAssembler boot = new CheckpointAssembler(ULong.valueOf(0), checkpoint, bootstrapping, store2, comm,
+                                                           context, 0.00125, DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());

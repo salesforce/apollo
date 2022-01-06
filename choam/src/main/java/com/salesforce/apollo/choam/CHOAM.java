@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,9 +114,9 @@ public class CHOAM {
 
         Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
 
-        Block produce(Long height, Digest prev, Assemble assemble);
+        Block produce(ULong height, Digest prev, Assemble assemble);
 
-        Block produce(Long height, Digest prev, Executions executions);
+        Block produce(ULong height, Digest prev, Executions executions);
 
         void publish(CertifiedBlock cb);
 
@@ -239,13 +240,13 @@ public class CHOAM {
 
     @FunctionalInterface
     public interface TransactionExecutor {
-        default void beginBlock(long height, Digest hash) {
+        default void beginBlock(ULong height, Digest hash) {
         }
 
         @SuppressWarnings("rawtypes")
         void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
-        default void genesis(long height, Digest hash, List<Transaction> initialization) {
+        default void genesis(ULong height, Digest hash, List<Transaction> initialization) {
         }
     }
 
@@ -408,6 +409,7 @@ public class CHOAM {
 
         @Override
         public void accept(HashedCertifiedBlock hb) {
+            assert hb.height().equals(ULong.valueOf(0));
             final var c = head.get();
             genesis.set(c);
             checkpoint.set(c);
@@ -522,7 +524,7 @@ public class CHOAM {
                                 Iterable<Transaction> initialization) {
         var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockSize());
         return Block.newBuilder()
-                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
+                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, ULong.valueOf(0),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
                                            lastViewChange.hash))
                     .setGenesis(Genesis.newBuilder().setInitialView(reconfigure).addAllInitialize(initialization))
@@ -559,7 +561,7 @@ public class CHOAM {
         int checkpointTarget = lastTarget == 0 ? params.checkpointBlockSize() : lastTarget - 1;
         var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
         return Block.newBuilder()
-                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height() + 1,
+                    .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
                                            lastViewChange.hash))
                     .setReconfigure(reconfigure)
@@ -588,7 +590,7 @@ public class CHOAM {
                                  .toList();
     }
 
-    private final Map<Long, CheckpointState>                            cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
@@ -779,7 +781,7 @@ public class CHOAM {
         final HashedCertifiedBlock v = view.get();
         final HashedBlock c = checkpoint.get();
         final Block block = Block.newBuilder()
-                                 .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height() + 1,
+                                 .setHeader(buildHeader(params.digestAlgorithm(), cp, lb.hash, lb.height().add(1),
                                                         c.height(), c.hash, v.height(), v.hash))
                                  .setCheckpoint(cp)
                                  .build();
@@ -794,11 +796,13 @@ public class CHOAM {
     }
 
     private void combine() {
-        log.trace("Attempting to combine blocks on: {}", params.member());
         var next = pending.peek();
+        log.trace("Attempting to combine blocks, peek: {} height: {}, head: {} height: {} on: {}",
+                  next == null ? "<null>" : next.hash, next == null ? "-1" : next.height(), head.get().hash,
+                  head.get().height(), params.member());
         while (next != null) {
             final HashedCertifiedBlock h = head.get();
-            if (h.height() >= 0 && next.height() <= h.height()) {
+            if (h.height() != null && next.height().compareTo(h.height()) <= 0) {
 //                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
 //                          next.height(), h.height(), params.member());
                 pending.poll();
@@ -822,6 +826,8 @@ public class CHOAM {
             next = pending.peek();
         }
 
+        log.trace("Finished combined, head: {} height: {} on: {}", head.get().hash, head.get().height(),
+                 params.member());
     }
 
     private void combine(List<Msg> messages) {
@@ -859,7 +865,7 @@ public class CHOAM {
             }
 
             @Override
-            public Block produce(Long height, Digest prev, Assemble assemble) {
+            public Block produce(ULong height, Digest prev, Assemble assemble) {
                 final HashedCertifiedBlock v = view.get();
                 final HashedBlock c = checkpoint.get();
                 return Block.newBuilder()
@@ -870,7 +876,7 @@ public class CHOAM {
             }
 
             @Override
-            public Block produce(Long height, Digest prev, Executions executions) {
+            public Block produce(ULong height, Digest prev, Executions executions) {
                 final HashedCertifiedBlock c = checkpoint.get();
                 final HashedCertifiedBlock v = view.get();
                 return Block.newBuilder()
@@ -921,7 +927,7 @@ public class CHOAM {
             log.warn("Received checkpoint fetch from non member: {} on: {}", from, params.member());
             return CheckpointSegments.getDefaultInstance();
         }
-        CheckpointState state = cachedCheckpoints.get(request.getCheckpoint());
+        CheckpointState state = cachedCheckpoints.get(ULong.valueOf(request.getCheckpoint()));
         if (state == null) {
             log.info("No cached checkpoint for {} on: {}", request.getCheckpoint(), params.member());
             return CheckpointSegments.getDefaultInstance();
@@ -939,9 +945,9 @@ public class CHOAM {
             log.warn("Received fetchBlocks from non member: {} on: {}", from, params.member());
             return Blocks.getDefaultInstance();
         }
-        BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+        BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
-        store.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+        store.fetchBlocks(bff, blocks, 5, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
         return blocks.build();
     }
 
@@ -951,9 +957,9 @@ public class CHOAM {
             log.warn("Received fetchViewChain from non member: {} on: {}", from, params.member());
             return Blocks.getDefaultInstance();
         }
-        BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+        BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
         Blocks.Builder blocks = Blocks.newBuilder();
-        store.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+        store.fetchViewChain(bff, blocks, 1, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
         return blocks.build();
     }
 
@@ -967,8 +973,12 @@ public class CHOAM {
     }
 
     private boolean isNext(HashedBlock next) {
+        if (next == null) {
+            return false;
+        }
         final var h = head.get();
-        if (next != null && next.height() == h.height() + 1) {
+        if ((h.height() == null && next.height().equals(ULong.valueOf(0))) ||
+            (next.height().equals(h.height().add(1)))) {
             return true;
         }
         final Digest prev = next.getPrevious();
@@ -1086,23 +1096,24 @@ public class CHOAM {
             log.info("No state to restore from on: {}", params.member().getId());
             return;
         }
-        genesis.set(new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0)));
+        genesis.set(new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))));
         head.set(lastBlock);
         Header header = lastBlock.block.getHeader();
         HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
-                                                                 store.getCertifiedBlock(header.getLastReconfig()));
+                                                                 store.getCertifiedBlock(ULong.valueOf(header.getLastReconfig())));
         Reconfigure reconfigure = lastView.block.getReconfigure();
         view.set(lastView);
         var validators = validatorsOf(reconfigure, params.context());
         current.set(new Synchronizer(validators));
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
-        CertifiedBlock lastCheckpoint = store.getCertifiedBlock(header.getLastCheckpoint());
+        CertifiedBlock lastCheckpoint = store.getCertifiedBlock(ULong.valueOf(header.getLastCheckpoint()));
         if (lastCheckpoint != null) {
             checkpoint.set(new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint));
         }
 
         log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}",
-                 new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(0)).hash, lastView.hash,
+                 new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))).hash,
+                 lastView.hash,
                  lastCheckpoint == null ? "<missing>"
                                         : new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint).hash,
                  lastBlock.hash, params.member().getId());
@@ -1167,15 +1178,16 @@ public class CHOAM {
             initial.setGenesis(g.certifiedBlock);
             HashedCertifiedBlock cp = checkpoint.get();
             if (cp != null) {
-                long height = request.getHeight();
+                ULong height = ULong.valueOf(request.getHeight());
 
-                while (cp.height() > height) {
+                while (cp.height().compareTo(height) > 0) {
                     cp = new HashedCertifiedBlock(params.digestAlgorithm(),
-                                                  store.getCertifiedBlock(cp.block.getHeader().getLastCheckpoint()));
+                                                  store.getCertifiedBlock(ULong.valueOf(cp.block.getHeader()
+                                                                                                .getLastCheckpoint())));
                 }
-                final long lastReconfig = cp.block.getHeader().getLastReconfig();
+                final ULong lastReconfig = ULong.valueOf(cp.block.getHeader().getLastReconfig());
                 HashedCertifiedBlock lastView = null;
-                if (lastReconfig < 0) {
+                if (lastReconfig.equals(ULong.valueOf(0))) {
                     lastView = cp;
                 } else {
                     var stored = store.getCertifiedBlock(lastReconfig);
@@ -1209,11 +1221,11 @@ public class CHOAM {
         } else {
             log.info("Synchronizing from checkpoint: {} on: {}", state.lastCheckpoint.hash, params.member());
             restoreFrom(state.lastCheckpoint, state.checkpoint);
-            current1 = store.getCertifiedBlock(state.lastCheckpoint.height() + 1);
+            current1 = store.getCertifiedBlock(state.lastCheckpoint.height().add(1));
         }
         while (current1 != null) {
             synchronizedProcess(current1, false);
-            current1 = store.getCertifiedBlock(height(current1.getBlock()) + 1);
+            current1 = store.getCertifiedBlock(height(current1.getBlock()).add(1));
         }
         synchronizing.set(false);
         log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
@@ -1239,17 +1251,26 @@ public class CHOAM {
         Header header = block.getHeader();
         if (previousBlock != null) {
             Digest prev = digest(header.getPrevious());
-            long prevHeight = previousBlock.height();
-            if (hcb.height() <= prevHeight) {
-                log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}", hcb.hash,
-                          hcb.height(), prevHeight, params.member());
-                return;
-            }
-            if (hcb.height() != prevHeight + 1) {
-                pending.add(hcb);
-                log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
-                          params.member(), hcb.hash, previousBlock.height() + 1, header.getHeight());
-                return;
+            ULong prevHeight = previousBlock.height();
+            if (prevHeight == null) {
+                if (!hcb.height().equals(ULong.valueOf(0))) {
+                    pending.add(hcb);
+                    log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                              params.member(), hcb.hash, 0, header.getHeight());
+                    return;
+                }
+            } else {
+                if (hcb.height().compareTo(prevHeight) <= 0) {
+                    log.debug("Discarding previously committed block: {} height: {} current height: {} on: {}",
+                              hcb.hash, hcb.height(), prevHeight, params.member());
+                    return;
+                }
+                if (!hcb.height().equals(prevHeight.add(1))) {
+                    pending.add(hcb);
+                    log.debug("Deferring block on {}.  Block: {} height should be {} and block height is {}",
+                              params.member(), hcb.hash, previousBlock.height().add(1), header.getHeight());
+                    return;
+                }
             }
             if (!previousBlock.hash.equals(prev)) {
                 log.error("Protocol violation on {}. New block does not refer to current block hash. Should be {} and next block's prev is {}, current height: {} next height: {}",

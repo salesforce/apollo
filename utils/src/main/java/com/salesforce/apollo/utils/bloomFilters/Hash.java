@@ -11,6 +11,8 @@ import static com.salesforce.apollo.utils.bloomFilters.Primes.PRIMES;
 import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
+import org.joou.ULong;
+
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -367,6 +369,27 @@ public abstract class Hash<M> {
         @Override
         protected void processIt(String key) {
             process(key);
+        }
+
+    }
+
+    public static class ULongHasher extends Hasher<ULong> {
+
+        public ULongHasher() {
+        }
+
+        public ULongHasher(ULong key, long seed) {
+            super(key, seed);
+        }
+
+        @Override
+        protected Hasher<ULong> clone() {
+            return new ULongHasher();
+        }
+
+        @Override
+        protected void processIt(ULong key) {
+            process(key.longValue());
         }
 
     }

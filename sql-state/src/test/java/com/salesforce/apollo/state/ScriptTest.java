@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -36,7 +37,7 @@ public class ScriptTest {
     public void smoke() throws Exception {
         SqlStateMachine machine = new SqlStateMachine("jdbc:h2:mem:test_script", new Properties(),
                                                       new File("target/chkpoints"));
-        machine.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        machine.getExecutor().genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
         Connection connection = machine.newConnection();
         createAndInsert(connection);
         connection.commit();
@@ -46,8 +47,8 @@ public class ScriptTest {
                                                                              Utils.getDocument(getClass().getResourceAsStream("/scripts/dbaccess.java"))))
                      .build();
         CompletableFuture<Object> completion = new CompletableFuture<>();
-        machine.getExecutor().execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(),
-                                      completion);
+        machine.getExecutor()
+               .execute(0, Digest.NONE, Transaction.newBuilder().setContent(txn.toByteString()).build(), completion);
 
         assertTrue(ResultSet.class.isAssignableFrom(completion.get().getClass()));
         ResultSet rs = (ResultSet) completion.get();

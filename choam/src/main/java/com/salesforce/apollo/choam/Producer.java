@@ -286,7 +286,7 @@ public class Producer {
             txns.forEach(e -> builder.addExecutions(e));
 
             var next = new HashedBlock(params().digestAlgorithm(),
-                                       view.produce(lb.height() + 1, lb.hash, builder.build()));
+                                       view.produce(lb.height().add(1), lb.hash, builder.build()));
             previousBlock.set(next);
 
             final var validation = view.generateValidation(next);
@@ -323,8 +323,11 @@ public class Producer {
         final var vlb = previousBlock.get();
         nextViewId = vlb.hash;
         nextAssembly.addAll(Committee.viewMembersOf(nextViewId, params().context()));
-        final var assemble = new HashedBlock(params().digestAlgorithm(), view.produce(vlb.height()
-        + 1, vlb.hash, Assemble.newBuilder().setNextView(vlb.hash.toDigeste()).build()));
+        final var assemble = new HashedBlock(params().digestAlgorithm(),
+                                             view.produce(vlb.height().add(1), vlb.hash,
+                                                          Assemble.newBuilder()
+                                                                  .setNextView(vlb.hash.toDigeste())
+                                                                  .build()));
         previousBlock.set(assemble);
         final var validation = view.generateValidation(assemble);
         final var p = new PendingBlock(assemble, new HashMap<>(), new AtomicBoolean());

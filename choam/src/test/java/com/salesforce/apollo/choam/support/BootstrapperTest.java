@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -103,7 +104,7 @@ public class BootstrapperTest {
 
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
 
-        bootstrapStore.validate(lastBlock.height(), 0);
+        bootstrapStore.validate(lastBlock.height(), ULong.valueOf(0));
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
         SigningMember member = members.get(0);
@@ -150,18 +151,18 @@ public class BootstrapperTest {
         when(client.fetchViewChain(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
-            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
-            bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+            bootstrapStore.fetchViewChain(bff, blocks, 1, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
             futureSailor.set(blocks.build());
             return futureSailor;
         });
         when(client.fetchBlocks(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
-            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
-            bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+            bootstrapStore.fetchBlocks(bff, blocks, 5, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
             futureSailor.set(blocks.build());
             return futureSailor;
         });

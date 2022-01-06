@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -223,7 +224,7 @@ public class TestCHOAM {
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
-                public void beginBlock(long height, Digest hash) {
+                public void beginBlock(ULong height, Digest hash) {
                     blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
                 }
 

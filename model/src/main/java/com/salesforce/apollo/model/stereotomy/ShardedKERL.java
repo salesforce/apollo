@@ -9,7 +9,9 @@ package com.salesforce.apollo.model.stereotomy;
 import java.sql.Connection;
 import java.sql.Types;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,14 +33,18 @@ import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
  */
 public class ShardedKERL extends UniKERL {
 
-    private Executor                 exec;
-    private final Mutator            mutator;
-    private ScheduledExecutorService scheduler;
-    private Duration                 timeout;
+    private final Executor                 exec;
+    private final Mutator                  mutator;
+    private final ScheduledExecutorService scheduler;
+    private final Duration                 timeout;
 
-    public ShardedKERL(Connection connection, Mutator mutator, DigestAlgorithm digestAlgorithm) {
+    public ShardedKERL(Connection connection, Mutator mutator, ScheduledExecutorService scheduler, Duration timeout,
+                       DigestAlgorithm digestAlgorithm, Executor exec) {
         super(connection, digestAlgorithm);
+        this.exec = exec;
         this.mutator = mutator;
+        this.scheduler = scheduler;
+        this.timeout = timeout;
     }
 
     @Override
@@ -68,5 +74,27 @@ public class ShardedKERL extends UniKERL {
                 return null;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
+        KeyState[] states = new KeyState[events.size()];
+
+        var batch = mutator.batch();
+        for (KeyEvent event : events) {
+            batch.execute(mutator.call("{ ? = call stereotomy_kerl.append(?, ?, ?) }",
+                                       Collections.singletonList(Types.BINARY),
+                                       new Object[] { event.getBytes(), event.getIlk(),
+                                                      DigestAlgorithm.DEFAULT.digestCode() }));
+        }
+        CompletableFuture<List<KeyState>> submitted;
+        try {
+            submitted = batch.submit(exec, timeout, scheduler).handle((a, t) -> Arrays.asList(states));
+        } catch (InvalidTransaction e) {
+            var f = new CompletableFuture<List<KeyState>>();
+            f.completeExceptionally(e);
+            return f;
+        }
+        return submitted;
     }
 }

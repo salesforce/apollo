@@ -278,6 +278,17 @@
                 <version>${antlr4.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.jooq</groupId>
+                <artifactId>joou</artifactId>
+                <version>0.9.4</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jooq</groupId>
+                <artifactId>jool</artifactId>
+                <version>0.9.14</version>
+            </dependency>
+
             <!-- Test dependencies only below this line! -->
 
             <dependency>

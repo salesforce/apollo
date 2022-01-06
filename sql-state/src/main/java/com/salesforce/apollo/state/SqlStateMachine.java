@@ -46,6 +46,7 @@ import org.h2.util.CloseWatcher;
 import org.h2.util.DateTimeUtils;
 import org.h2.util.JdbcUtils;
 import org.h2.value.Value;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,7 +129,7 @@ public class SqlStateMachine {
         }
     }
 
-    public record Current(long height, Digest blkHash, int txn, Digest txnHash) {}
+    public record Current(ULong height, Digest blkHash, int txn, Digest txnHash) {}
 
     public static class Event {
         public final JsonNode body;
@@ -187,7 +188,7 @@ public class SqlStateMachine {
 
     public class TxnExec implements TransactionExecutor {
         @Override
-        public void beginBlock(long height, Digest hash) {
+        public void beginBlock(ULong height, Digest hash) {
             SqlStateMachine.this.beginBlock(height, hash);
         }
 
@@ -217,7 +218,7 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void genesis(long height, Digest hash, List<Transaction> initialization) {
+        public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
             begin(height, hash);
             withContext(() -> {
                 initializeState();
@@ -353,7 +354,7 @@ public class SqlStateMachine {
         trampoline.deregister(discriminator);
     }
 
-    public BiConsumer<Long, CheckpointState> getBootstrapper() {
+    public BiConsumer<ULong, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
             try (java.sql.Statement statement = connection().createStatement()) {
@@ -380,7 +381,7 @@ public class SqlStateMachine {
         };
     }
 
-    public Function<Long, File> getCheckpointer() {
+    public Function<ULong, File> getCheckpointer() {
         return height -> {
             String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
             try (java.sql.Statement statement = connection().createStatement()) {
@@ -711,12 +712,12 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void begin(long height, Digest blkHash) {
+    private void begin(ULong height, Digest blkHash) {
         final var session = getSession();
         if (session == null) {
             return;
         }
-        session.getRandom().setSeed(new DigestHasher(blkHash, height).identityHash());
+        session.getRandom().setSeed(new DigestHasher(blkHash, height.longValue()).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
             secureEntropy.setSeed(blkHash.getBytes());
@@ -728,7 +729,7 @@ public class SqlStateMachine {
         clock.incrementHeight();
     }
 
-    private void beginBlock(long height, Digest hash) {
+    private void beginBlock(ULong height, Digest hash) {
         begin(height, hash);
         withContext(() -> {
             updateCurrent(height, hash, -1, Digest.NONE);
@@ -966,11 +967,11 @@ public class SqlStateMachine {
         }
     }
 
-    private void updateCurrent(long height, Digest blkHash, int txn, Digest txnHash) {
+    private void updateCurrent(ULong height, Digest blkHash, int txn, Digest txnHash) {
         try {
             execute(UPDATE_CURRENT, exec -> {
                 try {
-                    exec.setLong(1, height);
+                    exec.setLong(1, height.longValue());
                     exec.setString(2, QualifiedBase64.qb64(blkHash));
                     exec.setLong(3, txn);
                     exec.setString(4, QualifiedBase64.qb64(txnHash));

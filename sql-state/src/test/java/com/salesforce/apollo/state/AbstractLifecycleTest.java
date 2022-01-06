@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -337,7 +338,7 @@ abstract public class AbstractLifecycleTest {
     private TransactionExecutor wrap(SigningMember m, SqlStateMachine up) {
         return new TransactionExecutor() {
             @Override
-            public void beginBlock(long height, Digest hash) {
+            public void beginBlock(ULong height, Digest hash) {
                 blocks.get(m.getId()).add(hash);
                 up.getExecutor().beginBlock(height, hash);
             }
@@ -349,14 +350,14 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void genesis(long height, Digest hash, List<Transaction> initialization) {
+            public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
                 blocks.get(m.getId()).add(hash);
                 up.getExecutor().genesis(height, hash, initialization);
             }
         };
     }
 
-    private Function<Long, File> wrap(SqlStateMachine up) {
+    private Function<ULong, File> wrap(SqlStateMachine up) {
         final var checkpointer = up.getCheckpointer();
         return l -> {
             try {
