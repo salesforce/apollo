@@ -14,7 +14,6 @@ import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLType;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -57,81 +56,47 @@ import liquibase.LabelExpression;
  */
 public class Mutator {
     public static class BatchBuilder {
-
-        public class Completion<Result> {
-            public BatchBuilder andThen(@SuppressWarnings("rawtypes") CompletableFuture processor) {
-                completions.add(processor);
-                return BatchBuilder.this;
-            }
-
-            public BatchBuilder discard() {
-                completions.add(null);
-                return BatchBuilder.this;
-            }
-        }
-
-        private final BatchedTransaction.Builder   batch       = BatchedTransaction.newBuilder();
-        @SuppressWarnings("rawtypes")
-        private final ArrayList<CompletableFuture> completions = new ArrayList<>();
-        private final Session                      session;
+        private final BatchedTransaction.Builder batch = BatchedTransaction.newBuilder();
+        private final Session                    session;
 
         public BatchBuilder(Session session) {
             this.session = session;
         }
 
-        public Completion<int[]> execute(BatchUpdate update) {
+        public BatchBuilder execute(BatchUpdate update) {
             batch.addTransactions(Txn.newBuilder().setBatchUpdate(update).build());
-            return new Completion<>();
+            return this;
         }
 
-        public Completion<CallResult> execute(Call call) {
+        public BatchBuilder execute(Call call) {
             batch.addTransactions(Txn.newBuilder().setCall(call).build());
-            return new Completion<>();
+            return this;
         }
 
-        public Completion<Boolean> execute(Migration migration) {
+        public BatchBuilder execute(Migration migration) {
             batch.addTransactions(Txn.newBuilder().setMigration(migration).build());
-            return new Completion<>();
+            return this;
         }
 
-        public <T> Completion<T> execute(Script script) {
+        public BatchBuilder execute(Script script) {
             batch.addTransactions(Txn.newBuilder().setScript(script).build());
-            return new Completion<>();
+            return this;
         }
 
-        public Completion<List<ResultSet>> execute(Statement statement) {
+        public BatchBuilder execute(Statement statement) {
             batch.addTransactions(Txn.newBuilder().setStatement(statement).build());
-            return new Completion<>();
+            return this;
         }
 
         @SuppressWarnings("unchecked")
-        public <T> CompletableFuture<T> submit(Executor exec, Duration timeout,
-                                               ScheduledExecutorService scheduler) throws InvalidTransaction {
-            return (CompletableFuture<T>) session.submit(exec, build(), timeout, scheduler)
-                                                 .whenComplete((r, t) -> process(r, t));
+        public CompletableFuture<List<?>> submit(Executor exec, Duration timeout,
+                                                 ScheduledExecutorService scheduler) throws InvalidTransaction {
+            CompletableFuture<?> submit = session.submit(exec, build(), timeout, scheduler);
+            return (CompletableFuture<List<?>>) submit;
         }
 
         private Message build() {
             return batch.build();
-        }
-
-        private <T> void process(T r, Throwable t) {
-            if (t instanceof BatchedTransactionException) {
-                BatchedTransactionException e = (BatchedTransactionException) t;
-                completions.get(e.getIndex()).completeExceptionally(e.getCause());
-                return;
-            }
-            @SuppressWarnings("unchecked")
-            List<Object> results = (List<Object>) r;
-            assert results.size() == completions.size() : "Results: " + results.size() + " does not match Completions: "
-            + completions.size();
-            for (int i = 0; i < results.size(); i++) {
-                @SuppressWarnings("unchecked")
-                CompletableFuture<Object> futureSailor = completions.get(i);
-                if (futureSailor != null) {
-                    futureSailor.complete(results.get(i));
-                }
-            }
         }
     }
 
