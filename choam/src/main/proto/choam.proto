@@ -52,9 +52,9 @@ message Block {
 }
 
 message Header {
-    int64 height = 1; 
-    int64 lastCheckpoint = 2;
-    int64 lastReconfig = 3;
+    uint64 height = 1; 
+    uint64 lastCheckpoint = 2;
+    uint64 lastReconfig = 3;
     utils.Digeste lastCheckpointHash = 4;
     utils.Digeste lastReconfigHash = 5;
     utils.Digeste previous = 6;
@@ -144,7 +144,7 @@ message ByteTransaction {
 }
 
 message CheckpointProcessing {
-    int64 checkpoint = 1;
+    uint64 checkpoint = 1;
 }
 
 message Validate {  
@@ -174,7 +174,7 @@ message Validations {
 message Synchronize {
     utils.Digeste context = 1;
     utils.Digeste from = 2;
-    int64 height = 3;
+    uint64 height = 3;
 }
 
 message Initial {
@@ -186,8 +186,8 @@ message Initial {
 
 message BlockReplication {
     utils.Digeste context = 1;
-    int64 from = 2;
-    int64 to = 3;
+    uint64 from = 2;
+    uint64 to = 3;
     utils.Biff blocksBff = 4;
 }
 
@@ -197,7 +197,7 @@ message Blocks {
 
 message CheckpointReplication {
     utils.Digeste context = 1;
-    int64 checkpoint = 2;
+    uint64 checkpoint = 2;
     utils.Biff checkpointSegments = 3;
 }
 
