@@ -148,10 +148,10 @@ public class TestCHOAM {
 
     private static final int CARDINALITY = 5;
 
-    private Map<Digest, List<Digest>> blocks;
-    private Map<Digest, CHOAM>        choams;
-    private List<SigningMember>       members;
-    private Map<Digest, Router>       routers;
+    private Map<Digest, AtomicInteger> blocks;
+    private Map<Digest, CHOAM>         choams;
+    private List<SigningMember>        members;
+    private Map<Digest, Router>        routers;
 
     private Map<Digest, List<Transaction>> transactions;
 
@@ -221,11 +221,13 @@ public class TestCHOAM {
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            var recording = new AtomicInteger();
+            blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
                 public void beginBlock(ULong height, Digest hash) {
-                    blocks.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(hash);
+                    recording.incrementAndGet();
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
@@ -254,11 +256,11 @@ public class TestCHOAM {
         Utils.waitForCondition(300_000, 1_000,
                                () -> blocks.values()
                                            .stream()
-                                           .mapToInt(l -> l.size())
+                                           .mapToInt(l -> l.get())
                                            .filter(s -> s >= expected)
                                            .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).get());
     }
 
     @Test
@@ -270,11 +272,11 @@ public class TestCHOAM {
         Utils.waitForCondition(30_000, 1_000,
                                () -> blocks.values()
                                            .stream()
-                                           .mapToInt(l -> l.size())
+                                           .mapToInt(l -> l.get())
                                            .filter(s -> s >= expected)
                                            .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).get());
 
         final Duration timeout = Duration.ofSeconds(3);
 
@@ -325,11 +327,11 @@ public class TestCHOAM {
         Utils.waitForCondition(30_000, 1_000,
                                () -> blocks.values()
                                            .stream()
-                                           .mapToInt(l -> l.size())
+                                           .mapToInt(l -> l.get())
                                            .filter(s -> s >= expected)
                                            .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.size()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).size());
+        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
+                     "Failed: " + blocks.get(members.get(0).getId()).get());
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();

@@ -21,7 +21,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -173,7 +172,7 @@ abstract public class AbstractLifecycleTest {
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    protected Map<Digest, List<Digest>>          blocks;
+    protected Map<Digest, AtomicInteger>         blocks;
     protected CompletableFuture<Boolean>         checkpointOccurred;
     protected Map<Digest, CHOAM>                 choams;
     protected List<SigningMember>                members;
@@ -283,7 +282,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject) {
-        blocks.put(m.getId(), new CopyOnWriteArrayList<Digest>());
+        blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -339,7 +338,7 @@ abstract public class AbstractLifecycleTest {
         return new TransactionExecutor() {
             @Override
             public void beginBlock(ULong height, Digest hash) {
-                blocks.get(m.getId()).add(hash);
+                blocks.get(m.getId()).incrementAndGet();
                 up.getExecutor().beginBlock(height, hash);
             }
 
@@ -351,7 +350,7 @@ abstract public class AbstractLifecycleTest {
 
             @Override
             public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
-                blocks.get(m.getId()).add(hash);
+                blocks.get(m.getId()).incrementAndGet();
                 up.getExecutor().genesis(height, hash, initialization);
             }
         };

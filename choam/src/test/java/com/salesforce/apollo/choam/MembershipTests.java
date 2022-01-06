@@ -16,7 +16,6 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -120,7 +119,7 @@ public class MembershipTests {
         }
     }
 
-    private Map<Digest, List<Digest>>      blocks;
+    private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private Map<Digest, Router>            routers;
@@ -148,26 +147,20 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         final int expected = 3;
 
-        Utils.waitForCondition(30_000, 1000,
-                               () -> blocks.entrySet()
-                                           .stream()
-                                           .filter(e -> !e.getKey().equals(testSubject.getId()))
-                                           .map(e -> e.getValue())
-                                           .mapToInt(l -> l.size())
-                                           .filter(s -> s >= expected)
-                                           .count() == choams.size() - 1);
-        assertTrue(blocks.entrySet()
-                         .stream()
-                         .filter(e -> !e.getKey().equals(testSubject.getId()))
-                         .map(e -> e.getValue())
-                         .mapToInt(l -> l.size())
-                         .filter(s -> s >= expected)
-                         .count() == choams.size() - 1,
+        var success = Utils.waitForCondition(30_000, 1000,
+                                             () -> blocks.entrySet()
+                                                         .stream()
+                                                         .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                         .map(e -> e.getValue())
+                                                         .mapToInt(l -> l.get())
+                                                         .filter(s -> s >= expected)
+                                                         .count() == choams.size() - 1);
+        assertTrue(success,
                    "Failed: " + blocks.entrySet()
                                       .stream()
                                       .filter(e -> !e.getKey().equals(testSubject.getId()))
                                       .map(e -> e.getValue())
-                                      .map(l -> l.size())
+                                      .map(l -> l.get())
                                       .toList());
 
         final Duration timeout = Duration.ofSeconds(2);
@@ -188,7 +181,6 @@ public class MembershipTests {
         }
 
         transactioneers.forEach(e -> e.start());
-        boolean success;
         try {
             success = countdown.await(30, TimeUnit.SECONDS);
         } finally {
@@ -196,13 +188,13 @@ public class MembershipTests {
         }
         assertTrue(success,
                    "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() >= max).count());
-        var target = blocks.values().stream().mapToInt(l -> l.size()).max().getAsInt() + 1;
+        var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt() + 1;
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId()).size() >= target);
-        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).size() + " expected >= "
-        + blocks.get(members.get(0).getId()).size());
+        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId()).get() >= target);
+        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).get() + " expected >= "
+        + blocks.get(members.get(0).getId()).get());
 
     }
 
@@ -258,13 +250,13 @@ public class MembershipTests {
         }));
         Executor clients = Executors.newCachedThreadPool();
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            List<Digest> recording = new CopyOnWriteArrayList<>();
+            var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
 
                 @Override
                 public void beginBlock(ULong height, Digest hash) {
-                    recording.add(hash);
+                    recording.incrementAndGet();
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })
