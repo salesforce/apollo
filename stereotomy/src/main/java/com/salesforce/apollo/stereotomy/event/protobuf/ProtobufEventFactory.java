@@ -227,7 +227,7 @@ public class ProtobufEventFactory implements EventFactory {
     private InteractionSpec interactionSpec(InteractionSpecification specification) {
 
         Header header = Header.newBuilder()
-                              .setSequenceNumber(specification.getSequenceNumber())
+                              .setSequenceNumber(specification.getSequenceNumber().longValue())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
                               .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                        .name()))
@@ -252,7 +252,7 @@ public class ProtobufEventFactory implements EventFactory {
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
         var header = Header.newBuilder()
-                           .setSequenceNumber(specification.getSequenceNumber())
+                           .setSequenceNumber(specification.getSequenceNumber().longValue())
                            .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                     .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())

@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -125,7 +126,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public long getSequenceNumber() {
+        public ULong getSequenceNumber() {
             return getState().getSequenceNumber();
         }
 
@@ -495,7 +496,8 @@ public class StereotomyImpl implements Stereotomy {
         var seals = InteractionSpecification.newBuilder()
                                             .addAllSeals(Arrays.asList(EventSeal.construct(event.getIdentifier(),
                                                                                            event.hash(kerl.getDigestAlgorithm()),
-                                                                                           event.getSequenceNumber())));
+                                                                                           event.getSequenceNumber()
+                                                                                                .longValue())));
 
         // Interaction event with the seal
         var interaction = interaction(delegator, seals);
@@ -504,7 +506,8 @@ public class StereotomyImpl implements Stereotomy {
         var attachment = eventFactory.attachment(event,
                                                  new AttachmentImpl(EventSeal.construct(interaction.getIdentifier(),
                                                                                         interaction.hash(kerl.getDigestAlgorithm()),
-                                                                                        interaction.getSequenceNumber())));
+                                                                                        interaction.getSequenceNumber()
+                                                                                                   .longValue())));
 
         // Append the states - this is direct mode, all in our local KERL for now
         List<KeyState> states;

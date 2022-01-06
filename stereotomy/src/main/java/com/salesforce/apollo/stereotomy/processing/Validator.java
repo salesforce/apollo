@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,7 +93,8 @@ public interface Validator {
             if (event instanceof InceptionEvent) {
                 var icp = (InceptionEvent) ee;
 
-                this.validate(icp.getSequenceNumber() == 0, "inception events must have a sequence number of 0");
+                this.validate(icp.getSequenceNumber().equals(ULong.valueOf(0)),
+                              "inception events must have a sequence number of 0");
 
                 this.validateIdentifier(icp);
 
@@ -103,7 +105,7 @@ public interface Validator {
                 this.validate(!(state.isDelegated()) || rot instanceof DelegatedRotationEvent,
                               "delegated identifiers must use delegated rotation event type");
 
-                this.validate(rot.getSequenceNumber() > 0,
+                this.validate(rot.getSequenceNumber().compareTo(ULong.valueOf(0)) > 0,
                               "non-inception event must have a sequence number greater than 0 (s: %s)",
                               rot.getSequenceNumber());
 
@@ -133,7 +135,7 @@ public interface Validator {
         } else if (event instanceof InteractionEvent) {
             var ixn = (InteractionEvent) event;
 
-            this.validate(ixn.getSequenceNumber() > 0,
+            this.validate(ixn.getSequenceNumber().compareTo(ULong.valueOf(0)) > 0,
                           "non-inception event must have a sequence number greater than 0 (s: %s)",
                           ixn.getSequenceNumber());
 

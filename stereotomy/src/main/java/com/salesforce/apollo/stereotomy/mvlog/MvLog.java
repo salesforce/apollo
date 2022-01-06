@@ -190,7 +190,7 @@ public class MvLog implements KERL {
     }
 
     public static String receiptSequence(EventCoordinates event, EventCoordinates signer) {
-        return Long.toString(event.getSequenceNumber()) + ':' + signer.getSequenceNumber() + '.';
+        return event.getSequenceNumber().toString() + ':' + signer.getSequenceNumber() + '.';
     }
 
     private final DigestAlgorithm digestAlgorithm;

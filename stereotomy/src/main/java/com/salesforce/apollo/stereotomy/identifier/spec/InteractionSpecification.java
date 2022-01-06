@@ -11,6 +11,8 @@ import static java.util.Objects.requireNonNull;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.joou.ULong;
+
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -44,8 +46,8 @@ public class InteractionSpecification {
         }
 
         public InteractionSpecification build() {
-            return new InteractionSpecification(this.format, identifier, lastEvent.getSequenceNumber() + 1, lastEvent,
-                                                signer, seals, version, priorEventDigest);
+            return new InteractionSpecification(this.format, identifier, lastEvent.getSequenceNumber().add(1),
+                                                lastEvent, signer, seals, version, priorEventDigest);
         }
 
         @Override
@@ -142,16 +144,15 @@ public class InteractionSpecification {
     private final EventCoordinates previous;
     private final Digest           priorEventDigest;
     private final List<Seal>       seals;
-    private final long             sequenceNumber;
+    private final ULong            sequenceNumber;
     private final Signer           signer;
     private final Version          version;
 
-    public InteractionSpecification(Format format, Identifier identifier, long sequenceNumber,
-                                    EventCoordinates previous, Signer signer, List<Seal> seals, Version version,
-                                    Digest priorEventDigest) {
+    public InteractionSpecification(Format format, Identifier identifier, ULong uLong, EventCoordinates previous,
+                                    Signer signer, List<Seal> seals, Version version, Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
-        this.sequenceNumber = sequenceNumber;
+        this.sequenceNumber = uLong;
         this.previous = previous;
         this.signer = signer;
         this.seals = List.copyOf(seals);
@@ -179,7 +180,7 @@ public class InteractionSpecification {
         return seals;
     }
 
-    public long getSequenceNumber() {
+    public ULong getSequenceNumber() {
         return sequenceNumber;
     }
 

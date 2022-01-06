@@ -20,6 +20,10 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
+import java.math.BigInteger;
+
+import org.joou.ULong;
+
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -56,7 +60,8 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         if (split.length != 4) {
             throw new IllegalArgumentException("Invalid event coordinates: " + qb64);
         }
-        return new EventCoordinates(identifier(split[0]), Long.parseLong(split[1]), digest(split[2]), split[3]);
+        return new EventCoordinates(identifier(split[0]), ULong.valueOf(new BigInteger(split[1])), digest(split[2]),
+                                    split[3]);
     }
 
     public static Identifier identifier(Ident identifier) {

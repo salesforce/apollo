@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -137,7 +138,7 @@ public class StereotomyTests {
 
         // lastEstablishmentEvent
         assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
-        assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
+        assertEquals(ULong.valueOf(0), lastEstablishmentEvent.getSequenceNumber());
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent
@@ -197,7 +198,7 @@ public class StereotomyTests {
 
         // lastEstablishmentEvent
         assertEquals(identifier.getIdentifier(), lastEstablishmentEvent.getIdentifier());
-        assertEquals(0, lastEstablishmentEvent.getSequenceNumber());
+        assertEquals(ULong.valueOf(0), lastEstablishmentEvent.getSequenceNumber());
         assertEquals(lastEstablishmentEvent.hash(DigestAlgorithm.DEFAULT), identifier.getDigest());
 
         // lastEvent

@@ -61,7 +61,7 @@ abstract public class UniKERL implements KERL {
                           .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                           .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                           .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                           .and(COORDINATES.ILK.eq(coordinates.getIlk()))
                           .fetchOne();
         if (id == null) {
@@ -96,7 +96,7 @@ abstract public class UniKERL implements KERL {
                                 .from(COORDINATES)
                                 .where(COORDINATES.DIGEST.eq(prevCoords.getDigest().toDigeste().toByteArray()))
                                 .and(COORDINATES.IDENTIFIER.eq(preIdentifier))
-                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber()))
+                                .and(COORDINATES.SEQUENCE_NUMBER.eq(prevCoords.getSequenceNumber().longValue()))
                                 .and(COORDINATES.ILK.eq(prevCoords.getIlk()))
                                 .fetchOne();
         if (prev == null) {
@@ -129,7 +129,7 @@ abstract public class UniKERL implements KERL {
                                           .from(IDENTIFIER)
                                           .where(IDENTIFIER.PREFIX.eq(identBytes)))
                               .set(COORDINATES.ILK, event.getIlk())
-                              .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber())
+                              .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
                               .returningResult(COORDINATES.ID)
                               .fetchOne()
                               .value1();
@@ -212,7 +212,7 @@ abstract public class UniKERL implements KERL {
                    .on(COORDINATES.ID.eq(0L))
                    .whenNotMatchedThenInsert(COORDINATES.ID, COORDINATES.DIGEST, COORDINATES.IDENTIFIER,
                                              COORDINATES.SEQUENCE_NUMBER, COORDINATES.ILK)
-                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L, ecNone.getSequenceNumber(),
+                   .values(0L, ecNone.getDigest().toDigeste().toByteArray(), 0L, ecNone.getSequenceNumber().longValue(),
                            ecNone.getIlk())
                    .execute();
         });
@@ -248,9 +248,9 @@ abstract public class UniKERL implements KERL {
                   .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                   .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                   .and(COORDINATES.DIGEST.eq(coordinates.getPreviousEvent().getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .fetchOptional()
                   .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
                   .map(ke -> ke instanceof SealingEvent se ? se : null);
@@ -277,9 +277,9 @@ abstract public class UniKERL implements KERL {
                   .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                   .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                   .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .fetchOptional()
                   .map(r -> toKeyEvent(decompress(r.value1()), r.value2()));
     }
@@ -294,9 +294,9 @@ abstract public class UniKERL implements KERL {
                   .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
                   .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
                   .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                   .fetchOptional()
                   .map(r -> {
                       try {
