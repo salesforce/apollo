@@ -87,7 +87,7 @@ public class ShardedKERL extends UniKERL {
                                        new Object[] { event.getBytes(), event.getIlk(),
                                                       DigestAlgorithm.DEFAULT.digestCode() }));
         }
-        CompletableFuture<List<KeyState>> submitted;
+        CompletableFuture<List<?>> submitted;
         try {
             submitted = batch.submit(exec, timeout, scheduler).handle((a, t) -> Arrays.asList(states));
         } catch (InvalidTransaction e) {
@@ -95,6 +95,24 @@ public class ShardedKERL extends UniKERL {
             f.completeExceptionally(e);
             return f;
         }
-        return submitted;
+
+        return submitted.thenApply(results -> {
+            return results.stream()
+                          .map(result -> (CallResult) result)
+                          .map(cr -> cr.get(0))
+                          .map(o -> (byte[]) o)
+                          .map(b -> {
+                              try {
+                                  return new KeyStateImpl(keyStateOf(b));
+                              } catch (InvalidProtocolBufferException e) {
+                                  return (KeyState) null;
+                              }
+                          })
+                          .toList();
+        });
+    }
+
+    private com.salesfoce.apollo.stereotomy.event.proto.KeyState keyStateOf(byte[] b) throws InvalidProtocolBufferException {
+        return com.salesfoce.apollo.stereotomy.event.proto.KeyState.parseFrom(b);
     }
 }
