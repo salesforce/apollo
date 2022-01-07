@@ -559,8 +559,9 @@ public class SqlStateMachine {
                                                                                                       .getArgs())) {
                     setArgument(exec, i++, v);
                 }
-                for (int p = 0; p < call.getOutParametersCount(); p++) {
-                    exec.registerOutParameter(p, call.getOutParameters(p));
+                int p = 1;
+                for (int t : call.getOutParametersList()) {
+                    exec.registerOutParameter(p++, t);
                 }
                 List<Object> out = new ArrayList<>();
 
@@ -578,6 +579,10 @@ public class SqlStateMachine {
                     log.debug("Invalid statement execution enum: {}", call.getExecution());
                     return new CallResult(out, results);
                 }
+                for (int j = 1; j <= call.getOutParametersCount(); j++) {
+                    out.add(exec.getObject(j));
+                }
+                
                 CachedRowSet rowset = factory.createCachedRowSet();
 
                 rowset.populate(exec.getResultSet());
@@ -587,9 +592,6 @@ public class SqlStateMachine {
                     rowset = factory.createCachedRowSet();
                     rowset.populate(exec.getResultSet());
                     results.add(rowset);
-                }
-                for (int j = 0; j < call.getOutParametersCount(); j++) {
-                    out.add(exec.getObject(j));
                 }
                 return new CallResult(out, results);
             } finally {
