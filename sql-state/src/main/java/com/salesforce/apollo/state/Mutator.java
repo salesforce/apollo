@@ -95,7 +95,7 @@ public class Mutator {
             return (CompletableFuture<List<?>>) submit;
         }
 
-        private Message build() {
+        Message build() {
             return batch.build();
         }
     }
@@ -247,6 +247,7 @@ public class Mutator {
         StreamTransfer tfr = new StreamTransfer(h2Session);
         return Call.newBuilder()
                    .setExecution(execution)
+                   .addAllOutParameters(outParameters.stream().map(t -> t.getVendorTypeNumber()).toList())
                    .setSql(sql)
                    .setArgs(Arguments.newBuilder()
                                      .setVersion(tfr.getVersion())
