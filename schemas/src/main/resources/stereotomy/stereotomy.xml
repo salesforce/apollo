@@ -14,7 +14,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="identifier_pkey" />
             </column>
-            <column name="prefix" type="VARBINARY">
+            <column name="prefix" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -32,13 +32,13 @@
             <column name="identifier" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="digest" type="VARBINARY">
+            <column name="digest" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
             <column name="sequence_number" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="ilk" type="VARCHAR(3)">
+            <column name="ilk" type="CHARACTER VARYING(3)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -72,13 +72,15 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-            <column name="digest" type="VARBINARY">
+            <column name="digest" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
-            <column name="content" type="VARBINARY">
+            <column name="content" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
-            <column name="current_state" type="VARBINARY" />
+            <column name="current_state" type="BINARY VARYING" >
+                <constraints nullable="true" />
+            </column>
         </createTable>
 
         <addForeignKeyConstraint
@@ -124,7 +126,7 @@
             <column name="witness" type="INT">
                 <constraints nullable="false"  primaryKey="true"/>
             </column>
-            <column name="signature" type="VARBINARY">
+            <column name="signature" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -146,7 +148,7 @@
             <column name="for" type="INT8">
                 <constraints nullable="false" />
             </column>
-            <column name="seal" type="VARBINARY">
+            <column name="seal" type="BINARY VARYING">
                 <constraints nullable="false" />
             </column>
         </createTable>
