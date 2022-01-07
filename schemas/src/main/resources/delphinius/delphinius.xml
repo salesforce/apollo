@@ -15,7 +15,7 @@
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="namespace_pkey" />
             </column>
-            <column name="name" type="CHARACTER VARYING(1024)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -37,7 +37,7 @@
             <column name="namespace" type="INT8" defaultValue="0">
                 <constraints nullable="false" />
             </column>
-            <column name="name" type="CHARACTER VARYING(1024)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
         </createTable>
@@ -68,7 +68,7 @@
             <column name="namespace" type="INT8" defaultValue="0">
                 <constraints nullable="false" />
             </column>
-            <column name="name" type="CHARACTER VARYING(1024)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
             <column name="relation" type="INT8">
@@ -115,7 +115,7 @@
             <column name="namespace" type="INT8" defaultValue="0">
                 <constraints nullable="false" />
             </column>
-            <column name="name" type="CHARACTER VARYING(1024)">
+            <column name="name" type="VARCHAR(1024)">
                 <constraints nullable="false" />
             </column>
             <column name="relation" type="INT8" defaultValue="0">

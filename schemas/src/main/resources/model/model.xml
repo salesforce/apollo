@@ -22,10 +22,11 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-            <column name="lookup" type="CHARACTER VARYING(1024)">
-                <constraints nullable="false" />
+            <column name="key" type="VARCHAR(1024)">
+                <constraints nullable="false"
+                    primaryKey="true" />
             </column>
-            <column name="uri" type="CHARACTER VARYING(4096)">
+            <column name="uri" type="VARCHAR(4096)">
                 <constraints nullable="false" />
             </column>
         </createTable>

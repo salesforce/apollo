@@ -152,7 +152,7 @@
                         <dependency>
                             <groupId>com.h2database</groupId>
                             <artifactId>h2</artifactId>
-                            <version>${h2.version}</version>
+                            <version>${h2.gen.version}</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -163,7 +163,7 @@
                         <dependency>
                             <groupId>com.h2database</groupId>
                             <artifactId>h2</artifactId>
-                            <version>${h2.version}</version>
+                            <version>${h2.gen.version}</version>
                         </dependency>
                         <dependency>
                             <groupId>com.fasterxml.jackson.core</groupId>
@@ -176,8 +176,7 @@
                             <driver>org.h2.Driver</driver>
                             <url>${h2.db.url}</url>
                         </jdbc>
-                        
-                        <generator> 
+                        <generator>
                             <database>
                                 <name>org.jooq.meta.h2.H2Database</name>
                                 <includes>.*</includes>
