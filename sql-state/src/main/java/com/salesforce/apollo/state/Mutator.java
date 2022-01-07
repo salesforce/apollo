@@ -95,7 +95,7 @@ public class Mutator {
             return (CompletableFuture<List<?>>) submit;
         }
 
-        Message build() {
+        BatchedTransaction build() {
             return batch.build();
         }
     }

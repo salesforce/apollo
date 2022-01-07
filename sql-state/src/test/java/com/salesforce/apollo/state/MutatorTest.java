@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.sql.JDBCType;
 import java.sql.Types;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,7 @@ import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.Session;
@@ -100,5 +102,27 @@ public class MutatorTest {
         CallResult result = (CallResult) success.get(1, TimeUnit.SECONDS);
         assertNotNull(result);
         assertEquals(Integer.valueOf(0x1637), result.get(0));
+
+        var batch = mutator.batch();
+        for (int i = 0; i < 5; i++) {
+            batch.execute(call);
+        }
+        batch.build();
+
+        success = new CompletableFuture<>();
+        executor.execute(2, Digest.NONE,
+                         Transaction.newBuilder()
+                                    .setContent(Txn.newBuilder().setBatched(batch.build()).build().toByteString())
+                                    .build(),
+                         success);
+
+        var batchResult = (List<?>) success.get(1, TimeUnit.SECONDS);
+        assertNotNull(batchResult);
+        assertEquals(5, batchResult.size());
+        batchResult.stream()
+                   .map(o -> (CallResult) o)
+                   .map(o -> o.get(0))
+                   .mapToInt(o -> (int) o)
+                   .forEach(i -> assertEquals(TEST_VALUE, i));
     }
 }
