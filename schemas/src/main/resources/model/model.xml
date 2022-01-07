@@ -22,7 +22,7 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-            <column name="key" type="VARCHAR(1024)">
+            <column name="lookup" type="VARCHAR(1024)">
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>

@@ -10,8 +10,8 @@
 
         <createTable tableName="namespace"
             schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="namespace_pkey" />
             </column>
@@ -29,8 +29,8 @@
 
         <createTable tableName="relation"
             schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="relation_pkey" />
             </column>
@@ -60,8 +60,8 @@
 
         <createTable tableName="object"
             schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="object_pkey" />
             </column>
@@ -107,8 +107,8 @@
 
         <createTable tableName="subject"
             schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="subject_pkey" />
             </column>
@@ -181,8 +181,8 @@
 
         <createTable tableName="edge"
             schemaName="delphinius">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="edge_pkey" />
             </column>

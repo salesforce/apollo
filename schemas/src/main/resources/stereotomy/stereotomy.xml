@@ -9,8 +9,8 @@
 
         <createTable tableName="identifier"
             schemaName="stereotomy">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="identifier_pkey" />
             </column>
@@ -24,8 +24,8 @@
 
         <createTable tableName="coordinates"
             schemaName="stereotomy">
-            <column autoIncrement="true" generationType="ALWAYS"
-                name="id" type="INT8">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
                 <constraints nullable="false"
                     primaryKey="true" primaryKeyName="coordinates_pkey" />
             </column>
@@ -119,10 +119,12 @@
         <createTable tableName="receipt"
             schemaName="stereotomy">
             <column name="for" type="INT8">
-                <constraints nullable="false" primaryKey="true"/>
+                <constraints nullable="false"
+                    primaryKey="true" />
             </column>
             <column name="witness" type="INT">
-                <constraints nullable="false"  primaryKey="true"/>
+                <constraints nullable="false"
+                    primaryKey="true" />
             </column>
             <column name="signature" type="VARBINARY">
                 <constraints nullable="false" />
@@ -159,8 +161,7 @@
             referencedColumnNames="coordinates"
             referencedTableSchemaName="stereotomy" />
 
-        <addUniqueConstraint
-            columnNames="for, seal"
+        <addUniqueConstraint columnNames="for, seal"
             tableName="attachment" schemaName="stereotomy" />
 
         <createIndex tableName="attachment"
