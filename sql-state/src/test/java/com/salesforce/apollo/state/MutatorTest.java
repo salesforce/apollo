@@ -20,11 +20,9 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.state.proto.Batch;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.Session;
@@ -51,7 +49,7 @@ public class MutatorTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:smokin;DATABASE_TO_UPPER=TRUE", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        executor.genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Migration migration = Migration.newBuilder()
                                        .setUpdate(Mutator.changeLog(MigrationTest.BOOK_RESOURCE_PATH,
@@ -125,4 +123,5 @@ public class MutatorTest {
                    .mapToInt(o -> (int) o)
                    .forEach(i -> assertEquals(TEST_VALUE, i));
     }
+
 }

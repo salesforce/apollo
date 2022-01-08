@@ -108,9 +108,6 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
-    /**
-     * 
-     */
     private static final String SQL_STATE_INTERNAL = "/sql-state/internal.yml";
 
     public static class CallResult {
@@ -218,11 +215,11 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
-            begin(height, hash);
+        public void genesis(Digest hash, List<Transaction> initialization) {
+            begin(ULong.valueOf(0), hash);
             withContext(() -> {
                 initializeState();
-                updateCurrent(height, hash, -1, Digest.NONE);
+                updateCurrent(ULong.valueOf(0), hash, -1, Digest.NONE);
             });
             int i = 0;
             for (Transaction txn : initialization) {
@@ -582,7 +579,7 @@ public class SqlStateMachine {
                 for (int j = 1; j <= call.getOutParametersCount(); j++) {
                     out.add(exec.getObject(j));
                 }
-                
+
                 CachedRowSet rowset = factory.createCachedRowSet();
 
                 rowset.populate(exec.getResultSet());

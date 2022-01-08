@@ -416,9 +416,9 @@ public class CHOAMTest {
                                    }
 
                                    @Override
-                                   public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
+                                   public void genesis(Digest hash, List<Transaction> initialization) {
                                        blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
-                                       up.getExecutor().genesis(height, hash, initialization);
+                                       up.getExecutor().genesis(hash, initialization);
                                    }
                                })
                                .build(),

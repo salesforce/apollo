@@ -42,7 +42,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
 
@@ -75,7 +75,7 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.connection();
         SqlStateMachine.publish(connection, "test", json);
@@ -112,7 +112,7 @@ public class UpdaterTest {
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
 
-        executor.genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();

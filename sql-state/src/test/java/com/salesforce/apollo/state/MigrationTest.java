@@ -59,7 +59,7 @@ public class MigrationTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_migration-rollback", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        executor.genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Migration migration = Migration.newBuilder().setTag("test-1").build();
         CompletableFuture<Object> success = new CompletableFuture<>();
@@ -138,7 +138,7 @@ public class MigrationTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_migration-update", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        executor.genesis(ULong.valueOf(0), DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Migration migration = Migration.newBuilder()
                                        .setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT))

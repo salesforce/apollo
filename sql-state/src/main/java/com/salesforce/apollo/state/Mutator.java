@@ -205,6 +205,10 @@ public class Mutator {
         return ByteString.copyFrom(baos.toByteArray());
     }
 
+    public static Migration update(ChangeLog changeLog) {
+        return Migration.newBuilder().setUpdate(changeLog).build();
+    }
+
     private final org.h2.engine.Session h2Session;
 
     private final Session session;
@@ -298,8 +302,8 @@ public class Mutator {
         return session.submit(exec, Txn.newBuilder().setCall(call).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<List<ResultSet>> execute(Executor exec, Migration migration, Duration timeout,
-                                                      ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public CompletableFuture<Boolean> execute(Executor exec, Migration migration, Duration timeout,
+                                              ScheduledExecutorService scheduler) throws InvalidTransaction {
         return session.submit(exec, Txn.newBuilder().setMigration(migration).build(), timeout, scheduler);
     }
 

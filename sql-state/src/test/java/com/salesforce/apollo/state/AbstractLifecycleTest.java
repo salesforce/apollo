@@ -349,9 +349,9 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void genesis(ULong height, Digest hash, List<Transaction> initialization) {
+            public void genesis(Digest hash, List<Transaction> initialization) {
                 blocks.get(m.getId()).incrementAndGet();
-                up.getExecutor().genesis(height, hash, initialization);
+                up.getExecutor().genesis(hash, initialization);
             }
         };
     }

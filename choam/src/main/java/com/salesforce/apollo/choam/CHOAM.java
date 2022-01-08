@@ -246,7 +246,7 @@ public class CHOAM {
         @SuppressWarnings("rawtypes")
         void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
-        default void genesis(ULong height, Digest hash, List<Transaction> initialization) {
+        default void genesis(Digest hash, List<Transaction> initialization) {
         }
     }
 
@@ -575,12 +575,12 @@ public class CHOAM {
         return members.stream().collect(Collectors.toMap(m -> ring0.hash(m), m -> m));
     }
 
-    public static List<Transaction> toGenesisData(List<? super Message> initializationData) {
+    public static List<Transaction> toGenesisData(List<? extends Message> initializationData) {
         return toGenesisData(initializationData, DigestAlgorithm.DEFAULT, SignatureAlgorithm.DEFAULT);
     }
 
-    public static List<Transaction> toGenesisData(List<? super Message> initializationData, DigestAlgorithm digestAlgo,
-                                                  SignatureAlgorithm sigAlgo) {
+    public static List<Transaction> toGenesisData(List<? extends Message> initializationData,
+                                                  DigestAlgorithm digestAlgo, SignatureAlgorithm sigAlgo) {
         var source = digestAlgo.getOrigin();
         SignerImpl signer = new SignerImpl(sigAlgo.generateKeyPair().getPrivate());
         AtomicInteger nonce = new AtomicInteger();
@@ -827,7 +827,7 @@ public class CHOAM {
         }
 
         log.trace("Finished combined, head: {} height: {} on: {}", head.get().hash, head.get().height(),
-                 params.member());
+                  params.member());
     }
 
     private void combine(List<Msg> messages) {
@@ -966,7 +966,7 @@ public class CHOAM {
     private void genesisInitialization(final HashedBlock h, final List<Transaction> initialization) {
         log.info("Executing genesis initialization block: {} on: {}", h.hash, params.member());
         try {
-            params.processor().genesis(h.height(), h.hash, initialization);
+            params.processor().genesis(h.hash, initialization);
         } catch (Throwable t) {
             log.error("Exception processing genesis initialization block: {} on: {}", h.hash, params.member(), t);
         }
