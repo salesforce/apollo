@@ -17,8 +17,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.junit.jupiter.api.Test;
-
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
