@@ -42,7 +42,3 @@ I develop on an M1 MBP, and there is (currently) no _protoc-gen-grpc-java_ for t
 
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
-
-## Build Flapping
-Am I right? Still have a flapper or 2.  Apollogies.  Know that I hates it and am working to eliminate them.
-
