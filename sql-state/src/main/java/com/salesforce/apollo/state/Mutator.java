@@ -8,6 +8,7 @@ package com.salesforce.apollo.state;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -64,34 +66,35 @@ public class Mutator {
         }
 
         public BatchBuilder execute(BatchUpdate update) {
-            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update).build());
+            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update));
             return this;
         }
 
         public BatchBuilder execute(Call call) {
-            batch.addTransactions(Txn.newBuilder().setCall(call).build());
+            batch.addTransactions(Txn.newBuilder().setCall(call));
             return this;
         }
 
         public BatchBuilder execute(Migration migration) {
-            batch.addTransactions(Txn.newBuilder().setMigration(migration).build());
+            batch.addTransactions(Txn.newBuilder().setMigration(migration));
             return this;
         }
 
         public BatchBuilder execute(Script script) {
-            batch.addTransactions(Txn.newBuilder().setScript(script).build());
+            batch.addTransactions(Txn.newBuilder().setScript(script));
             return this;
         }
 
         public BatchBuilder execute(Statement statement) {
-            batch.addTransactions(Txn.newBuilder().setStatement(statement).build());
+            batch.addTransactions(Txn.newBuilder().setStatement(statement));
             return this;
         }
 
         @SuppressWarnings("unchecked")
         public CompletableFuture<List<?>> submit(Executor exec, Duration timeout,
                                                  ScheduledExecutorService scheduler) throws InvalidTransaction {
-            CompletableFuture<?> submit = session.submit(exec, build(), timeout, scheduler);
+            CompletableFuture<?> submit = session.submit(exec, Txn.newBuilder().setBatched(build()).build(), timeout,
+                                                         scheduler);
             return (CompletableFuture<List<?>>) submit;
         }
 
@@ -112,7 +115,7 @@ public class Mutator {
         }
 
         public BatchedTransactionException(int index, Throwable cause) {
-            this(index, null, cause);
+            this(index, "Exception in " + index, cause);
         }
 
         public int getIndex() {
@@ -167,9 +170,18 @@ public class Mutator {
         return changeLog(resources, root, context, labels).setCount(count).build();
     }
 
+    public static ChangeLog changeLog(int count, Map<Path, URL> resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
+    }
+
     public static ChangeLog changeLog(int count, Path resources, String root, Contexts context,
                                       LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
+    }
+
+    public static ChangeLog changeLog(Map<Path, URL> resources, String root) {
+        return changeLog(resourcesFrom(resources), root, null, null).build();
     }
 
     public static ChangeLog changeLog(Path resources, String root) {
@@ -181,9 +193,35 @@ public class Mutator {
         return changeLog(resources, root, context, labels).setTag(tag).build();
     }
 
+    public static ChangeLog changeLog(String tag, Map<Path, URL> resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
+    }
+
     public static ChangeLog changeLog(String tag, Path resources, String root, Contexts context,
                                       LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
+    }
+
+    public static ByteString resourcesFrom(Map<Path, URL> resources) {
+        final var baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zs = new ZipOutputStream(baos)) {
+            resources.entrySet().forEach(entry -> {
+                ZipEntry zipEntry = new ZipEntry(entry.getKey().toString());
+                try {
+                    zs.putNextEntry(zipEntry);
+                    try (var is = entry.getValue().openStream()) {
+                        is.transferTo(zs);
+                    }
+                    zs.closeEntry();
+                } catch (IOException e) {
+                    throw new IllegalStateException("error creating entry: " + entry.getKey(), e);
+                }
+            });
+        } catch (IOException e) {
+            throw new IllegalStateException("error creating resources: " + resources, e);
+        }
+        return ByteString.copyFrom(baos.toByteArray());
     }
 
     public static ByteString resourcesFrom(Path sourceDirectory, FileVisitOption... options) {

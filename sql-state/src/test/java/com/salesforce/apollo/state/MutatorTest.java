@@ -46,7 +46,7 @@ public class MutatorTest {
 
     @Test
     public void smokin() throws Exception {
-        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:smokin;DATABASE_TO_UPPER=TRUE", new Properties(),
+        SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:smokin", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
         executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());

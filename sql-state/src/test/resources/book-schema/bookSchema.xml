@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+    <changeSet author="hhildebrand" id="test-1">
+        <sql>create schema if not exists test</sql>
+
+        <createTable tableName="books" schemaName="test">
+            <column name="id" type="INT">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+            <column name="title" type="varchar(50)">
+                <constraints nullable="false" />
+            </column>
+            <column name="author" type="varchar(50)">
+                <constraints nullable="false" />
+            </column>
+            <column name="price" type="float">
+                <constraints nullable="false" />
+            </column>
+            <column name="qty" type="int">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <rollback>
+            <sql>drop table test.books</sql>
+            <sql>drop schema test </sql>
+        </rollback>
+
+    </changeSet>
+</databaseChangeLog>

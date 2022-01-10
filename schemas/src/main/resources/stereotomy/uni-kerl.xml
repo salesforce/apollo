@@ -10,10 +10,6 @@
 			"com.salesforce.apollo.stereotomy.db.UniKERL.initializeKERL"
 		</sql>
 
-		<sql>call stereotomy.initialize()</sql>
-
-		<sql>drop alias stereotomy.initialize</sql>
-
 		<sql>create alias stereotomy.append for
 			"com.salesforce.apollo.stereotomy.db.UniKERL.appendEvent"
 		</sql>
@@ -21,6 +17,10 @@
         <sql>create alias stereotomy.appendAttachment for
             "com.salesforce.apollo.stereotomy.db.UniKERL.appendAttachment"
         </sql>
+
+        <sql>call stereotomy.initialize()</sql>
+
+        <sql>drop alias stereotomy.initialize</sql>
 
 	</changeSet>
 </databaseChangeLog>

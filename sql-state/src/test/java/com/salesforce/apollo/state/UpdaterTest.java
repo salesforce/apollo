@@ -80,16 +80,16 @@ public class UpdaterTest {
         Connection connection = updater.connection();
         SqlStateMachine.publish(connection, "test", json);
         Statement statement = connection.createStatement();
-        ResultSet events = statement.executeQuery("select * from APOLLO_INTERNAL.TRAMPOLINE");
+        ResultSet events = statement.executeQuery("select * from apollo_internal.trampoline ");
 
         assertTrue(events.next());
         assertFalse(events.next());
 
-        CallableStatement call = connection.prepareCall("call APOLLO_INTERNAL.PUBLISH(?1, ?2)");
+        CallableStatement call = connection.prepareCall("call apollo_internal.publish(?1, ?2)");
         call.setString(1, "test");
         call.setString(2, json);
         call.execute();
-        events = statement.executeQuery("select * from APOLLO_INTERNAL.TRAMPOLINE");
+        events = statement.executeQuery("select * from apollo_internal.trampoline");
         assertTrue(events.next());
         assertTrue(events.next());
         assertFalse(events.next());
@@ -116,7 +116,7 @@ public class UpdaterTest {
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();
-        ResultSet cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
+        ResultSet cb = statement.executeQuery("select * from apollo_internal.current");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(0, cb.getLong(2));
@@ -124,7 +124,7 @@ public class UpdaterTest {
         assertFalse(cb.next(), "Should be only 1 record");
 
         executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin());
-        cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
+        cb = statement.executeQuery("select * from apollo_internal.current");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(1, cb.getLong(2));

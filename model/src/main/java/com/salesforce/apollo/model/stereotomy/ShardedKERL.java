@@ -7,9 +7,8 @@
 package com.salesforce.apollo.model.stereotomy;
 
 import java.sql.Connection;
-import java.sql.Types;
+import java.sql.JDBCType;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -56,9 +55,8 @@ public class ShardedKERL extends UniKERL {
 
     @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
-        var call = mutator.call("{ ? = call stereotomy_kerl.append(?, ?, ?) }", Collections.singletonList(Types.BINARY),
-                                new Object[] { event.getBytes(), event.getIlk(),
-                                               DigestAlgorithm.DEFAULT.digestCode() });
+        var call = mutator.call("{ ? = call stereotomy.append(?, ?, ?) }", Collections.singletonList(JDBCType.BINARY),
+                                event.getBytes(), event.getIlk(), DigestAlgorithm.DEFAULT.digestCode());
         CompletableFuture<CallResult> submitted;
         try {
             submitted = mutator.execute(exec, call, timeout, scheduler);
@@ -67,7 +65,9 @@ public class ShardedKERL extends UniKERL {
             f.completeExceptionally(e);
             return f;
         }
-        return submitted.thenApply(callResult -> (byte[]) callResult.outValues.get(0)).thenApply(b -> {
+        return submitted.thenApply(callResult -> {
+            return (byte[]) callResult.outValues.get(0);
+        }).thenApply(b -> {
             try {
                 return b == null ? (KeyState) null : new KeyStateImpl(b);
             } catch (InvalidProtocolBufferException e) {
@@ -78,38 +78,32 @@ public class ShardedKERL extends UniKERL {
 
     @Override
     public CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments) {
-        KeyState[] states = new KeyState[events.size()];
-
         var batch = mutator.batch();
         for (KeyEvent event : events) {
-            batch.execute(mutator.call("{ ? = call stereotomy_kerl.append(?, ?, ?) }",
-                                       Collections.singletonList(Types.BINARY),
-                                       new Object[] { event.getBytes(), event.getIlk(),
-                                                      DigestAlgorithm.DEFAULT.digestCode() }));
+            batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
+                                       Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
+                                       DigestAlgorithm.DEFAULT.digestCode()));
         }
-        CompletableFuture<List<?>> submitted;
         try {
-            submitted = batch.submit(exec, timeout, scheduler).handle((a, t) -> Arrays.asList(states));
+            return batch.submit(exec, timeout, scheduler)
+                        .thenApply(results -> results.stream()
+                                                     .map(result -> (CallResult) result)
+                                                     .map(cr -> cr.get(0))
+                                                     .map(o -> (byte[]) o)
+                                                     .map(b -> {
+                                                         try {
+                                                             return new KeyStateImpl(keyStateOf(b));
+                                                         } catch (InvalidProtocolBufferException e) {
+                                                             return (KeyState) null;
+                                                         }
+                                                     })
+                                                     .toList());
         } catch (InvalidTransaction e) {
             var f = new CompletableFuture<List<KeyState>>();
             f.completeExceptionally(e);
             return f;
         }
 
-        return submitted.thenApply(results -> {
-            return results.stream()
-                          .map(result -> (CallResult) result)
-                          .map(cr -> cr.get(0))
-                          .map(o -> (byte[]) o)
-                          .map(b -> {
-                              try {
-                                  return new KeyStateImpl(keyStateOf(b));
-                              } catch (InvalidProtocolBufferException e) {
-                                  return (KeyState) null;
-                              }
-                          })
-                          .toList();
-        });
     }
 
     private com.salesfoce.apollo.stereotomy.event.proto.KeyState keyStateOf(byte[] b) throws InvalidProtocolBufferException {

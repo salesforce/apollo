@@ -9,7 +9,7 @@
     <name>Stereotomy: Identity and Key Management</name>
 
     <properties>
-        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</h2.db.url>
+        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
     </properties>
 
     <dependencies>
@@ -183,7 +183,7 @@
                                 <excludes></excludes>
                                 <schemata>
                                     <schema>
-                                        <inputSchema>stereotomy</inputSchema>
+                                        <inputSchema>STEREOTOMY</inputSchema>
                                     </schema>
                                 </schemata>
                             </database>

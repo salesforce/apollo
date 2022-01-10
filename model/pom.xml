@@ -22,6 +22,10 @@
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>stereotomy</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>delphinius</artifactId>
+        </dependency>
 
         <!-- Test only deps below this line -->
         <dependency>

@@ -53,7 +53,7 @@ public class TestUniKERL {
     @Test
     public void smoke() throws Exception {
         var factory = new ProtobufEventFactory();
-        final var url = "jdbc:h2:mem:test_engine-smoke;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        final var url = "jdbc:h2:mem:test_engine-smoke;DB_CLOSE_DELAY=-1";
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
         var database = new H2Database();

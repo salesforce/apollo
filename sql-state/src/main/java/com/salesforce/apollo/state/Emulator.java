@@ -9,8 +9,7 @@ package com.salesforce.apollo.state;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.sql.Connection;
-import java.util.Collections;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -113,14 +112,10 @@ public class Emulator {
         return ssm.newConnection();
     }
 
-    public void start() {
-        start(Collections.emptyList());
-    }
-
-    public void start(List<Txn> genesisTransactions) {
+    public void start(Txn... genesisTransactions) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        txnExec.genesis(hash.updateAndGet(d -> d.prefix(0)), CHOAM.toGenesisData(genesisTransactions));
+        txnExec.genesis(hash.updateAndGet(d -> d.prefix(0)), CHOAM.toGenesisData(Arrays.asList(genesisTransactions)));
     }
 }

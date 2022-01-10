@@ -398,6 +398,7 @@ public class StereotomyImpl implements Stereotomy {
         try {
             state = kerl.append(event).get();
         } catch (InterruptedException | ExecutionException e) {
+            log.warn("Unable to append inception event for identifier: {}", event.getIdentifier(), e);
             return Optional.empty();
         }
 
@@ -407,8 +408,8 @@ public class StereotomyImpl implements Stereotomy {
         }
         ControlledIdentifier cid = new ControlledIdentifierImpl(state);
 
-        log.info("New {} identifier: {} coordinates: {} cur key: {} next key: {}",
-                 spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getIdentifier(), cid.getCoordinates());
+        log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
+                 cid.getIdentifier(), cid.getCoordinates());
         return Optional.of(cid);
 
     }

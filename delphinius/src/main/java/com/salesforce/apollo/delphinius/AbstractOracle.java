@@ -44,25 +44,25 @@ abstract public class AbstractOracle implements Oracle {
 
     protected static final Edge                   A          = EDGE.as("A");
     protected static final Edge                   B          = EDGE.as("B");
-    protected static final Table<org.jooq.Record> candidates = DSL.table(DSL.name("candidates"));
-    protected static final Field<Long>            cChild     = DSL.field(DSL.name("candidates", "child"), Long.class);
-    protected static final Field<Long>            cParent    = DSL.field(DSL.name("candidates", "parent"), Long.class);
+    protected static final Table<org.jooq.Record> candidates = DSL.table(DSL.name("CANDIDATES"));
+    protected static final Field<Long>            cChild     = DSL.field(DSL.name("CANDIDATES", "CHILD"), Long.class);
+    protected static final Field<Long>            cParent    = DSL.field(DSL.name("CANDIDATES", "PARENT"), Long.class);
     protected static final Edge                   E          = EDGE.as("E");
     protected static final Logger                 log        = LoggerFactory.getLogger(AbstractOracle.class);
-    protected static final Name                   ROWZ       = DSL.name("rowz");
+    protected static final Name                   ROWZ       = DSL.name("ROZ");
     protected static final Table<Record>          rowzTable  = DSL.table(ROWZ);
     protected static final Table<Record>          s1         = rowzTable.as("S1");
-    protected static final Field<Long>            s1Child    = DSL.field(DSL.name("S1", "child"), Long.class);
-    protected static final Field<Long>            s1Parent   = DSL.field(DSL.name("S1", "parent"), Long.class);
+    protected static final Field<Long>            s1Child    = DSL.field(DSL.name("S1", "CHILD"), Long.class);
+    protected static final Field<Long>            s1Parent   = DSL.field(DSL.name("S1", "PARENT"), Long.class);
     protected static final Table<Record>          s2         = rowzTable.as("S2");
-    protected static final Field<Long>            s2Child    = DSL.field(DSL.name("S2", "child"), Long.class);
-    protected static final Field<Long>            s2Parent   = DSL.field(DSL.name("S2", "parent"), Long.class);
+    protected static final Field<Long>            s2Child    = DSL.field(DSL.name("S2", "CHILD"), Long.class);
+    protected static final Field<Long>            s2Parent   = DSL.field(DSL.name("S2", "PARENT"), Long.class);
     protected static final Table<Record>          s3         = rowzTable.as("S3");
-    protected static final Field<Long>            s3Child    = DSL.field(DSL.name("S3", "child"), Long.class);
-    protected static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "parent"), Long.class);
-    protected static final Field<Long>            sChild     = DSL.field(DSL.name("suspect", "child"), Long.class);
-    protected static final Field<Long>            sParent    = DSL.field(DSL.name("suspect", "parent"), Long.class);
-    protected static final Name                   suspect    = DSL.name("suspect");
+    protected static final Field<Long>            s3Child    = DSL.field(DSL.name("S3", "CHILD"), Long.class);
+    protected static final Field<Long>            s3Parent   = DSL.field(DSL.name("S3", "PARENT"), Long.class);
+    protected static final Field<Long>            sChild     = DSL.field(DSL.name("SUSPECT", "CHILD"), Long.class);
+    protected static final Field<Long>            sParent    = DSL.field(DSL.name("SUSPECT", "PARENT"), Long.class);
+    protected static final Name                   suspect    = DSL.name("SUSPECT");
 
     public static void addAssertion(Connection connection, String subjectNamespace, String subjectName,
                                     String subjectRelationNamespace, String subjectRelationName, String objectNamespace,
@@ -443,22 +443,22 @@ abstract public class AbstractOracle implements Oracle {
     }
 
     static SelectJoinStep<Record2<Long, Long>> grants(Long s, DSLContext ctx, Long o) throws SQLException {
-        Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("subject_id"))
+        Table<Record1<Long>> subject = ctx.select(EDGE.CHILD.as("SUBJECT_ID"))
                                           .from(EDGE)
                                           .where(EDGE.TYPE.eq(SUBJECT_TYPE))
                                           .and(EDGE.PARENT.eq(s))
-                                          .union(ctx.select(DSL.val(s).as("subject_id")))
+                                          .union(ctx.select(DSL.val(s).as("SUBJECT_ID")))
                                           .asTable();
-        Field<Long> subjectId = subject.field("subject_id", Long.class);
+        Field<Long> subjectId = subject.field("SUBJECT_ID", Long.class);
 
-        Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("object_id"))
+        Table<Record1<Long>> object = ctx.select(EDGE.CHILD.as("OBJECT_ID"))
                                          .from(EDGE)
                                          .where(EDGE.TYPE.eq(OBJECT_TYPE))
                                          .and(EDGE.PARENT.eq(o))
-                                         .union(DSL.select(DSL.val(o).as("object_id")))
+                                         .union(DSL.select(DSL.val(o).as("OBJECT_ID")))
                                          .asTable();
 
-        Field<Long> objectId = object.field("object_id", Long.class);
+        Field<Long> objectId = object.field("OBJECT_ID", Long.class);
 
         return ctx.select(subjectId, objectId)
                   .from(subject.crossJoin(object)
@@ -827,24 +827,24 @@ abstract public class AbstractOracle implements Oracle {
             }
         }
 
-        var subject = dslCtx.select(EDGE.PARENT.as("inferred"), EDGE.CHILD.as("direct"))
+        var subject = dslCtx.select(EDGE.PARENT.as("INFERRED"), EDGE.CHILD.as("DIRECT"))
                             .from(EDGE)
                             .where(EDGE.TYPE.eq(SUBJECT_TYPE))
                             .asTable("S");
 
-        var direct = subject.field("direct", Long.class);
-        var inferred = subject.field("inferred", Long.class);
+        var direct = subject.field("DIRECT", Long.class);
+        var inferred = subject.field("INFERRED", Long.class);
 
-        var o = dslCtx.select(EDGE.CHILD.as("object_id"))
+        var o = dslCtx.select(EDGE.CHILD.as("OBJECT_ID"))
                       .from(EDGE)
                       .where(EDGE.TYPE.eq(OBJECT_TYPE))
                       .and(EDGE.PARENT.eq(resolved.id()))
-                      .union(DSL.select(DSL.val(resolved.id()).as("object_id")))
+                      .union(DSL.select(DSL.val(resolved.id()).as("OBJECT_ID")))
                       .asTable();
-        var objectId = o.field("object_id", Long.class);
+        var objectId = o.field("OBJECT_ID", Long.class);
 
-        var relNs = NAMESPACE.as("relNs");
-        var subNs = NAMESPACE.as("subNs");
+        var relNs = NAMESPACE.as("REL_NS");
+        var subNs = NAMESPACE.as("SUB_NS");
 
         var base = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
                          .from(SUBJECT)
@@ -881,8 +881,8 @@ abstract public class AbstractOracle implements Oracle {
                 return Stream.empty();
             }
         }
-        var relNs = NAMESPACE.as("relNs");
-        var objNs = NAMESPACE.as("objNs");
+        var relNs = NAMESPACE.as("REL_NS");
+        var objNs = NAMESPACE.as("OBJ_NS");
         var query = dslCtx.selectDistinct(objNs.NAME, OBJECT.NAME, relNs.NAME, RELATION.NAME)
                           .from(OBJECT)
                           .join(objNs)
@@ -915,8 +915,8 @@ abstract public class AbstractOracle implements Oracle {
                 return Stream.empty();
             }
         }
-        var relNs = NAMESPACE.as("relNs");
-        var subNs = NAMESPACE.as("subNs");
+        var relNs = NAMESPACE.as("REL_NS");
+        var subNs = NAMESPACE.as("SUB_NS");
         var query = dslCtx.selectDistinct(subNs.NAME, SUBJECT.NAME, relNs.NAME, RELATION.NAME)
                           .from(SUBJECT)
                           .join(subNs)

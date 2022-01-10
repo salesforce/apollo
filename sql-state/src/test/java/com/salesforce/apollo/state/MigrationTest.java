@@ -41,7 +41,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 public class MigrationTest {
 
     public static final Path   BOOK_RESOURCE_PATH = Path.of("src", "test", "resources", "book-schema");
-    public static final String BOOK_SCHEMA_ROOT   = "bookSchema.yml";
+    public static final String BOOK_SCHEMA_ROOT   = "bookSchema.xml";
 
     public static List<Message> initializeBookSchema() {
         return Collections.singletonList(Txn.newBuilder()
@@ -71,7 +71,7 @@ public class MigrationTest {
 
         executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
 
-        migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml")).build();
+        migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
 
         success = new CompletableFuture<>();
         executor.execute(0, Digest.NONE,

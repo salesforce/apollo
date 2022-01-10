@@ -27,7 +27,7 @@ public class StereotomyUniKelTest extends StereotomyTests {
 
 
     void initializeKel() throws SQLException, LiquibaseException {
-        final var url = String.format("jdbc:h2:mem:test_engine-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+        final var url = String.format("jdbc:h2:mem:test_engine-%s;DB_CLOSE_DELAY=-1",
                                       Math.random());
         var connection = new JdbcConnection(url, new Properties(), "", "");
 

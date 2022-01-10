@@ -6,12 +6,21 @@
  */
 package com.salesforce.apollo.model;
 
+import static java.nio.file.Path.of;
+
+import java.net.URL;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
+import com.salesfoce.apollo.state.proto.Migration;
+import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.model.stereotomy.ShardedKERL;
+import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
@@ -22,11 +31,33 @@ import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
  */
 public class Node {
 
+    public static Txn boostrapMigration() {
+        Map<Path, URL> resources = new HashMap<>();
+        resources.put(of("/initialize.xml"), res("/initialize.xml"));
+        resources.put(of("/stereotomy/initialize.xml"), res("/stereotomy/initialize.xml"));
+        resources.put(of("/stereotomy/stereotomy.xml"), res("/stereotomy/stereotomy.xml"));
+        resources.put(of("/stereotomy/uni-kerl.xml"), res("/stereotomy/uni-kerl.xml"));
+        resources.put(of("/delphinius/initialize.xml"), res("/delphinius/initialize.xml"));
+        resources.put(of("/delphinius/delphinius.xml"), res("/delphinius/delphinius.xml"));
+        resources.put(of("/delphinius/delphinius-functions.xml"), res("/delphinius/delphinius-functions.xml"));
+        resources.put(of("/model/model.xml"), res("/model/model.xml"));
+
+        return Txn.newBuilder()
+                  .setMigration(Migration.newBuilder()
+                                         .setUpdate(Mutator.changeLog(resources, "/initialize.xml"))
+                                         .build())
+                  .build();
+    }
+
+    private static URL res(String resource) {
+        return Node.class.getResource(resource);
+    }
+
+    @SuppressWarnings("unused")
+    private final Stereotomy controller;
     private final Digest     id;
     @SuppressWarnings("unused")
     private final Shard      shard;
-    @SuppressWarnings("unused")
-    private final Stereotomy controller;
 
     public Node(Digest id, Shard shard, StereotomyKeyStore keyStore, DigestAlgorithm digestAlgorithm,
                 SecureRandom entropy) throws SQLException {

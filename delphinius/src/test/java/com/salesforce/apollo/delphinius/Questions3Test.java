@@ -32,7 +32,7 @@ public class Questions3Test {
 
     @Test
     public void callSmokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+        final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
         var connection = new JdbcConnection(url, new Properties(), "", "");
 
@@ -49,7 +49,7 @@ public class Questions3Test {
 
     @Test
     public void directSmokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+        final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
         var connection = new JdbcConnection(url, new Properties(), "", "");
 

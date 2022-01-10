@@ -9,7 +9,7 @@
     <name>Delphinius: Role Based Access Control</name>
 
     <properties>
-        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</h2.db.url>
+        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
     </properties>
 
     <dependencies>
@@ -156,7 +156,7 @@
                                 <excludes></excludes>
                                 <schemata>
                                     <schema>
-                                        <inputSchema>delphinius</inputSchema>
+                                        <inputSchema>DELPHINIUS</inputSchema>
                                     </schema>
                                 </schemata>
                             </database>

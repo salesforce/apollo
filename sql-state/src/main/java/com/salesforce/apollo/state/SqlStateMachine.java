@@ -108,7 +108,7 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
-    private static final String SQL_STATE_INTERNAL = "/sql-state/internal.yml";
+    private static final String SQL_STATE_INTERNAL = "/sql-state/internal.xml";
 
     public static class CallResult {
         public final List<Object>    outValues;
@@ -205,7 +205,8 @@ public class SqlStateMachine {
             try {
                 txn = Txn.parseFrom(tx.getContent());
             } catch (InvalidProtocolBufferException e) {
-                log.warn("invalid txn", e);
+                log.warn("invalid txn: {}", tx, e);
+                onComplete.completeExceptionally(e);
                 return;
             }
             withContext(() -> {
@@ -271,16 +272,16 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
                                                                                                           SqlStateMachine.class.getCanonicalName());
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
     private static final RowSetFactory             factory;
     private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
     private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
+    private static final String                    PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT                         = "MERGE INTO APOLLO_INTERNAL.CURRENT(_U, HEIGHT, BLOCK_HASH, TRANSACTION, TRANSACTION_HASH) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
+    private static final String                    UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -551,14 +552,13 @@ public class SqlStateMachine {
         return call(call.getSql(), exec -> {
             List<ResultSet> results = new ArrayList<>();
             try {
-                int i = 1;
-                for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
-                                                                                                      .getArgs())) {
-                    setArgument(exec, i++, v);
-                }
                 int p = 1;
                 for (int t : call.getOutParametersList()) {
                     exec.registerOutParameter(p++, t);
+                }
+                for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
+                                                                                                      .getArgs())) {
+                    setArgument(exec, p++, v);
                 }
                 List<Object> out = new ArrayList<>();
 
@@ -792,8 +792,9 @@ public class SqlStateMachine {
     }
 
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
-        if (onCompletion != null) {
-            onCompletion.completeExceptionally(e);
+        if (onCompletion != null) { 
+            var completed = onCompletion.completeExceptionally(e);
+            assert completed : "Invalid state";
         }
     }
 
@@ -820,20 +821,16 @@ public class SqlStateMachine {
     }
 
     private Object execute(Txn txn) throws Exception {
-        try {
-            return switch (txn.getExecutionCase()) {
-            case BATCH -> acceptBatch(txn.getBatch());
-            case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
-            case CALL -> acceptCall(txn.getCall());
-            case SCRIPT -> acceptScript(txn.getScript());
-            case STATEMENT -> acceptPreparedStatement(txn.getStatement());
-            case BATCHED -> acceptBatchTransaction(txn.getBatched());
-            case MIGRATION -> acceptMigration(txn.getMigration());
-            default -> null;
-            };
-        } catch (Throwable th) {
-            return th;
-        }
+        return switch (txn.getExecutionCase()) {
+        case BATCH -> acceptBatch(txn.getBatch());
+        case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
+        case CALL -> acceptCall(txn.getCall());
+        case SCRIPT -> acceptScript(txn.getScript());
+        case STATEMENT -> acceptPreparedStatement(txn.getStatement());
+        case BATCHED -> acceptBatchTransaction(txn.getBatched());
+        case MIGRATION -> acceptMigration(txn.getMigration());
+        default -> null;
+        };
     }
 
     private void execute(int index, Digest hash, Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
