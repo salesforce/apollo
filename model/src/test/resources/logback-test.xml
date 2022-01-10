@@ -24,12 +24,12 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.stereotomy" level="info"
+    <logger name="com.salesforce.apollo.stereotomy" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <root level="INFO">
+    <root level="trace">
         <appender-ref ref="STDOUT" />
     </root>
 

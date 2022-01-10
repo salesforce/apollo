@@ -913,6 +913,13 @@ public class SqlStateMachine {
 
     private void rollback() {
         try {
+            if (connection().isClosed()) {
+                return;
+            }
+        } catch (SQLException e1) {
+            return; // I'm done with this shit
+        }
+        try {
             connection().rollback();
         } catch (SQLException e) {
             log.trace("unable to rollback connection", e);

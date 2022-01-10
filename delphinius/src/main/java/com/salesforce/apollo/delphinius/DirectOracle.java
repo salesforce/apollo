@@ -7,7 +7,7 @@
 package com.salesforce.apollo.delphinius;
 
 import java.sql.Connection;
-import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
@@ -34,56 +34,74 @@ public class DirectOracle extends AbstractOracle {
      * Add an Assertion. The subject and object of the assertion will also be added
      * if they do not exist
      */
-    public void add(Assertion assertion) throws SQLException {
+    public CompletableFuture<Void> add(Assertion assertion) {
         dslCtx.transaction(ctx -> {
             add(DSL.using(ctx), assertion);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Add a Namespace.
      */
-    public void add(Namespace namespace) throws SQLException {
+    public CompletableFuture<Void> add(Namespace namespace) {
         dslCtx.transaction(ctx -> {
             add(DSL.using(ctx), namespace);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Add an Object.
      */
-    public void add(Object object) throws SQLException {
+    public CompletableFuture<Void> add(Object object) {
         dslCtx.transaction(ctx -> {
             add(DSL.using(ctx), object);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Add a Relation
      */
-    public void add(Relation relation) throws SQLException {
+    public CompletableFuture<Void> add(Relation relation) {
         dslCtx.transaction(ctx -> {
             add(DSL.using(ctx), relation);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Add a Subject
      */
-    public void add(Subject subject) throws SQLException {
+    public CompletableFuture<Void> add(Subject subject) {
         dslCtx.transaction(ctx -> {
             add(DSL.using(ctx), subject);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Delete an assertion. Only the assertion is deleted, not the subject nor
      * object of the assertion.
      */
-    public void delete(Assertion assertion) throws SQLException {
+    public CompletableFuture<Void> delete(Assertion assertion) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), assertion);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
@@ -91,93 +109,123 @@ public class DirectOracle extends AbstractOracle {
      * reference this namespace will also be deleted.
      */
     @Override
-    public void delete(Namespace namespace) throws SQLException {
+    public CompletableFuture<Void> delete(Namespace namespace) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), namespace);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Delete an Object. All dependant uses of the object (mappings, Assertions) are
      * removed as well.
      */
-    public void delete(Object object) throws SQLException {
+    public CompletableFuture<Void> delete(Object object) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), object);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Delete an Relation. All dependant uses of the relation (mappings, Subject,
      * Object and Assertions) are removed as well.
      */
-    public void delete(Relation relation) throws SQLException {
+    public CompletableFuture<Void> delete(Relation relation) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), relation);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Delete an Subject. All dependant uses of the subject (mappings and
      * Assertions) are removed as well.
      */
-    public void delete(Subject subject) throws SQLException {
+    public CompletableFuture<Void> delete(Subject subject) {
         dslCtx.transaction(ctx -> {
             delete(DSL.using(ctx), subject);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Map the parent object to the child
      */
-    public void map(Object parent, Object child) throws SQLException {
+    public CompletableFuture<Void> map(Object parent, Object child) {
         dslCtx.transaction(ctx -> {
             map(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Map the parent relation to the child
      */
-    public void map(Relation parent, Relation child) throws SQLException {
+    public CompletableFuture<Void> map(Relation parent, Relation child) {
         dslCtx.transaction(ctx -> {
             map(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Map the parent subject to the child
      */
-    public void map(Subject parent, Subject child) throws SQLException {
+    public CompletableFuture<Void> map(Subject parent, Subject child) {
         dslCtx.transaction(ctx -> {
             map(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Remove the mapping between the parent and the child objects
      */
-    public void remove(Object parent, Object child) throws SQLException {
+    public CompletableFuture<Void> remove(Object parent, Object child) {
         dslCtx.transaction(ctx -> {
             remove(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Remove the mapping between the parent and the child relations
      */
-    public void remove(Relation parent, Relation child) throws SQLException {
+    public CompletableFuture<Void> remove(Relation parent, Relation child) {
         dslCtx.transaction(ctx -> {
             remove(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 
     /**
      * Remove the mapping between the parent and the child subects
      */
-    public void remove(Subject parent, Subject child) throws SQLException {
+    public CompletableFuture<Void> remove(Subject parent, Subject child) {
         dslCtx.transaction(ctx -> {
             remove(parent, DSL.using(ctx), child);
         });
+        var fs = new CompletableFuture<Void>();
+        fs.complete(null);
+        return fs;
     }
 }
