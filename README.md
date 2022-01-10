@@ -5,7 +5,7 @@ The Apollo Delphinius project is a distibuted system platform. The underlying me
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
-* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
+* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
 * MTLS network communication - Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
