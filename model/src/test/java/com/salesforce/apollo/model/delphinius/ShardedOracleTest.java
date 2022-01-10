@@ -10,12 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+
+import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -29,7 +30,7 @@ import com.salesforce.apollo.state.Emulator;
  */
 public class ShardedOracleTest {
 
-//    @Test
+    @Test
     public void func() throws Exception {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Duration timeout = Duration.ofSeconds(1);
@@ -43,7 +44,8 @@ public class ShardedOracleTest {
         smoke(oracle);
     }
 
-    private void smoke(Oracle oracle) throws SQLException {
+    private void smoke(Oracle oracle) throws Exception {
+
         // Namespace
         var ns = Oracle.namespace("my-org");
 
@@ -75,23 +77,23 @@ public class ShardedOracleTest {
         var burcu = ns.subject("Burcu");
 
         // Map direct edges. Transitive edges added as a side effect
-        oracle.map(helpDeskMembers, adminMembers);
-        oracle.map(ali, adminMembers);
-        oracle.map(ali, userMembers);
-        oracle.map(burcu, userMembers);
-        oracle.map(can, userMembers);
-        oracle.map(managerMembers, userMembers);
-        oracle.map(technicianMembers, userMembers);
-        oracle.map(demet, helpDeskMembers);
-        oracle.map(egin, helpDeskMembers);
-        oracle.map(egin, userMembers);
-        oracle.map(fuat, managerMembers);
-        oracle.map(gl, managerMembers);
-        oracle.map(hakan, technicianMembers);
-        oracle.map(irmak, technicianMembers);
-        oracle.map(abcTechMembers, technicianMembers);
-        oracle.map(flaggedTechnicianMembers, technicianMembers);
-        oracle.map(jale, abcTechMembers);
+        oracle.map(helpDeskMembers, adminMembers).get();
+        oracle.map(ali, adminMembers).get();
+        oracle.map(ali, userMembers).get();
+        oracle.map(burcu, userMembers).get();
+        oracle.map(can, userMembers).get();
+        oracle.map(managerMembers, userMembers).get();
+        oracle.map(technicianMembers, userMembers).get();
+        oracle.map(demet, helpDeskMembers).get();
+        oracle.map(egin, helpDeskMembers).get();
+        oracle.map(egin, userMembers).get();
+        oracle.map(fuat, managerMembers).get();
+        oracle.map(gl, managerMembers).get();
+        oracle.map(hakan, technicianMembers).get();
+        oracle.map(irmak, technicianMembers).get();
+        oracle.map(abcTechMembers, technicianMembers).get();
+        oracle.map(flaggedTechnicianMembers, technicianMembers).get();
+        oracle.map(jale, abcTechMembers).get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -102,7 +104,7 @@ public class ShardedOracleTest {
 
         // Users can View Document 123
         Assertion tuple = userMembers.assertion(object123View);
-        oracle.add(tuple);
+        oracle.add(tuple).get();
 
         // Direct subjects that can View the document
         var viewers = oracle.read(object123View);
@@ -116,7 +118,7 @@ public class ShardedOracleTest {
 
         // Assert flagged technicians can directly view the document
         Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
-        oracle.add(grantTechs);
+        oracle.add(grantTechs).get();
 
         // Now have 2 direct subjects that can view the doc
         viewers = oracle.read(object123View);
@@ -160,21 +162,21 @@ public class ShardedOracleTest {
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove them
-        oracle.remove(abcTechMembers, technicianMembers);
+        oracle.remove(abcTechMembers, technicianMembers).get();
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove our assertion
-        oracle.delete(tuple);
+        oracle.delete(tuple).get();
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Some deletes
-        oracle.delete(abcTechMembers);
-        oracle.delete(flaggedTechnicianMembers);
+        oracle.delete(abcTechMembers).get();
+        oracle.delete(flaggedTechnicianMembers).get();
     }
 }

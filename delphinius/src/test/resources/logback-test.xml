@@ -24,7 +24,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.delphinius" level="trace"
+    <logger name="com.salesforce.apollo.delphinius" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
