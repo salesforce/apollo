@@ -36,8 +36,8 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
-import com.salesforce.apollo.stereotomy.mvlog.MvLog;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.utils.Hex;
 
 /**
@@ -46,7 +46,7 @@ import com.salesforce.apollo.utils.Hex;
  */
 public class StereotomyTests {
     KERL                     kel;
-    final StereotomyKeyStore ks = new InMemoryKeyStore();
+    final StereotomyKeyStore ks = new MemKeyStore();
     SecureRandom             secureRandom;
 
     @BeforeEach
@@ -229,7 +229,7 @@ public class StereotomyTests {
     }
 
     void initializeKel() throws Exception {
-        kel = new MvLog(DigestAlgorithm.DEFAULT, MVStore.open(null));
+        kel = new MemKERL(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
     private void provision(ControlledIdentifier i, Stereotomy controller) throws Exception {

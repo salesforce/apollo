@@ -39,7 +39,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-import com.salesforce.apollo.stereotomy.keys.InMemoryKeyStore;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
 
 /**
@@ -66,7 +66,7 @@ public class ShardedKERLTest {
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
                                            DigestAlgorithm.DEFAULT, exec);
 
-        Stereotomy controller = new StereotomyImpl(new InMemoryKeyStore(), kerl, secureRandom);
+        Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
         var opt = controller.newIdentifier();
 
@@ -95,7 +95,7 @@ public class ShardedKERLTest {
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
                                            DigestAlgorithm.DEFAULT, exec);
 
-        var ks = new InMemoryKeyStore();
+        var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
         var opti = controller.newIdentifier();

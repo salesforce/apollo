@@ -19,6 +19,8 @@ import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.model.delphinius.ShardedOracle;
 import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.stereotomy.Stereotomy;
@@ -29,6 +31,7 @@ import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
  * @author hal.hildebrand
  *
  */
+@SuppressWarnings("unused")
 public class Node {
 
     public static Txn boostrapMigration() {
@@ -53,11 +56,10 @@ public class Node {
         return Node.class.getResource(resource);
     }
 
-    @SuppressWarnings("unused")
     private final Stereotomy controller;
     private final Digest     id;
-    @SuppressWarnings("unused")
     private final Shard      shard;
+    private final Oracle     oracle;
 
     public Node(Digest id, Shard shard, StereotomyKeyStore keyStore, DigestAlgorithm digestAlgorithm,
                 SecureRandom entropy) throws SQLException {
@@ -66,6 +68,8 @@ public class Node {
         this.controller = new StereotomyImpl(keyStore, new ShardedKERL(shard.createConnection(), shard.getMutator(),
                                                                        null, null, digestAlgorithm, null),
                                              entropy);
+        this.oracle = new ShardedOracle(shard.createConnection(), shard.getMutator(), null, null, digestAlgorithm,
+                                        null);
     }
 
     public Digest getId() {
