@@ -16,9 +16,8 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
-import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -60,14 +59,14 @@ public interface KEL {
     CompletableFuture<List<KeyState>> append(List<KeyEvent> events, List<AttachmentEvent> attachments);
 
     /**
+     * Answer the Attachment for the coordinates
+     */
+    Optional<Attachment> getAttachment(EventCoordinates coordinates);
+
+    /**
      * The digest algorithm used
      */
     DigestAlgorithm getDigestAlgorithm();
-
-    /**
-     * Answer the SealingEvent of the delegating coordinates
-     */
-    Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates);
 
     /**
      * Answer the KeyEvent that has the matching digest

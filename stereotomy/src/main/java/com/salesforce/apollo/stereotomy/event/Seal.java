@@ -37,27 +37,6 @@ public interface Seal {
         EventCoordinates getEvent();
     }
 
-    interface DelegatingLocationSeal extends Seal {
-
-        static DelegatingLocationSeal construct(DelegatingEventCoordinates coordinates) {
-            return new DelegatingLocationSeal() {
-
-                @Override
-                public DelegatingEventCoordinates getCoordinates() {
-                    return coordinates;
-                }
-
-                @Override
-                public Sealed toSealed() {
-                    return Sealed.newBuilder().setDelegatingLocation(coordinates.toCoords()).build();
-                }
-            };
-        }
-
-        DelegatingEventCoordinates getCoordinates();
-
-    }
-
     interface DigestSeal extends Seal {
 
         static DigestSeal construct(Digest digest) {
@@ -120,9 +99,6 @@ public interface Seal {
     static Seal from(Sealed s) {
         if (s.hasEventCoordinates()) {
             return CoordinatesSeal.construct(new EventCoordinates(s.getEventCoordinates()));
-        }
-        if (s.hasDelegatingLocation()) {
-            return DelegatingLocationSeal.construct(new DelegatingEventCoordinates(s.getDelegatingLocation()));
         }
         if (s.hasDigest()) {
             return DigestSeal.construct(Digest.from(s.getDigest()));

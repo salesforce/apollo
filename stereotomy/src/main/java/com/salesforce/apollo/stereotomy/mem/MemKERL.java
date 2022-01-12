@@ -10,6 +10,7 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,10 +29,8 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 
@@ -64,12 +63,11 @@ public class MemKERL implements KERL {
      * </pre>
      */
     public static String receiptOrdering(EventCoordinates event, EventCoordinates signer) {
-        return MemKERL.receiptPrefix(event, signer) + MemKERL.receiptSequence(event, signer)
-        + receiptDigestSuffix(event, signer);
+        return receiptPrefix(event, signer) + receiptSequence(event, signer) + receiptDigestSuffix(event, signer);
     }
 
     public static String receiptPrefix(EventCoordinates event, EventCoordinates signer) {
-        return MemKERL.receiptPrefix(event.getIdentifier(), signer.getIdentifier());
+        return receiptPrefix(event.getIdentifier(), signer.getIdentifier());
     }
 
     public static String receiptPrefix(Identifier forIdentifier, Identifier forIdentifier2) {
@@ -145,16 +143,6 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        KeyEvent keyEvent = events.get(MemKERL.coordinateOrdering(new EventCoordinates(coordinates.getIdentifier(),
-                                                                                     coordinates.getSequenceNumber(),
-                                                                                     coordinates.getPreviousEvent()
-                                                                                                .getDigest(),
-                                                                                     coordinates.getIlk())));
-        return (keyEvent instanceof SealingEvent) ? Optional.of((SealingEvent) keyEvent) : Optional.empty();
-    }
-
-    @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
         String coordinates = eventsByHash.get(digest);
         return coordinates == null ? Optional.empty() : Optional.of(events.get(coordinates));
@@ -162,12 +150,12 @@ public class MemKERL implements KERL {
 
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return Optional.ofNullable(events.get(MemKERL.coordinateOrdering(coordinates)));
+        return Optional.ofNullable(events.get(coordinateOrdering(coordinates)));
     }
 
     @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return Optional.ofNullable(keyState.get(MemKERL.coordinateOrdering(coordinates)));
+        return Optional.ofNullable(keyState.get(coordinateOrdering(coordinates)));
     }
 
     @Override
@@ -177,9 +165,33 @@ public class MemKERL implements KERL {
         return stateHash == null ? Optional.empty() : Optional.ofNullable(keyState.get(stateHash));
     }
 
+    @Override
+    public List<EventWithAttachments> kerl(Identifier identifier) {
+        var current = getKeyState(identifier);
+        var coordinates = current.get().getCoordinates();
+        var keyEvent = getKeyEvent(coordinates);
+        if (keyEvent.isEmpty()) {
+            throw new IllegalStateException("The KEL is in a corrupted state, cannot find key event for "
+            + coordinates);
+        }
+        return current.isEmpty() ? Collections.emptyList() : kerl(keyEvent.get());
+    }
+
+    private List<EventWithAttachments> kerl(KeyEvent event) {
+        var current = event;
+        var result = new ArrayList<EventWithAttachments>();
+        while (current != null) {
+            var coordinates = current.getCoordinates();
+            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            current = getKeyEvent(current.getPrevious()).orElse(null);
+        }
+        Collections.reverse(result);
+        return result;
+    }
+
     private void append(KeyEvent event, KeyState newState) {
-        String coordinates = MemKERL.coordinateOrdering(event.getCoordinates());
-        events.put(coordinates, event); 
+        String coordinates = coordinateOrdering(event.getCoordinates());
+        events.put(coordinates, event);
         eventsByHash.put(newState.getDigest(), coordinates);
         locationToHash.put(coordinates, newState.getDigest());
         keyState.put(coordinates, newState);
@@ -187,7 +199,7 @@ public class MemKERL implements KERL {
     }
 
     private void appendAttachments(EventCoordinates coordinates, AttachmentEvent.Attachment attachment) {
-        var key = MemKERL.coordinateOrdering(coordinates);
+        var key = coordinateOrdering(coordinates);
         var previous = receipts.get(key);
         receipts.put(key, combine(attachment, previous));
     }
@@ -213,5 +225,10 @@ public class MemKERL implements KERL {
                 return seals;
             }
         };
+    }
+
+    @Override
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
     }
 }

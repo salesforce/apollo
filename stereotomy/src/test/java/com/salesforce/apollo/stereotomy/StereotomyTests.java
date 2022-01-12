@@ -28,6 +28,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -72,6 +73,18 @@ public class StereotomyTests {
         i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
+        i.rotate();
+        i.rotate();
+        var iKerl = kel.kerl(i.getIdentifier());
+        assertNotNull(iKerl);
+        assertEquals(7, iKerl.size());
+        assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());
+        assertEquals(KeyEvent.INTERACTION_TYPE, iKerl.get(2).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(3).event().getIlk());
+        assertEquals(KeyEvent.INTERACTION_TYPE, iKerl.get(4).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(5).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(6).event().getIlk());
     }
 
     @Test

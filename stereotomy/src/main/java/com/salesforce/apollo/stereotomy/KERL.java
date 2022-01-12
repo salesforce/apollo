@@ -6,9 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * The Key Event Receipt Log
@@ -18,6 +22,10 @@ import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
  */
 public interface KERL extends KEL {
 
+    record EventWithAttachments(KeyEvent event, Attachment attachments) {}
+
     CompletableFuture<Void> append(AttachmentEvent event);
+
+    List<EventWithAttachments> kerl(Identifier identifier);
 
 }

@@ -36,14 +36,6 @@ message EventLoc {
     utils.Digeste digest = 3;
 }
 
-// Location of the delegating event
-message DelegatingEventCoords {
-    Ident identifier = 1;
-    uint64 sequenceNumber = 2;
-    EventCoords previous = 3;
-    string ilk = 4;
-}
-
 // Coordinates of a key
 message KeyCoords {
     EventCoords establishment = 1;
@@ -54,10 +46,9 @@ message KeyCoords {
 message Sealed { 
     oneof type {
         EventCoords eventCoordinates = 1;
-        DelegatingEventCoords delegatingLocation = 2;
-        utils.Digeste digest = 3;
-        EventLoc event = 4;
-        bytes bits = 5;
+        utils.Digeste digest = 2;
+        EventLoc event = 3;
+        bytes bits = 4;
     }
 }
 
@@ -149,7 +140,7 @@ message Attachment {
     repeated Sealed seals = 2;
 }
 
-message KEL {
+message KERL {
     repeated KeyEvent events = 1;
 }
 
@@ -221,7 +212,7 @@ message KeyContext {
 
 // Resolver API
 service Resolver { 
-    rpc kel (IdentifierContext) returns (KEL) {}
+    rpc kerl (IdentifierContext) returns (KERL) {}
     
     rpc lookup (IdentifierContext) returns (Binding) {}
     

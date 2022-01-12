@@ -31,7 +31,6 @@ import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 
 /**
  * QB64 DSL for identifier conversion
@@ -190,11 +189,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     public static String selfSigningIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
         var placeholderLength = qb64Length(signatureAlgorithm.signatureLength());
         return "#".repeat(placeholderLength);
-    }
-
-    public static String shortQb64(DelegatingEventCoordinates c) {
-        var p = c.getPreviousEvent();
-        return shortQb64(p.getIdentifier()) + ":" + p.getSequenceNumber() + ":" + shortQb64(p.getDigest());
     }
 
     public static String shortQb64(EventCoordinates c) {

@@ -18,7 +18,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -28,16 +32,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.Sealed;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.SealingEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
@@ -50,7 +56,8 @@ import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
  */
 abstract public class UniKERL implements KERL {
     private static final byte[] DIGEST_NONE_BYTES = Digest.NONE.toDigeste().toByteArray();
-    private static final Logger log               = LoggerFactory.getLogger(UniKERL.class);
+
+    private static final Logger log = LoggerFactory.getLogger(UniKERL.class);
 
     public static void append(DSLContext dsl, AttachmentEvent attachment) {
         var coordinates = attachment.coordinates();
@@ -223,8 +230,8 @@ abstract public class UniKERL implements KERL {
     }
 
     protected final DigestAlgorithm digestAlgorithm;
-    protected final DSLContext      dsl;
 
+    protected final DSLContext        dsl;
     protected final KeyEventProcessor processor;
 
     public UniKERL(Connection connection, DigestAlgorithm digestAlgorithm) {
@@ -234,26 +241,59 @@ abstract public class UniKERL implements KERL {
     }
 
     @Override
-    public DigestAlgorithm getDigestAlgorithm() {
-        return digestAlgorithm;
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        var resolved = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toDigeste().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
+                          .fetchOne();
+        if (resolved == null) {
+            return Optional.empty();
+        }
+
+        var seals = dsl.select(ATTACHMENT.SEAL)
+                       .from(ATTACHMENT)
+                       .where(ATTACHMENT.FOR.eq(resolved.value1()))
+                       .fetch()
+                       .stream()
+                       .map(r -> {
+                           try {
+                               return Seal.from(Sealed.parseFrom(r.value1()));
+                           } catch (InvalidProtocolBufferException e) {
+                               log.error("Error deserializing seal: {}", e);
+                               return null;
+                           }
+                       })
+                       .filter(s -> s != null)
+                       .toList();
+
+        record receipt(int witness, Sig signature) {}
+        var receipts = dsl.select(RECEIPT.WITNESS, RECEIPT.SIGNATURE)
+                          .from(RECEIPT)
+                          .where(RECEIPT.FOR.eq(resolved.value1()))
+                          .fetch()
+                          .stream()
+                          .map(r -> {
+                              try {
+                                  return new receipt(r.value1(), Sig.parseFrom(r.value2()));
+                              } catch (InvalidProtocolBufferException e) {
+                                  log.error("Error deserializing signature witness: {}", e);
+                                  return null;
+                              }
+                          })
+                          .filter(s -> s != null)
+                          .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
+        return Optional.of(new Attachment.AttachmentImpl(seals, receipts));
     }
 
     @Override
-    public Optional<SealingEvent> getKeyEvent(DelegatingEventCoordinates coordinates) {
-        return dsl.select(EVENT.CONTENT, COORDINATES.ILK)
-                  .from(EVENT)
-                  .join(COORDINATES)
-                  .on(EVENT.COORDINATES.eq(COORDINATES.ID))
-                  .join(IDENTIFIER)
-                  .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toIdent().toByteArray()))
-                  .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
-                  .and(COORDINATES.DIGEST.eq(coordinates.getPreviousEvent().getDigest().toDigeste().toByteArray()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .and(COORDINATES.ILK.eq(coordinates.getIlk()))
-                  .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
-                  .fetchOptional()
-                  .map(r -> toKeyEvent(decompress(r.value1()), r.value2()))
-                  .map(ke -> ke instanceof SealingEvent se ? se : null);
+    public DigestAlgorithm getDigestAlgorithm() {
+        return digestAlgorithm;
     }
 
     @Override
@@ -324,6 +364,30 @@ abstract public class UniKERL implements KERL {
                           return null;
                       }
                   });
+    }
+
+    @Override
+    public List<EventWithAttachments> kerl(Identifier identifier) {
+        var current = getKeyState(identifier);
+        var coordinates = current.get().getCoordinates();
+        var keyEvent = getKeyEvent(coordinates);
+        if (keyEvent.isEmpty()) {
+            throw new IllegalStateException("The KEL is in a corrupted state, cannot find key event for "
+            + coordinates);
+        }
+        return current.isEmpty() ? Collections.emptyList() : kerl(keyEvent.get());
+    }
+
+    private List<EventWithAttachments> kerl(KeyEvent event) {
+        var current = event;
+        var result = new ArrayList<EventWithAttachments>();
+        while (current != null) {
+            var coordinates = current.getCoordinates();
+            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            current = getKeyEvent(current.getPrevious()).orElse(null);
+        }
+        Collections.reverse(result);
+        return result;
     }
 
 }

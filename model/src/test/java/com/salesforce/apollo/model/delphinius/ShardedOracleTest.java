@@ -18,7 +18,6 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.junit.jupiter.api.Test;
 
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.model.Node;
@@ -40,7 +39,7 @@ public class ShardedOracleTest {
         emmy.start(Node.boostrapMigration());
 
         ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                                                 DigestAlgorithm.DEFAULT, exec);
+                                                 exec);
         smoke(oracle);
     }
 

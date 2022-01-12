@@ -17,15 +17,13 @@ import java.util.Map;
 
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
-import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
-import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
-import com.salesforce.apollo.stereotomy.Stereotomy;
-import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * @author hal.hildebrand
@@ -56,23 +54,20 @@ public class Node {
         return Node.class.getResource(resource);
     }
 
-    private final Stereotomy controller;
-    private final Digest     id;
-    private final Shard      shard;
-    private final Oracle     oracle;
+    private final KERL                 commonKERL;
+    private final ControlledIdentifier id;
+    private final Shard                shard;
+    private final Oracle               oracle;
 
-    public Node(Digest id, Shard shard, StereotomyKeyStore keyStore, DigestAlgorithm digestAlgorithm,
+    public Node(ControlledIdentifier id, Shard shard, KERL commonKERL, DigestAlgorithm digestAlgorithm,
                 SecureRandom entropy) throws SQLException {
         this.id = id;
         this.shard = shard;
-        this.controller = new StereotomyImpl(keyStore, new ShardedKERL(shard.createConnection(), shard.getMutator(),
-                                                                       null, null, digestAlgorithm, null),
-                                             entropy);
-        this.oracle = new ShardedOracle(shard.createConnection(), shard.getMutator(), null, null, digestAlgorithm,
-                                        null);
+        this.commonKERL = commonKERL;
+        this.oracle = new ShardedOracle(shard.createConnection(), shard.getMutator(), null, null, null);
     }
 
-    public Digest getId() {
-        return id;
+    public Identifier getId() {
+        return id.getIdentifier();
     }
 }

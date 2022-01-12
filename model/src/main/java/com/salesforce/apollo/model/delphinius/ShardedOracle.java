@@ -13,7 +13,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.salesforce.apollo.choam.support.InvalidTransaction;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.AbstractOracle;
 import com.salesforce.apollo.state.Mutator;
 
@@ -31,7 +30,7 @@ public class ShardedOracle extends AbstractOracle {
     private final Duration                 timeout;
 
     public ShardedOracle(Connection connection, Mutator mutator, ScheduledExecutorService scheduler, Duration timeout,
-                         DigestAlgorithm digestAlgorithm, Executor exec) {
+                         Executor exec) {
         super(connection);
         this.mutator = mutator;
         this.exec = exec;
