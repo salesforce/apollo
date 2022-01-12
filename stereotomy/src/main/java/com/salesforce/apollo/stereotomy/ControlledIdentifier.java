@@ -17,6 +17,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -33,6 +34,11 @@ public interface ControlledIdentifier extends BoundIdentifier {
      * @return the binding of the identifier to the current key state
      */
     BoundIdentifier bind();
+
+    /**
+     * @return the KERL of the receiver identifier
+     */
+    Optional<List<EventWithAttachments>> getKerl();
 
     /**
      * @return the Signer for the key state binding

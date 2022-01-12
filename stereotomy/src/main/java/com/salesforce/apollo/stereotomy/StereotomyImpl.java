@@ -38,6 +38,7 @@ import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
@@ -239,6 +240,11 @@ public class StereotomyImpl implements Stereotomy {
                 return false;
             }
             return Objects.equals(state, other.state);
+        }
+
+        @Override
+        public Optional<List<EventWithAttachments>> getKerl() {
+            return kerl.kerl(getIdentifier());
         }
 
         @Override
