@@ -25,7 +25,7 @@ import org.joou.ULong;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.stereotomy.event.proto.KEL;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -56,7 +56,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
                          int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec, Supplier<KEL> kel,
+                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec, Supplier<KERL> kerl,
                          FoundationSeal foundation) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
@@ -212,7 +212,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private Function<Map<Member, Join>, List<Transaction>> genesisData           = view -> new ArrayList<>();
         private Digest                                         genesisViewId;
         private Duration                                       gossipDuration        = Duration.ofSeconds(1);
-        private Supplier<KEL>                                  kel                   = () -> KEL.getDefaultInstance();
+        private Supplier<KERL>                                 kerl                  = () -> KERL.getDefaultInstance();
         private int                                            maxCheckpointSegments = 200;
         private SigningMember                                  member;
         private ChoamMetrics                                   metrics;
@@ -239,7 +239,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   checkpointer, checkpointBlockSize, restorer, digestAlgorithm, metrics,
                                   viewSigAlgorithm, synchronizationCycles, synchronizeDuration, regenerationCycles,
                                   synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff,
-                                  exec, kel, foundation);
+                                  exec, kerl, foundation);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -294,8 +294,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return gossipDuration;
         }
 
-        public Supplier<KEL> getKel() {
-            return kel;
+        public Supplier<KERL> getKerl() {
+            return kerl;
         }
 
         public int getMaxCheckpointSegments() {
@@ -424,8 +424,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setKel(Supplier<KEL> kel) {
-            this.kel = kel;
+        public Builder setKerl(Supplier<KERL> kerl) {
+            this.kerl = kerl;
             return this;
         }
 

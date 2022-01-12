@@ -153,7 +153,7 @@ public class GenesisAssembly implements Genesis {
                        .setMember(genesisMember)
                        .addEndorsements(certification)
                        .setView(view.context().getId().toDigeste())
-                       .setKel(params().kel().get())
+                       .setKerl(params().kerl().get())
                        .build();
         var proposed = new Proposed(join, params().member());
         proposed.certifications.put(params().member(), certification);

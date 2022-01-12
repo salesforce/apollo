@@ -116,7 +116,7 @@ message Join {
     utils.Digeste view = 1;
     ViewMember member = 2;
     repeated Certification endorsements = 3;
-    stereotomy.KEL kel = 4;
+    stereotomy.KERL kerl = 4;
 }
 
 message ViewMember {
