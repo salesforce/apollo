@@ -37,8 +37,8 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
-import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Hex;
 
 /**
@@ -75,8 +75,10 @@ public class StereotomyTests {
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
         i.rotate();
         i.rotate();
-        var iKerl = kel.kerl(i.getIdentifier());
-        assertNotNull(iKerl);
+        var opti = kel.kerl(i.getIdentifier());
+        assertNotNull(opti);
+        assertFalse(opti.isEmpty());
+        var iKerl = opti.get();
         assertEquals(7, iKerl.size());
         assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());

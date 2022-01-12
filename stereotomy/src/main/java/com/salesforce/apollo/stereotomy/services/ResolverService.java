@@ -13,9 +13,9 @@ import java.util.concurrent.TimeoutException;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -41,10 +41,9 @@ public interface ResolverService {
     public record Bound(InceptionEvent identifier, URI uri) {}
 
     /**
-     * Answer the known extent of the key event receipt log for the supplied
-     * identifier prefix
+     * Answer the KERL of the identifier prefix
      */
-    Optional<List<KeyEvent>> kerl(Identifier prefix) throws TimeoutException;
+    Optional<List<EventWithAttachments>> kerl(Identifier prefix) throws TimeoutException;
 
     /**
      * Answer the binding associated with the non transferable identifier

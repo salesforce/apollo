@@ -14,8 +14,8 @@ import java.util.concurrent.TimeoutException;
 
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.services.ResolverService;
 import com.salesforce.apollo.stereotomy.services.ResolverService.BinderService;
@@ -44,9 +44,8 @@ public class MemResolver implements ResolverService, BinderService {
     }
 
     @Override
-    public Optional<List<KeyEvent>> kerl(Identifier prefix) throws TimeoutException {
-        // TODO Auto-generated method stub
-        return null;
+    public Optional<List<EventWithAttachments>> kerl(Identifier prefix) throws TimeoutException {
+        return kerl.kerl(prefix);
     }
 
     @Override

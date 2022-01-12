@@ -367,15 +367,19 @@ abstract public class UniKERL implements KERL {
     }
 
     @Override
-    public List<EventWithAttachments> kerl(Identifier identifier) {
+    public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
+        // TODO use a real DB query instead of this really expensive iterative lookup
         var current = getKeyState(identifier);
+        if (current.isEmpty()) {
+            return Optional.empty();
+        }
         var coordinates = current.get().getCoordinates();
         var keyEvent = getKeyEvent(coordinates);
         if (keyEvent.isEmpty()) {
             throw new IllegalStateException("The KEL is in a corrupted state, cannot find key event for "
             + coordinates);
         }
-        return current.isEmpty() ? Collections.emptyList() : kerl(keyEvent.get());
+        return Optional.of(kerl(keyEvent.get()));
     }
 
     private List<EventWithAttachments> kerl(KeyEvent event) {

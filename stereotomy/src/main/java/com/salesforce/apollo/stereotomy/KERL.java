@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
@@ -26,6 +27,6 @@ public interface KERL extends KEL {
 
     CompletableFuture<Void> append(AttachmentEvent event);
 
-    List<EventWithAttachments> kerl(Identifier identifier);
+    Optional<List<EventWithAttachments>> kerl(Identifier identifier);
 
 }
