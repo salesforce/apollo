@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -243,8 +242,7 @@ public class TestCHOAM {
             return new CHOAM(params.setMember(m)
                                    .setCommunications(routers.get(m.getId()))
                                    .setProcessor(processor)
-                                   .build(),
-                             MVStore.open(null));
+                                   .build());
         }));
     }
 

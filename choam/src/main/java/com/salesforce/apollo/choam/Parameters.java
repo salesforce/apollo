@@ -20,6 +20,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
@@ -57,7 +58,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                          Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
                          int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
                          ExponentialBackoff.Builder<Status> clientBackoff, Executor exec, Supplier<KERL> kerl,
-                         FoundationSeal foundation) {
+                         FoundationSeal foundation, MVStore.Builder mvBuilder) {
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -216,6 +217,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         private int                                            maxCheckpointSegments = 200;
         private SigningMember                                  member;
         private ChoamMetrics                                   metrics;
+        private MVStore.Builder                                mvBuilder             = new MVStore.Builder();
         private TransactionExecutor                            processor             = (i, h, t, f) -> {
                                                                                      };
         private ProducerParameters                             producer              = ProducerParameters.newBuilder()
@@ -239,7 +241,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   checkpointer, checkpointBlockSize, restorer, digestAlgorithm, metrics,
                                   viewSigAlgorithm, synchronizationCycles, synchronizeDuration, regenerationCycles,
                                   synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff,
-                                  exec, kerl, foundation);
+                                  exec, kerl, foundation, mvBuilder);
         }
 
         public BootstrapParameters getBootstrap() {
@@ -501,6 +503,15 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setViewSigAlgorithm(SignatureAlgorithm viewSigAlgorithm) {
             this.viewSigAlgorithm = viewSigAlgorithm;
+            return this;
+        }
+
+        protected MVStore.Builder getMvBuilder() {
+            return mvBuilder;
+        }
+
+        protected Builder setMvBuilder(MVStore.Builder mvBuilder) {
+            this.mvBuilder = mvBuilder;
             return this;
         }
     }

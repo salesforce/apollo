@@ -35,7 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -421,8 +420,7 @@ public class CHOAMTest {
                                        up.getExecutor().genesis(hash, initialization);
                                    }
                                })
-                               .build(),
-                         MVStore.open(null));
+                               .build());
     }
 
     private Txn initialInsert() {

@@ -35,7 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.h2.mvstore.MVMap;
-import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -613,12 +612,8 @@ public class CHOAM {
     private final Combine.Transitions                                   transitions;
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
-    public CHOAM(Parameters params, MVStore store) {
-        this(params, new Store(params.digestAlgorithm(), store));
-    }
-
-    public CHOAM(Parameters params, Store store) {
-        this.store = store;
+    public CHOAM(Parameters params) {
+        this.store = new Store(params.digestAlgorithm(), params.mvBuilder().open());
         this.params = params;
         executions = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r, "Executions " + params.member().getId());

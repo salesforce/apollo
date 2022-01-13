@@ -33,7 +33,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -296,8 +295,7 @@ abstract public class AbstractLifecycleTest {
                                .setSynchronizationCycles(testSubject ? 100 : 1)
                                .setRestorer(up.getBootstrapper())
                                .setProcessor(wrap(m, up))
-                               .build(),
-                         MVStore.open(null));
+                               .build());
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
