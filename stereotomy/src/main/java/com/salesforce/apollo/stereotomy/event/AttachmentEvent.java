@@ -80,5 +80,7 @@ public interface AttachmentEvent {
 
     EventCoordinates coordinates();
 
+    byte[] getBytes();
+
     Version version();
 }

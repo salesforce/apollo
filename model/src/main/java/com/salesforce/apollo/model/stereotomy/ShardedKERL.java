@@ -48,9 +48,17 @@ public class ShardedKERL extends UniKERL {
 
     @Override
     public CompletableFuture<Void> append(AttachmentEvent event) {
-        var returned = new CompletableFuture<Void>();
-        returned.complete(null);
-        return returned;
+        var call = mutator.call("{ ? = call stereotomy.appendAttachement(?) }",
+                                Collections.singletonList(JDBCType.BINARY), event.getBytes());
+        CompletableFuture<CallResult> submitted;
+        try {
+            submitted = mutator.execute(exec, call, timeout, scheduler);
+        } catch (InvalidTransaction e) {
+            var f = new CompletableFuture<Void>();
+            f.completeExceptionally(e);
+            return f;
+        }
+        return submitted.thenApply(r -> null);
     }
 
     @Override

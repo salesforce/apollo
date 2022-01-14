@@ -65,6 +65,10 @@ public class Mutator {
             this.session = session;
         }
 
+        public BatchedTransaction build() {
+            return batch.build();
+        }
+
         public BatchBuilder execute(BatchUpdate update) {
             batch.addTransactions(Txn.newBuilder().setBatchUpdate(update));
             return this;
@@ -96,10 +100,6 @@ public class Mutator {
             CompletableFuture<?> submit = session.submit(exec, Txn.newBuilder().setBatched(build()).build(), timeout,
                                                          scheduler);
             return (CompletableFuture<List<?>>) submit;
-        }
-
-        BatchedTransaction build() {
-            return batch.build();
         }
     }
 

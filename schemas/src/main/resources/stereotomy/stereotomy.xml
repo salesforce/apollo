@@ -45,8 +45,7 @@
 
         <sql>alter table stereotomy.coordinates add constraint
             coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
-            'ixn',
-            'nan', 'rct', 'vrc', 'rot'))
+            'ixn', 'nan', 'rct', 'vrc', 'rot'))
         </sql>
 
         <addForeignKeyConstraint

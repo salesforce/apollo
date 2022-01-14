@@ -7,6 +7,7 @@
 package com.salesforce.apollo.model.stereotomy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,6 +33,7 @@ import com.salesforce.apollo.stereotomy.KeyCoordinates;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -68,9 +70,7 @@ public class ShardedKERLTest {
 
         Stereotomy controller = new StereotomyImpl(new MemKeyStore(), kerl, secureRandom);
 
-        var opt = controller.newIdentifier();
-
-        var i = opt.get();
+        var i = controller.newIdentifier().get();
 
         var digest = DigestAlgorithm.BLAKE3_256.digest("digest seal".getBytes());
         var event = EventCoordinates.of(kerl.getKeyEvent(i.getLastEstablishmentEvent()).get());
@@ -81,6 +81,20 @@ public class ShardedKERLTest {
         i.seal(InteractionSpecification.newBuilder());
         i.rotate(RotationSpecification.newBuilder().addAllSeals(seals));
         i.seal(InteractionSpecification.newBuilder().addAllSeals(seals));
+        i.rotate();
+        i.rotate();
+        var opti = kerl.kerl(i.getIdentifier());
+        assertNotNull(opti);
+        assertFalse(opti.isEmpty());
+        var iKerl = opti.get();
+        assertEquals(7, iKerl.size());
+        assertEquals(KeyEvent.INCEPTION_TYPE, iKerl.get(0).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(1).event().getIlk());
+        assertEquals(KeyEvent.INTERACTION_TYPE, iKerl.get(2).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(3).event().getIlk());
+        assertEquals(KeyEvent.INTERACTION_TYPE, iKerl.get(4).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(5).event().getIlk());
+        assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(6).event().getIlk());
 
     }
 

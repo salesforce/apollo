@@ -68,6 +68,11 @@ public class AttachmentEventImpl implements AttachmentEvent {
     }
 
     @Override
+    public byte[] getBytes() {
+        return event.toByteArray();
+    }
+
+    @Override
     public int hashCode() {
         return Objects.hash(event);
     }

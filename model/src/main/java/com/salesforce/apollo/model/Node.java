@@ -10,7 +10,9 @@ import static java.nio.file.Path.of;
 
 import java.net.URL;
 import java.nio.file.Path;
+import java.sql.JDBCType;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,8 +22,12 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -29,6 +35,8 @@ import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -102,7 +110,13 @@ public class Node {
 
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        return members.entrySet().stream().sorted().map(e -> manifest(e.getValue())).filter(t -> t != null).toList();
+        return members.entrySet()
+                      .stream()
+                      .sorted()
+                      .map(e -> manifest(e.getValue()))
+                      .filter(t -> t != null)
+                      .flatMap(l -> l.stream())
+                      .toList();
     }
 
     // Answer the KERL of this node
@@ -118,8 +132,33 @@ public class Node {
 
     // Manifest the transactions that instantiate the KERL for this Join. The Join
     // is validated as a side effect and if invalid, NULL is returned.
-    private Transaction manifest(Join value) {
-        // TODO Auto-generated method stub
-        return null;
+    private List<Transaction> manifest(Join join) {
+        // TODO validate
+        return join.getKerl().getEventsList().stream().map(ke -> transactionOf(ke)).toList();
     }
+
+    private Transaction transactionOf(KeyEvent ke) {
+        var event = switch (ke.getEventCase()) {
+        case EVENT_NOT_SET -> null;
+        case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+        case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+        case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+        default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
+        };
+        var mutator = shard.getMutator();
+        var batch = mutator.batch();
+        batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
+                                   Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
+                                   DigestAlgorithm.DEFAULT.digestCode()));
+        if (ke.getAttachment().isInitialized()) {
+            var attach = AttachmentEvent.newBuilder()
+                                        .setCoordinates(event.getCoordinates().toEventCoords())
+                                        .setAttachment(ke.getAttachment())
+                                        .build();
+            batch.execute(mutator.call("{ ? = call stereotomy.appendAttachement(?) }",
+                                       Collections.singletonList(JDBCType.BINARY), event.getBytes()));
+        }
+        return Session.transactionOf(params.member().getId(), 0, batch.build(), params.member());
+    }
+
 }
