@@ -12,7 +12,7 @@
             <column name="_u" type="INT">
                 <constraints nullable="false" />
             </column>
-            <column name="height" type="INT8">
+            <column name="height" type="BIGINT">
                 <constraints nullable="false" />
             </column>
             <column name="block_hash" type="VARCHAR(256)">

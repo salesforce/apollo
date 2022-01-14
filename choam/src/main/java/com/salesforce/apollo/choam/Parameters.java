@@ -244,6 +244,14 @@ public record Parameters(Context<Member> context, Router communications, Signing
                                   exec, kerl, foundation, mvBuilder);
         }
 
+        public Builder clone() {
+            try {
+                return (Builder) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new IllegalStateException("well, that was unexpected");
+            }
+        }
+
         public BootstrapParameters getBootstrap() {
             return bootstrap;
         }

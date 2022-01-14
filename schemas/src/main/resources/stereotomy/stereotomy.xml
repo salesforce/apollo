@@ -35,7 +35,7 @@
             <column name="digest" type="VARBINARY">
                 <constraints nullable="false" />
             </column>
-            <column name="sequence_number" type="INT8">
+            <column name="sequence_number" type="BIGINT">
                 <constraints nullable="false" />
             </column>
             <column name="ilk" type="VARCHAR(3)">
@@ -59,12 +59,6 @@
         <addUniqueConstraint
             columnNames="identifier, digest, sequence_number, ilk"
             tableName="coordinates" schemaName="stereotomy" />
-
-        <createIndex tableName="coordinates"
-            schemaName="stereotomy"
-            indexName="coordinates_identifier_idx">
-            <column name="identifier" />
-        </createIndex>
 
         <createTable tableName="event"
             schemaName="stereotomy">
@@ -138,11 +132,6 @@
             referencedColumnNames="coordinates"
             referencedTableSchemaName="stereotomy" />
 
-        <createIndex tableName="receipt"
-            schemaName="stereotomy" indexName="receipt_for_idx">
-            <column name="for" />
-        </createIndex>
-
         <createTable tableName="attachment"
             schemaName="stereotomy">
             <column name="for" type="INT8">
@@ -163,11 +152,6 @@
 
         <addUniqueConstraint columnNames="for, seal"
             tableName="attachment" schemaName="stereotomy" />
-
-        <createIndex tableName="attachment"
-            schemaName="stereotomy" indexName="attachment_for_idx">
-            <column name="for" />
-        </createIndex>
 
     </changeSet>
 </databaseChangeLog>

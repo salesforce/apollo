@@ -23,7 +23,13 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KERL extends KEL {
 
-    record EventWithAttachments(KeyEvent event, Attachment attachments) {}
+    record EventWithAttachments(KeyEvent event, Attachment attachments) {
+
+        public com.salesfoce.apollo.stereotomy.event.proto.KeyEvent toKeyEvente() {
+            var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.newBuilder();
+            event.setEventOf(builder);
+            return builder.setAttachment(attachments.toAttachemente()).build();
+        }}
 
     CompletableFuture<Void> append(AttachmentEvent event);
 

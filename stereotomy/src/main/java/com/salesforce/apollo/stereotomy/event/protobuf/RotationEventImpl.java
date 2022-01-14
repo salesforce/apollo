@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.Builder;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -49,19 +50,32 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
 
     @Override
     public List<BasicIdentifier> getWitnessesAddedList() {
-        return event.getSpecification().getWitnessesAddedList().stream().map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null).collect(Collectors.toList());
+        return event.getSpecification()
+                    .getWitnessesAddedList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
+                    .collect(Collectors.toList());
     }
 
     @Override
     public List<BasicIdentifier> getWitnessesRemovedList() {
-        return event.getSpecification().getWitnessesRemovedList().stream().map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null).collect(Collectors.toList());
+        return event.getSpecification()
+                    .getWitnessesRemovedList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
+                    .collect(Collectors.toList());
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(event);
+    }
+
+    @Override
+    public void setEventOf(Builder builder) {
+        builder.setRotation(event);
     }
 
     @Override
