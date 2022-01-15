@@ -36,6 +36,7 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -113,10 +114,10 @@ public class ShardedKERLTest {
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
         var opti = controller.newIdentifier();
-        ControlledIdentifier base = opti.get();
+        ControlledIdentifier<Identifier> base = opti.get();
 
           opti = base.newIdentifier(IdentifierSpecification.newBuilder());
-        ControlledIdentifier identifier = opti.get();
+        ControlledIdentifier<Identifier> identifier = opti.get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
