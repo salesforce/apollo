@@ -158,7 +158,8 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     @Override
-    public InceptionEvent inception(Identifier identifier, IdentifierSpecification specification) {
+    public <D extends Identifier, E extends Identifier> InceptionEvent inception(E identifier,
+                                                                                 IdentifierSpecification<D> specification) {
         var delegated = !identifier.equals(Identifier.NONE);
 
         var inceptionStatement = identifierSpec(identifier, specification, delegated);
@@ -210,8 +211,9 @@ public class ProtobufEventFactory implements EventFactory {
         return Version.newBuilder().setMajor(version.getMajor()).setMinor(version.getMinor());
     }
 
-    private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification,
-                                          boolean delegated) {
+    private <D extends Identifier> IdentifierSpec identifierSpec(Identifier identifier,
+                                                                 IdentifierSpecification<D> specification,
+                                                                 boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
                                          .addAllKeys(specification.getKeys()

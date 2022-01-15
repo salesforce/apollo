@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -13,6 +14,12 @@ import org.junit.jupiter.api.Test;
  *
  */
 public class NodeTest {
+
+    @BeforeEach
+    public void before() {
+
+    }
+
     @Test
     public void smoke() {
     }

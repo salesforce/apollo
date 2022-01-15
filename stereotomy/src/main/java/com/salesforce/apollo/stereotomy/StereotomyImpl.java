@@ -165,7 +165,8 @@ public class StereotomyImpl implements Stereotomy {
 
     }
 
-    private class BoundControllableIdentifier extends AbstractCtrlId implements BoundIdentifier {
+    private class BoundControllableIdentifier<D extends Identifier> extends AbstractCtrlId
+                                             implements BoundIdentifier<D> {
         volatile KeyState state;
 
         public BoundControllableIdentifier(KeyState state) {
@@ -180,13 +181,18 @@ public class StereotomyImpl implements Stereotomy {
             if (!super.equals(obj)) {
                 return false;
             }
-            if (!(obj instanceof BoundControllableIdentifier other)) {
+            if (!(obj instanceof BoundControllableIdentifier<?> other)) {
                 return false;
             }
             if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
             return Objects.equals(state, other.state);
+        }
+
+        @SuppressWarnings("unchecked")
+        public D getIdentifier() {
+            return (D) super.getIdentifier();
         }
 
         @Override
@@ -214,15 +220,16 @@ public class StereotomyImpl implements Stereotomy {
 
     }
 
-    private class ControlledIdentifierImpl extends BoundControllableIdentifier implements ControlledIdentifier {
+    private class ControlledIdentifierImpl<D extends Identifier> extends BoundControllableIdentifier<D>
+                                          implements ControlledIdentifier<D> {
 
         public ControlledIdentifierImpl(KeyState state) {
             super(state);
         }
 
         @Override
-        public BoundIdentifier bind() {
-            return new BoundControllableIdentifier(getState());
+        public BoundIdentifier<D> bind() {
+            return new BoundControllableIdentifier<D>(getState());
         }
 
         @Override
@@ -233,7 +240,7 @@ public class StereotomyImpl implements Stereotomy {
             if (!super.equals(obj)) {
                 return false;
             }
-            if (!(obj instanceof ControlledIdentifierImpl other)) {
+            if (!(obj instanceof @SuppressWarnings("rawtypes") ControlledIdentifierImpl other)) {
                 return false;
             }
             if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
@@ -267,8 +274,9 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
-            return StereotomyImpl.this.newIdentifier(this, spec);
+        public <E extends Identifier> Optional<ControlledIdentifier<E>> newIdentifier(IdentifierSpecification.Builder<E> spec) {
+            var returned = StereotomyImpl.this.newIdentifier(this, spec);
+            return returned;
         }
 
         @Override
@@ -358,23 +366,23 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public Optional<BoundIdentifier> bindingOf(EventCoordinates coordinates) {
+    public <D extends Identifier> Optional<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates) {
         final var lookup = kerl.getKeyState(coordinates);
         if (lookup.isEmpty()) {
             log.warn("Identifier has no key state: {}", coordinates);
             return Optional.empty();
         }
-        return Optional.of(new ControlledIdentifierImpl(lookup.get()));
+        return Optional.of(new ControlledIdentifierImpl<D>(lookup.get()));
     }
 
     @Override
-    public Optional<ControlledIdentifier> controlOf(Identifier identifier) {
+    public <D extends Identifier> Optional<ControlledIdentifier<D>> controlOf(D identifier) {
         final var lookup = kerl.getKeyState(identifier);
         if (lookup.isEmpty()) {
             log.warn("Identifier has no key state: {}", identifier);
             return Optional.empty();
         }
-        return Optional.of(new ControlledIdentifierImpl(lookup.get()));
+        return Optional.of(new ControlledIdentifierImpl<D>(lookup.get()));
     }
 
     @Override
@@ -393,12 +401,12 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public Optional<ControlledIdentifier> newIdentifier() {
+    public <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier() {
         return newIdentifier(IdentifierSpecification.newBuilder());
     }
 
     @Override
-    public Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec) {
+    public <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(IdentifierSpecification.Builder<D> spec) {
         var event = inception(Identifier.NONE, spec);
         KeyState state;
         try {
@@ -412,7 +420,7 @@ public class StereotomyImpl implements Stereotomy {
             log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
             return Optional.empty();
         }
-        ControlledIdentifier cid = new ControlledIdentifierImpl(state);
+        ControlledIdentifier<D> cid = new ControlledIdentifierImpl<D>(state);
 
         log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
                  cid.getIdentifier(), cid.getCoordinates());
@@ -447,8 +455,9 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(new Signer.SignerImpl(signers));
     }
 
-    private InceptionEvent inception(Identifier delegatingIdentifier, IdentifierSpecification.Builder spec) {
-        IdentifierSpecification.Builder specification = spec.clone();
+    private <D extends Identifier> InceptionEvent inception(Identifier delegatingIdentifier,
+                                                            IdentifierSpecification.Builder<D> spec) {
+        IdentifierSpecification.Builder<D> specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
@@ -493,8 +502,8 @@ public class StereotomyImpl implements Stereotomy {
         return event;
     }
 
-    private Optional<ControlledIdentifier> newIdentifier(ControlledIdentifier delegator,
-                                                         IdentifierSpecification.Builder spec) {
+    private <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
+                                                                                   IdentifierSpecification.Builder<D> spec) {
         // The delegated inception
         var event = inception(delegator.getIdentifier(), spec);
 
@@ -535,12 +544,12 @@ public class StereotomyImpl implements Stereotomy {
 
         // Update delegating state. Bit of a hack at the moment
         KeyState delegatingState = states.get(1);
-        if (delegator instanceof ControlledIdentifierImpl controller) {
+        if (delegator instanceof ControlledIdentifierImpl<?> controller) {
             controller.setState(delegatingState);
         }
 
         // Finally, the new delegated identifier
-        ControlledIdentifier cid = new ControlledIdentifierImpl(delegatedState);
+        ControlledIdentifier<D> cid = new ControlledIdentifierImpl<D>(delegatedState);
 
         log.info("New {} delegator: {} identifier: {} coordinates: {}",
                  spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),

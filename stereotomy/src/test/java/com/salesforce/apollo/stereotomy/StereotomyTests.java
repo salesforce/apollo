@@ -32,6 +32,7 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -109,7 +110,7 @@ public class StereotomyTests {
     public void newIdentifier() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        ControlledIdentifier identifier = controller.newIdentifier().get();
+        ControlledIdentifier<Identifier> identifier = controller.newIdentifier().get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -167,9 +168,9 @@ public class StereotomyTests {
     @Test
     public void newIdentifierFromIdentifier() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
-        ControlledIdentifier base = controller.newIdentifier().get();
+        ControlledIdentifier<Identifier> base = controller.newIdentifier().get();
 
-        ControlledIdentifier identifier = base.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        ControlledIdentifier<Identifier> identifier = base.newIdentifier(IdentifierSpecification.newBuilder()).get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -247,7 +248,7 @@ public class StereotomyTests {
         kel = new MemKERL(DigestAlgorithm.DEFAULT, MVStore.open(null));
     }
 
-    private void provision(ControlledIdentifier i, Stereotomy controller) throws Exception {
+    private void provision(ControlledIdentifier<?> i, Stereotomy controller) throws Exception {
         var now = Instant.now();
         var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
         var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();

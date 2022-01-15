@@ -66,14 +66,15 @@ public interface Identifier {
         return Identifier.NONE;
     }
 
-    public static Identifier identifier(IdentifierSpecification spec, ByteBuffer inceptionStatement) {
+    @SuppressWarnings("unchecked")
+    public static <D extends Identifier> D identifier(IdentifierSpecification<D> spec, ByteBuffer inceptionStatement) {
         var derivation = spec.getDerivation();
         if (derivation.isAssignableFrom(BasicIdentifier.class)) {
-            return basic(spec.getKeys().get(0));
+            return (D) basic(spec.getKeys().get(0));
         } else if (derivation.isAssignableFrom(SelfAddressingIdentifier.class)) {
-            return selfAddressing(inceptionStatement, spec.getSelfAddressingDigestAlgorithm());
+            return (D) selfAddressing(inceptionStatement, spec.getSelfAddressingDigestAlgorithm());
         } else if (derivation.isAssignableFrom(SelfSigningIdentifier.class)) {
-            return selfSigning(inceptionStatement, spec.getSigner());
+            return (D) selfSigning(inceptionStatement, spec.getSigner());
         } else {
             throw new IllegalArgumentException("unknown prefix type: " + derivation.getCanonicalName());
         }

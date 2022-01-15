@@ -133,12 +133,12 @@ public interface Stereotomy {
     /**
      * Answer the BoundIdentifier of the EventCoordinates
      */
-    Optional<BoundIdentifier> bindingOf(EventCoordinates coordinates);
+    <D extends Identifier> Optional<BoundIdentifier<D>> bindingOf(EventCoordinates coordinates);
 
     /**
      * Answer the Controllable identifier
      */
-    Optional<ControlledIdentifier> controlOf(Identifier identifier);
+    <D extends Identifier> Optional<ControlledIdentifier<D>> controlOf(D identifier);
 
     /**
      * Answer the KeyState of the provided event coordinates
@@ -161,11 +161,11 @@ public interface Stereotomy {
      * Answer a new ControlledIdentifier created from the default specification
      * prototype and Identifier.NONE as the base identifier
      */
-    Optional<ControlledIdentifier> newIdentifier();
+    <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier();
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification
      * prototype and Identifier.NONE as the base identifier
      */
-    Optional<ControlledIdentifier> newIdentifier(IdentifierSpecification.Builder spec);
+    <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(IdentifierSpecification.Builder<D> spec);
 }

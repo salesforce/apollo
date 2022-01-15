@@ -18,6 +18,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -29,11 +30,11 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  * @author hal.hildebrand
  *
  */
-public interface ControlledIdentifier extends BoundIdentifier {
+public interface ControlledIdentifier<D extends Identifier> extends BoundIdentifier<D> {
     /**
      * @return the binding of the identifier to the current key state
      */
-    BoundIdentifier bind();
+    BoundIdentifier<D> bind();
 
     /**
      * @return the KERL of the receiver identifier
@@ -48,7 +49,7 @@ public interface ControlledIdentifier extends BoundIdentifier {
     /**
      * Create a new delegated identifier using the receiver as the base.
      */
-    Optional<ControlledIdentifier> newIdentifier(Builder newBuilder);
+    <E extends Identifier> Optional<ControlledIdentifier<E>> newIdentifier(Builder<E> newBuilder);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using

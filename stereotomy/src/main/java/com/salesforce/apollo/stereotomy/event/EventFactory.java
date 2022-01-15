@@ -16,7 +16,8 @@ public interface EventFactory {
 
     AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment);
 
-    InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
+    <D extends Identifier, E extends Identifier> InceptionEvent inception(E identifier,
+                                                                          IdentifierSpecification<D> specification);
 
     KeyEvent interaction(InteractionSpecification specification);
 

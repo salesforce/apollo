@@ -158,7 +158,7 @@ public class TestUniKERL {
         rotation = rotation(rotation, prevNext, uni, factory, nextKeyPair);
     }
 
-    private InceptionEvent inception(Builder specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
+    private InceptionEvent inception(Builder<?> specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
                                      KeyPair nextKeyPair) {
 
         specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
