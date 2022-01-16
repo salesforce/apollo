@@ -49,7 +49,7 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     /**
      * Create a new delegated identifier using the receiver as the base.
      */
-    <E extends Identifier> Optional<ControlledIdentifier<E>> newIdentifier(Builder<E> newBuilder);
+    <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using

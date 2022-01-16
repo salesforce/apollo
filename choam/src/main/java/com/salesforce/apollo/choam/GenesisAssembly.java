@@ -275,8 +275,10 @@ public class GenesisAssembly implements Genesis {
         final var mid = Digest.from(vm.getId());
         final var m = nextAssembly.get(mid);
         if (m == null) {
-            log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                      params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                          params().member());
+            }
             return;
         }
         if (m.equals(params().member())) {
@@ -286,18 +288,25 @@ public class GenesisAssembly implements Genesis {
         PubKey encoded = vm.getConsensusKey();
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
-            log.trace("Could not verify consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not verify consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
 
         PublicKey consensusKey = publicKey(encoded);
         if (consensusKey == null) {
-            log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not deserialize consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
-        log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()), params().member());
+        if (log.isTraceEnabled()) {
+            log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                      params().member());
+        }
         var proposed = proposals.computeIfAbsent(mid, k -> new Proposed(join, m));
         if (join.getEndorsementsList().size() == 1) {
             proposed.certifications.computeIfAbsent(m, k -> join.getEndorsements(0));

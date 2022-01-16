@@ -183,7 +183,7 @@ public record Parameters(Context<Member> context, Router communications, Signing
         return new Builder();
     }
 
-    public static class Builder {
+    public static class Builder implements Cloneable {
         private final static Function<ULong, File> NULL_CHECKPOINTER = h -> {
             File cp;
             try {

@@ -274,9 +274,8 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public <E extends Identifier> Optional<ControlledIdentifier<E>> newIdentifier(IdentifierSpecification.Builder<E> spec) {
-            var returned = StereotomyImpl.this.newIdentifier(this, spec);
-            return returned;
+        public <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(IdentifierSpecification.Builder<I> spec) {
+            return StereotomyImpl.this.newIdentifier(this, spec);
         }
 
         @Override
@@ -401,12 +400,12 @@ public class StereotomyImpl implements Stereotomy {
     }
 
     @Override
-    public <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier() {
+    public Optional<ControlledIdentifier<? extends Identifier>> newIdentifier() {
         return newIdentifier(IdentifierSpecification.newBuilder());
     }
 
     @Override
-    public <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(IdentifierSpecification.Builder<D> spec) {
+    public Optional<ControlledIdentifier<? extends Identifier>> newIdentifier(IdentifierSpecification.Builder<? super Identifier> spec) {
         var event = inception(Identifier.NONE, spec);
         KeyState state;
         try {
@@ -420,7 +419,7 @@ public class StereotomyImpl implements Stereotomy {
             log.warn("Unable to append inception event for identifier: {}", event.getIdentifier());
             return Optional.empty();
         }
-        ControlledIdentifier<D> cid = new ControlledIdentifierImpl<D>(state);
+        ControlledIdentifier<?> cid = new ControlledIdentifierImpl<>(state);
 
         log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
                  cid.getIdentifier(), cid.getCoordinates());
@@ -502,8 +501,8 @@ public class StereotomyImpl implements Stereotomy {
         return event;
     }
 
-    private <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
-                                                                                   IdentifierSpecification.Builder<D> spec) {
+    private <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(ControlledIdentifier<? extends Identifier> delegator,
+                                                                                   IdentifierSpecification.Builder<I> spec) {
         // The delegated inception
         var event = inception(delegator.getIdentifier(), spec);
 
@@ -549,7 +548,7 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         // Finally, the new delegated identifier
-        ControlledIdentifier<D> cid = new ControlledIdentifierImpl<D>(delegatedState);
+        ControlledIdentifier<I> cid = new ControlledIdentifierImpl<I>(delegatedState);
 
         log.info("New {} delegator: {} identifier: {} coordinates: {}",
                  spec.getWitnesses().isEmpty() ? "Private" : "Public", cid.getDelegatingIdentifier(),

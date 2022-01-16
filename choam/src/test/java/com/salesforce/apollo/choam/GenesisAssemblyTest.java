@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.security.KeyPair;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,6 +51,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -123,16 +125,15 @@ public class GenesisAssemblyTest {
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
-            final var mbr = m;
-            final SigningMember sm = (SigningMember) mbr;
             when(s.join(any(JoinRequest.class), any(Digest.class))).then(new Answer<ViewMember>() {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
-                    final PubKey consensus = bs(mbr.getPublicKey());
+                    KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
+                    final PubKey consensus = bs(keyPair.getPublic());
                     return ViewMember.newBuilder()
-                                     .setId(mbr.getId().toDigeste())
+                                     .setId(m.getId().toDigeste())
                                      .setConsensusKey(consensus)
-                                     .setSignature(sm.sign(consensus.toByteString()).toSig())
+                                     .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
 
                 }
@@ -162,11 +163,12 @@ public class GenesisAssemblyTest {
             var view = new GenesisContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
                                           reconfigure);
 
-            final PubKey consensus = bs(m.getPublicKey());
+            KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
+            final PubKey consensus = bs(keyPair.getPublic());
             var vm = ViewMember.newBuilder()
                                .setId(m.getId().toDigeste())
                                .setConsensusKey(consensus)
-                               .setSignature(sm.sign(consensus.toByteString()).toSig())
+                               .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                .build();
             genii.put(m, new GenesisAssembly(view, comms.get(m), vm));
         });

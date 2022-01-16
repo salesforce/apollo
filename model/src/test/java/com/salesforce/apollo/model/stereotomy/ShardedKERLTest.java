@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -113,11 +114,11 @@ public class ShardedKERLTest {
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
-        var opti = controller.newIdentifier();
-        ControlledIdentifier<Identifier> base = opti.get();
+        Optional<ControlledIdentifier<? extends Identifier>> opti = controller.newIdentifier();
+        ControlledIdentifier<? extends Identifier> base = opti.get();
 
-          opti = base.newIdentifier(IdentifierSpecification.newBuilder());
-        ControlledIdentifier<Identifier> identifier = opti.get();
+        var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());
+        ControlledIdentifier<? extends Identifier> identifier = opti2.get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);

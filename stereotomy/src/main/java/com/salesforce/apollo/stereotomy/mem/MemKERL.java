@@ -19,8 +19,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
-import org.h2.mvstore.MVStore;
-
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -96,7 +94,7 @@ public class MemKERL implements KERL {
     // Order by <receiptOrdering>
     private final Map<String, AttachmentEvent.Attachment> receipts = new ConcurrentHashMap<>();
 
-    public MemKERL(DigestAlgorithm digestAlgorithm, MVStore store) {
+    public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
     }
 

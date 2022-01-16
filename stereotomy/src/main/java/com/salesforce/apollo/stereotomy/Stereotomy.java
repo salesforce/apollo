@@ -161,11 +161,11 @@ public interface Stereotomy {
      * Answer a new ControlledIdentifier created from the default specification
      * prototype and Identifier.NONE as the base identifier
      */
-    <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier();
+    Optional<ControlledIdentifier<? extends Identifier>> newIdentifier();
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification
      * prototype and Identifier.NONE as the base identifier
      */
-    <D extends Identifier> Optional<ControlledIdentifier<D>> newIdentifier(IdentifierSpecification.Builder<D> spec);
+    Optional<ControlledIdentifier<? extends Identifier>> newIdentifier(IdentifierSpecification.Builder<? super Identifier> spec);
 }

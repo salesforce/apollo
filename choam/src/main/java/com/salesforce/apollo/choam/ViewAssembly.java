@@ -387,26 +387,35 @@ public class ViewAssembly implements Reconfiguration {
         final var mid = Digest.from(vm.getId());
         final var m = nextAssembly.get(mid);
         if (m == null) {
-            log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                      params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                          params().member());
+            }
             return;
         }
 
         PubKey encoded = vm.getConsensusKey();
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
-            log.trace("Could not verify consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not verify consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
 
         PublicKey consensusKey = publicKey(encoded);
         if (consensusKey == null) {
-            log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not deserialize consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
-        log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()), params().member());
+        if (log.isTraceEnabled()) {
+            log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                      params().member());
+        }
         proposals.computeIfAbsent(mid, k -> new Proposed(vm, m, new ConcurrentHashMap<>()));
     }
 

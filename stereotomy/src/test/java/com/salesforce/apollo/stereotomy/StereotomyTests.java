@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -110,7 +109,7 @@ public class StereotomyTests {
     public void newIdentifier() {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
 
-        ControlledIdentifier<Identifier> identifier = controller.newIdentifier().get();
+        ControlledIdentifier<? extends Identifier> identifier = controller.newIdentifier().get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -168,9 +167,10 @@ public class StereotomyTests {
     @Test
     public void newIdentifierFromIdentifier() throws Exception {
         Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
-        ControlledIdentifier<Identifier> base = controller.newIdentifier().get();
+        ControlledIdentifier<? extends Identifier> base = controller.newIdentifier().get();
 
-        ControlledIdentifier<Identifier> identifier = base.newIdentifier(IdentifierSpecification.newBuilder()).get();
+        ControlledIdentifier<? extends Identifier> identifier = base.newIdentifier(IdentifierSpecification.newBuilder())
+                                                                    .get();
 
         // identifier
         assertTrue(identifier.getIdentifier() instanceof SelfAddressingIdentifier);
@@ -245,7 +245,7 @@ public class StereotomyTests {
     }
 
     void initializeKel() throws Exception {
-        kel = new MemKERL(DigestAlgorithm.DEFAULT, MVStore.open(null));
+        kel = new MemKERL(DigestAlgorithm.DEFAULT);
     }
 
     private void provision(ControlledIdentifier<?> i, Stereotomy controller) throws Exception {

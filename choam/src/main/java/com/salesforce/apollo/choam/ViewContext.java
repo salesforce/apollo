@@ -103,11 +103,13 @@ public class ViewContext {
     public Validate generateValidation(ViewMember vm) {
         JohnHancock signature = signer.sign(vm.getSignature().toByteString());
         if (signature == null) {
-            log.error("Unable to sign view member: {}  on: {}", print(vm, params.digestAlgorithm()), params.member());
+            log.error("Unable to sign view member: {} on: {}", print(vm, params.digestAlgorithm()), params.member());
             return null;
         }
-        log.trace("Signed view member: {} sig: {} on: {}", print(vm, params.digestAlgorithm()),
-                  params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member());
+        if (log.isTraceEnabled()) {
+            log.trace("Signed view member: {} with sig: {} on: {}", print(vm, params.digestAlgorithm()),
+                      params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member());
+        }
         var validation = Validate.newBuilder()
                                  .setHash(vm.getId())
                                  .setWitness(Certification.newBuilder()
@@ -158,28 +160,37 @@ public class ViewContext {
 
     public boolean validate(ViewMember vm, Validate validate) {
         Verifier v = verifierOf(validate);
+        if (v == null) {
+            return false;
+        }
         final var valid = v.verify(JohnHancock.from(validate.getWitness().getSignature()),
                                    vm.getSignature().toByteString());
         if (!valid) {
-            log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
-                      print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
-                      params.digestAlgorithm().digest(v.toString()), params.member());
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
+                          print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
+                          params.digestAlgorithm().digest(v.toString()), params.member());
+            }
         }
-        return v == null ? false : valid;
+        return valid;
     }
 
     protected Verifier verifierOf(Validate validate) {
         final var mid = Digest.from(validate.getWitness().getId());
         var m = context.getMember(mid);
         if (m == null) {
-            log.debug("Unable to validate key by non existant validator: {} on: {}",
-                      print(validate, params.digestAlgorithm()), params.member());
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                          print(validate, params.digestAlgorithm()), params.member());
+            }
             return null;
         }
         Verifier v = validators.get(m);
         if (v == null) {
-            log.debug("Unable to validate key by non existant validator: {} on: {}",
-                      print(validate, params.digestAlgorithm()), params.member());
+            if (log.isDebugEnabled()) {
+                log.debug("Unable to validate key by non existant validator: {} on: {}",
+                          print(validate, params.digestAlgorithm()), params.member());
+            }
             return null;
         }
         return v;

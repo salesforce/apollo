@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import java.io.InputStream;
-import java.security.PublicKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -134,11 +133,6 @@ public class Participant implements Member {
     }
 
     @Override
-    public PublicKey getPublicKey() {
-        return wrapped.getPublicKey();
-    }
-
-    @Override
     public int hashCode() {
         return wrapped.hashCode();
     }
@@ -219,16 +213,22 @@ public class Participant implements Member {
     }
 
     List<Accusation> getEncodedAccusations(int rings) {
-        return IntStream.range(0, rings).mapToObj(i -> getEncodedAccusation(i)).filter(e -> e != null)
-                        .map(e -> e.getWrapped()).collect(Collectors.toList());
+        return IntStream.range(0, rings)
+                        .mapToObj(i -> getEncodedAccusation(i))
+                        .filter(e -> e != null)
+                        .map(e -> e.getWrapped())
+                        .collect(Collectors.toList());
     }
 
     EncodedCertificate getEncodedCertificate() {
         NoteWrapper current = note;
         return current == null ? null
-                               : EncodedCertificate.newBuilder().setId(getId().toDigeste()).setEpoch(current.getEpoch())
+                               : EncodedCertificate.newBuilder()
+                                                   .setId(getId().toDigeste())
+                                                   .setEpoch(current.getEpoch())
                                                    .setHash(certificateHash.toDigeste())
-                                                   .setContent(ByteString.copyFrom(derEncodedCertificate)).build();
+                                                   .setContent(ByteString.copyFrom(derEncodedCertificate))
+                                                   .build();
     }
 
     long getEpoch() {

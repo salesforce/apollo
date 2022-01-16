@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.security.KeyPair;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +43,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -70,8 +72,6 @@ public class ViewAssemblyTest {
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        Map<Member, Verifier> validators = committee.allMembers().collect(Collectors.toMap(m -> m, m -> m));
-
         final var executor = Executors.newCachedThreadPool();
         Parameters.Builder params = Parameters.newBuilder()
                                               .setScheduler(Executors.newScheduledThreadPool(cardinality))
@@ -84,18 +84,18 @@ public class ViewAssemblyTest {
 
         Map<Member, ViewAssembly> recons = new HashMap<>();
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
-
+        Map<Member, KeyPair> consensusPairs = new HashMap<>();
         servers.forEach((m, s) -> {
-            final var mbr = m;
-            final SigningMember sm = (SigningMember) mbr;
+            KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
+            consensusPairs.put(m, keyPair);
+            final PubKey consensus = bs(keyPair.getPublic());
             when(s.join(any(JoinRequest.class), any(Digest.class))).then(new Answer<ViewMember>() {
                 @Override
                 public ViewMember answer(InvocationOnMock invocation) throws Throwable {
-                    final PubKey consensus = bs(mbr.getPublicKey());
                     return ViewMember.newBuilder()
-                                     .setId(mbr.getId().toDigeste())
+                                     .setId(m.getId().toDigeste())
                                      .setConsensusKey(consensus)
-                                     .setSignature(sm.sign(consensus.toByteString()).toSig())
+                                     .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
 
                 }
@@ -118,12 +118,19 @@ public class ViewAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
+
+        Map<Member, Verifier> validators = consensusPairs.entrySet()
+                                                         .stream()
+                                                         .collect(Collectors.toMap(e -> e.getKey(),
+                                                                                   e -> new Verifier.DefaultVerifier(e.getValue()
+                                                                                                                      .getPublic())));
         committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
-            ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
-                                               validators, null);
+            ViewContext view = new ViewContext(committee, params.setMember(sm).setCommunications(router).build(),
+                                               new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
+                                               null);
             recons.put(m, new ViewAssembly(nextViewId, view, comms.get(m)) {
 
                 @Override
