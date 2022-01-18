@@ -28,8 +28,12 @@ public interface KERL extends KEL {
         public com.salesfoce.apollo.stereotomy.event.proto.KeyEvent toKeyEvente() {
             var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.newBuilder();
             event.setEventOf(builder);
-            return builder.setAttachment(attachments.toAttachemente()).build();
-        }}
+            if (attachments != null) {
+                builder.setAttachment(attachments.toAttachemente());
+            }
+            return builder.build();
+        }
+    }
 
     CompletableFuture<Void> append(AttachmentEvent event);
 

@@ -123,7 +123,6 @@ public class GenesisAssembly implements Genesis {
         proposals.values()
                  .stream()
                  .filter(p -> p.certifications.size() > params().toleranceLevel())
-                 .sorted(Comparator.comparing(p -> p.member.getId()))
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
         reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                           view.genesis(slate, view.context().getId(),

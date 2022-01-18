@@ -12,26 +12,34 @@ import static java.nio.file.Path.of;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.JDBCType;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
+import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
-import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -50,6 +58,7 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class Node {
+    private static final Logger log = LoggerFactory.getLogger(Node.class);
 
     public static Txn boostrapMigration() {
         Map<Path, URL> resources = new HashMap<>();
@@ -143,15 +152,28 @@ public class Node {
         return identifier.getIdentifier();
     }
 
+    public void start() {
+        shard.start();
+    }
+
+    public void stop() {
+        shard.stop();
+    }
+
     // Provide the list of transactions establishing the unified KERL of the group
     private List<Transaction> genesisOf(Map<Member, Join> members) {
-        return members.entrySet()
-                      .stream()
-                      .sorted()
-                      .map(e -> manifest(e.getValue()))
-                      .filter(t -> t != null)
-                      .flatMap(l -> l.stream())
-                      .toList();
+        log.info("Genesis joins: {} on: {}", members.keySet(), params.member());
+        var sorted = new ArrayList<Member>(members.keySet());
+        sorted.sort(Comparator.naturalOrder());
+        List<Transaction> transactions = new ArrayList<>();
+        // Schemas
+        transactions.add(transactionOf(boostrapMigration()));
+        sorted.stream()
+              .map(e -> manifest(members.get(e)))
+              .filter(t -> t != null)
+              .flatMap(l -> l.stream())
+              .forEach(t -> transactions.add(t));
+        return transactions;
     }
 
     // Answer the KERL of this node
@@ -168,7 +190,6 @@ public class Node {
     // Manifest the transactions that instantiate the KERL for this Join. The Join
     // is validated as a side effect and if invalid, NULL is returned.
     private List<Transaction> manifest(Join join) {
-        // TODO validate
         return join.getKerl().getEventsList().stream().map(ke -> transactionOf(ke)).toList();
     }
 
@@ -185,15 +206,29 @@ public class Node {
         batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
                                    Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
                                    DigestAlgorithm.DEFAULT.digestCode()));
-        if (ke.getAttachment().isInitialized()) {
+        if (!ke.getAttachment().equals(Attachment.getDefaultInstance())) {
             var attach = AttachmentEvent.newBuilder()
                                         .setCoordinates(event.getCoordinates().toEventCoords())
                                         .setAttachment(ke.getAttachment())
                                         .build();
-            batch.execute(mutator.call("{ ? = call stereotomy.appendAttachement(?) }",
+            batch.execute(mutator.call("{ ? = call stereotomy.appendAttachment(?) }",
                                        Collections.singletonList(JDBCType.BINARY), attach.toByteArray()));
         }
-        return Session.transactionOf(params.member().getId(), 0, batch.build(), params.member());
+        return transactionOf(Txn.newBuilder().setBatched(batch.build()).build());
     }
 
+    private Transaction transactionOf(Message message) {
+        ByteBuffer buff = ByteBuffer.allocate(4);
+        buff.putInt(0);
+        buff.flip();
+        var signer = new Signer.MockSigner(params.viewSigAlgorithm());
+        var digeste = params.digestAlgorithm().getOrigin().toDigeste();
+        var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
+                              message.toByteString().asReadOnlyByteBuffer());
+        return Transaction.newBuilder()
+                          .setSource(digeste)
+                          .setContent(message.toByteString())
+                          .setSignature(sig.toSig())
+                          .build();
+    }
 }

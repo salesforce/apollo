@@ -25,10 +25,15 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
 public interface Signer {
 
     class MockSigner implements Signer {
+        private final SignatureAlgorithm algorithm;
+        
+        public MockSigner(SignatureAlgorithm algorithm) {
+            this.algorithm = algorithm;
+        }
 
         @Override
         public SignatureAlgorithm algorithm() {
-            return SignatureAlgorithm.DEFAULT;
+            return algorithm;
         }
 
         @Override

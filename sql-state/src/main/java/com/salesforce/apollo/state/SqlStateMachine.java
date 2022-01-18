@@ -71,6 +71,7 @@ import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
 import com.salesforce.apollo.state.liquibase.LiquibaseConnection;
 import com.salesforce.apollo.state.liquibase.MigrationAccessor;
 import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
@@ -792,7 +793,7 @@ public class SqlStateMachine {
     }
 
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
-        if (onCompletion != null) { 
+        if (onCompletion != null) {
             var completed = onCompletion.completeExceptionally(e);
             assert completed : "Invalid state";
         }
@@ -858,6 +859,11 @@ public class SqlStateMachine {
         } catch (Exception e) {
             rollback();
             exception(onCompletion, e);
+            if (e instanceof BatchedTransactionException bte) {
+                log.error("error executing: {}: {}", tx.getExecutionCase(), bte.getCause().getMessage());
+            } else {
+                log.error("error executing: {}", tx.getExecutionCase(), e);
+            }
         } finally {
             commit();
         }

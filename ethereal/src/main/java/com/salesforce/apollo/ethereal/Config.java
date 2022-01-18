@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.crypto.Verifier;
@@ -70,7 +71,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         private int                                      orderStartLevel = 6;
         private double                                   pByz            = -1;
         private short                                    pid;
-        private Signer                                   signer          = new MockSigner();
+        private Signer                                   signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]                               verifiers;
         private WeakThresholdKey                         wtk;
         private int                                      zeroVoteRoundForCommonVote;

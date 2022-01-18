@@ -13,12 +13,12 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +50,17 @@ public class NodeTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
+    private final ArrayList<Node>        nodes   = new ArrayList<>();
+    private final ArrayList<LocalRouter> routers = new ArrayList<>();
+
+    @AfterEach
+    public void after() {
+        nodes.forEach(n -> n.stop());
+        nodes.clear();
+        routers.forEach(r -> r.close());
+        routers.clear();
+    }
+
     @BeforeEach
     public void before() throws SQLException {
         final var prefix = UUID.randomUUID().toString();
@@ -60,24 +71,21 @@ public class NodeTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
 
-        record memId(SigningMember m, ControlledIdentifier<SelfAddressingIdentifier> id) {}
-        var members = IntStream.range(0, CARDINALITY).mapToObj(i -> {
+        var members = new HashMap<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>>();
+        for (int i = 0; i < CARDINALITY; i++) {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            // TODO for now
             var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
 
-            return new memId(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
-                                                   cert.get().getPrivateKey(), id.getSigner().get(),
-                                                   id.getKeys().get(0)),
-                             id);
-        }).collect(Collectors.toMap(m -> m.m, m -> m.id));
+            members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
+                                              cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0)),
+                        id);
+        }
 
         members.keySet().forEach(m -> context.activate(m));
 
-        var nodes = new ArrayList<Node>();
         members.forEach((member, id) -> {
             AtomicInteger exec = new AtomicInteger();
 
@@ -92,15 +100,22 @@ public class NodeTest {
                                                   thread.setDaemon(true);
                                                   return thread;
                                               }));
-            params.setMember(member);
-            params.getProducer().ethereal().setSigner(member);
-            params.setCommunications(localRouter);
+            routers.add(localRouter);
+            params.setMember(member)
+                  .setCommunications(localRouter)
+                  .getProducer()
+                  .ethereal()
+                  .setSigner(member);
             nodes.add(new Node(id, params));
+            localRouter.start();
         });
     }
 
     @Test
-    public void smoke() {
+    public void smoke() throws Exception {
+        nodes.forEach(n -> n.start());
+
+        Thread.sleep(5000);
     }
 
     private Builder params(Context<Member> context) {

@@ -136,6 +136,9 @@ public class CHOAM {
 
         @Override
         public void awaitRegeneration() {
+            if (!started.get()) {
+                return;
+            }
             final HashedCertifiedBlock g = genesis.get();
             if (g != null) {
                 return;
@@ -156,6 +159,9 @@ public class CHOAM {
 
         @Override
         public void awaitSynchronization() {
+            if (!started.get()) {
+                return;
+            }
             HashedCertifiedBlock anchor = pending.poll();
             if (anchor != null) {
                 log.info("Synchronizing from anchor: {} on: {}", anchor.hash, params.member());
@@ -884,6 +890,7 @@ public class CHOAM {
             @Override
             public void publish(CertifiedBlock cb) {
                 combine.publish(cb, true);
+                log.trace("Published block height: {} on: {}", cb.getBlock().getHeader().getHeight(), params.member());
             }
 
             @Override
@@ -1023,9 +1030,10 @@ public class CHOAM {
             break;
         case GENESIS:
             cancelSynchronization();
-            reconfigure(h.block.getGenesis().getInitialView());
-            genesisInitialization(h, h.block.getGenesis().getInitializeList());
             transitions.regenerated();
+            genesisInitialization(h, h.block.getGenesis().getInitializeList());
+            reconfigure(h.block.getGenesis().getInitialView());
+            break;
         case EXECUTIONS:
             execute(h.block.getExecutions().getExecutionsList());
             break;
