@@ -153,7 +153,7 @@
                     <dependency>
                         <groupId>com.h2database</groupId>
                         <artifactId>h2</artifactId>
-                        <version>${h2.gen.version}</version>
+                        <version>${h2.version}</version>
                     </dependency>
                     <dependency>
                         <groupId>com.salesforce.apollo</groupId>
@@ -177,7 +177,7 @@
                     <dependency>
                         <groupId>com.h2database</groupId>
                         <artifactId>h2</artifactId>
-                        <version>${h2.gen.version}</version>
+                        <version>${h2.version}</version>
                     </dependency>
                 </dependencies>
                 <configuration>

@@ -33,7 +33,7 @@ public class Questions3Test {
     public void callSmokin() throws Exception {
         final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
@@ -41,7 +41,7 @@ public class Questions3Test {
         Liquibase liquibase = new Liquibase("delphinius/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         Oracle oracle = new CallOracle(connection);
 
         smoke(oracle);
@@ -51,7 +51,7 @@ public class Questions3Test {
     public void directSmokin() throws Exception {
         final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
@@ -59,7 +59,7 @@ public class Questions3Test {
                                                  database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         Oracle oracle = new DirectOracle(connection);
 
         smoke(oracle);
