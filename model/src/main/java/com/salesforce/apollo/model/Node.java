@@ -16,7 +16,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.JDBCType;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -93,14 +92,15 @@ public class Node {
         return dir;
     }
 
+    private final CHOAM                                          choam;
     @SuppressWarnings("unused")
     private final KERL                                           commonKERL;
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    private final Mutator                                        mutator;
     @SuppressWarnings("unused")
     private final Oracle                                         oracle;
     private final Parameters                                     params;
-
-    private final Shard shard;
+    private final SqlStateMachine                                sqlStateMachine;
 
     public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params) {
         this(id, params, "jdbc:h2:mem:", tempDirOf(id));
@@ -124,7 +124,7 @@ public class Node {
         }
         var checkpointDir = new File(dir, qb64(((SelfAddressingIdentifier) id.getIdentifier()).getDigest()));
         this.identifier = id;
-        SqlStateMachine sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
+        sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
         params.setCheckpointer(sqlStateMachine.getCheckpointer());
         params.setProcessor(sqlStateMachine.getExecutor());
         params.setRestorer(sqlStateMachine.getBootstrapper());
@@ -132,16 +132,11 @@ public class Node {
         params.setGenesisData(members -> genesisOf(members));
 
         this.params = params.build();
-        var choam = new CHOAM(this.params);
-        this.shard = new CHOAMShard(choam, sqlStateMachine);
-        try {
-            this.oracle = new ShardedOracle(shard.createConnection(), shard.getMutator(), params.getScheduler(),
-                                            params.getSubmitTimeout(), params.getExec());
-        } catch (SQLException e) {
-            throw new IllegalStateException("unable to create connection", e);
-        }
-        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(),
-                                          sqlStateMachine.getMutator(choam.getSession()), params.getScheduler(),
+        choam = new CHOAM(this.params);
+        mutator = sqlStateMachine.getMutator(choam.getSession());
+        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, params.getScheduler(),
+                                        params.getSubmitTimeout(), params.getExec());
+        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, params.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(), params.getExec());
     }
 
@@ -153,11 +148,11 @@ public class Node {
     }
 
     public void start() {
-        shard.start();
+        choam.start();
     }
 
     public void stop() {
-        shard.stop();
+        choam.stop();
     }
 
     // Provide the list of transactions establishing the unified KERL of the group
@@ -201,7 +196,6 @@ public class Node {
         case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
         default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
         };
-        var mutator = shard.getMutator();
         var batch = mutator.batch();
         batch.execute(mutator.call("{ ? = call stereotomy.append(?, ?, ?) }",
                                    Collections.singletonList(JDBCType.BINARY), event.getBytes(), event.getIlk(),
