@@ -463,7 +463,7 @@ public class SqlStateMachine {
         if (current == null) {
             withContext(() -> {
                 try {
-                    connection = new JdbcConnection(url, info, "", "");
+                    connection = new JdbcConnection(url, info, "", "", false);
                 } catch (SQLException e) {
                     throw new IllegalStateException("Unable to create connection using " + url, e);
                 }

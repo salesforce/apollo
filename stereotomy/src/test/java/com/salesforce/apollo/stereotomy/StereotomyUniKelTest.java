@@ -25,18 +25,17 @@ import liquibase.resource.ClassLoaderResourceAccessor;
  */
 public class StereotomyUniKelTest extends StereotomyTests {
 
-
     void initializeKel() throws SQLException, LiquibaseException {
-        final var url = String.format("jdbc:h2:mem:test_engine-%s;DB_CLOSE_DELAY=-1",
-                                      Math.random());
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        final var url = String.format("jdbc:h2:mem:test_engine-%s;DB_CLOSE_DELAY=-1", Math.random());
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
+                                                 database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         kel = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
     }
 }

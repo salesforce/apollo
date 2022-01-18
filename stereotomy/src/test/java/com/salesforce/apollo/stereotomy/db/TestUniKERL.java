@@ -54,14 +54,15 @@ public class TestUniKERL {
     public void smoke() throws Exception {
         var factory = new ProtobufEventFactory();
         final var url = "jdbc:h2:mem:test_engine-smoke;DB_CLOSE_DELAY=-1";
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
+                                                 database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         var uni = new UniKERLDirect(connection, DigestAlgorithm.DEFAULT);
 
         doOne(factory, uni);
@@ -161,8 +162,10 @@ public class TestUniKERL {
     private InceptionEvent inception(Builder<?> specification, KeyPair initialKeyPair, ProtobufEventFactory factory,
                                      KeyPair nextKeyPair) {
 
-        specification.addKey(initialKeyPair.getPublic()).setSigningThreshold(unweighted(1))
-                     .setNextKeys(List.of(nextKeyPair.getPublic())).setWitnesses(Collections.emptyList())
+        specification.addKey(initialKeyPair.getPublic())
+                     .setSigningThreshold(unweighted(1))
+                     .setNextKeys(List.of(nextKeyPair.getPublic()))
+                     .setWitnesses(Collections.emptyList())
                      .setSigner(new SignerImpl(initialKeyPair.getPrivate()));
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
@@ -209,9 +212,13 @@ public class TestUniKERL {
     private RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
                                    KeyPair nextKeyPair, ProtobufEventFactory factory) {
         var rotSpec = RotationSpecification.newBuilder();
-        rotSpec.setIdentifier(prev.getIdentifier()).setCurrentCoords(prev.getCoordinates()).setCurrentDigest(prevDigest)
-               .setKey(prevNext.getPublic()).setSigningThreshold(unweighted(1))
-               .setNextKeys(List.of(nextKeyPair.getPublic())).setSigner(new SignerImpl(prevNext.getPrivate()));
+        rotSpec.setIdentifier(prev.getIdentifier())
+               .setCurrentCoords(prev.getCoordinates())
+               .setCurrentDigest(prevDigest)
+               .setKey(prevNext.getPublic())
+               .setSigningThreshold(unweighted(1))
+               .setNextKeys(List.of(nextKeyPair.getPublic()))
+               .setSigner(new SignerImpl(prevNext.getPrivate()));
 
         RotationEvent rotation = factory.rotation(rotSpec.build(), false);
         return rotation;
