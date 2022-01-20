@@ -82,8 +82,8 @@ public interface Oracle {
     /** Grounding for all the domains */
     Namespace NO_NAMESPACE = new Namespace("");
     Relation  NO_RELATION  = new Relation(NO_NAMESPACE, "");
-    Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
     Object    NO_OBJECT    = new Object(NO_NAMESPACE, "", NO_RELATION);
+    Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
     Assertion NO_ASSERTION = new Assertion(NO_SUBJECT, NO_OBJECT);
 
     // Types for DAG
@@ -133,6 +133,12 @@ public interface Oracle {
      * object of the assertion.
      */
     CompletableFuture<Void> delete(Assertion assertion);
+
+    /**
+     * Delete a Namespace. All objects, subjects, relations and assertions that
+     * reference this namespace will also be deleted.
+     */
+    CompletableFuture<Void> delete(Namespace namespace);
 
     /**
      * Delete an Object. All dependant uses of the object (mappings, Assertions) are
@@ -267,11 +273,5 @@ public interface Oracle {
      * @throws SQLException
      */
     Stream<Subject> subjects(Relation predicate, Object object) throws SQLException;
-
-    /**
-     * Delete a Namespace. All objects, subjects, relations and assertions that
-     * reference this namespace will also be deleted.
-     */
-    CompletableFuture<Void> delete(Namespace namespace);
 
 }

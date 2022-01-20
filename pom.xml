@@ -19,6 +19,7 @@
         <module>model</module>
         <module>delphinius</module>
         <module>schemas</module>
+        <module>demo</module>
     </modules>
 
     <properties>
