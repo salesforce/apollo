@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -127,7 +128,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/delete/assertion")
     public void delete(Assertion assertion) {
@@ -140,7 +141,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/delete/namespace")
     public void delete(Namespace namespace) {
@@ -153,7 +154,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/delete/object")
     public void delete(Object object) {
@@ -166,7 +167,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/delete/relation")
     public void delete(Relation relation) {
@@ -179,7 +180,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/delete/subject")
     public void delete(Subject subject) {
@@ -316,7 +317,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/remove/object")
     public void removeObjectMapping(Assocation<Object> association) {
@@ -329,7 +330,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/remove/relation")
     public void removeRelationMapping(Assocation<Relation> association) {
@@ -342,7 +343,7 @@ public class AdminResource {
         }
     }
 
-    @POST
+    @DELETE
     @Timed
     @Path("admin/remove/subject")
     public void removeSubjectMapping(Assocation<Subject> association) {
