@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.demo;
 
-import com.salesforce.apollo.demo.rbac.AccessCheckResource;
 import com.salesforce.apollo.demo.rbac.AdminResource;
 
 import io.dropwizard.Application;
@@ -21,7 +20,6 @@ public class DemoApplication extends Application<DemoConfiguration> {
     @Override
     public void run(DemoConfiguration configuration, Environment environment) throws Exception {
         environment.jersey().register(new AdminResource(null));
-        environment.jersey().register(new AccessCheckResource());
         environment.healthChecks().register("demo", new DemoHealthCheck());
     }
 }

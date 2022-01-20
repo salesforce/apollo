@@ -2,7 +2,7 @@
  * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
- * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ * For full license text, see the LICENSE file in the repo root or https:/opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.demo.rbac;
 
@@ -32,7 +32,7 @@ import com.salesforce.apollo.delphinius.Oracle.Subject;
  * @author hal.hildebrand
  *
  */
-@Path("/rbac/admin")
+@Path("/rbac")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class AdminResource {
@@ -53,7 +53,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("add/assertion")
+    @Path("admin/add/assertion")
     public void add(Assertion assertion) {
         try {
             oracle.add(assertion).get();
@@ -66,7 +66,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("add/namespace")
+    @Path("admin/add/namespace")
     public void add(Namespace namespace) {
         try {
             oracle.add(namespace).get();
@@ -79,7 +79,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("add/object")
+    @Path("admin/add/object")
     public void add(Object object) {
         try {
             oracle.add(object).get();
@@ -92,7 +92,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("add/relation")
+    @Path("admin/add/relation")
     public void add(Relation relation) {
         try {
             oracle.add(relation).get();
@@ -105,7 +105,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("add/subject")
+    @Path("admin/add/subject")
     public void add(Subject subject) {
         try {
             oracle.add(subject).get();
@@ -118,7 +118,18 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("delete/assertion")
+    @Path("check")
+    public boolean check(Assertion assertion) {
+        try {
+            return oracle.check(assertion);
+        } catch (SQLException e) {
+            throw new WebApplicationException(e.getCause(), Response.Status.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @POST
+    @Timed
+    @Path("admin/delete/assertion")
     public void delete(Assertion assertion) {
         try {
             oracle.delete(assertion).get();
@@ -131,7 +142,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("delete/namespace")
+    @Path("admin/delete/namespace")
     public void delete(Namespace namespace) {
         try {
             oracle.delete(namespace).get();
@@ -144,7 +155,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("delete/object")
+    @Path("admin/delete/object")
     public void delete(Object object) {
         try {
             oracle.delete(object).get();
@@ -157,7 +168,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("delete/relation")
+    @Path("admin/delete/relation")
     public void delete(Relation relation) {
         try {
             oracle.delete(relation).get();
@@ -170,7 +181,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("delete/subject")
+    @Path("admin/delete/subject")
     public void delete(Subject subject) {
         try {
             oracle.delete(subject).get();
@@ -183,7 +194,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("expand/object")
+    @Path("admin/expand/object")
     public List<Subject> expand(Object object) {
         try {
             return oracle.expand(object);
@@ -194,7 +205,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("expand/objects")
+    @Path("admin/expand/objects")
     public List<Subject> expand(PredicateObject predicateObject) {
         try {
             return oracle.expand(predicateObject.predicate, predicateObject.object);
@@ -205,7 +216,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("expand/subjects")
+    @Path("admin/expand/subjects")
     public List<Object> expand(PredicateSubject predicateSubject) {
         try {
             return oracle.expand(predicateSubject.predicate, predicateSubject.subject);
@@ -216,7 +227,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("expand/subject")
+    @Path("admin/expand/subject")
     public List<Object> expand(Subject subject) {
         try {
             return oracle.expand(subject);
@@ -227,7 +238,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("map/object")
+    @Path("admin/map/object")
     public void mapObject(Assocation<Object> association) {
         try {
             oracle.map(association.a, association.b).get();
@@ -240,7 +251,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("map/relation")
+    @Path("admin/map/relation")
     public void mapRelation(Assocation<Relation> association) {
         try {
             oracle.map(association.a, association.b).get();
@@ -253,7 +264,7 @@ public class AdminResource {
 
     @PUT
     @Timed
-    @Path("map/subject")
+    @Path("admin/map/subject")
     public void mapSubject(Assocation<Subject> association) {
         try {
             oracle.map(association.a, association.b).get();
@@ -266,7 +277,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("read/objects/subjects")
+    @Path("admin/read/objects/subjects")
     public List<Subject> read(PredicateObjects predicateObjects) {
         try {
             return oracle.read(predicateObjects.predicate,
@@ -278,14 +289,14 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("read/subjects/objects")
+    @Path("admin/read/subjects/objects")
     public Response read(PredicateSubject predicateSubject) {
         return null;
     }
 
     @POST
     @Timed
-    @Path("read/subjects")
+    @Path("admin/read/subjects")
     public List<Subject> readObjects(List<Object> objects) {
         try {
             return oracle.read(objects.toArray(new Object[objects.size()]));
@@ -296,7 +307,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("read/objects")
+    @Path("admin/read/objects")
     public List<Object> readSubjects(List<Subject> subjects) {
         try {
             return oracle.read(subjects.toArray(new Subject[subjects.size()]));
@@ -307,7 +318,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("remove/object")
+    @Path("admin/remove/object")
     public void removeObjectMapping(Assocation<Object> association) {
         try {
             oracle.remove(association.a, association.b).get();
@@ -320,7 +331,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("remove/relation")
+    @Path("admin/remove/relation")
     public void removeRelationMapping(Assocation<Relation> association) {
         try {
             oracle.remove(association.a, association.b).get();
@@ -333,7 +344,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("remove/subject")
+    @Path("admin/remove/subject")
     public void removeSubjectMapping(Assocation<Subject> association) {
         try {
             oracle.remove(association.a, association.b).get();
@@ -346,7 +357,7 @@ public class AdminResource {
 
     @POST
     @Timed
-    @Path("subjects")
+    @Path("admin/subjects")
     public Stream<Subject> subjects(PredicateObject predicateObject) {
         try {
             return oracle.subjects(predicateObject.predicate, predicateObject.object);
