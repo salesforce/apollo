@@ -7,17 +7,13 @@
 package com.salesforce.apollo.ethereal;
 
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
-import java.util.function.BiFunction;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.MockSigner;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.ethereal.Adder.Correctness;
 import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 
 /**
@@ -29,8 +25,7 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
 public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
                      int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     List<BiFunction<Unit, Dag, Correctness>> checks, WeakThresholdKey WTKey, Clock clock, double bias,
-                     Verifier[] verifiers, double fpr) {
+                     WeakThresholdKey WTKey, Clock clock, double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -56,32 +51,30 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return new Builder().requiredByLinear();
         }
 
-        private int                                      bias            = 3;
-        private boolean                                  canSkipLevel    = false;
-        private List<BiFunction<Unit, Dag, Correctness>> checks          = new ArrayList<>();
-        private Clock                                    clock           = Clock.systemUTC();
-        private short                                    crpFixedPrefix;
-        private DigestAlgorithm                          digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int                                      epochLength     = 30;
-        private int                                      firstDecidedRound;
-        private double                                   fpr             = 0.125;
-        private int                                      lastLevel       = -1;
-        private short                                    nProc;
-        private int                                      numberOfEpochs  = 3;
-        private int                                      orderStartLevel = 6;
-        private double                                   pByz            = -1;
-        private short                                    pid;
-        private Signer                                   signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
-        private Verifier[]                               verifiers;
-        private WeakThresholdKey                         wtk;
-        private int                                      zeroVoteRoundForCommonVote;
+        private int              bias            = 3;
+        private boolean          canSkipLevel    = false;
+        private Clock            clock           = Clock.systemUTC();
+        private short            crpFixedPrefix;
+        private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
+        private int              epochLength     = 30;
+        private int              firstDecidedRound;
+        private double           fpr             = 0.125;
+        private int              lastLevel       = -1;
+        private short            nProc;
+        private int              numberOfEpochs  = 3;
+        private int              orderStartLevel = 6;
+        private double           pByz            = -1;
+        private short            pid;
+        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
+        private Verifier[]       verifiers;
+        private WeakThresholdKey wtk;
+        private int              zeroVoteRoundForCommonVote;
 
         public Builder() {
         }
 
         public Builder(Config config) {
             canSkipLevel = config.canSkipLevel;
-            checks = config.checks;
             crpFixedPrefix = config.crpFixedPrefix;
             digestAlgorithm = config.digestAlgorithm;
             epochLength = config.epochLength;
@@ -101,7 +94,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             crpFixedPrefix = 2;
             numberOfEpochs = 3;
             epochLength = 30;
-            checks.addAll(Checks.ConsensusChecks);
             return this;
         }
 
@@ -116,7 +108,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             crpFixedPrefix = 0;
             epochLength = 1;
             numberOfEpochs = 1;
-            checks.addAll(Checks.SetupChecks);
             return this;
         }
 
@@ -134,8 +125,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 addLastLevel();
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs,
-                              checks, wtk, clock, bias, verifiers, fpr);
+                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs, wtk,
+                              clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -149,10 +140,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public int getBias() {
             return bias;
-        }
-
-        public List<BiFunction<Unit, Dag, Correctness>> getChecks() {
-            return checks;
         }
 
         public Clock getClock() {
@@ -236,11 +223,6 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setCanSkipLevel(boolean canSkipLevel) {
             this.canSkipLevel = canSkipLevel;
-            return this;
-        }
-
-        public Builder setChecks(List<BiFunction<Unit, Dag, Correctness>> checks) {
-            this.checks = checks;
             return this;
         }
 

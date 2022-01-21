@@ -54,15 +54,73 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
                          int regenerationCycles, Duration synchronizeTimeout, int toleranceLevel,
                          BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff, FoundationSeal foundation,
-                         MVStore.Builder mvBuilder) {
+                         ExponentialBackoff.Builder<Status> clientBackoff, MvStoreBuilder mvBuilder) {
+
+    public static class MvStoreBuilder {
+        private int     autoCommitBufferSize = -1;
+        private int     autoCompactFillRate  = -1;
+        private int     cachConcurrency      = -1;
+        private int     cachSize             = -1;
+        private boolean compress             = false;
+        private boolean compressHigh         = false;
+        private File    fileName             = null;
+        private int     keysPerPage          = -1;
+        private int     pageSplitSize        = -1;
+        private boolean readOnly             = false;
+        private boolean recoveryMode         = false;
+
+        public MVStore build() {
+            return build(null);
+        }
+
+        public MVStore build(char[] encryptionKey) {
+            var builder = new MVStore.Builder();
+            if (autoCommitBufferSize > 0) {
+                builder.autoCommitBufferSize(autoCommitBufferSize);
+            }
+            if (autoCompactFillRate > 0) {
+                builder.autoCompactFillRate(autoCompactFillRate);
+            }
+            if (fileName != null) {
+                builder.fileName(fileName.getAbsolutePath());
+            }
+            if (encryptionKey != null) {
+                builder.encryptionKey(encryptionKey);
+            }
+            if (readOnly) {
+                builder.readOnly();
+            }
+            if (keysPerPage > 0) {
+                builder.keysPerPage(keysPerPage);
+            }
+            if (recoveryMode) {
+                builder.recoveryMode();
+            }
+            if (cachSize > 0) {
+                builder.cacheSize(cachSize);
+            }
+            if (cachConcurrency > 0) {
+                builder.cacheConcurrency(cachConcurrency);
+            }
+            if (compress) {
+                builder.compress();
+            }
+            if (compressHigh) {
+                builder.compressHigh();
+            }
+            if (pageSplitSize > 0) {
+                builder.pageSplitSize(pageSplitSize);
+            }
+            return builder.open();
+        }
+    }
 
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
                                     ScheduledExecutorService scheduler,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
-                                    Supplier<KERL> kerl) {
+                                    Supplier<KERL> kerl, FoundationSeal foundation) {
         public static class Builder {
             private final static Function<ULong, File>             NULL_CHECKPOINTER = h -> {
                                                                                          File cp;
@@ -83,6 +141,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             private Router                                         communications;
             private Context<Member>                                context;
             private Executor                                       exec              = ForkJoinPool.commonPool();
+            private FoundationSeal                                 foundation        = FoundationSeal.getDefaultInstance();
             private Function<Map<Member, Join>, List<Transaction>> genesisData       = view -> new ArrayList<>();
             private Supplier<KERL>                                 kerl              = () -> KERL.getDefaultInstance();
             private SigningMember                                  member;
@@ -95,7 +154,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
             public RuntimeParameters build() {
                 return new RuntimeParameters(context, communications, member, scheduler, genesisData, processor,
-                                             restorer, checkpointer, metrics, exec, kerl);
+                                             restorer, checkpointer, metrics, exec, kerl, foundation);
             }
 
             public Function<ULong, File> getCheckpointer() {
@@ -112,6 +171,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
             public Executor getExec() {
                 return exec;
+            }
+
+            public FoundationSeal getFoundation() {
+                return foundation;
             }
 
             public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
@@ -160,6 +223,11 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
             public Builder setExec(Executor exec) {
                 this.exec = exec;
+                return this;
+            }
+
+            public Builder setFoundation(FoundationSeal foundation) {
+                this.foundation = foundation;
                 return this;
             }
 
@@ -335,11 +403,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                                                                                                  .retryIf(s -> s.isOk());
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private FoundationSeal                         foundation            = FoundationSeal.getDefaultInstance();
         private Digest                                 genesisViewId;
         private Duration                               gossipDuration        = Duration.ofSeconds(1);
         private int                                    maxCheckpointSegments = 200;
-        private MVStore.Builder                        mvBuilder             = new MVStore.Builder();
+        private MvStoreBuilder                         mvBuilder             = new MvStoreBuilder();
         private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
         private int                                    regenerationCycles    = 20;
         private Duration                               submitTimeout         = Duration.ofSeconds(30);
@@ -355,8 +422,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return new Parameters(runtime, combineParams, gossipDuration, maxCheckpointSegments, submitTimeout,
                                   genesisViewId, checkpointBlockSize, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, synchronizeDuration, regenerationCycles, synchronizeTimeout,
-                                  toleranceLevel, bootstrap, producer, txnPermits, clientBackoff, foundation,
-                                  mvBuilder);
+                                  toleranceLevel, bootstrap, producer, txnPermits, clientBackoff, mvBuilder);
         }
 
         public Builder clone() {
@@ -385,10 +451,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
-        }
-
-        public FoundationSeal getFoundation() {
-            return foundation;
         }
 
         public Digest getGenesisViewId() {
@@ -464,11 +526,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return this;
         }
 
-        public Builder setFoundation(FoundationSeal foundation) {
-            this.foundation = foundation;
-            return this;
-        }
-
         public Builder setGenesisViewId(Digest genesisViewId) {
             this.genesisViewId = genesisViewId;
             return this;
@@ -529,11 +586,11 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return this;
         }
 
-        protected MVStore.Builder getMvBuilder() {
+        protected MvStoreBuilder getMvBuilder() {
             return mvBuilder;
         }
 
-        protected Builder setMvBuilder(MVStore.Builder mvBuilder) {
+        protected Builder setMvBuilder(MvStoreBuilder mvBuilder) {
             this.mvBuilder = mvBuilder;
             return this;
         }
