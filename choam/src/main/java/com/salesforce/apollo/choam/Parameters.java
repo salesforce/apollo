@@ -48,17 +48,161 @@ import io.grpc.Status;
  * @author hal.hildebrand
  *
  */
-public record Parameters(Context<Member> context, Router communications, SigningMember member,
-                         ReliableBroadcaster.Parameters.Builder combine, ScheduledExecutorService scheduler,
+public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Parameters.Builder combine,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
-                         Function<Map<Member, Join>, List<Transaction>> genesisData, Digest genesisViewId,
-                         TransactionExecutor processor, Function<ULong, File> checkpointer, int checkpointBlockSize,
-                         BiConsumer<ULong, CheckpointState> restorer, DigestAlgorithm digestAlgorithm,
-                         ChoamMetrics metrics, SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles,
-                         Duration synchronizeDuration, int regenerationCycles, Duration synchronizeTimeout,
-                         int toleranceLevel, BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff, Executor exec, Supplier<KERL> kerl,
-                         FoundationSeal foundation, MVStore.Builder mvBuilder) {
+                         Digest genesisViewId, int checkpointBlockSize, DigestAlgorithm digestAlgorithm,
+                         SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
+                         int regenerationCycles, Duration synchronizeTimeout, int toleranceLevel,
+                         BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
+                         ExponentialBackoff.Builder<Status> clientBackoff, FoundationSeal foundation,
+                         MVStore.Builder mvBuilder) {
+
+    public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
+                                    ScheduledExecutorService scheduler,
+                                    Function<Map<Member, Join>, List<Transaction>> genesisData,
+                                    TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
+                                    Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
+                                    Supplier<KERL> kerl) {
+        public static class Builder {
+            private final static Function<ULong, File>             NULL_CHECKPOINTER = h -> {
+                                                                                         File cp;
+                                                                                         try {
+                                                                                             cp = File.createTempFile("cp-"
+                                                                                             + h, ".chk");
+                                                                                             cp.deleteOnExit();
+                                                                                             try (
+                                                                                             var os = new FileOutputStream(cp)) {
+                                                                                                 os.write("Give me food or give me slack or kill me".getBytes());
+                                                                                             }
+                                                                                         } catch (IOException e) {
+                                                                                             throw new IllegalStateException(e);
+                                                                                         }
+                                                                                         return cp;
+                                                                                     };
+            private Function<ULong, File>                          checkpointer      = NULL_CHECKPOINTER;
+            private Router                                         communications;
+            private Context<Member>                                context;
+            private Executor                                       exec              = ForkJoinPool.commonPool();
+            private Function<Map<Member, Join>, List<Transaction>> genesisData       = view -> new ArrayList<>();
+            private Supplier<KERL>                                 kerl              = () -> KERL.getDefaultInstance();
+            private SigningMember                                  member;
+            private ChoamMetrics                                   metrics;
+            private TransactionExecutor                            processor         = (i, h, t, f) -> {
+                                                                                     };
+            private BiConsumer<ULong, CheckpointState>             restorer          = (height, checkpointState) -> {
+                                                                                     };
+            private ScheduledExecutorService                       scheduler;
+
+            public RuntimeParameters build() {
+                return new RuntimeParameters(context, communications, member, scheduler, genesisData, processor,
+                                             restorer, checkpointer, metrics, exec, kerl);
+            }
+
+            public Function<ULong, File> getCheckpointer() {
+                return checkpointer;
+            }
+
+            public Router getCommunications() {
+                return communications;
+            }
+
+            public Context<Member> getContext() {
+                return context;
+            }
+
+            public Executor getExec() {
+                return exec;
+            }
+
+            public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
+                return genesisData;
+            }
+
+            public Supplier<KERL> getKerl() {
+                return kerl;
+            }
+
+            public SigningMember getMember() {
+                return member;
+            }
+
+            public ChoamMetrics getMetrics() {
+                return metrics;
+            }
+
+            public TransactionExecutor getProcessor() {
+                return processor;
+            }
+
+            public BiConsumer<ULong, CheckpointState> getRestorer() {
+                return restorer;
+            }
+
+            public ScheduledExecutorService getScheduler() {
+                return scheduler;
+            }
+
+            public Builder setCheckpointer(Function<ULong, File> checkpointer) {
+                this.checkpointer = checkpointer;
+                return this;
+            }
+
+            public Builder setCommunications(Router communications) {
+                this.communications = communications;
+                return this;
+            }
+
+            @SuppressWarnings("unchecked")
+            public Builder setContext(Context<? extends Member> context) {
+                this.context = (Context<Member>) context;
+                return this;
+            }
+
+            public Builder setExec(Executor exec) {
+                this.exec = exec;
+                return this;
+            }
+
+            public Builder setGenesisData(Function<Map<Member, Join>, List<Transaction>> genesisData) {
+                this.genesisData = genesisData;
+                return this;
+            }
+
+            public Builder setKerl(Supplier<KERL> kerl) {
+                this.kerl = kerl;
+                return this;
+            }
+
+            public Builder setMember(SigningMember member) {
+                this.member = member;
+                return this;
+            }
+
+            public Builder setMetrics(ChoamMetrics metrics) {
+                this.metrics = metrics;
+                return this;
+            }
+
+            public Builder setProcessor(TransactionExecutor processor) {
+                this.processor = processor;
+                return this;
+            }
+
+            public Builder setRestorer(BiConsumer<ULong, CheckpointState> biConsumer) {
+                this.restorer = biConsumer;
+                return this;
+            }
+
+            public Builder setScheduler(ScheduledExecutorService scheduler) {
+                this.scheduler = scheduler;
+                return this;
+            }
+        }
+
+        public static Builder newBuilder() {
+            return new Builder();
+        }
+    }
 
     public record BootstrapParameters(Duration gossipDuration, int maxViewBlocks, int maxSyncBlocks) {
 
@@ -184,64 +328,35 @@ public record Parameters(Context<Member> context, Router communications, Signing
     }
 
     public static class Builder implements Cloneable {
-        private final static Function<ULong, File> NULL_CHECKPOINTER = h -> {
-            File cp;
-            try {
-                cp = File.createTempFile("cp-" + h, ".chk");
-                cp.deleteOnExit();
-                try (var os = new FileOutputStream(cp)) {
-                    os.write("Give me food or give me slack or kill me".getBytes());
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-            return cp;
-        };
 
-        private BootstrapParameters                            bootstrap             = BootstrapParameters.newBuilder()
-                                                                                                          .build();
-        private int                                            checkpointBlockSize   = 8192;
-        private Function<ULong, File>                          checkpointer          = NULL_CHECKPOINTER;
-        private ExponentialBackoff.Builder<Status>             clientBackoff         = ExponentialBackoff.<Status>newBuilder()
-                                                                                                         .retryIf(s -> s.isOk());
-        private ReliableBroadcaster.Parameters.Builder         combineParams         = ReliableBroadcaster.Parameters.newBuilder();
-        private Router                                         communications;
-        private Context<Member>                                context;
-        private DigestAlgorithm                                digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Executor                                       exec                  = ForkJoinPool.commonPool();
-        private FoundationSeal                                 foundation            = FoundationSeal.getDefaultInstance();
-        private Function<Map<Member, Join>, List<Transaction>> genesisData           = view -> new ArrayList<>();
-        private Digest                                         genesisViewId;
-        private Duration                                       gossipDuration        = Duration.ofSeconds(1);
-        private Supplier<KERL>                                 kerl                  = () -> KERL.getDefaultInstance();
-        private int                                            maxCheckpointSegments = 200;
-        private SigningMember                                  member;
-        private ChoamMetrics                                   metrics;
-        private MVStore.Builder                                mvBuilder             = new MVStore.Builder();
-        private TransactionExecutor                            processor             = (i, h, t, f) -> {
-                                                                                     };
-        private ProducerParameters                             producer              = ProducerParameters.newBuilder()
-                                                                                                         .build();
-        private int                                            regenerationCycles    = 20;
-        private BiConsumer<ULong, CheckpointState>             restorer              = (height, checkpointState) -> {
-                                                                                     };
-        private ScheduledExecutorService                       scheduler;
-        private Duration                                       submitTimeout         = Duration.ofSeconds(30);
-        private int                                            synchronizationCycles = 10;
-        private Duration                                       synchronizeDuration   = Duration.ofMillis(500);
-        private Duration                                       synchronizeTimeout    = Duration.ofSeconds(30);
-        private int                                            txnPermits            = 3_000;
-        private SignatureAlgorithm                             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private BootstrapParameters                    bootstrap             = BootstrapParameters.newBuilder().build();
+        private int                                    checkpointBlockSize   = 8192;
+        private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
+                                                                                                 .retryIf(s -> s.isOk());
+        private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
+        private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private FoundationSeal                         foundation            = FoundationSeal.getDefaultInstance();
+        private Digest                                 genesisViewId;
+        private Duration                               gossipDuration        = Duration.ofSeconds(1);
+        private int                                    maxCheckpointSegments = 200;
+        private MVStore.Builder                        mvBuilder             = new MVStore.Builder();
+        private ProducerParameters                     producer              = ProducerParameters.newBuilder().build();
+        private int                                    regenerationCycles    = 20;
+        private Duration                               submitTimeout         = Duration.ofSeconds(30);
+        private int                                    synchronizationCycles = 10;
+        private Duration                               synchronizeDuration   = Duration.ofMillis(500);
+        private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
+        private int                                    txnPermits            = 3_000;
+        private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
-        public Parameters build() {
-            final double n = context.getRingCount();
+        public Parameters build(RuntimeParameters runtime) {
+            final double n = runtime.context.getRingCount();
             var toleranceLevel = Dag.minimalQuorum((short) n, 3);
-            return new Parameters(context, communications, member, combineParams, scheduler, gossipDuration,
-                                  maxCheckpointSegments, submitTimeout, genesisData, genesisViewId, processor,
-                                  checkpointer, checkpointBlockSize, restorer, digestAlgorithm, metrics,
-                                  viewSigAlgorithm, synchronizationCycles, synchronizeDuration, regenerationCycles,
-                                  synchronizeTimeout, toleranceLevel, bootstrap, producer, txnPermits, clientBackoff,
-                                  exec, kerl, foundation, mvBuilder);
+            return new Parameters(runtime, combineParams, gossipDuration, maxCheckpointSegments, submitTimeout,
+                                  genesisViewId, checkpointBlockSize, digestAlgorithm, viewSigAlgorithm,
+                                  synchronizationCycles, synchronizeDuration, regenerationCycles, synchronizeTimeout,
+                                  toleranceLevel, bootstrap, producer, txnPermits, clientBackoff, foundation,
+                                  mvBuilder);
         }
 
         public Builder clone() {
@@ -260,10 +375,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return checkpointBlockSize;
         }
 
-        public Function<ULong, File> getCheckpointer() {
-            return checkpointer;
-        }
-
         public ExponentialBackoff.Builder<Status> getClientBackoff() {
             return clientBackoff;
         }
@@ -272,28 +383,12 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return combineParams;
         }
 
-        public Router getCommunications() {
-            return communications;
-        }
-
-        public Context<Member> getContext() {
-            return context;
-        }
-
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
         }
 
-        public Executor getExec() {
-            return exec;
-        }
-
         public FoundationSeal getFoundation() {
             return foundation;
-        }
-
-        public Function<Map<Member, Join>, List<Transaction>> getGenesisData() {
-            return genesisData;
         }
 
         public Digest getGenesisViewId() {
@@ -304,24 +399,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return gossipDuration;
         }
 
-        public Supplier<KERL> getKerl() {
-            return kerl;
-        }
-
         public int getMaxCheckpointSegments() {
             return maxCheckpointSegments;
-        }
-
-        public SigningMember getMember() {
-            return member;
-        }
-
-        public ChoamMetrics getMetrics() {
-            return metrics;
-        }
-
-        public TransactionExecutor getProcessor() {
-            return processor;
         }
 
         public ProducerParameters getProducer() {
@@ -330,14 +409,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public int getRegenerationCycles() {
             return regenerationCycles;
-        }
-
-        public BiConsumer<ULong, CheckpointState> getRestorer() {
-            return restorer;
-        }
-
-        public ScheduledExecutorService getScheduler() {
-            return scheduler;
         }
 
         public Duration getSubmitTimeout() {
@@ -378,11 +449,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setCheckpointer(Function<ULong, File> checkpointer) {
-            this.checkpointer = checkpointer;
-            return this;
-        }
-
         public Builder setClientBackoff(ExponentialBackoff.Builder<Status> clientBackoff) {
             this.clientBackoff = clientBackoff;
             return this;
@@ -393,34 +459,13 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setCommunications(Router communications) {
-            this.communications = communications;
-            return this;
-        }
-
-        @SuppressWarnings("unchecked")
-        public Parameters.Builder setContext(Context<? extends Member> context) {
-            this.context = (Context<Member>) context;
-            return this;
-        }
-
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
             return this;
         }
 
-        public Builder setExec(Executor exec) {
-            this.exec = exec;
-            return this;
-        }
-
         public Builder setFoundation(FoundationSeal foundation) {
             this.foundation = foundation;
-            return this;
-        }
-
-        public Builder setGenesisData(Function<Map<Member, Join>, List<Transaction>> genesisData) {
-            this.genesisData = genesisData;
             return this;
         }
 
@@ -434,28 +479,8 @@ public record Parameters(Context<Member> context, Router communications, Signing
             return this;
         }
 
-        public Builder setKerl(Supplier<KERL> kerl) {
-            this.kerl = kerl;
-            return this;
-        }
-
         public Builder setMaxCheckpointSegments(int maxCheckpointSegments) {
             this.maxCheckpointSegments = maxCheckpointSegments;
-            return this;
-        }
-
-        public Parameters.Builder setMember(SigningMember member) {
-            this.member = member;
-            return this;
-        }
-
-        public Builder setMetrics(ChoamMetrics metrics) {
-            this.metrics = metrics;
-            return this;
-        }
-
-        public Builder setProcessor(TransactionExecutor processor) {
-            this.processor = processor;
             return this;
         }
 
@@ -466,16 +491,6 @@ public record Parameters(Context<Member> context, Router communications, Signing
 
         public Builder setRegenerationCycles(int regenerationCycles) {
             this.regenerationCycles = regenerationCycles;
-            return this;
-        }
-
-        public Builder setRestorer(BiConsumer<ULong, CheckpointState> biConsumer) {
-            this.restorer = biConsumer;
-            return this;
-        }
-
-        public Parameters.Builder setScheduler(ScheduledExecutorService scheduler) {
-            this.scheduler = scheduler;
             return this;
         }
 
@@ -522,6 +537,50 @@ public record Parameters(Context<Member> context, Router communications, Signing
             this.mvBuilder = mvBuilder;
             return this;
         }
+    }
+
+    public SigningMember member() {
+        return runtime.member;
+    }
+
+    public Context<Member> context() {
+        return runtime.context;
+    }
+
+    public Router communications() {
+        return runtime.communications;
+    }
+
+    public ChoamMetrics metrics() {
+        return runtime.metrics;
+    }
+
+    public ScheduledExecutorService scheduler() {
+        return runtime.scheduler;
+    }
+
+    public Function<ULong, File> checkpointer() {
+        return runtime.checkpointer;
+    }
+
+    public Function<Map<Member, Join>, List<Transaction>> genesisData() {
+        return runtime.genesisData;
+    }
+
+    public TransactionExecutor processor() {
+        return runtime.processor;
+    }
+
+    public BiConsumer<ULong, CheckpointState> restorer() {
+        return runtime.restorer;
+    }
+
+    public Executor exec() {
+        return runtime.exec;
+    }
+
+    public Supplier<KERL> kerl() {
+        return runtime.kerl;
     }
 
 }

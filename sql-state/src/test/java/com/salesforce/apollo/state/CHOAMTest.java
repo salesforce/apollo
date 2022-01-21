@@ -51,6 +51,7 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -216,14 +217,10 @@ public class CHOAMTest {
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var params = Parameters.newBuilder()
-                               .setContext(context)
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGenesisData(view -> GENESIS_DATA)
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(20))
                                                               .setBatchInterval(Duration.ofMillis(100))
@@ -250,10 +247,7 @@ public class CHOAMTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m,
-                                              ServerConnectionCache.newBuilder()
-                                                                   .setTarget(30)
-                                                                   .setMetrics(params.getMetrics()),
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2, r -> {
                                                   Thread thread = new Thread(r, "Router exec" + m.getId() + "["
                                                   + exec.getAndIncrement() + "]");
@@ -263,7 +257,7 @@ public class CHOAMTest {
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m);
+            return createCHOAM(entropy, params, m, context);
         }));
     }
 
@@ -388,7 +382,7 @@ public class CHOAMTest {
         }
     }
 
-    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m) {
+    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -396,31 +390,39 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m)
-                               .setCommunications(routers.get(m.getId()))
-                               .setExec(Router.createFjPool())
-                               .setCheckpointer(up.getCheckpointer())
-                               .setProcessor(new TransactionExecutor() {
+        return new CHOAM(params.build(RuntimeParameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setExec(Router.createFjPool())
+                                                       .setGenesisData(view -> GENESIS_DATA)
+                                                       .setScheduler(scheduler)
+                                                       .setMember(m)
+                                                       .setCommunications(routers.get(m.getId()))
+                                                       .setExec(Router.createFjPool())
+                                                       .setCheckpointer(up.getCheckpointer())
+                                                       .setProcessor(new TransactionExecutor() {
 
-                                   @Override
-                                   public void beginBlock(ULong height, Digest hash) {
-                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
-                                       up.getExecutor().beginBlock(height, hash);
-                                   }
+                                                           @Override
+                                                           public void beginBlock(ULong height, Digest hash) {
+                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
+                                                                     .add(hash);
+                                                               up.getExecutor().beginBlock(height, hash);
+                                                           }
 
-                                   @Override
-                                   public void execute(int i, Digest hash, Transaction tx,
-                                                       @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                                       up.getExecutor().execute(i, hash, tx, onComplete);
-                                   }
+                                                           @Override
+                                                           public void execute(int i, Digest hash, Transaction tx,
+                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                                                               up.getExecutor().execute(i, hash, tx, onComplete);
+                                                           }
 
-                                   @Override
-                                   public void genesis(Digest hash, List<Transaction> initialization) {
-                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
-                                       up.getExecutor().genesis(hash, initialization);
-                                   }
-                               })
-                               .build());
+                                                           @Override
+                                                           public void genesis(Digest hash,
+                                                                               List<Transaction> initialization) {
+                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
+                                                                     .add(hash);
+                                                               up.getExecutor().genesis(hash, initialization);
+                                                           }
+                                                       })
+                                                       .build()));
     }
 
     private Txn initialInsert() {

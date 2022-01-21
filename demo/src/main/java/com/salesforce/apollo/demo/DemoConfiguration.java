@@ -12,6 +12,5 @@ import io.dropwizard.Configuration;
  * @author hal.hildebrand
  *
  */
-public class DemoConfiguration extends Configuration {
-
+public class DemoConfiguration extends Configuration { 
 }

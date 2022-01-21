@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -32,7 +33,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -67,7 +67,7 @@ public class NodeTest {
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase.toFile());
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
-        var params = params(context);
+        var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
 
@@ -85,28 +85,28 @@ public class NodeTest {
         }
 
         members.keySet().forEach(m -> context.activate(m));
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         members.forEach((member, id) -> {
-            AtomicInteger exec = new AtomicInteger();
+            AtomicInteger execC = new AtomicInteger();
 
-            params.setMember(member);
-            var localRouter = new LocalRouter(prefix, member,
-                                              ServerConnectionCache.newBuilder()
-                                                                   .setTarget(30)
-                                                                   .setMetrics(params.getMetrics()),
+            var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2, r -> {
                                                   Thread thread = new Thread(r, "Router exec" + member.getId() + "["
-                                                  + exec.getAndIncrement() + "]");
+                                                  + execC.getAndIncrement() + "]");
                                                   thread.setDaemon(true);
                                                   return thread;
                                               }));
             routers.add(localRouter);
-            params.setMember(member)
-                  .setCommunications(localRouter)
-                  .getProducer()
-                  .ethereal()
-                  .setSigner(member);
-            nodes.add(new Node(id, params));
+            params.getProducer().ethereal().setSigner(member);
+            var exec = Router.createFjPool();
+            nodes.add(new Node(id, params,
+                               RuntimeParameters.newBuilder()
+                                                .setScheduler(scheduler)
+                                                .setMember(member)
+                                                .setContext(context)
+                                                .setExec(exec)
+                                                .setCommunications(localRouter)));
             localRouter.start();
         });
     }
@@ -118,16 +118,12 @@ public class NodeTest {
         Thread.sleep(5000);
     }
 
-    private Builder params(Context<Member> context) {
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
+    private Builder params() {
         var params = Parameters.newBuilder()
-                               .setContext(context)
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setExec(Router.createFjPool())
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(20))
                                                               .setBatchInterval(Duration.ofMillis(100))

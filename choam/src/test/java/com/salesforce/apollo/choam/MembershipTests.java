@@ -37,6 +37,7 @@ import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -204,10 +205,9 @@ public class MembershipTests {
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
+        var exec = Router.createFjPool();
         var params = Parameters.newBuilder()
-                               .setContext(context)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setExec(Router.createFjPool())
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(10))
                                                                 .setMaxSyncBlocks(1000)
@@ -215,7 +215,6 @@ public class MembershipTests {
                                                                 .build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(5))
-                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(150))
@@ -234,14 +233,11 @@ public class MembershipTests {
         SigningMember testSubject = members.get(cardinality - 1);
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m,
-                                              ServerConnectionCache.newBuilder()
-                                                                   .setTarget(cardinality)
-                                                                   .setMetrics(params.getMetrics()),
+            AtomicInteger execC = new AtomicInteger();
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(cardinality),
                                               Executors.newFixedThreadPool(2, r -> {
                                                   Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + exec.getAndIncrement() + "]");
+                                                  + execC.getAndIncrement() + "]");
                                                   thread.setDaemon(true);
                                                   return thread;
                                               }));
@@ -273,10 +269,14 @@ public class MembershipTests {
             } else {
                 params.setSynchronizationCycles(3);
             }
-            return new CHOAM(params.setMember(m)
-                                   .setCommunications(routers.get(m.getId()))
-                                   .setProcessor(processor)
-                                   .build());
+            return new CHOAM(params.build(RuntimeParameters.newBuilder()
+                                                           .setMember(m)
+                                                           .setCommunications(routers.get(m.getId()))
+                                                           .setProcessor(processor)
+                                                           .setContext(context)
+                                                           .setExec(exec)
+                                                           .setScheduler(scheduler)
+                                                           .build()));
         }));
         return testSubject;
     }

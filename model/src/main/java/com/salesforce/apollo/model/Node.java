@@ -37,6 +37,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -102,16 +104,17 @@ public class Node {
     private final Parameters                                     params;
     private final SqlStateMachine                                sqlStateMachine;
 
-    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params) {
-        this(id, params, "jdbc:h2:mem:", tempDirOf(id));
+    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, Builder runtime) {
+        this(id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
     }
 
-    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, Path checkpointBaseDir) {
-        this(id, params, "jdbc:h2:mem:", checkpointBaseDir);
+    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, Path checkpointBaseDir,
+                RuntimeParameters.Builder runtime) {
+        this(id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
     }
 
     public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
-                Path checkpointBaseDir) {
+                Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         params = params.clone();
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
@@ -125,19 +128,19 @@ public class Node {
         var checkpointDir = new File(dir, qb64(((SelfAddressingIdentifier) id.getIdentifier()).getDigest()));
         this.identifier = id;
         sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
-        params.setCheckpointer(sqlStateMachine.getCheckpointer());
-        params.setProcessor(sqlStateMachine.getExecutor());
-        params.setRestorer(sqlStateMachine.getBootstrapper());
-        params.setKerl(() -> kerl());
-        params.setGenesisData(members -> genesisOf(members));
 
-        this.params = params.build();
+        this.params = params.build(runtime.setCheckpointer(sqlStateMachine.getCheckpointer())
+                                          .setProcessor(sqlStateMachine.getExecutor())
+                                          .setRestorer(sqlStateMachine.getBootstrapper())
+                                          .setKerl(() -> kerl())
+                                          .setGenesisData(members -> genesisOf(members))
+                                          .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
-        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, params.getScheduler(),
-                                        params.getSubmitTimeout(), params.getExec());
-        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, params.getScheduler(),
-                                          params.getSubmitTimeout(), params.getDigestAlgorithm(), params.getExec());
+        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
+                                        params.getSubmitTimeout(), runtime.getExec());
+        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
+                                          params.getSubmitTimeout(), params.getDigestAlgorithm(), runtime.getExec());
     }
 
     /**

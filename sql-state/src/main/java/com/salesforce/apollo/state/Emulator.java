@@ -24,6 +24,7 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.crypto.Digest;
@@ -68,9 +69,10 @@ public class Emulator {
         txnExec = this.ssm.getExecutor();
         hash = new AtomicReference<>(base);
         params = Parameters.newBuilder()
-                           .setMember(new SigningMemberImpl(Utils.getMember(0)))
-                           .setContext(new Context<>(base, 0.01, 5, 3))
-                           .build();
+                           .build(RuntimeParameters.newBuilder()
+                                                   .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                   .setContext(new Context<>(base, 0.01, 5, 3))
+                                                   .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {
             lock.lock();

@@ -31,6 +31,7 @@ import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.TestChain;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -119,11 +120,12 @@ public class BootstrapperTest {
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
                                              Parameters.newBuilder()
-                                                       .setContext(context)
-                                                       .setMember(member)
                                                        .setSynchronizeDuration(Duration.ofMillis(1000))
-                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                                                       .build(),
+                                                       .build(RuntimeParameters.newBuilder()
+                                                                               .setContext(context)
+                                                                               .setMember(member)
+                                                                               .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                                               .build()),
                                              store, comms);
 
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();

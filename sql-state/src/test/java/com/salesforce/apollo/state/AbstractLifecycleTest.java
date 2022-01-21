@@ -47,6 +47,7 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -242,10 +243,7 @@ abstract public class AbstractLifecycleTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m,
-                                              ServerConnectionCache.newBuilder()
-                                                                   .setTarget(30)
-                                                                   .setMetrics(params.getMetrics()),
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(3, r -> {
                                                   Thread thread = new Thread(r, "Router exec" + m.getId() + "["
                                                   + exec.getAndIncrement() + "]");
@@ -255,8 +253,8 @@ abstract public class AbstractLifecycleTest {
             return localRouter;
         }));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(),
-                                                  m -> createChoam(entropy, params, m, m.equals(testSubject))));
+                        .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
+                                                                                   m.equals(testSubject), context)));
     }
 
     protected Txn initialInsert() {
@@ -280,7 +278,8 @@ abstract public class AbstractLifecycleTest {
         return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
-    private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject) {
+    private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
+                              Context<Member> context) {
         blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
@@ -289,20 +288,23 @@ abstract public class AbstractLifecycleTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m)
-                               .setCommunications(routers.get(m.getId()))
-                               .setCheckpointer(wrap(up))
-                               .setSynchronizationCycles(testSubject ? 100 : 1)
-                               .setRestorer(up.getBootstrapper())
-                               .setProcessor(wrap(m, up))
-                               .build());
+        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
+                               .build(RuntimeParameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setExec(Router.createFjPool())
+                                                       .setGenesisData(view -> GENESIS_DATA)
+                                                       .setScheduler(scheduler)
+                                                       .setMember(m)
+                                                       .setCommunications(routers.get(m.getId()))
+                                                       .setCheckpointer(wrap(up))
+                                                       .setRestorer(up.getBootstrapper())
+                                                       .setProcessor(wrap(m, up))
+                                                       .build()));
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
         var params = Parameters.newBuilder()
-                               .setContext(context)
                                .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setExec(Router.createFjPool())
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(10))
@@ -310,15 +312,13 @@ abstract public class AbstractLifecycleTest {
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
                                .setSynchronizeDuration(Duration.ofMillis(10))
-                               .setGenesisData(view -> GENESIS_DATA)
-                               .setGossipDuration(Duration.ofMillis(10))
-                               .setScheduler(scheduler)
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
+                               .setGossipDuration(Duration.ofMillis(10))
                                .setTxnPermits(1000)
                                .setCheckpointBlockSize(2);
         params.getClientBackoff()

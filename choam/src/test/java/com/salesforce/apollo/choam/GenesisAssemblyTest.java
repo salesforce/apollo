@@ -40,6 +40,7 @@ import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.CHOAM.BlockProducer;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
@@ -68,6 +69,7 @@ public class GenesisAssemblyTest {
     public void genesis() throws Exception {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
+        var scheduler = Executors.newScheduledThreadPool(cardinality);
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> Utils.getMember(i))
@@ -79,49 +81,14 @@ public class GenesisAssemblyTest {
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         Parameters.Builder params = Parameters.newBuilder()
-                                              .setScheduler(Executors.newScheduledThreadPool(cardinality))
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
-                                              .setGossipDuration(Duration.ofMillis(100))
-                                              .setContext(base);
+                                              .setGossipDuration(Duration.ofMillis(100));
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
 
-        BlockProducer reconfigure = new BlockProducer() {
-
-            @Override
-            public Block checkpoint() {
-                return null;
-            }
-
-            @Override
-            public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return CHOAM.genesis(viewId, joining, previous, committee, previous, params.build(), previous,
-                                     Collections.emptyList());
-            }
-
-            @Override
-            public Block produce(ULong height, Digest prev, Assemble assemble) {
-                return null;
-            }
-
-            @Override
-            public Block produce(ULong height, Digest prev, Executions executions) {
-                return null;
-            }
-
-            @Override
-            public void publish(CertifiedBlock cb) {
-                published.add(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, cb));
-            }
-
-            @Override
-            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
-                return null;
-            }
-        };
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
 
         servers.forEach((m, s) -> {
@@ -160,8 +127,46 @@ public class GenesisAssemblyTest {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
-            var view = new GenesisContext(committee, params.setMember(sm).setCommunications(router).build(), sm,
-                                          reconfigure);
+            var built = params.build(RuntimeParameters.newBuilder()
+                                                      .setScheduler(scheduler)
+                                                      .setContext(base)
+                                                      .setMember(sm)
+                                                      .setCommunications(router)
+                                                      .build());
+            BlockProducer reconfigure = new BlockProducer() {
+
+                @Override
+                public Block checkpoint() {
+                    return null;
+                }
+
+                @Override
+                public Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                    return CHOAM.genesis(viewId, joining, previous, committee, previous, built, previous,
+                                         Collections.emptyList());
+                }
+
+                @Override
+                public Block produce(ULong height, Digest prev, Assemble assemble) {
+                    return null;
+                }
+
+                @Override
+                public Block produce(ULong height, Digest prev, Executions executions) {
+                    return null;
+                }
+
+                @Override
+                public void publish(CertifiedBlock cb) {
+                    published.add(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, cb));
+                }
+
+                @Override
+                public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                    return null;
+                }
+            };
+            var view = new GenesisContext(committee, built, sm, reconfigure);
 
             KeyPair keyPair = params.getViewSigAlgorithm().generateKeyPair();
             final PubKey consensus = bs(keyPair.getPublic());
