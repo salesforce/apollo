@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.demo;
 
-import com.salesforce.apollo.demo.rbac.AdminResource;
-
 import io.dropwizard.Application;
 import io.dropwizard.setup.Environment;
 
@@ -19,7 +17,8 @@ public class DemoApplication extends Application<DemoConfiguration> {
 
     @Override
     public void run(DemoConfiguration configuration, Environment environment) throws Exception {
-        environment.jersey().register(new AdminResource(null));
+        environment.jersey().register(new ResolverResource(null));
+        environment.jersey().register(new DelphiResource(null));
         environment.healthChecks().register("demo", new DemoHealthCheck());
     }
 }

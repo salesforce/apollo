@@ -64,7 +64,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification.Bu
  *
  */
 public class StereotomyImpl implements Stereotomy {
-    private abstract class AbstractCtrlId implements KeyState {
+    private abstract static class AbstractCtrlId implements KeyState {
 
         @Override
         public Set<ConfigurationTrait> configurationTraits() {
@@ -178,18 +178,14 @@ public class StereotomyImpl implements Stereotomy {
             if (this == obj) {
                 return true;
             }
-            if (!super.equals(obj)) {
-                return false;
-            }
-            if (!(obj instanceof BoundControllableIdentifier<?> other)) {
-                return false;
-            }
-            if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
+            if (!super.equals(obj) || !(obj instanceof BoundControllableIdentifier<?> other) ||
+                !getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
             return Objects.equals(state, other.state);
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public D getIdentifier() {
             return (D) super.getIdentifier();
@@ -207,6 +203,11 @@ public class StereotomyImpl implements Stereotomy {
             result = prime * result + getEnclosingInstance().hashCode();
             result = prime * result + Objects.hash(state);
             return result;
+        }
+
+        @Override
+        public com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState() {
+            return state.toKeyState();
         }
 
         @Override
@@ -237,13 +238,8 @@ public class StereotomyImpl implements Stereotomy {
             if (this == obj) {
                 return true;
             }
-            if (!super.equals(obj)) {
-                return false;
-            }
-            if (!(obj instanceof @SuppressWarnings("rawtypes") ControlledIdentifierImpl other)) {
-                return false;
-            }
-            if (!getEnclosingInstance().equals(other.getEnclosingInstance())) {
+            if (!super.equals(obj) || !(obj instanceof @SuppressWarnings("rawtypes") ControlledIdentifierImpl other) ||
+                !getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
             return Objects.equals(state, other.state);

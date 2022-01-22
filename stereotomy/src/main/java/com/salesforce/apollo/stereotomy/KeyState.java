@@ -71,4 +71,6 @@ public interface KeyState {
         return this.getCoordinates().getIdentifier().isTransferable() &&
                this.getNextKeyConfigurationDigest().isPresent();
     }
+
+    com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState();
 }

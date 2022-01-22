@@ -188,6 +188,11 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
+    public com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState() {
+        return state;
+    }
+
+    @Override
     public String toString() {
         return "KeyStateImpl\n" + state + "\n";
     }

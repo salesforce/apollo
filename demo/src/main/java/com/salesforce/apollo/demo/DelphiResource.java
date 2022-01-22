@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https:/opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.demo.rbac;
+package com.salesforce.apollo.demo;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -33,10 +33,10 @@ import com.salesforce.apollo.delphinius.Oracle.Subject;
  * @author hal.hildebrand
  *
  */
-@Path("/rbac")
+@Path("/delphi")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-public class AdminResource {
+public class DelphiResource {
 
     public record PredicateObject(Relation predicate, Object object) {}
 
@@ -48,7 +48,7 @@ public class AdminResource {
 
     private final Oracle oracle;
 
-    public AdminResource(Oracle oracle) {
+    public DelphiResource(Oracle oracle) {
         this.oracle = oracle;
     }
 
