@@ -6,12 +6,17 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>delphinius</artifactId>
+    <name>Delphinius: Role Based Access Control</name>
 
     <properties>
-        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq;DATABASE_TO_LOWER=TRUE</h2.db.url>
+        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>schemas</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
@@ -86,7 +91,7 @@
                     <driver>org.h2.Driver</driver>
                     <url>${h2.db.url}</url>
                     <verbose>true</verbose>
-                    <changeLogFile>${project.basedir}/src/main/resources/delphinius.xml</changeLogFile>
+                    <changeLogFile>delphinius/delphinius.xml</changeLogFile>
                 </configuration>
                 <executions>
                     <execution>
@@ -120,7 +125,7 @@
                         <dependency>
                             <groupId>com.h2database</groupId>
                             <artifactId>h2</artifactId>
-                            <version>${h2.gen.version}</version>
+                            <version>${h2.version}</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -131,7 +136,7 @@
                         <dependency>
                             <groupId>com.h2database</groupId>
                             <artifactId>h2</artifactId>
-                            <version>${h2.gen.version}</version>
+                            <version>${h2.version}</version>
                         </dependency>
                         <dependency>
                             <groupId>com.fasterxml.jackson.core</groupId>
@@ -151,7 +156,7 @@
                                 <excludes></excludes>
                                 <schemata>
                                     <schema>
-                                        <inputSchema>delphinius</inputSchema>
+                                        <inputSchema>DELPHINIUS</inputSchema>
                                     </schema>
                                 </schemata>
                             </database>

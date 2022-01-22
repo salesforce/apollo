@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -13,10 +14,13 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 
 public interface EventFactory {
 
-    InceptionEvent inception(Identifier identifier, IdentifierSpecification specification);
+    AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment);
+
+    <D extends Identifier, E extends Identifier> InceptionEvent inception(E identifier,
+                                                                          IdentifierSpecification<D> specification);
 
     KeyEvent interaction(InteractionSpecification specification);
 
-    RotationEvent rotation(RotationSpecification specification);
+    RotationEvent rotation(RotationSpecification specification, boolean delegated);
 
 }

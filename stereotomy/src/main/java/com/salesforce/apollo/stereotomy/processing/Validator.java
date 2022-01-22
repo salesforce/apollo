@@ -12,10 +12,10 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,7 +25,7 @@ import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.stereotomy.KEL;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.DelegatedEstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.DelegatedInceptionEvent;
 import com.salesforce.apollo.stereotomy.event.DelegatedRotationEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
@@ -33,7 +33,6 @@ import com.salesforce.apollo.stereotomy.event.InceptionEvent.ConfigurationTrait;
 import com.salesforce.apollo.stereotomy.event.InteractionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
-import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -94,7 +93,8 @@ public interface Validator {
             if (event instanceof InceptionEvent) {
                 var icp = (InceptionEvent) ee;
 
-                this.validate(icp.getSequenceNumber() == 0, "inception events must have a sequence number of 0");
+                this.validate(icp.getSequenceNumber().equals(ULong.valueOf(0)),
+                              "inception events must have a sequence number of 0");
 
                 this.validateIdentifier(icp);
 
@@ -105,7 +105,7 @@ public interface Validator {
                 this.validate(!(state.isDelegated()) || rot instanceof DelegatedRotationEvent,
                               "delegated identifiers must use delegated rotation event type");
 
-                this.validate(rot.getSequenceNumber() > 0,
+                this.validate(rot.getSequenceNumber().compareTo(ULong.valueOf(0)) > 0,
                               "non-inception event must have a sequence number greater than 0 (s: %s)",
                               rot.getSequenceNumber());
 
@@ -128,41 +128,20 @@ public interface Validator {
                 this.validateRotationWitnesses(rot, state);
             }
 
-            if (event instanceof DelegatedEstablishmentEvent) {
-                var dee = (DelegatedEstablishmentEvent) ee;
-                var delegatingEvent = kel.getKeyEvent(dee.getDelegatingSeal().getCoordinates())
-                                         .orElseThrow(() -> new MissingDelegatingEventException(event,
-                                                                                                dee.getDelegatingSeal()
-                                                                                                   .getCoordinates()));
-
-                this.validate(this.containsSeal(delegatingEvent.getSeals(), dee),
-                              "delegated establishment event seal must contain be contained in referenced delegating event");
+            if (event instanceof DelegatedInceptionEvent dee) {
+                this.validate(dee.getDelegatingPrefix() != null,
+                              "delegated establishment event must contain referenced delegating identifier");
             }
         } else if (event instanceof InteractionEvent) {
             var ixn = (InteractionEvent) event;
 
-            this.validate(ixn.getSequenceNumber() > 0,
+            this.validate(ixn.getSequenceNumber().compareTo(ULong.valueOf(0)) > 0,
                           "non-inception event must have a sequence number greater than 0 (s: %s)",
                           ixn.getSequenceNumber());
 
             this.validate(!state.configurationTraits().contains(ConfigurationTrait.ESTABLISHMENT_EVENTS_ONLY),
                           "interaction events only permitted when identifier is not configured for establishment events only");
         }
-    }
-
-    private boolean containsSeal(List<Seal> seals, DelegatedEstablishmentEvent event) {
-        for (var s : seals) {
-            if (s instanceof Seal.CoordinatesSeal) {
-                var ecds = (Seal.CoordinatesSeal) s;
-                var digest = ecds.getEvent().getDigest();
-                if (ecds.getEvent().getIdentifier().equals(event.getIdentifier()) &&
-                    ecds.getEvent().getSequenceNumber() == event.getSequenceNumber() &&
-                    event.hash(digest.getAlgorithm()).equals(digest)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private void validate(boolean valid, String message, Object... formatValues) {

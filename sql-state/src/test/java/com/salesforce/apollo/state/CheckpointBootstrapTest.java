@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -23,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.Counter;
@@ -41,37 +43,48 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     @Test
     public void checkpointBootstrap() throws Exception {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(6);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 23;
-        final int clientCount = 10;
-        final int max = 15;
+        final ULong waitFor = ULong.valueOf(5);
+        final int clientCount = 1;
+        final int max = 1;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
 
-        routers.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
+        routers.entrySet()
+               .stream()
+               .filter(e -> !e.getKey().equals(testSubject.getId()))
+               .map(e -> e.getValue())
                .forEach(r -> r.start());
-        choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).map(e -> e.getValue())
+        choams.entrySet()
+              .stream()
+              .filter(e -> !e.getKey().equals(testSubject.getId()))
+              .map(e -> e.getValue())
               .forEach(ch -> ch.start());
-        Thread.sleep(1000);
 
         var success = Utils.waitForCondition(30_000, 100,
-                                             () -> members.stream().map(m -> updaters.get(m))
-                                                          .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                                          .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
+                                             () -> members.stream()
+                                                          .map(m -> updaters.get(m))
+                                                          .map(ssm -> ssm.getCurrentBlock())
+                                                          .filter(cb -> cb != null)
+                                                          .map(cb -> cb.height())
+                                                          .filter(l -> l.compareTo(waitFor) >= 0)
                                                           .count() > toleranceLevel);
         assertTrue(success, "States: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession()
+        final var initial = choams.get(members.get(0).getId())
+                                  .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject))
+            updaters.entrySet()
+                    .stream()
+                    .filter(e -> !e.getKey().equals(testSubject))
                     .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
                                                  timeout, timeouts, latency, proceed, lineTotal, max, countdown,
                                                  txScheduler))
@@ -82,29 +95,43 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         transactioneers.stream().forEach(e -> e.start());
         checkpointOccurred.whenComplete((s, t) -> {
             System.out.println("Starting late joining node");
-            choams.get(testSubject.getId()).start();
+            var choam = choams.get(testSubject.getId());
+            choam.context().activate(Collections.singletonList(testSubject));
+            choam.start();
             routers.get(testSubject.getId()).start();
         });
 
         try {
-            countdown.await(120, TimeUnit.SECONDS);
-            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS));
+            assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
+            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS), "Checkpoint did not occur");
         } finally {
             proceed.set(false);
         }
 
-        final long target = updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                    .mapToLong(cb -> cb.height()).max().getAsLong()
-        + 10;
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
 
-        Utils.waitForCondition(60_000, 100,
-                               () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                                            .filter(cb -> cb != null).mapToLong(cb -> cb.height())
-                                            .filter(l -> l >= target).count() == members.size());
+        Utils.waitForCondition(30_000, 1000,
+                               () -> members.stream()
+                                            .map(m -> updaters.get(m))
+                                            .map(ssm -> ssm.getCurrentBlock())
+                                            .filter(cb -> cb != null)
+                                            .map(cb -> cb.height())
+                                            .filter(l -> l.compareTo(target) >= 0)
+                                            .count() == members.size());
 
         System.out.println("target: " + target + " results: "
-        + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                 .map(cb -> cb.height()).toList());
+        + members.stream()
+                 .map(m -> updaters.get(m))
+                 .map(ssm -> ssm.getCurrentBlock())
+                 .filter(cb -> cb != null)
+                 .map(cb -> cb.height())
+                 .toList());
 
         System.out.println();
         System.out.println();

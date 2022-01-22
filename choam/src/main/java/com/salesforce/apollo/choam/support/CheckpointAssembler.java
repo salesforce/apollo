@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVMap;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,11 +54,11 @@ public class CheckpointAssembler {
     private final DigestAlgorithm                           digestAlgorithm;
     private final double                                    fpr;
     private final List<Digest>                              hashes    = new ArrayList<>();
-    private final long                                      height;
+    private final ULong                                     height;
     private final SigningMember                             member;
     private final MVMap<Integer, byte[]>                    state;
 
-    public CheckpointAssembler(long height, Checkpoint checkpoint, SigningMember member, Store store,
+    public CheckpointAssembler(ULong height, Checkpoint checkpoint, SigningMember member, Store store,
                                CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
                                double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
         this.height = height;
@@ -90,7 +91,7 @@ public class CheckpointAssembler {
         });
         CheckpointReplication.Builder request = CheckpointReplication.newBuilder()
                                                                      .setContext(context.getId().toDigeste())
-                                                                     .setCheckpoint(height);
+                                                                     .setCheckpoint(height.longValue());
         request.setCheckpointSegments(segmentsBff.toBff());
         return request.build();
     }

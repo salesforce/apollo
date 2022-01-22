@@ -17,13 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -46,6 +44,7 @@ import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.fsm.Reconfiguration;
 import com.salesforce.apollo.choam.fsm.Reconfigure;
+import com.salesforce.apollo.choam.support.OneShot;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.SliceIterator;
 import com.salesforce.apollo.crypto.Digest;
@@ -78,28 +77,6 @@ import io.grpc.StatusRuntimeException;
  */
 public class ViewAssembly implements Reconfiguration {
 
-    static class OneShot implements Supplier<ByteString> {
-        private CountDownLatch      latch = new CountDownLatch(1);
-        private volatile ByteString value;
-
-        @Override
-        public ByteString get() {
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            }
-            final var current = value;
-            value = null;
-            return current == null ? ByteString.EMPTY : current;
-        }
-
-        void setValue(ByteString value) {
-            this.value = value;
-            latch.countDown();
-        }
-    }
-
     record AJoin(Member m, Join j) {}
 
     private record Proposed(ViewMember vm, Member member, Map<Member, Validate> validations) {}
@@ -124,13 +101,15 @@ public class ViewAssembly implements Reconfiguration {
         view = vc;
         this.nextViewId = nextViewId;
         ds = new OneShot();
-        nextAssembly = Committee.viewMembersOf(nextViewId, params().context()).stream()
+        nextAssembly = Committee.viewMembersOf(nextViewId, params().context())
+                                .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
                                                 new ArrayList<>(nextAssembly.values()), comms);
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
-        Context<Member> reContext = new Context<Member>(reconPrefixed, 0.33, view.context().activeMembers().size());
+        Context<Member> reContext = new Context<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
+                                                        view.context().memberCount(), view.context().getBias());
         reContext.activate(view.context().activeMembers());
 
         final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, getStartState(), true);
@@ -140,12 +119,15 @@ public class ViewAssembly implements Reconfiguration {
         Config.Builder config = params().producer().ethereal().clone();
 
         // Canonical assignment of members -> pid for Ethereal
-        Short pid = view.roster().get(params().member().getId());
-        if (pid == null) {
-            config.setPid((short) 0).setnProc((short) 1);
-        } else {
-            config.setPid(pid).setnProc((short) view.roster().size());
+        var remapped = CHOAM.rosterMap(reContext, reContext.activeMembers());
+        short pid = 0;
+        for (Digest d : remapped.keySet().stream().sorted().toList()) {
+            if (remapped.get(d).equals(params().member())) {
+                break;
+            }
+            pid++;
         }
+        config.setPid(pid).setnProc((short) view.roster().size());
         config.setEpochLength(7).setNumberOfEpochs(epochs());
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> process(preblock, last),
@@ -167,7 +149,8 @@ public class ViewAssembly implements Reconfiguration {
                                                          .addAllValidations(proposals.values().stream().map(p -> {
                                                              return view.generateValidation(p.vm);
                                                          }).toList()))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
     }
 
     @Override
@@ -177,8 +160,11 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void elect() {
-        proposals.values().stream().filter(p -> p.validations.size() > params().toleranceLevel())
-                 .sorted(Comparator.comparing(p -> p.member.getId())).forEach(p -> slate.put(p.member(), joinOf(p)));
+        proposals.values()
+                 .stream()
+                 .filter(p -> p.validations.size() > params().toleranceLevel())
+                 .sorted(Comparator.comparing(p -> p.member.getId()))
+                 .forEach(p -> slate.put(p.member(), joinOf(p)));
         if (slate.size() > params().toleranceLevel()) {
             log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
             transitions.complete();
@@ -195,8 +181,11 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void gather() {
-        JoinRequest request = JoinRequest.newBuilder().setContext(params().context().getId().toDigeste())
-                                         .setNextView(nextViewId.toDigeste()).build();
+        log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member());
+        JoinRequest request = JoinRequest.newBuilder()
+                                         .setContext(params().context().getId().toDigeste())
+                                         .setNextView(nextViewId.toDigeste())
+                                         .build();
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicReference<Runnable> reiterate = new AtomicReference<>();
         AtomicInteger countDown = new AtomicInteger(1); // 1 rounds of attempts
@@ -223,10 +212,13 @@ public class ViewAssembly implements Reconfiguration {
                   proposals.values().stream().map(p -> p.member.getId()).toList(), params().member());
         ds.setValue(Reassemble.newBuilder()
                               .setViewMembers(ViewMembers.newBuilder()
-                                                         .addAllMembers(proposals.values().stream().map(p -> p.vm)
+                                                         .addAllMembers(proposals.values()
+                                                                                 .stream()
+                                                                                 .map(p -> p.vm)
                                                                                  .toList())
                                                          .build())
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
     }
 
     public Parameters params() {
@@ -395,34 +387,48 @@ public class ViewAssembly implements Reconfiguration {
         final var mid = Digest.from(vm.getId());
         final var m = nextAssembly.get(mid);
         if (m == null) {
-            log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                      params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                          params().member());
+            }
             return;
         }
 
         PubKey encoded = vm.getConsensusKey();
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
-            log.trace("Could not verify consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not verify consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
 
         PublicKey consensusKey = publicKey(encoded);
         if (consensusKey == null) {
-            log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                      ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            if (log.isTraceEnabled()) {
+                log.trace("Could not deserialize consensus key from view member: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+            }
             return;
         }
-        log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()), params().member());
+        if (log.isTraceEnabled()) {
+            log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                      params().member());
+        }
         proposals.computeIfAbsent(mid, k -> new Proposed(vm, m, new ConcurrentHashMap<>()));
     }
 
     private Join joinOf(Proposed candidate) {
-        final List<Certification> witnesses = candidate.validations.values().stream().map(v -> v.getWitness())
+        final List<Certification> witnesses = candidate.validations.values()
+                                                                   .stream()
+                                                                   .map(v -> v.getWitness())
                                                                    .sorted(Comparator.comparing(c -> new Digest(c.getId())))
                                                                    .collect(Collectors.toList());
-        return Join.newBuilder().setMember(candidate.vm).setView(nextViewId.toDigeste()).addAllEndorsements(witnesses)
+        return Join.newBuilder()
+                   .setMember(candidate.vm)
+                   .setView(nextViewId.toDigeste())
+                   .addAllEndorsements(witnesses)
                    .build();
     }
 

@@ -5,7 +5,7 @@ The Apollo Delphinius project is a distibuted system platform. The underlying me
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
-* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers 
+* Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
 * MTLS network communication - Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
@@ -42,3 +42,7 @@ I develop on an M1 MBP, and there is (currently) no _protoc-gen-grpc-java_ for t
 
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+
+## Build Flapping
+Am I right? Still have a flapper or 2.  Apollogies.  Know that I hates it and am working to eliminate them.
+

@@ -11,6 +11,8 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
 
+import org.joou.ULong;
+
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -40,13 +42,14 @@ public class EventCoordinates {
     }
 
     public static EventCoordinates of(Identifier identifier) {
-        return new EventCoordinates(identifier, 0, Digest.NONE, INCEPTION_TYPE);
+        return new EventCoordinates(identifier, ULong.valueOf(0), Digest.NONE, INCEPTION_TYPE);
     }
 
     public static EventCoordinates of(KeyEvent event) {
         requireNonNull(event, "event");
         var algorithm = event.getPrevious().equals(EventCoordinates.NONE) ? DigestAlgorithm.DEFAULT
-                                                                          : event.getPrevious().getDigest()
+                                                                          : event.getPrevious()
+                                                                                 .getDigest()
                                                                                  .getAlgorithm();
         if (algorithm.equals(DigestAlgorithm.NONE)) {
             algorithm = DigestAlgorithm.DEFAULT;
@@ -71,7 +74,7 @@ public class EventCoordinates {
 
     private final String ilk;
 
-    private final long sequenceNumber;
+    private final ULong sequenceNumber;
 
     public EventCoordinates(EventCoordinates event, Digest digest) {
         this(event.getIdentifier(), event.getSequenceNumber(), digest, event.getIlk());
@@ -81,14 +84,14 @@ public class EventCoordinates {
         digest = Digest.from(coordinates.getDigest());
         ilk = coordinates.getIlk();
         identifier = Identifier.from(coordinates.getIdentifier());
-        sequenceNumber = coordinates.getSequenceNumber();
+        sequenceNumber = ULong.valueOf(coordinates.getSequenceNumber());
     }
 
     public EventCoordinates(String ilk, BasicIdentifier identifier) {
-        this(identifier, 0, Digest.NONE, ilk);
+        this(identifier, ULong.valueOf(0), Digest.NONE, ilk);
     }
 
-    public EventCoordinates(Identifier identifier, long sequenceNumber, Digest digest, String ilk) {
+    public EventCoordinates(Identifier identifier, ULong sequenceNumber, Digest digest, String ilk) {
         this.identifier = requireNonNull(identifier, "identifier");
         this.sequenceNumber = sequenceNumber;
         this.digest = requireNonNull(digest, "digest");
@@ -98,7 +101,7 @@ public class EventCoordinates {
     private EventCoordinates() {
         identifier = Identifier.NONE;
         digest = Digest.NONE;
-        sequenceNumber = -1;
+        sequenceNumber = ULong.valueOf(-1);
         ilk = KeyEvent.NONE;
     }
 
@@ -112,7 +115,7 @@ public class EventCoordinates {
         }
         EventCoordinates other = (EventCoordinates) obj;
         return Objects.equals(digest, other.digest) && Objects.equals(identifier, other.identifier) &&
-               sequenceNumber == other.sequenceNumber;
+               Objects.equals(sequenceNumber, other.sequenceNumber);
     }
 
     public Digest getDigest() {
@@ -127,7 +130,7 @@ public class EventCoordinates {
         return ilk;
     }
 
-    public long getSequenceNumber() {
+    public ULong getSequenceNumber() {
         return this.sequenceNumber;
     }
 
@@ -137,8 +140,12 @@ public class EventCoordinates {
     }
 
     public EventCoords toEventCoords() {
-        return EventCoords.newBuilder().setSequenceNumber(sequenceNumber).setIdentifier(identifier.toIdent())
-                          .setIlk(ilk).setDigest(digest.toDigeste()).build();
+        return EventCoords.newBuilder()
+                          .setSequenceNumber(sequenceNumber.longValue())
+                          .setIdentifier(identifier.toIdent())
+                          .setIlk(ilk)
+                          .setDigest(digest.toDigeste())
+                          .build();
     }
 
     @Override

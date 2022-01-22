@@ -53,13 +53,17 @@ public class SwarmTest {
     private static final int                              CARDINALITY = 100;
 
     static {
-        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE).build();
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
     }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -109,6 +113,7 @@ public class SwarmTest {
         testViews.clear();
 //        communications.close();
         for (int i = 0; i < 4; i++) {
+            System.out.println("Restarting views " + (i * 25) + " to " + (i + 1) * 25);
             int start = testViews.size();
             for (int j = 0; j < 25; j++) {
                 testViews.add(views.get(start + j));
@@ -120,7 +125,8 @@ public class SwarmTest {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
             });
 
-            assertTrue(stabilized);
+            assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
+            + testViews.stream().map(e -> e.getLive().size()).toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
@@ -142,8 +148,11 @@ public class SwarmTest {
                 }
             }
         }
-        ConsoleReporter.forRegistry(registry).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build().report();
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     @Test
@@ -169,8 +178,10 @@ public class SwarmTest {
             }
         }
 
-        List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-                                  .filter(view -> view != null).collect(Collectors.toList());
+        List<View> invalid = views.stream()
+                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .filter(view -> view != null)
+                                  .collect(Collectors.toList());
         assertEquals(0, invalid.size());
 
         Graph<Participant> testGraph = new Graph<>();
@@ -191,8 +202,11 @@ public class SwarmTest {
         }
 
         views.forEach(view -> view.getService().stop());
-        ConsoleReporter.forRegistry(node0Registry).convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS).build().report();
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private void initialize() {
@@ -201,7 +215,8 @@ public class SwarmTest {
         node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
-        members = certs.values().stream()
+        members = certs.values()
+                       .stream()
                        .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                                    new SignerImpl(cert.getPrivateKey()),
@@ -223,7 +238,8 @@ public class SwarmTest {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);
             Router comms = new LocalRouter(prefix, node,
-                                           ServerConnectionCache.newBuilder().setTarget(2)
+                                           ServerConnectionCache.newBuilder()
+                                                                .setTarget(2)
                                                                 .setMetrics(fireflyMetricsImpl),
                                            Executors.newFixedThreadPool(3));
             comms.start();

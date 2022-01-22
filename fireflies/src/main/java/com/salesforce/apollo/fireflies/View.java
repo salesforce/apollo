@@ -320,7 +320,7 @@ public class View {
                 m.setFailed(true);
                 context.offline(m);
             });
-            context.clear();
+            context.clear(); 
         }
 
         /**
@@ -754,7 +754,6 @@ public class View {
                                                              .toByteArray()))
                             .build();
         seed.setNote(new NoteWrapper(getDigestAlgorithm().digest(seedNote.toByteString()), seedNote));
-        context.add(seed);
         context.activate(seed);
     }
 

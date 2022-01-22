@@ -20,6 +20,10 @@ import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_25519;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.ED_448;
 import static com.salesforce.apollo.crypto.SignatureAlgorithm.lookup;
 
+import java.math.BigInteger;
+
+import org.joou.ULong;
+
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -27,7 +31,6 @@ import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KeyCoordinates;
-import com.salesforce.apollo.stereotomy.event.DelegatingEventCoordinates;
 
 /**
  * QB64 DSL for identifier conversion
@@ -56,7 +59,8 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
         if (split.length != 4) {
             throw new IllegalArgumentException("Invalid event coordinates: " + qb64);
         }
-        return new EventCoordinates(identifier(split[0]), Long.parseLong(split[1]), digest(split[2]), split[3]);
+        return new EventCoordinates(identifier(split[0]), ULong.valueOf(new BigInteger(split[1])), digest(split[2]),
+                                    split[3]);
     }
 
     public static Identifier identifier(Ident identifier) {
@@ -185,11 +189,6 @@ public class QualifiedBase64Identifier extends QualifiedBase64 {
     public static String selfSigningIdentifierPlaceholder(SignatureAlgorithm signatureAlgorithm) {
         var placeholderLength = qb64Length(signatureAlgorithm.signatureLength());
         return "#".repeat(placeholderLength);
-    }
-
-    public static String shortQb64(DelegatingEventCoordinates c) {
-        var p = c.getPreviousEvent();
-        return shortQb64(p.getIdentifier()) + ":" + p.getSequenceNumber() + ":" + shortQb64(p.getDigest());
     }
 
     public static String shortQb64(EventCoordinates c) {

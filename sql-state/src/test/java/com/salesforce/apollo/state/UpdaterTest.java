@@ -23,6 +23,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,7 +42,7 @@ public class UpdaterTest {
     public void smoke() throws Exception {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_update", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
 
@@ -55,7 +56,8 @@ public class UpdaterTest {
                                               "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                               "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                               "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
         Transaction transaction = builder.build();
 
         updater.getExecutor().execute(0, Digest.NONE, transaction, null);
@@ -73,21 +75,21 @@ public class UpdaterTest {
 
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_publish", new Properties(),
                                                       new File("target/chkpoints"));
-        updater.getExecutor().genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        updater.getExecutor().genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.connection();
         SqlStateMachine.publish(connection, "test", json);
         Statement statement = connection.createStatement();
-        ResultSet events = statement.executeQuery("select * from APOLLO_INTERNAL.TRAMPOLINE");
+        ResultSet events = statement.executeQuery("select * from apollo_internal.trampoline ");
 
         assertTrue(events.next());
         assertFalse(events.next());
 
-        CallableStatement call = connection.prepareCall("call APOLLO_INTERNAL.PUBLISH(?1, ?2)");
+        CallableStatement call = connection.prepareCall("call apollo_internal.publish(?1, ?2)");
         call.setString(1, "test");
         call.setString(2, json);
         call.execute();
-        events = statement.executeQuery("select * from APOLLO_INTERNAL.TRAMPOLINE");
+        events = statement.executeQuery("select * from apollo_internal.trampoline");
         assertTrue(events.next());
         assertTrue(events.next());
         assertFalse(events.next());
@@ -110,19 +112,19 @@ public class UpdaterTest {
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
 
-        executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Connection connection = updater.newConnection();
         Statement statement = connection.createStatement();
-        ResultSet cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
+        ResultSet cb = statement.executeQuery("select * from apollo_internal.current");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(0, cb.getLong(2));
         assertEquals(qb64(DigestAlgorithm.DEFAULT.getLast()), cb.getString(3));
         assertFalse(cb.next(), "Should be only 1 record");
 
-        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin());
-        cb = statement.executeQuery("select * from APOLLO_INTERNAL.CURRENT");
+        executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin());
+        cb = statement.executeQuery("select * from apollo_internal.current");
 
         assertTrue(cb.next(), "Should exist");
         assertEquals(1, cb.getLong(2));

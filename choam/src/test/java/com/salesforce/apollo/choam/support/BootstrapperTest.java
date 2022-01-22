@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,7 @@ import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.TestChain;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
@@ -57,7 +59,9 @@ public class BootstrapperTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -68,22 +72,40 @@ public class BootstrapperTest {
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
-        List<SigningMember> members = certs.values().stream()
+        List<SigningMember> members = certs.values()
+                                           .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
                                                                            c.getX509Certificate(), c.getPrivateKey(),
                                                                            new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.activate(m)).collect(Collectors.toList());
+                                           .peek(m -> context.activate(m))
+                                           .collect(Collectors.toList());
 
         TestChain testChain = new TestChain(bootstrapStore);
-        testChain.genesis().userBlocks(10).viewChange().userBlocks(10).viewChange().userBlocks(10).viewChange()
-                 .userBlocks(10).viewChange().userBlocks(10).checkpoint().userBlocks(10).synchronizeView()
-                 .userBlocks(10).synchronizeCheckpoint().userBlocks(5).viewChange().userBlocks(20).anchor()
+        testChain.genesis()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .viewChange()
+                 .userBlocks(10)
+                 .checkpoint()
+                 .userBlocks(10)
+                 .synchronizeView()
+                 .userBlocks(10)
+                 .synchronizeCheckpoint()
+                 .userBlocks(5)
+                 .viewChange()
+                 .userBlocks(20)
+                 .anchor()
                  .userBlocks(5);
 
         HashedCertifiedBlock lastBlock = testChain.getLastBlock();
 
-        bootstrapStore.validate(lastBlock.height(), 0);
+        bootstrapStore.validate(lastBlock.height(), ULong.valueOf(0));
         bootstrapStore.validateViewChain(testChain.getSynchronizeView().height());
 
         SigningMember member = members.get(0);
@@ -97,10 +119,13 @@ public class BootstrapperTest {
         Store store = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
-                                             Parameters.newBuilder().setContext(context).setMember(member)
+                                             Parameters.newBuilder()
                                                        .setSynchronizeDuration(Duration.ofMillis(1000))
-                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
-                                                       .build(),
+                                                       .build(RuntimeParameters.newBuilder()
+                                                                               .setContext(context)
+                                                                               .setMember(member)
+                                                                               .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                                               .build()),
                                              store, comms);
 
         CompletableFuture<SynchronizedState> syncFuture = boot.synchronize();
@@ -128,18 +153,18 @@ public class BootstrapperTest {
         when(client.fetchViewChain(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
-            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
-            bootstrapStore.fetchViewChain(bff, blocks, 1, rep.getFrom(), rep.getTo());
+            bootstrapStore.fetchViewChain(bff, blocks, 1, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
             futureSailor.set(blocks.build());
             return futureSailor;
         });
         when(client.fetchBlocks(any())).then(invocation -> {
             SettableFuture<Blocks> futureSailor = SettableFuture.create();
             BlockReplication rep = invocation.getArgument(0, BlockReplication.class);
-            BloomFilter<Long> bff = BloomFilter.from(rep.getBlocksBff());
+            BloomFilter<ULong> bff = BloomFilter.from(rep.getBlocksBff());
             Blocks.Builder blocks = Blocks.newBuilder();
-            bootstrapStore.fetchBlocks(bff, blocks, 5, rep.getFrom(), rep.getTo());
+            bootstrapStore.fetchBlocks(bff, blocks, 5, ULong.valueOf(rep.getFrom()), ULong.valueOf(rep.getTo()));
             futureSailor.set(blocks.build());
             return futureSailor;
         });

@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
@@ -32,16 +31,17 @@ public class Questions3Test {
 
     @Test
     public void callSmokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+        final var url = String.format("jdbc:h2:mem:test_engine-call-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (
+        Liquibase liquibase = new Liquibase("delphinius/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         Oracle oracle = new CallOracle(connection);
 
         smoke(oracle);
@@ -49,22 +49,23 @@ public class Questions3Test {
 
     @Test
     public void directSmokin() throws Exception {
-        final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=3",
+        final var url = String.format("jdbc:h2:mem:test_engine-direct-smoke-%s;DB_CLOSE_DELAY=3",
                                       new Random().nextLong());
-        var connection = new JdbcConnection(url, new Properties(), "", "");
+        var connection = new JdbcConnection(url, new Properties(), "", "", false);
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("/delphinius/initialize.xml", new ClassLoaderResourceAccessor(),
+                                                 database)) {
             liquibase.update((String) null);
         }
-        connection = new JdbcConnection(url, new Properties(), "", "");
+        connection = new JdbcConnection(url, new Properties(), "", "", false);
         Oracle oracle = new DirectOracle(connection);
 
         smoke(oracle);
     }
 
-    private void smoke(Oracle oracle) throws SQLException {
+    private void smoke(Oracle oracle) throws Exception {
         // Namespace
         var ns = Oracle.namespace("my-org");
 
@@ -96,23 +97,23 @@ public class Questions3Test {
         var burcu = ns.subject("Burcu");
 
         // Map direct edges. Transitive edges added as a side effect
-        oracle.map(helpDeskMembers, adminMembers);
-        oracle.map(ali, adminMembers);
-        oracle.map(ali, userMembers);
-        oracle.map(burcu, userMembers);
-        oracle.map(can, userMembers);
-        oracle.map(managerMembers, userMembers);
-        oracle.map(technicianMembers, userMembers);
-        oracle.map(demet, helpDeskMembers);
-        oracle.map(egin, helpDeskMembers);
-        oracle.map(egin, userMembers);
-        oracle.map(fuat, managerMembers);
-        oracle.map(gl, managerMembers);
-        oracle.map(hakan, technicianMembers);
-        oracle.map(irmak, technicianMembers);
-        oracle.map(abcTechMembers, technicianMembers);
-        oracle.map(flaggedTechnicianMembers, technicianMembers);
-        oracle.map(jale, abcTechMembers);
+        oracle.map(helpDeskMembers, adminMembers).get();
+        oracle.map(ali, adminMembers).get();
+        oracle.map(ali, userMembers).get();
+        oracle.map(burcu, userMembers).get();
+        oracle.map(can, userMembers).get();
+        oracle.map(managerMembers, userMembers).get();
+        oracle.map(technicianMembers, userMembers).get();
+        oracle.map(demet, helpDeskMembers).get();
+        oracle.map(egin, helpDeskMembers).get();
+        oracle.map(egin, userMembers).get();
+        oracle.map(fuat, managerMembers).get();
+        oracle.map(gl, managerMembers).get();
+        oracle.map(hakan, technicianMembers).get();
+        oracle.map(irmak, technicianMembers).get();
+        oracle.map(abcTechMembers, technicianMembers).get();
+        oracle.map(flaggedTechnicianMembers, technicianMembers).get();
+        oracle.map(jale, abcTechMembers).get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
@@ -181,21 +182,21 @@ public class Questions3Test {
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove them
-        oracle.remove(abcTechMembers, technicianMembers);
+        oracle.remove(abcTechMembers, technicianMembers).get();
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertTrue(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Remove our assertion
-        oracle.delete(tuple);
+        oracle.delete(tuple).get();
 
         assertFalse(oracle.check(object123View.assertion(jale)));
         assertFalse(oracle.check(object123View.assertion(egin)));
         assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
 
         // Some deletes
-        oracle.delete(abcTechMembers);
-        oracle.delete(flaggedTechnicianMembers);
+        oracle.delete(abcTechMembers).get();
+        oracle.delete(flaggedTechnicianMembers).get();
     }
 }

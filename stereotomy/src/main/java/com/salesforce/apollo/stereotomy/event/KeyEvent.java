@@ -6,6 +6,9 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import org.joou.ULong;
+
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -45,9 +48,11 @@ public interface KeyEvent {
 
     Digest getPriorEventDigest();
 
-    long getSequenceNumber();
+    ULong getSequenceNumber();
 
     Version getVersion();
 
     Digest hash(DigestAlgorithm digest);
+
+    void setEventOf(Builder builder);
 }

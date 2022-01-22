@@ -6,9 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.util.OptionalLong;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
@@ -19,8 +23,20 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  */
 public interface KERL extends KEL {
 
-    OptionalLong findLatestReceipt(Identifier forIdentifier, Identifier byIdentifier);
+    record EventWithAttachments(KeyEvent event, Attachment attachments) {
 
-    void append(AttachmentEvent event, KeyState newState);
+        public com.salesfoce.apollo.stereotomy.event.proto.KeyEvent toKeyEvente() {
+            var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.newBuilder();
+            event.setEventOf(builder);
+            if (attachments != null) {
+                builder.setAttachment(attachments.toAttachemente());
+            }
+            return builder.build();
+        }
+    }
+
+    CompletableFuture<Void> append(AttachmentEvent event);
+
+    Optional<List<EventWithAttachments>> kerl(Identifier identifier);
 
 }

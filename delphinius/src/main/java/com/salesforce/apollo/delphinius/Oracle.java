@@ -8,6 +8,7 @@ package com.salesforce.apollo.delphinius;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 /**
@@ -81,8 +82,8 @@ public interface Oracle {
     /** Grounding for all the domains */
     Namespace NO_NAMESPACE = new Namespace("");
     Relation  NO_RELATION  = new Relation(NO_NAMESPACE, "");
-    Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
     Object    NO_OBJECT    = new Object(NO_NAMESPACE, "", NO_RELATION);
+    Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
     Assertion NO_ASSERTION = new Assertion(NO_SUBJECT, NO_OBJECT);
 
     // Types for DAG
@@ -98,27 +99,27 @@ public interface Oracle {
      * Add an Assertion. The subject and object of the assertion will also be added
      * if they do not exist
      */
-    void add(Assertion assertion) throws SQLException;
+    CompletableFuture<Void> add(Assertion assertion);
 
     /**
      * Add a Namespace.
      */
-    void add(Namespace namespace) throws SQLException;
+    CompletableFuture<Void> add(Namespace namespace);
 
     /**
      * Add an Object.
      */
-    void add(Object object) throws SQLException;
+    CompletableFuture<Void> add(Object object);
 
     /**
      * Add a Relation
      */
-    void add(Relation relation) throws SQLException;
+    CompletableFuture<Void> add(Relation relation);
 
     /**
      * Add a Subject
      */
-    void add(Subject subject) throws SQLException;
+    CompletableFuture<Void> add(Subject subject);
 
     /**
      * Check the assertion.
@@ -131,25 +132,31 @@ public interface Oracle {
      * Delete an assertion. Only the assertion is deleted, not the subject nor
      * object of the assertion.
      */
-    void delete(Assertion assertion) throws SQLException;
+    CompletableFuture<Void> delete(Assertion assertion);
+
+    /**
+     * Delete a Namespace. All objects, subjects, relations and assertions that
+     * reference this namespace will also be deleted.
+     */
+    CompletableFuture<Void> delete(Namespace namespace);
 
     /**
      * Delete an Object. All dependant uses of the object (mappings, Assertions) are
      * removed as well.
      */
-    void delete(Object object) throws SQLException;
+    CompletableFuture<Void> delete(Object object);
 
     /**
      * Delete an Relation. All dependant uses of the relation (mappings, Subject,
      * Object and Assertions) are removed as well.
      */
-    void delete(Relation relation) throws SQLException;
+    CompletableFuture<Void> delete(Relation relation);
 
     /**
      * Delete an Subject. All dependant uses of the subject (mappings and
      * Assertions) are removed as well.
      */
-    void delete(Subject subject) throws SQLException;
+    CompletableFuture<Void> delete(Subject subject);
 
     /**
      * Answer the list of Subjects, both direct and transitive Subjects, that map to
@@ -192,17 +199,17 @@ public interface Oracle {
     /**
      * Map the parent object to the child
      */
-    void map(Object parent, Object child) throws SQLException;
+    CompletableFuture<Void> map(Object parent, Object child);
 
     /**
      * Map the parent relation to the child
      */
-    void map(Relation parent, Relation child) throws SQLException;
+    CompletableFuture<Void> map(Relation parent, Relation child);
 
     /**
      * Map the parent subject to the child
      */
-    void map(Subject parent, Subject child) throws SQLException;
+    CompletableFuture<Void> map(Subject parent, Subject child);
 
     /**
      * Answer the list of direct Subjects that map to the supplied objects. The
@@ -245,17 +252,17 @@ public interface Oracle {
     /**
      * Remove the mapping between the parent and the child objects
      */
-    void remove(Object parent, Object child) throws SQLException;
+    CompletableFuture<Void> remove(Object parent, Object child);
 
     /**
      * Remove the mapping between the parent and the child relations
      */
-    void remove(Relation parent, Relation child) throws SQLException;
+    CompletableFuture<Void> remove(Relation parent, Relation child);
 
     /**
      * Remove the mapping between the parent and the child subects
      */
-    void remove(Subject parent, Subject child) throws SQLException;
+    CompletableFuture<Void> remove(Subject parent, Subject child);
 
     /**
      * Answer the list of direct and transitive subjects that map to the object.
@@ -266,11 +273,5 @@ public interface Oracle {
      * @throws SQLException
      */
     Stream<Subject> subjects(Relation predicate, Object object) throws SQLException;
-
-    /**
-     * Delete a Namespace. All objects, subjects, relations and assertions that
-     * reference this namespace will also be deleted.
-     */
-    void delete(Namespace namespace) throws SQLException;
 
 }

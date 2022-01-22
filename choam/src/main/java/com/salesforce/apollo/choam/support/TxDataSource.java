@@ -100,6 +100,7 @@ public class TxDataSource implements DataSource {
             break;
         case VALIDATIONS:
             log.trace("Requesting validations only on: {}", member);
+            mode.set(Mode.CLOSED);
             blockingThread = Thread.currentThread();
             try {
                 Validate validation = validations.poll(1, TimeUnit.SECONDS);

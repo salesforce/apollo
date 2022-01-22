@@ -8,6 +8,8 @@ package com.salesforce.apollo.utils.bloomFilters;
 
 import java.util.BitSet;
 
+import org.joou.ULong;
+
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 
@@ -42,7 +44,7 @@ abstract public class BloomFilter<T> {
 
         @Override
         protected int getType() {
-            return 3;
+            return BYTES;
         }
     }
 
@@ -68,7 +70,7 @@ abstract public class BloomFilter<T> {
 
         @Override
         protected int getType() {
-            return 0;
+            return DIGEST;
         }
 
     }
@@ -95,7 +97,7 @@ abstract public class BloomFilter<T> {
 
         @Override
         protected int getType() {
-            return 1;
+            return INT;
         }
 
     }
@@ -121,7 +123,7 @@ abstract public class BloomFilter<T> {
 
         @Override
         protected int getType() {
-            return 2;
+            return LONG;
         }
 
     }
@@ -148,23 +150,58 @@ abstract public class BloomFilter<T> {
 
         @Override
         protected int getType() {
-            return 4;
+            return STRING;
         }
     }
+
+    public static class ULongBloomFilter extends BloomFilter<ULong> {
+        public ULongBloomFilter(long seed, int n, double p) {
+            super(new Hash<ULong>(seed, n, p) {
+                @Override
+                protected Hasher<ULong> newHasher() {
+                    return new ULongHasher();
+                }
+            });
+        }
+
+        public ULongBloomFilter(long seed, int m, int k, long[] bits) {
+            super(new Hash<ULong>(seed, k, m) {
+                @Override
+                protected Hasher<ULong> newHasher() {
+                    return new ULongHasher();
+                }
+            }, BitSet.valueOf(bits));
+        }
+
+        @Override
+        protected int getType() {
+            return ULONG;
+        }
+
+    }
+
+    private static final int BYTES  = 3;
+    private static final int DIGEST = 0;
+    private static final int INT    = 1;
+    private static final int LONG   = 2;
+    private static final int STRING = 4;
+    private static final int ULONG  = 5;
 
     @SuppressWarnings("unchecked")
     public static <Q> BloomFilter<Q> create(long seed, int n, double p, int type) {
         switch (type) {
-        case 0:
+        case DIGEST:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, n, p);
-        case 1:
+        case INT:
             return (BloomFilter<Q>) new IntBloomFilter(seed, n, p);
-        case 2:
+        case LONG:
             return (BloomFilter<Q>) new LongBloomFilter(seed, n, p);
-        case 3:
+        case BYTES:
             return (BloomFilter<Q>) new BytesBloomFilter(seed, n, p);
-        case 4:
+        case STRING:
             return (BloomFilter<Q>) new StringBloomFilter(seed, n, p);
+        case ULONG:
+            return (BloomFilter<Q>) new ULongBloomFilter(seed, n, p);
         default:
             throw new IllegalArgumentException("Invalid type: " + type);
         }
@@ -173,20 +210,22 @@ abstract public class BloomFilter<T> {
     @SuppressWarnings("unchecked")
     public static <Q> BloomFilter<Q> create(long seed, int m, int k, long[] bits, int type) {
         switch (type) {
-        case 0:
+        case DIGEST:
             return (BloomFilter<Q>) new DigestBloomFilter(seed, m, k, bits);
-        case 1:
+        case INT:
             return (BloomFilter<Q>) new IntBloomFilter(seed, m, k, bits);
-        case 2:
+        case LONG:
             return (BloomFilter<Q>) new LongBloomFilter(seed, m, k, bits);
-        case 3:
+        case BYTES:
             return (BloomFilter<Q>) new BytesBloomFilter(seed, m, k, bits);
-        case 4:
+        case STRING:
             return (BloomFilter<Q>) new StringBloomFilter(seed, m, k, bits);
+        case ULONG:
+            return (BloomFilter<Q>) new ULongBloomFilter(seed, m, k, bits);
         default:
             throw new IllegalArgumentException("Invalid type: " + type);
         }
-    }
+    } 
 
     public static <Q> BloomFilter<Q> from(Biff bff) {
         long[] bits = new long[bff.getBitsCount()];

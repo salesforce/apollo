@@ -31,6 +31,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -51,8 +52,11 @@ public class SessionTest {
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
-        Parameters params = Parameters.newBuilder().setContext(context)
-                                      .setMember(new SigningMemberImpl(Utils.getMember(0))).build();
+        Parameters params = Parameters.newBuilder()
+                                      .build(RuntimeParameters.newBuilder()
+                                                              .setContext(context)
+                                                              .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                              .build());
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
             ForkJoinPool.commonPool().execute(() -> {
@@ -84,9 +88,12 @@ public class SessionTest {
     public void scalingTest() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
-        Parameters params = Parameters.newBuilder().setContext(context)
-                                      .setMember(new SigningMemberImpl(Utils.getMember(0))).setTxnPermits(100_000_000)
-                                      .build();
+        Parameters params = Parameters.newBuilder()
+                                      .setTxnPermits(100_000_000)
+                                      .build(RuntimeParameters.newBuilder()
+                                                              .setContext(context)
+                                                              .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                              .build());
 
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
@@ -138,13 +145,16 @@ public class SessionTest {
             try {
                 f.get(10, TimeUnit.SECONDS);
             } catch (ExecutionException e) {
-                if (e.getCause()instanceof StatusRuntimeException sre) {
+                if (e.getCause() instanceof StatusRuntimeException sre) {
 
                 }
             }
         }
         System.out.println();
-        ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build().report();
+        ConsoleReporter.forRegistry(reg)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 }

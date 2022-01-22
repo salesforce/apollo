@@ -8,19 +8,20 @@ package com.salesforce.apollo.state;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLType;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -57,81 +58,48 @@ import liquibase.LabelExpression;
  */
 public class Mutator {
     public static class BatchBuilder {
-
-        public class Completion<Result> {
-            public BatchBuilder andThen(@SuppressWarnings("rawtypes") CompletableFuture processor) {
-                completions.add(processor);
-                return BatchBuilder.this;
-            }
-
-            public BatchBuilder discard() {
-                completions.add(null);
-                return BatchBuilder.this;
-            }
-        }
-
-        private final BatchedTransaction.Builder   batch       = BatchedTransaction.newBuilder();
-        @SuppressWarnings("rawtypes")
-        private final ArrayList<CompletableFuture> completions = new ArrayList<>();
-        private final Session                      session;
+        private final BatchedTransaction.Builder batch = BatchedTransaction.newBuilder();
+        private final Session                    session;
 
         public BatchBuilder(Session session) {
             this.session = session;
         }
 
-        public Completion<int[]> execute(BatchUpdate update) {
-            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update).build());
-            return new Completion<>();
-        }
-
-        public Completion<CallResult> execute(Call call) {
-            batch.addTransactions(Txn.newBuilder().setCall(call).build());
-            return new Completion<>();
-        }
-
-        public Completion<Boolean> execute(Migration migration) {
-            batch.addTransactions(Txn.newBuilder().setMigration(migration).build());
-            return new Completion<>();
-        }
-
-        public <T> Completion<T> execute(Script script) {
-            batch.addTransactions(Txn.newBuilder().setScript(script).build());
-            return new Completion<>();
-        }
-
-        public Completion<List<ResultSet>> execute(Statement statement) {
-            batch.addTransactions(Txn.newBuilder().setStatement(statement).build());
-            return new Completion<>();
-        }
-
-        @SuppressWarnings("unchecked")
-        public <T> CompletableFuture<T> submit(Executor exec, Duration timeout,
-                                               ScheduledExecutorService scheduler) throws InvalidTransaction {
-            return (CompletableFuture<T>) session.submit(exec, build(), timeout, scheduler)
-                                                 .whenComplete((BiConsumer<Object, Throwable>) (r, t) -> process(r, t));
-        }
-
-        private Message build() {
+        public BatchedTransaction build() {
             return batch.build();
         }
 
-        private void process(Object r, Throwable t) {
-            if (t instanceof BatchedTransactionException) {
-                BatchedTransactionException e = (BatchedTransactionException) t;
-                completions.get(e.getIndex()).completeExceptionally(e.getCause());
-                return;
-            }
-            @SuppressWarnings("unchecked")
-            List<Object> results = (List<Object>) r;
-            assert results.size() == completions.size() : "Results: " + results.size() + " does not match Completions: "
-            + completions.size();
-            for (int i = 0; i < results.size(); i++) {
-                @SuppressWarnings("unchecked")
-                CompletableFuture<Object> futureSailor = completions.get(i);
-                if (futureSailor != null) {
-                    futureSailor.complete(results.get(i));
-                }
-            }
+        public BatchBuilder execute(BatchUpdate update) {
+            batch.addTransactions(Txn.newBuilder().setBatchUpdate(update));
+            return this;
+        }
+
+        public BatchBuilder execute(Call call) {
+            batch.addTransactions(Txn.newBuilder().setCall(call));
+            return this;
+        }
+
+        public BatchBuilder execute(Migration migration) {
+            batch.addTransactions(Txn.newBuilder().setMigration(migration));
+            return this;
+        }
+
+        public BatchBuilder execute(Script script) {
+            batch.addTransactions(Txn.newBuilder().setScript(script));
+            return this;
+        }
+
+        public BatchBuilder execute(Statement statement) {
+            batch.addTransactions(Txn.newBuilder().setStatement(statement));
+            return this;
+        }
+
+        @SuppressWarnings("unchecked")
+        public CompletableFuture<List<?>> submit(Executor exec, Duration timeout,
+                                                 ScheduledExecutorService scheduler) throws InvalidTransaction {
+            CompletableFuture<?> submit = session.submit(exec, Txn.newBuilder().setBatched(build()).build(), timeout,
+                                                         scheduler);
+            return (CompletableFuture<List<?>>) submit;
         }
     }
 
@@ -147,7 +115,7 @@ public class Mutator {
         }
 
         public BatchedTransactionException(int index, Throwable cause) {
-            this(index, null, cause);
+            this(index, "Exception in " + index, cause);
         }
 
         public int getIndex() {
@@ -202,9 +170,18 @@ public class Mutator {
         return changeLog(resources, root, context, labels).setCount(count).build();
     }
 
+    public static ChangeLog changeLog(int count, Map<Path, URL> resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
+    }
+
     public static ChangeLog changeLog(int count, Path resources, String root, Contexts context,
                                       LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setCount(count).build();
+    }
+
+    public static ChangeLog changeLog(Map<Path, URL> resources, String root) {
+        return changeLog(resourcesFrom(resources), root, null, null).build();
     }
 
     public static ChangeLog changeLog(Path resources, String root) {
@@ -216,9 +193,35 @@ public class Mutator {
         return changeLog(resources, root, context, labels).setTag(tag).build();
     }
 
+    public static ChangeLog changeLog(String tag, Map<Path, URL> resources, String root, Contexts context,
+                                      LabelExpression labels) {
+        return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
+    }
+
     public static ChangeLog changeLog(String tag, Path resources, String root, Contexts context,
                                       LabelExpression labels) {
         return changeLog(resourcesFrom(resources), root, context, labels).setTag(tag).build();
+    }
+
+    public static ByteString resourcesFrom(Map<Path, URL> resources) {
+        final var baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zs = new ZipOutputStream(baos)) {
+            resources.entrySet().forEach(entry -> {
+                ZipEntry zipEntry = new ZipEntry(entry.getKey().toString());
+                try {
+                    zs.putNextEntry(zipEntry);
+                    try (var is = entry.getValue().openStream()) {
+                        is.transferTo(zs);
+                    }
+                    zs.closeEntry();
+                } catch (IOException e) {
+                    throw new IllegalStateException("error creating entry: " + entry.getKey(), e);
+                }
+            });
+        } catch (IOException e) {
+            throw new IllegalStateException("error creating resources: " + resources, e);
+        }
+        return ByteString.copyFrom(baos.toByteArray());
     }
 
     public static ByteString resourcesFrom(Path sourceDirectory, FileVisitOption... options) {
@@ -238,6 +241,10 @@ public class Mutator {
             throw new IllegalStateException("error creating resources: " + sourceDirectory, e);
         }
         return ByteString.copyFrom(baos.toByteArray());
+    }
+
+    public static Migration update(ChangeLog changeLog) {
+        return Migration.newBuilder().setUpdate(changeLog).build();
     }
 
     private final org.h2.engine.Session h2Session;
@@ -264,8 +271,10 @@ public class Mutator {
     }
 
     public BatchUpdate batchOf(String sql, List<List<Object>> batch) {
-        return batch(sql, batch.stream().map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
-                               .collect(Collectors.toList()));
+        return batch(sql,
+                     batch.stream()
+                          .map(args -> args.stream().map(o -> convert(o)).collect(Collectors.toList()))
+                          .collect(Collectors.toList()));
     }
 
     public Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Object... arguments) {
@@ -278,19 +287,36 @@ public class Mutator {
 
     public Call call(EXECUTION execution, String sql, List<SQLType> outParameters, Value... arguments) {
         StreamTransfer tfr = new StreamTransfer(h2Session);
-        return Call.newBuilder().setSql(sql).setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
-                                                              .setArgs(tfr.write(Arrays.asList(arguments))))
+        return Call.newBuilder()
+                   .setExecution(execution)
+                   .addAllOutParameters(outParameters.stream().map(t -> t.getVendorTypeNumber()).toList())
+                   .setSql(sql)
+                   .setArgs(Arguments.newBuilder()
+                                     .setVersion(tfr.getVersion())
+                                     .setArgs(tfr.write(Arrays.asList(arguments))))
                    .build();
+    }
+
+    public Call call(String sql) {
+        return call(EXECUTION.EXECUTE, sql, null);
     }
 
     public Call call(String sql, List<SQLType> outParameters, Object... arguments) {
         return call(EXECUTION.EXECUTE, sql, outParameters, arguments);
     }
 
+    public Call call(String sql, Object... arguments) {
+        return call(EXECUTION.EXECUTE, sql, Collections.emptyList(), arguments);
+    }
+
     public Script callScript(String className, String method, String source, Value... args) {
         StreamTransfer tfr = new StreamTransfer(h2Session);
-        return Script.newBuilder().setClassName(className).setMethod(method).setSource(source)
-                     .setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
+        return Script.newBuilder()
+                     .setClassName(className)
+                     .setMethod(method)
+                     .setSource(source)
+                     .setArgs(Arguments.newBuilder()
+                                       .setVersion(tfr.getVersion())
                                        .setArgs(tfr.write(Arrays.asList(args))))
                      .build();
     }
@@ -314,8 +340,8 @@ public class Mutator {
         return session.submit(exec, Txn.newBuilder().setCall(call).build(), timeout, scheduler);
     }
 
-    public CompletableFuture<List<ResultSet>> execute(Executor exec, Migration migration, Duration timeout,
-                                                      ScheduledExecutorService scheduler) throws InvalidTransaction {
+    public CompletableFuture<Boolean> execute(Executor exec, Migration migration, Duration timeout,
+                                              ScheduledExecutorService scheduler) throws InvalidTransaction {
         return session.submit(exec, Txn.newBuilder().setMigration(migration).build(), timeout, scheduler);
     }
 
@@ -344,9 +370,17 @@ public class Mutator {
 
     public Statement statement(EXECUTION execution, String sql, Value... args) {
         var tfr = new StreamTransfer(h2Session);
-        return Statement.newBuilder().setSql(sql).setArgs(Arguments.newBuilder().setVersion(tfr.getVersion())
-                                                                   .setArgs(tfr.write(Arrays.asList(args))))
+        return Statement.newBuilder()
+                        .setSql(sql)
+                        .setExecution(execution)
+                        .setArgs(Arguments.newBuilder()
+                                          .setVersion(tfr.getVersion())
+                                          .setArgs(tfr.write(Arrays.asList(args))))
                         .build();
+    }
+
+    public Statement statement(String sql) {
+        return statement(EXECUTION.EXECUTE, sql, (Object[]) null);
     }
 
     public Statement statement(String sql, Object... args) {

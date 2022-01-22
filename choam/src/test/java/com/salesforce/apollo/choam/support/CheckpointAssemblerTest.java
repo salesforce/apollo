@@ -33,6 +33,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,9 @@ public class CheckpointAssemblerTest {
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -107,19 +110,22 @@ public class CheckpointAssemblerTest {
         }
 
         Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
-        List<SigningMember> members = certs.values().stream()
+        List<SigningMember> members = certs.values()
+                                           .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
                                                                            c.getX509Certificate(), c.getPrivateKey(),
                                                                            new SignerImpl(c.getPrivateKey()),
                                                                            c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.activate(m)).collect(Collectors.toList());
+                                           .peek(m -> context.activate(m))
+                                           .collect(Collectors.toList());
 
         Checkpoint checkpoint = HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
 
         SigningMember bootstrapping = members.get(0);
 
         Store store1 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointState state = new CheckpointState(checkpoint, store1.putCheckpoint(0, chkptFile, checkpoint));
+        CheckpointState state = new CheckpointState(checkpoint,
+                                                    store1.putCheckpoint(ULong.valueOf(0), chkptFile, checkpoint));
 
         File testFile = File.createTempFile("test-", "chkpt", checkpointDir);
         testFile.deleteOnExit();
@@ -151,8 +157,8 @@ public class CheckpointAssemblerTest {
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(0, checkpoint, bootstrapping, store2, comm, context, 0.00125,
-                                                           DigestAlgorithm.DEFAULT);
+        CheckpointAssembler boot = new CheckpointAssembler(ULong.valueOf(0), checkpoint, bootstrapping, store2, comm,
+                                                           context, 0.00125, DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());

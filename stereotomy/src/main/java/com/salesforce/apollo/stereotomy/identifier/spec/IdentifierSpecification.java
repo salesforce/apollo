@@ -35,9 +35,9 @@ import com.salesforce.apollo.stereotomy.identifier.SelfSigningIdentifier;
  * @author hal.hildebrand
  *
  */
-public class IdentifierSpecification {
+public class IdentifierSpecification<D extends Identifier> {
 
-    public static class Builder implements Cloneable {
+    public static class Builder<D extends Identifier> implements Cloneable {
 
         private final EnumSet<ConfigurationTrait> configurationTraits           = EnumSet.noneOf(ConfigurationTrait.class);
         private Class<? extends Identifier>       derivation                    = SelfAddressingIdentifier.class;
@@ -55,18 +55,18 @@ public class IdentifierSpecification {
         private final List<BasicIdentifier>       witnesses                     = new ArrayList<>();
         private int                               witnessThreshold              = 0;
 
-        public Builder addKey(PublicKey key) {
+        public Builder<D> addKey(PublicKey key) {
             keys.add(requireNonNull(key));
             return this;
         }
 
-        public Builder basicDerivation(PublicKey key) {
+        public Builder<D> basicDerivation(PublicKey key) {
             this.derivation = BasicIdentifier.class;
             this.keys.add(key);
             return this;
         }
 
-        public IdentifierSpecification build() {
+        public IdentifierSpecification<D> build() {
 
             // --- KEYS ---
 
@@ -143,17 +143,18 @@ public class IdentifierSpecification {
             }
 
             // validation is provided by spec consumer
-            return new IdentifierSpecification(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
-                                               signer, nextKeyConfigurationDigest, witnessThreshold, witnesses,
-                                               configurationTraits, version, selfAddressingDigestAlgorithm,
-                                               signatureAlgorithm);
+            return new IdentifierSpecification<D>(derivation, identifierDigestAlgorithm, format, signingThreshold, keys,
+                                                  signer, nextKeyConfigurationDigest, witnessThreshold, witnesses,
+                                                  configurationTraits, version, selfAddressingDigestAlgorithm,
+                                                  signatureAlgorithm);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public Builder clone() {
-            Builder clone;
+        public Builder<D> clone() {
+            Builder<D> clone;
             try {
-                clone = (Builder) super.clone();
+                clone = (Builder<D>) super.clone();
             } catch (CloneNotSupportedException e) {
                 throw new IllegalStateException(e);
             }
@@ -220,37 +221,38 @@ public class IdentifierSpecification {
             return witnessThreshold;
         }
 
-        public Builder setBasic() {
+        @SuppressWarnings("unchecked")
+        public Builder<BasicIdentifier> setBasic() {
             derivation = BasicIdentifier.class;
-            return this;
+            return (Builder<BasicIdentifier>) this;
         }
 
-        public Builder setConfigurationTraits(ConfigurationTrait... configurationTraits) {
+        public Builder<D> setConfigurationTraits(ConfigurationTrait... configurationTraits) {
             Collections.addAll(this.configurationTraits, configurationTraits);
             return this;
         }
 
-        public Builder setDoNotDelegate() {
+        public Builder<D> setDoNotDelegate() {
             configurationTraits.add(ConfigurationTrait.DO_NOT_DELEGATE);
             return this;
         }
 
-        public Builder setEstablishmentEventsOnly() {
+        public Builder<D> setEstablishmentEventsOnly() {
             configurationTraits.add(ConfigurationTrait.ESTABLISHMENT_EVENTS_ONLY);
             return this;
         }
 
-        public Builder setFormat(Format format) {
+        public Builder<D> setFormat(Format format) {
             format = requireNonNull(format);
             return this;
         }
 
-        public Builder setIdentifierDigestAlgorithm(DigestAlgorithm algorithm) {
+        public Builder<D> setIdentifierDigestAlgorithm(DigestAlgorithm algorithm) {
             identifierDigestAlgorithm = algorithm;
             return this;
         }
 
-        public Builder setKeys(List<PublicKey> keys) {
+        public Builder<D> setKeys(List<PublicKey> keys) {
             requireNonNull(keys);
 
             if (keys.isEmpty()) {
@@ -261,13 +263,13 @@ public class IdentifierSpecification {
             return this;
         }
 
-        public Builder setNextKeys(List<PublicKey> nextKeys) {
+        public Builder<D> setNextKeys(List<PublicKey> nextKeys) {
             this.nextKeys.clear();
             this.nextKeys.addAll(nextKeys);
             return this;
         }
 
-        public Builder setNextSigningThreshold(int nextSigningThreshold) {
+        public Builder<D> setNextSigningThreshold(int nextSigningThreshold) {
             if (nextSigningThreshold < 1) {
                 throw new IllegalArgumentException("nextSigningThreshold must be 1 or greater");
             }
@@ -277,37 +279,39 @@ public class IdentifierSpecification {
             return this;
         }
 
-        public Builder setNextSigningThreshold(SigningThreshold nextSigningThreshold) {
+        public Builder<D> setNextSigningThreshold(SigningThreshold nextSigningThreshold) {
             nextSigningThreshold = requireNonNull(nextSigningThreshold);
             return this;
         }
 
-        public Builder setSelfAddressing() {
+        public Builder<D> setSelfAddressing() {
             derivation = SelfAddressingIdentifier.class;
             return this;
         }
 
-        public Builder setSelfAddressingDigestAlgorithm(DigestAlgorithm selfAddressingDigestAlgorithm) {
+        @SuppressWarnings("unchecked")
+        public Builder<SelfAddressingIdentifier> setSelfAddressingDigestAlgorithm(DigestAlgorithm selfAddressingDigestAlgorithm) {
             this.selfAddressingDigestAlgorithm = selfAddressingDigestAlgorithm;
-            return this;
+            return (Builder<SelfAddressingIdentifier>) this;
         }
 
-        public Builder setSelfSigning() {
+        @SuppressWarnings("unchecked")
+        public Builder<SelfSigningIdentifier> setSelfSigning() {
             derivation = SelfSigningIdentifier.class;
-            return this;
+            return (Builder<SelfSigningIdentifier>) this;
         }
 
-        public Builder setSignatureAlgorithm(SignatureAlgorithm signatureAlgorithm) {
+        public Builder<D> setSignatureAlgorithm(SignatureAlgorithm signatureAlgorithm) {
             this.signatureAlgorithm = signatureAlgorithm;
             return this;
         }
 
-        public Builder setSigner(Signer signer) {
+        public Builder<D> setSigner(Signer signer) {
             this.signer = signer;
             return this;
         }
 
-        public Builder setSigningThreshold(int signingThreshold) {
+        public Builder<D> setSigningThreshold(int signingThreshold) {
             if (signingThreshold < 1) {
                 throw new IllegalArgumentException("signingThreshold must be 1 or greater");
             }
@@ -316,27 +320,27 @@ public class IdentifierSpecification {
             return this;
         }
 
-        public Builder setSigningThreshold(SigningThreshold signingThreshold) {
+        public Builder<D> setSigningThreshold(SigningThreshold signingThreshold) {
             this.signingThreshold = requireNonNull(signingThreshold);
             return this;
         }
 
-        public Builder setVersion(Version version) {
+        public Builder<D> setVersion(Version version) {
             this.version = version;
             return this;
         }
 
-        public Builder setWitness(BasicIdentifier witness) {
+        public Builder<D> setWitness(BasicIdentifier witness) {
             witnesses.add(requireNonNull(witness));
             return this;
         }
 
-        public Builder setWitnesses(List<BasicIdentifier> witnesses) {
+        public Builder<D> setWitnesses(List<BasicIdentifier> witnesses) {
             witnesses.addAll(requireNonNull(witnesses));
             return this;
         }
 
-        public Builder setWitnessThreshold(int witnessThreshold) {
+        public Builder<D> setWitnessThreshold(int witnessThreshold) {
             if (witnessThreshold < 1) {
                 throw new IllegalArgumentException("witnessThreshold must be 1 or greater");
             }
@@ -351,12 +355,12 @@ public class IdentifierSpecification {
         return new BasicIdentifier(key);
     }
 
-    public static Identifier identifier(IdentifierSpecification spec, byte[] inceptionStatement) {
-        return Identifier.identifier(spec, ByteBuffer.wrap(inceptionStatement));
+    public static <D extends Identifier> D identifier(IdentifierSpecification<D> spec, byte[] inceptionStatement) {
+        return (D) Identifier.identifier(spec, ByteBuffer.wrap(inceptionStatement));
     }
 
-    public static Builder newBuilder() {
-        return new Builder();
+    public static <D extends Identifier> Builder<D> newBuilder() {
+        return new Builder<D>();
     }
 
     public static SelfAddressingIdentifier selfAddressing(byte[] inceptionStatement, DigestAlgorithm digestAlgorithm) {

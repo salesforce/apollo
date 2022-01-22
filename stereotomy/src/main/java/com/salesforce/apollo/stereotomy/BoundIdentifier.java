@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy;
 import java.util.Optional;
 
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
 
 /**
  * Identifier bound at a particular key state;
@@ -16,7 +17,9 @@ import com.salesforce.apollo.crypto.Verifier;
  * @author hal.hildebrand
  *
  */
-public interface BoundIdentifier extends KeyState {
+public interface BoundIdentifier<D extends Identifier> extends KeyState {
+
+    D getIdentifier();
 
     /**
      * @return the Verifier for the key state binding

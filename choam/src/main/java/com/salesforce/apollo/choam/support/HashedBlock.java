@@ -13,6 +13,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.joou.ULong;
+import org.joou.Unsigned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,19 +43,22 @@ public class HashedBlock implements Comparable<HashedBlock> {
         }
 
         @Override
-        public long height() {
-            return -1;
+        public ULong height() {
+            return null;
         }
     }
 
     private static final Logger log = LoggerFactory.getLogger(HashedBlock.class);
 
-    public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, long height,
-                                     long lastCheckpoint, Digest lastCheckpointHash, long lastReconfig,
+    public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, ULong height,
+                                     ULong lastCheckpoint, Digest lastCheckpointHash, ULong lastReconfig,
                                      Digest lastReconfigHash) {
-        return Header.newBuilder().setLastCheckpoint(lastCheckpoint)
-                     .setLastCheckpointHash(lastCheckpointHash.toDigeste()).setLastReconfig(lastReconfig)
-                     .setLastReconfigHash(lastReconfigHash.toDigeste()).setHeight(height)
+        return Header.newBuilder()
+                     .setLastCheckpoint(lastCheckpoint == null ? 0 : lastCheckpoint.longValue())
+                     .setLastCheckpointHash(lastCheckpointHash.toDigeste())
+                     .setLastReconfig(lastReconfig == null ? 0 : lastReconfig.longValue())
+                     .setLastReconfigHash(lastReconfigHash.toDigeste())
+                     .setHeight(height.longValue())
                      .setPrevious(previous.toDigeste())
                      .setBodyHash(digestAlgorithm.digest(body.toByteString().asReadOnlyByteBufferList()).toDigeste())
                      .build();
@@ -71,7 +76,9 @@ public class HashedBlock implements Comparable<HashedBlock> {
             }
             length = state.length();
         }
-        Checkpoint.Builder builder = Checkpoint.newBuilder().setByteSize(length).setSegmentSize(blockSize)
+        Checkpoint.Builder builder = Checkpoint.newBuilder()
+                                               .setByteSize(length)
+                                               .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toDigeste());
         if (state != null) {
             byte[] buff = new byte[blockSize];
@@ -121,11 +128,11 @@ public class HashedBlock implements Comparable<HashedBlock> {
         return algo.digest(buffers);
     }
 
-    public static long height(Block block) {
-        return block.getHeader().getHeight();
+    public static ULong height(Block block) {
+        return Unsigned.ulong(block.getHeader().getHeight());
     }
 
-    public static long height(CertifiedBlock cb) {
+    public static ULong height(CertifiedBlock cb) {
         return height(cb.getBlock());
     }
 
@@ -148,14 +155,14 @@ public class HashedBlock implements Comparable<HashedBlock> {
 
     @Override
     public int compareTo(HashedBlock o) {
-        return hash.equals(o.hash) ? 0 : Long.compare(height(), o.height());
+        return hash.equals(o.hash) ? 0 : height().compareTo(o.height());
     }
 
     public Digest getPrevious() {
         return new Digest(block.getHeader().getPrevious());
     }
 
-    public long height() {
+    public ULong height() {
         return height(block);
     }
 }

@@ -26,7 +26,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +51,7 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -112,8 +112,9 @@ public class CHOAMTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
-                                                                     update(entropy, mutator), timeout, scheduler),
+                                decorate(mutator.getSession()
+                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                        scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -133,8 +134,9 @@ public class CHOAMTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
-                                                                     update(entropy, mutator), timeout, scheduler),
+                                decorate(mutator.getSession()
+                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                        scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
@@ -151,8 +153,8 @@ public class CHOAMTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                         scheduler),
+                    decorate(mutator.getSession()
+                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler),
                              time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
@@ -170,7 +172,6 @@ public class CHOAMTest {
     private File                               checkpointDirBase;
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
-    private ExecutorService                    routerExec;
     private Map<Digest, Router>                routers;
     private ScheduledExecutorService           scheduler;
     private int                                toleranceLevel;
@@ -194,10 +195,6 @@ public class CHOAMTest {
             scheduler.shutdownNow();
             scheduler = null;
         }
-        if (routerExec != null) {
-            routerExec.shutdownNow();
-            routerExec = null;
-        }
         if (txScheduler != null) {
             txScheduler.shutdownNow();
             txScheduler = null;
@@ -217,52 +214,63 @@ public class CHOAMTest {
         toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        AtomicInteger exec = new AtomicInteger();
-        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
-            Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        var params = Parameters.newBuilder().setContext(context).setSynchronizationCycles(1)
-                               .setSynchronizeTimeout(Duration.ofSeconds(1)).setExec(Router.createFjPool())
-                               .setGenesisViewId(GENESIS_VIEW_ID).setGenesisData(GENESIS_DATA)
-                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
+        var params = Parameters.newBuilder()
+                               .setSynchronizationCycles(1)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setGenesisViewId(GENESIS_VIEW_ID)
+                               .setGossipDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(20))
                                                               .setBatchInterval(Duration.ofMillis(100))
-                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(500).setCheckpointBlockSize(200);
-        params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
+                               .setTxnPermits(5000)
+                               .setCheckpointBlockSize(200);
+        params.getClientBackoff()
+              .setBase(10)
+              .setCap(250)
+              .setInfiniteAttempts()
+              .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
-        members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m)).toList();
+        params.getProducer().ethereal().setNumberOfEpochs(4);
+
+        members = IntStream.range(0, CARDINALITY)
+                           .mapToObj(i -> Utils.getMember(i))
+                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .map(e -> (SigningMember) e)
+                           .peek(m -> context.activate(m))
+                           .toList();
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(CARDINALITY)
-                                                                                             .setMetrics(params.getMetrics()),
-                                                                        routerExec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            AtomicInteger exec = new AtomicInteger();
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(2, r -> {
+                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
+                                                  + exec.getAndIncrement() + "]");
+                                                  thread.setDaemon(true);
+                                                  return thread;
+                                              }));
+            return localRouter;
+        }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m);
+            return createCHOAM(entropy, params, m, context);
         }));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
-        final Duration timeout = Duration.ofSeconds(6);
+        final Duration timeout = Duration.ofSeconds(3);
         AtomicBoolean proceed = new AtomicBoolean(true);
         MetricRegistry reg = new MetricRegistry();
         Timer latency = reg.timer("Transaction latency");
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int waitFor = 5;
+        final ULong waitFor = ULong.valueOf(5);
         final int clientCount = 1000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
@@ -272,48 +280,60 @@ public class CHOAMTest {
         choams.values().forEach(ch -> ch.start());
 
         var success = Utils.waitForCondition(60_000,
-                                             () -> members.stream().map(m -> updaters.get(m))
-                                                          .map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                                          .mapToLong(cb -> cb.height()).filter(l -> l >= waitFor)
+                                             () -> members.stream()
+                                                          .map(m -> updaters.get(m))
+                                                          .map(ssm -> ssm.getCurrentBlock())
+                                                          .filter(cb -> cb != null)
+                                                          .map(cb -> cb.height())
+                                                          .filter(l -> l.compareTo(waitFor) >= 0)
                                                           .count() > toleranceLevel);
         assertTrue(success,
-                   "Results: "
-                   + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                            .filter(cb -> cb != null).map(cb -> cb.height()).filter(l -> l >= waitFor).toList());
+                   "Results: " + members.stream()
+                                        .map(m -> updaters.get(m))
+                                        .map(ssm -> ssm.getCurrentBlock())
+                                        .filter(cb -> cb != null)
+                                        .map(cb -> cb.height())
+                                        .filter(l -> l.compareTo(waitFor) >= 0)
+                                        .toList());
 
-        final var initial = choams.get(members.get(0).getId()).getSession()
+        final var initial = choams.get(members.get(0).getId())
+                                  .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet().stream().map(e -> new Transactioneer(
-                                                                     e.getValue()
-                                                                      .getMutator(choams.get(e.getKey().getId())
-                                                                                        .getSession()),
-                                                                     timeout, timeouts, latency, proceed, lineTotal,
-                                                                     max, countdown, txScheduler))
+            updaters.entrySet()
+                    .stream()
+                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
+                                                 timeout, timeouts, latency, proceed, lineTotal, max, countdown,
+                                                 txScheduler))
                     .forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         try {
-            success = countdown.await(120, TimeUnit.SECONDS);
+            assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions");
         } finally {
             proceed.set(false);
         }
 
-        final long target = updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                                    .mapToLong(cb -> cb.height()).max().getAsLong()
-        + 10;
+        final ULong target = updaters.values()
+                                     .stream()
+                                     .map(ssm -> ssm.getCurrentBlock())
+                                     .filter(cb -> cb != null)
+                                     .map(cb -> cb.height())
+                                     .max((a, b) -> a.compareTo(b))
+                                     .get();
 
         try {
-
-            assertTrue(success, "did not finish transactioneers: " + countdown.getCount());
-
             Utils.waitForCondition(20_000, 1000,
-                                   () -> members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock())
-                                                .filter(cb -> cb != null).mapToLong(cb -> cb.height())
-                                                .filter(l -> l >= target).count() == members.size());
+                                   () -> members.stream()
+                                                .map(m -> updaters.get(m))
+                                                .map(ssm -> ssm.getCurrentBlock())
+                                                .filter(cb -> cb != null)
+                                                .map(cb -> cb.height())
+                                                .filter(l -> l.compareTo(target) >= 0)
+                                                .count() == members.size());
 
             record row(float price, int quantity) {}
 
@@ -342,20 +362,27 @@ public class CHOAMTest {
             }
         } finally {
             System.out.println("target: " + target + " results: "
-            + members.stream().map(m -> updaters.get(m)).map(ssm -> ssm.getCurrentBlock()).filter(cb -> cb != null)
-                     .map(cb -> cb.height()).toList());
+            + members.stream()
+                     .map(m -> updaters.get(m))
+                     .map(ssm -> ssm.getCurrentBlock())
+                     .filter(cb -> cb != null)
+                     .map(cb -> cb.height())
+                     .toList());
 
             System.out.println();
             System.out.println();
             System.out.println();
 
             System.out.println("# of clients: " + choams.size() * clientCount);
-            ConsoleReporter.forRegistry(reg).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build().report();
+            ConsoleReporter.forRegistry(reg)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
         }
     }
 
-    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m) {
+    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -363,28 +390,39 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setExec(Router.createFjPool())
-                               .setCheckpointer(up.getCheckpointer()).setProcessor(new TransactionExecutor() {
+        return new CHOAM(params.build(RuntimeParameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setExec(Router.createFjPool())
+                                                       .setGenesisData(view -> GENESIS_DATA)
+                                                       .setScheduler(scheduler)
+                                                       .setMember(m)
+                                                       .setCommunications(routers.get(m.getId()))
+                                                       .setExec(Router.createFjPool())
+                                                       .setCheckpointer(up.getCheckpointer())
+                                                       .setProcessor(new TransactionExecutor() {
 
-                                   @Override
-                                   public void beginBlock(long height, Digest hash) {
-                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
-                                       up.getExecutor().beginBlock(height, hash);
-                                   }
+                                                           @Override
+                                                           public void beginBlock(ULong height, Digest hash) {
+                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
+                                                                     .add(hash);
+                                                               up.getExecutor().beginBlock(height, hash);
+                                                           }
 
-                                   @Override
-                                   public void execute(int i, Digest hash, Transaction tx,
-                                                       @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
-                                       up.getExecutor().execute(i, hash, tx, onComplete);
-                                   }
+                                                           @Override
+                                                           public void execute(int i, Digest hash, Transaction tx,
+                                                                               @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
+                                                               up.getExecutor().execute(i, hash, tx, onComplete);
+                                                           }
 
-                                   @Override
-                                   public void genesis(long height, Digest hash, List<Transaction> initialization) {
-                                       blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>()).add(hash);
-                                       up.getExecutor().genesis(height, hash, initialization);
-                                   }
-                               }).build(),
-                         MVStore.open(null));
+                                                           @Override
+                                                           public void genesis(Digest hash,
+                                                                               List<Transaction> initialization) {
+                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
+                                                                     .add(hash);
+                                                               up.getExecutor().genesis(hash, initialization);
+                                                           }
+                                                       })
+                                                       .build()));
     }
 
     private Txn initialInsert() {

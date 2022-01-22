@@ -46,6 +46,7 @@ import org.h2.util.CloseWatcher;
 import org.h2.util.DateTimeUtils;
 import org.h2.util.JdbcUtils;
 import org.h2.value.Value;
+import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +71,7 @@ import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
+import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
 import com.salesforce.apollo.state.liquibase.LiquibaseConnection;
 import com.salesforce.apollo.state.liquibase.MigrationAccessor;
 import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
@@ -107,6 +109,8 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
+    private static final String SQL_STATE_INTERNAL = "/sql-state/internal.xml";
+
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -123,7 +127,7 @@ public class SqlStateMachine {
         }
     }
 
-    public record Current(long height, Digest blkHash, int txn, Digest txnHash) {}
+    public record Current(ULong height, Digest blkHash, int txn, Digest txnHash) {}
 
     public static class Event {
         public final JsonNode body;
@@ -182,7 +186,7 @@ public class SqlStateMachine {
 
     public class TxnExec implements TransactionExecutor {
         @Override
-        public void beginBlock(long height, Digest hash) {
+        public void beginBlock(ULong height, Digest hash) {
             SqlStateMachine.this.beginBlock(height, hash);
         }
 
@@ -202,7 +206,8 @@ public class SqlStateMachine {
             try {
                 txn = Txn.parseFrom(tx.getContent());
             } catch (InvalidProtocolBufferException e) {
-                log.warn("invalid txn", e);
+                log.warn("invalid txn: {}", tx, e);
+                onComplete.completeExceptionally(e);
                 return;
             }
             withContext(() -> {
@@ -212,11 +217,11 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void genesis(long height, Digest hash, List<Transaction> initialization) {
-            begin(height, hash);
+        public void genesis(Digest hash, List<Transaction> initialization) {
+            begin(ULong.valueOf(0), hash);
             withContext(() -> {
                 initializeState();
-                updateCurrent(height, hash, -1, Digest.NONE);
+                updateCurrent(ULong.valueOf(0), hash, -1, Digest.NONE);
             });
             int i = 0;
             for (Transaction txn : initialization) {
@@ -268,16 +273,16 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS APOLLO_INTERNAL.PUBLISH FOR \"%s.publish\"",
+    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
                                                                                                           SqlStateMachine.class.getCanonicalName());
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM APOLLO_INTERNAL.TRAMPOLINE";
+    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
     private static final RowSetFactory             factory;
     private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
     private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                         = "INSERT INTO APOLLO_INTERNAL.TRAMPOLINE(CHANNEL, BODY) VALUES(?1, ?2 FORMAT JSON)";
+    private static final String                    PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM APOLLO_INTERNAL.TRAMPOLINE";
-    private static final String                    UPDATE_CURRENT                         = "MERGE INTO APOLLO_INTERNAL.CURRENT(_U, HEIGHT, BLOCK_HASH, TRANSACTION, TRANSACTION_HASH) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
+    private static final String                    UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -348,7 +353,7 @@ public class SqlStateMachine {
         trampoline.deregister(discriminator);
     }
 
-    public BiConsumer<Long, CheckpointState> getBootstrapper() {
+    public BiConsumer<ULong, CheckpointState> getBootstrapper() {
         return (height, state) -> {
             String rndm = UUID.randomUUID().toString();
             try (java.sql.Statement statement = connection().createStatement()) {
@@ -375,7 +380,7 @@ public class SqlStateMachine {
         };
     }
 
-    public Function<Long, File> getCheckpointer() {
+    public Function<ULong, File> getCheckpointer() {
         return height -> {
             String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
             try (java.sql.Statement statement = connection().createStatement()) {
@@ -458,7 +463,7 @@ public class SqlStateMachine {
         if (current == null) {
             withContext(() -> {
                 try {
-                    connection = new JdbcConnection(url, info, "", "");
+                    connection = new JdbcConnection(url, info, "", "", false);
                 } catch (SQLException e) {
                     throw new IllegalStateException("Unable to create connection using " + url, e);
                 }
@@ -482,7 +487,7 @@ public class SqlStateMachine {
 
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
-        try (Liquibase liquibase = new Liquibase("/internal.yml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase(SQL_STATE_INTERNAL, new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
             statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
@@ -548,13 +553,13 @@ public class SqlStateMachine {
         return call(call.getSql(), exec -> {
             List<ResultSet> results = new ArrayList<>();
             try {
-                int i = 1;
+                int p = 1;
+                for (int t : call.getOutParametersList()) {
+                    exec.registerOutParameter(p++, t);
+                }
                 for (Value v : new StreamTransfer(call.getArgs().getVersion(), getSession()).read(call.getArgs()
                                                                                                       .getArgs())) {
-                    setArgument(exec, i++, v);
-                }
-                for (int p = 0; p < call.getOutParametersCount(); p++) {
-                    exec.registerOutParameter(p, call.getOutParameters(p));
+                    setArgument(exec, p++, v);
                 }
                 List<Object> out = new ArrayList<>();
 
@@ -572,6 +577,10 @@ public class SqlStateMachine {
                     log.debug("Invalid statement execution enum: {}", call.getExecution());
                     return new CallResult(out, results);
                 }
+                for (int j = 1; j <= call.getOutParametersCount(); j++) {
+                    out.add(exec.getObject(j));
+                }
+
                 CachedRowSet rowset = factory.createCachedRowSet();
 
                 rowset.populate(exec.getResultSet());
@@ -581,9 +590,6 @@ public class SqlStateMachine {
                     rowset = factory.createCachedRowSet();
                     rowset.populate(exec.getResultSet());
                     results.add(rowset);
-                }
-                for (int j = 0; j < call.getOutParametersCount(); j++) {
-                    out.add(exec.getObject(j));
                 }
                 return new CallResult(out, results);
             } finally {
@@ -706,12 +712,12 @@ public class SqlStateMachine {
         return returnValue;
     }
 
-    private void begin(long height, Digest blkHash) {
+    private void begin(ULong height, Digest blkHash) {
         final var session = getSession();
         if (session == null) {
             return;
         }
-        session.getRandom().setSeed(new DigestHasher(blkHash, height).identityHash());
+        session.getRandom().setSeed(new DigestHasher(blkHash, height.longValue()).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
             secureEntropy.setSeed(blkHash.getBytes());
@@ -723,7 +729,7 @@ public class SqlStateMachine {
         clock.incrementHeight();
     }
 
-    private void beginBlock(long height, Digest hash) {
+    private void beginBlock(ULong height, Digest hash) {
         begin(height, hash);
         withContext(() -> {
             updateCurrent(height, hash, -1, Digest.NONE);
@@ -788,7 +794,8 @@ public class SqlStateMachine {
 
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
-            onCompletion.completeExceptionally(e);
+            var completed = onCompletion.completeExceptionally(e);
+            assert completed : "Invalid state";
         }
     }
 
@@ -815,27 +822,23 @@ public class SqlStateMachine {
     }
 
     private Object execute(Txn txn) throws Exception {
-        try {
-            return switch (txn.getExecutionCase()) {
-            case BATCH -> acceptBatch(txn.getBatch());
-            case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
-            case CALL -> acceptCall(txn.getCall());
-            case SCRIPT -> acceptScript(txn.getScript());
-            case STATEMENT -> acceptPreparedStatement(txn.getStatement());
-            case BATCHED -> acceptBatchTransaction(txn.getBatched());
-            case MIGRATION -> acceptMigration(txn.getMigration());
-            default -> null;
-            };
-        } catch (Throwable th) {
-            return th;
-        }
+        return switch (txn.getExecutionCase()) {
+        case BATCH -> acceptBatch(txn.getBatch());
+        case BATCHUPDATE -> acceptBatchUpdate(txn.getBatchUpdate());
+        case CALL -> acceptCall(txn.getCall());
+        case SCRIPT -> acceptScript(txn.getScript());
+        case STATEMENT -> acceptPreparedStatement(txn.getStatement());
+        case BATCHED -> acceptBatchTransaction(txn.getBatched());
+        case MIGRATION -> acceptMigration(txn.getMigration());
+        default -> null;
+        };
     }
 
     private void execute(int index, Digest hash, Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
         log.debug("executing: {}", tx.getExecutionCase());
         var c = currentBlock.get();
         updateCurrent(c.height, c.blkHash, index, hash);
-        
+
         clock.incrementTxn();
         ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
 
@@ -856,6 +859,11 @@ public class SqlStateMachine {
         } catch (Exception e) {
             rollback();
             exception(onCompletion, e);
+            if (e instanceof BatchedTransactionException bte) {
+                log.error("error executing: {}: {}", tx.getExecutionCase(), bte.getCause().getMessage());
+            } else {
+                log.error("error executing: {}", tx.getExecutionCase(), e);
+            }
         } finally {
             commit();
         }
@@ -911,6 +919,13 @@ public class SqlStateMachine {
 
     private void rollback() {
         try {
+            if (connection().isClosed()) {
+                return;
+            }
+        } catch (SQLException e1) {
+            return; // I'm done with this shit
+        }
+        try {
             connection().rollback();
         } catch (SQLException e) {
             log.trace("unable to rollback connection", e);
@@ -961,11 +976,11 @@ public class SqlStateMachine {
         }
     }
 
-    private void updateCurrent(long height, Digest blkHash, int txn, Digest txnHash) {
+    private void updateCurrent(ULong height, Digest blkHash, int txn, Digest txnHash) {
         try {
             execute(UPDATE_CURRENT, exec -> {
                 try {
-                    exec.setLong(1, height);
+                    exec.setLong(1, height.longValue());
                     exec.setString(2, QualifiedBase64.qb64(blkHash));
                     exec.setLong(3, txn);
                     exec.setString(4, QualifiedBase64.qb64(txnHash));

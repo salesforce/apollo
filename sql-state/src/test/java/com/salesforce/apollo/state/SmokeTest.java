@@ -29,8 +29,8 @@ public class SmokeTest {
     public void checkpoint() throws Exception {
         File chkpnt1File = new File("target/chkpnt1.sql");
         File chkpnt2File = new File("target/chkpnt2.sql");
-        JdbcConnection db1 = new JdbcConnection("jdbc:h2:mem:chkpt1", new Properties(), null, null);
-        JdbcConnection db2 = new JdbcConnection("jdbc:h2:mem:chkpt2", new Properties(), null, null);
+        JdbcConnection db1 = new JdbcConnection("jdbc:h2:mem:chkpt1", new Properties(), null, null, false);
+        JdbcConnection db2 = new JdbcConnection("jdbc:h2:mem:chkpt2", new Properties(), null, null, false);
 
         createAndInsert(db1).close();
         db1.commit();

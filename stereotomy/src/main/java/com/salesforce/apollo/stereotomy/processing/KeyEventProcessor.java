@@ -11,6 +11,7 @@ import java.util.function.BiFunction;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
@@ -31,32 +32,14 @@ public class KeyEventProcessor implements Validator, Verifier {
         this.keyStateProcessor = keyStateProcessor;
     }
 
-    public void process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
-        KeyEvent event = kerl.getKeyEvent(attachmentEvent.getCoordinates())
-                             .orElseThrow(() -> new MissingEventException(attachmentEvent,
-                                                                          attachmentEvent.getCoordinates()));
-        var state = kerl.getKeyState(attachmentEvent.getCoordinates())
+    public Attachment process(AttachmentEvent attachmentEvent) throws AttachmentEventProcessingException {
+        KeyEvent event = kerl.getKeyEvent(attachmentEvent.coordinates())
+                             .orElseThrow(() -> new MissingAttachmentEventException(attachmentEvent,
+                                                                                    attachmentEvent.coordinates()));
+        var state = kerl.getKeyState(attachmentEvent.coordinates())
                         .orElseThrow(() -> new MissingReferencedEventException(attachmentEvent,
-                                                                               attachmentEvent.getCoordinates()));
-
-        @SuppressWarnings("unused")
-        var validControllerSignatures = verifyAuthentication(state, event, attachmentEvent.getAuthentication(), kerl);
-        @SuppressWarnings("unused")
-        var validWitnessReceipts = verifyEndorsements(state, event, attachmentEvent.getEndorsements());
-        @SuppressWarnings("unused")
-        var validOtherReceipts = verifyReceipts(event, attachmentEvent.getReceipts(), kerl);
-
-        // TODO remove invalid signatures before appending
-        kerl.append(attachmentEvent, state);
-    }
-
-    public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
-
-        validateKeyEventData(previousState, event, kerl);
-
-        KeyState newState = keyStateProcessor.apply(previousState, event);
-
-        return newState;
+                                                                               attachmentEvent.coordinates()));
+        return verify(state, event, attachmentEvent.attachments());
     }
 
     public KeyState process(KeyEvent event) throws KeyEventProcessingException {
@@ -68,5 +51,18 @@ public class KeyEventProcessor implements Validator, Verifier {
         }
 
         return process(previousState, event);
+    }
+
+    public KeyState process(KeyState previousState, KeyEvent event) throws KeyEventProcessingException {
+
+        validateKeyEventData(previousState, event, kerl);
+
+        KeyState newState = keyStateProcessor.apply(previousState, event);
+
+        return newState;
+    }
+
+    private Attachment verify(KeyState state, KeyEvent event, Attachment attachments) {
+        return attachments; // TODO
     }
 }

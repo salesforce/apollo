@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.joou.ULong;
+
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -51,7 +53,7 @@ public interface KeyState {
 
     Optional<Digest> getNextKeyConfigurationDigest();
 
-    default long getSequenceNumber() {
+    default ULong getSequenceNumber() {
         return this.getCoordinates().getSequenceNumber();
     }
 
@@ -69,4 +71,6 @@ public interface KeyState {
         return this.getCoordinates().getIdentifier().isTransferable() &&
                this.getNextKeyConfigurationDigest().isPresent();
     }
+
+    com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState();
 }

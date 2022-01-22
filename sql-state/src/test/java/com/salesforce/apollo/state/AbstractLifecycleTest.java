@@ -21,9 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -35,7 +33,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.mvstore.MVStore;
+import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -49,6 +47,7 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -95,6 +94,10 @@ abstract public class AbstractLifecycleTest {
             this.mutator = mutator;
         }
 
+        public int completed() {
+            return completed.get();
+        }
+
         void decorate(CompletableFuture<?> fs, Timer.Context time) {
             fs.whenCompleteAsync((o, t) -> {
                 if (!proceed.get()) {
@@ -114,13 +117,14 @@ abstract public class AbstractLifecycleTest {
                     if (completed.get() < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
-                                                                     update(entropy, mutator), timeout, scheduler),
+                                decorate(mutator.getSession()
+                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                        scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     }
                 } else {
                     time.close();
@@ -135,13 +139,14 @@ abstract public class AbstractLifecycleTest {
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
-                                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(),
-                                                                     update(entropy, mutator), timeout, scheduler),
+                                decorate(mutator.getSession()
+                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
+                                                        scheduler),
                                          tc);
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     } else if (complete == max) {
                         countdown.countDown();
                     }
@@ -153,13 +158,13 @@ abstract public class AbstractLifecycleTest {
             scheduler.schedule(() -> {
                 Timer.Context time = latency.time();
                 try {
-                    decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                         scheduler),
+                    decorate(mutator.getSession()
+                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler),
                              time);
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+            }, entropy.nextInt(500), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -167,14 +172,13 @@ abstract public class AbstractLifecycleTest {
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    protected Map<Digest, List<Digest>>          blocks;
+    protected Map<Digest, AtomicInteger>         blocks;
     protected CompletableFuture<Boolean>         checkpointOccurred;
     protected Map<Digest, CHOAM>                 choams;
     protected List<SigningMember>                members;
     protected Map<Digest, Router>                routers;
     protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
 
-    ExecutorService          routerExec;
     ScheduledExecutorService scheduler;
     int                      toleranceLevel;
     ScheduledExecutorService txScheduler;
@@ -201,10 +205,6 @@ abstract public class AbstractLifecycleTest {
         updaters.clear();
         parameters.clear();
         members = null;
-        if (routerExec != null) {
-            routerExec.shutdownNow();
-            routerExec = null;
-        }
         if (txScheduler != null) {
             txScheduler.shutdownNow();
             txScheduler = null;
@@ -228,32 +228,33 @@ abstract public class AbstractLifecycleTest {
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
-        AtomicInteger exec = new AtomicInteger();
-        routerExec = Executors.newFixedThreadPool(CARDINALITY, r -> {
-            Thread thread = new Thread(r, "Router exec [" + exec.getAndIncrement() + "]");
-            thread.setDaemon(true);
-            return thread;
-        });
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var params = parameters(context, scheduler);
 
-        members = IntStream.range(0, CARDINALITY).mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk)).map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m)).toList();
+        members = IntStream.range(0, CARDINALITY)
+                           .mapToObj(i -> Utils.getMember(i))
+                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .map(e -> (SigningMember) e)
+                           .peek(m -> context.add(m))
+                           .toList();
         final SigningMember testSubject = members.get(CARDINALITY - 1);
+        members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(CARDINALITY)
-                                                                                             .setMetrics(params.getMetrics()),
-                                                                        routerExec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            AtomicInteger exec = new AtomicInteger();
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(3, r -> {
+                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
+                                                  + exec.getAndIncrement() + "]");
+                                                  thread.setDaemon(true);
+                                                  return thread;
+                                              }));
+            return localRouter;
+        }));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(),
-                                                  m -> createChoam(entropy, params, m, m.equals(testSubject))));
+                        .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
+                                                                                   m.equals(testSubject), context)));
     }
 
     protected Txn initialInsert() {
@@ -277,8 +278,9 @@ abstract public class AbstractLifecycleTest {
         return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();
     }
 
-    private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject) {
-        blocks.put(m.getId(), new CopyOnWriteArrayList<Digest>());
+    private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
+                              Context<Member> context) {
+        blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -286,34 +288,55 @@ abstract public class AbstractLifecycleTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setMember(m).setCommunications(routers.get(m.getId())).setCheckpointer(wrap(up))
-                               .setSynchronizationCycles(testSubject ? 100 : 1).setRestorer(up.getBootstrapper())
-                               .setProcessor(wrap(m, up)).build(),
-                         MVStore.open(null));
+        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
+                               .build(RuntimeParameters.newBuilder()
+                                                       .setContext(context)
+                                                       .setExec(Router.createFjPool())
+                                                       .setGenesisData(view -> GENESIS_DATA)
+                                                       .setScheduler(scheduler)
+                                                       .setMember(m)
+                                                       .setCommunications(routers.get(m.getId()))
+                                                       .setCheckpointer(wrap(up))
+                                                       .setRestorer(up.getBootstrapper())
+                                                       .setProcessor(wrap(m, up))
+                                                       .build()));
     }
 
     private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
-        var params = Parameters.newBuilder().setContext(context).setGenesisViewId(GENESIS_VIEW_ID)
-                               .setExec(Router.createFjPool()).setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setBootstrap(BootstrapParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                                .setMaxSyncBlocks(1000).setMaxViewBlocks(1000).build())
-                               .setSynchronizeDuration(Duration.ofMillis(10)).setGenesisData(GENESIS_DATA)
-                               .setGossipDuration(Duration.ofMillis(10)).setScheduler(scheduler)
-                               .setProducer(ProducerParameters.newBuilder().setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(150))
-                                                              .setMaxBatchByteSize(1024 * 1024).setMaxBatchCount(10000)
+        var params = Parameters.newBuilder()
+                               .setGenesisViewId(GENESIS_VIEW_ID)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setBootstrap(BootstrapParameters.newBuilder()
+                                                                .setGossipDuration(Duration.ofMillis(10))
+                                                                .setMaxSyncBlocks(1000)
+                                                                .setMaxViewBlocks(1000)
+                                                                .build())
+                               .setSynchronizeDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(10))
+                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(10_000).setCheckpointBlockSize(2);
-        params.getClientBackoff().setBase(20).setCap(150).setInfiniteAttempts().setJitter()
+                               .setGossipDuration(Duration.ofMillis(10))
+                               .setTxnPermits(1000)
+                               .setCheckpointBlockSize(2);
+        params.getClientBackoff()
+              .setBase(20)
+              .setCap(150)
+              .setInfiniteAttempts()
+              .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
+
+        params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }
 
     private TransactionExecutor wrap(SigningMember m, SqlStateMachine up) {
         return new TransactionExecutor() {
             @Override
-            public void beginBlock(long height, Digest hash) {
-                blocks.get(m.getId()).add(hash);
+            public void beginBlock(ULong height, Digest hash) {
+                blocks.get(m.getId()).incrementAndGet();
                 up.getExecutor().beginBlock(height, hash);
             }
 
@@ -324,14 +347,14 @@ abstract public class AbstractLifecycleTest {
             }
 
             @Override
-            public void genesis(long height, Digest hash, List<Transaction> initialization) {
-                blocks.get(m.getId()).add(hash);
-                up.getExecutor().genesis(height, hash, initialization);
+            public void genesis(Digest hash, List<Transaction> initialization) {
+                blocks.get(m.getId()).incrementAndGet();
+                up.getExecutor().genesis(hash, initialization);
             }
         };
     }
 
-    private Function<Long, File> wrap(SqlStateMachine up) {
+    private Function<ULong, File> wrap(SqlStateMachine up) {
         final var checkpointer = up.getCheckpointer();
         return l -> {
             try {

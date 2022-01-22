@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.Builder;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -47,7 +48,10 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     @Override
     public Set<ConfigurationTrait> getConfigurationTraits() {
-        return event.getSpecification().getConfigurationList().stream().map(s -> ConfigurationTrait.valueOf(s))
+        return event.getSpecification()
+                    .getConfigurationList()
+                    .stream()
+                    .map(s -> ConfigurationTrait.valueOf(s))
                     .collect(Collectors.toSet());
     }
 
@@ -63,13 +67,22 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
 
     @Override
     public List<BasicIdentifier> getWitnesses() {
-        return event.getSpecification().getWitnessesList().stream().map(s -> identifier(s))
-                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null).collect(Collectors.toList());
+        return event.getSpecification()
+                    .getWitnessesList()
+                    .stream()
+                    .map(s -> identifier(s))
+                    .map(i -> i instanceof BasicIdentifier ? (BasicIdentifier) i : null)
+                    .collect(Collectors.toList());
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(event);
+    }
+
+    @Override
+    public void setEventOf(Builder builder) {
+        builder.setInception(event);
     }
 
     @Override

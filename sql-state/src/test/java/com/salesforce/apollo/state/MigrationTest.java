@@ -23,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.h2.jdbc.JdbcSQLSyntaxErrorException;
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.Message;
@@ -40,10 +41,11 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 public class MigrationTest {
 
     public static final Path   BOOK_RESOURCE_PATH = Path.of("src", "test", "resources", "book-schema");
-    public static final String BOOK_SCHEMA_ROOT   = "bookSchema.yml";
+    public static final String BOOK_SCHEMA_ROOT   = "bookSchema.xml";
 
     public static List<Message> initializeBookSchema() {
-        return Collections.singletonList(Txn.newBuilder().setMigration(MigrationTest.bookSchemaMigration())
+        return Collections.singletonList(Txn.newBuilder()
+                                            .setMigration(MigrationTest.bookSchemaMigration())
                                             .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
                                             .build());
     }
@@ -57,7 +59,7 @@ public class MigrationTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_migration-rollback", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
         Migration migration = Migration.newBuilder().setTag("test-1").build();
         CompletableFuture<Object> success = new CompletableFuture<>();
@@ -67,9 +69,9 @@ public class MigrationTest {
                                     .build(),
                          success);
 
-        executor.beginBlock(1, DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
+        executor.beginBlock(ULong.valueOf(1), DigestAlgorithm.DEFAULT.getOrigin().prefix("voo"));
 
-        migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, "/bookSchema.yml")).build();
+        migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT)).build();
 
         success = new CompletableFuture<>();
         executor.execute(0, Digest.NONE,
@@ -92,7 +94,8 @@ public class MigrationTest {
                                               "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                               "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                               "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
         Transaction transaction = builder.build();
 
         updater.getExecutor().execute(0, Digest.NONE, transaction, null);
@@ -104,13 +107,14 @@ public class MigrationTest {
         }
 
         migration = Migration.newBuilder()
-                             .setRollback(ChangeLog.newBuilder().setRoot(BOOK_SCHEMA_ROOT)
+                             .setRollback(ChangeLog.newBuilder()
+                                                   .setRoot(BOOK_SCHEMA_ROOT)
                                                    .setResources(Mutator.resourcesFrom(BOOK_RESOURCE_PATH))
                                                    .setTag("test-1"))
                              .build();
         success = new CompletableFuture<>();
 
-        executor.beginBlock(2, DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
+        executor.beginBlock(ULong.valueOf(2), DigestAlgorithm.DEFAULT.getOrigin().prefix("foo"));
 
         executor.execute(1, Digest.NONE,
                          Transaction.newBuilder()
@@ -134,9 +138,10 @@ public class MigrationTest {
         SqlStateMachine updater = new SqlStateMachine("jdbc:h2:mem:test_migration-update", new Properties(),
                                                       new File("target/chkpoints"));
         final var executor = updater.getExecutor();
-        executor.genesis(0, DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
+        executor.genesis(DigestAlgorithm.DEFAULT.getLast(), Collections.emptyList());
 
-        Migration migration = Migration.newBuilder().setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT))
+        Migration migration = Migration.newBuilder()
+                                       .setUpdate(Mutator.changeLog(BOOK_RESOURCE_PATH, BOOK_SCHEMA_ROOT))
                                        .build();
 
         CompletableFuture<Object> success = new CompletableFuture<>();
@@ -160,7 +165,8 @@ public class MigrationTest {
                                               "insert into test.books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
                                               "insert into test.books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
                                               "insert into test.books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                              .build().toByteString());
+                              .build()
+                              .toByteString());
         Transaction transaction = builder.build();
 
         updater.getExecutor().execute(1, Digest.NONE, transaction, null);

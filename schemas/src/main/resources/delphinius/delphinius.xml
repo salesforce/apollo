@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+    <changeSet author="hhildebrand" id="1">
+
+        <sql>create schema if not exists delphinius</sql>
+
+        <createTable tableName="namespace"
+            schemaName="delphinius">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="namespace_pkey" />
+            </column>
+            <column name="name" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addUniqueConstraint columnNames="name"
+            tableName="namespace" schemaName="delphinius" />
+
+        <!-- The NULL namespace -->
+        <sql>insert into delphinius.namespace (id, name) values (0, '')
+        </sql>
+
+        <createTable tableName="relation"
+            schemaName="delphinius">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="relation_pkey" />
+            </column>
+            <column name="namespace" type="INT8" defaultValue="0">
+                <constraints nullable="false" />
+            </column>
+            <column name="name" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="relation" baseTableSchemaName="delphinius"
+            constraintName="relation_namespace_fk"
+            referencedTableName="namespace" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addUniqueConstraint
+            columnNames="namespace, name" tableName="relation"
+            schemaName="delphinius" />
+
+        <!-- The NULL relation -->
+        <sql>insert into delphinius.relation (id, namespace, name)
+            values (0, 0, '')
+        </sql>
+
+        <createTable tableName="object"
+            schemaName="delphinius">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="object_pkey" />
+            </column>
+            <column name="namespace" type="INT8" defaultValue="0">
+                <constraints nullable="false" />
+            </column>
+            <column name="name" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+            <column name="relation" type="INT8">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="object" baseTableSchemaName="delphinius"
+            constraintName="object_namespace_fk"
+            referencedTableName="namespace" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="relation"
+            baseTableName="object" baseTableSchemaName="delphinius"
+            constraintName="object_relation_fk"
+            referencedTableName="relation" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addUniqueConstraint
+            columnNames="namespace, name, relation" tableName="object"
+            schemaName="delphinius" />
+
+        <createIndex indexName="object_relation"
+            schemaName="delphinius" tableName="object">
+            <column name="relation" />
+        </createIndex>
+
+        <!-- The NULL object -->
+        <sql>insert into delphinius.object (id, namespace, name,
+            relation)
+            values (0, 0, '', 0)
+        </sql>
+
+        <createTable tableName="subject"
+            schemaName="delphinius">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="subject_pkey" />
+            </column>
+            <column name="namespace" type="INT8" defaultValue="0">
+                <constraints nullable="false" />
+            </column>
+            <column name="name" type="VARCHAR(1024)">
+                <constraints nullable="false" />
+            </column>
+            <column name="relation" type="INT8" defaultValue="0">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="namespace"
+            baseTableName="subject"
+            constraintName="subject_namespace_fk"
+            referencedTableName="namespace"
+            baseTableSchemaName="delphinius" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="relation"
+            baseTableName="subject" baseTableSchemaName="delphinius"
+            constraintName="subject_relation_fk"
+            referencedTableName="relation" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addUniqueConstraint
+            columnNames="namespace, name, relation" tableName="subject"
+            schemaName="delphinius" />
+
+        <createIndex indexName="subject_relation"
+            schemaName="delphinius" tableName="subject">
+            <column name="relation" />
+        </createIndex>
+
+        <!-- The NULL subject -->
+        <sql>insert into delphinius.subject (id, namespace, name,
+            relation)
+            values (0, 0, '', 0)
+        </sql>
+
+        <createTable tableName="assertion"
+            schemaName="delphinius">
+            <column name="subject" type="INT8" />
+            <column name="object" type="INT8" />
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="subject"
+            baseTableName="assertion" baseTableSchemaName="delphinius"
+            constraintName="assertion_subject_fk"
+            referencedTableName="subject" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="object"
+            baseTableName="assertion" baseTableSchemaName="delphinius"
+            constraintName="assertion_object_fk"
+            referencedTableName="object" referencedColumnNames="id"
+            referencedTableSchemaName="delphinius" />
+
+        <!-- The NULL assertion -->
+        <sql>insert into delphinius.assertion (subject, object)
+            values
+            (0, 0)
+        </sql>
+
+        <createTable tableName="edge"
+            schemaName="delphinius">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="edge_pkey" />
+            </column>
+            <column name="parent" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="child" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="transitive" type="BOOLEAN">
+                <constraints nullable="false" />
+            </column>
+            <column name="mark" type="BOOLEAN"
+                defaultValueBoolean="false">
+                <constraints nullable="false" />
+            </column>
+            <column name="type" type="CHAR(1)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <sql>alter table delphinius.edge add constraint
+            edge_validate
+            check (type in ('s', 'r', 'o'))
+        </sql>
+
+        <createIndex indexName="forward_edge"
+            schemaName="delphinius" tableName="edge">
+            <column name="parent" />
+            <column name="child" />
+        </createIndex>
+
+        <createIndex indexName="reverse_edge"
+            schemaName="delphinius" tableName="edge">
+            <column name="child" />
+            <column name="parent" />
+        </createIndex>
+
+        <createIndex indexName="edge_transitive"
+            schemaName="delphinius" tableName="edge">
+            <column name="transitive" />
+        </createIndex>
+
+        <createIndex indexName="edge_type"
+            schemaName="delphinius" tableName="edge">
+            <column name="type" />
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

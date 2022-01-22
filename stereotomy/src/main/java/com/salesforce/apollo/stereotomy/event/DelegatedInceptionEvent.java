@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.stereotomy.event;
 
+import com.salesforce.apollo.stereotomy.identifier.Identifier;
+
 /**
  * @author hal.hildebrand
  *
@@ -16,4 +18,6 @@ public interface DelegatedInceptionEvent extends InceptionEvent, DelegatedEstabl
     default String getIlk() {
         return DELEGATED_INCEPTION_TYPE;
     }
+
+    public Identifier getDelegatingPrefix();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2021 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * Copyright 2004-2022 H2 Group. Multiple-Licensed under the MPL 2.0,
  * and the EPL 1.0 (https://h2database.com/html/license.html).
  * Initial Developer: H2 Group
  */
@@ -41,7 +41,6 @@ import org.h2.mvstore.db.MVTable;
 import org.h2.mvstore.db.Store;
 import org.h2.mvstore.tx.Transaction;
 import org.h2.mvstore.tx.TransactionStore;
-import org.h2.result.ResultInterface;
 import org.h2.result.Row;
 import org.h2.schema.Schema;
 import org.h2.schema.Sequence;
@@ -124,6 +123,19 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
     private static final String SYSTEM_IDENTIFIER_PREFIX = "_";
     private static int nextSerialId;
 
+    /**
+     * Thread local session for comparison operations between different data types.
+     */
+    private static final ThreadLocal<Session> THREAD_LOCAL_SESSION = new ThreadLocal<>();
+
+    static Session getThreadLocalSession() {
+        Session session = THREAD_LOCAL_SESSION.get();
+        if (session == null) {
+            THREAD_LOCAL_SESSION.remove();
+        }
+        return session;
+    }
+
     private final int serialId = nextSerialId++;
     private final Database database;
     private final User user;
@@ -154,7 +166,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
     private HashMap<String, ValueLob> removeLobMap;
     private int systemIdentifier;
     private HashMap<String, Procedure> procedures;
-    private boolean undoLogEnabled = true;
     private boolean autoCommitAtTransactionEnd;
     private String currentTransactionName;
     private volatile long cancelAtNs;
@@ -162,7 +173,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
     private Instant commandStartOrEnd;
     private ValueTimestampTimeZone currentTimestamp;
     private HashMap<String, Value> variables;
-    private HashSet<ResultInterface> temporaryResults;
     private int queryTimeout;
     private boolean commitOrRollbackDisabled;
     private Table waitForLock;
@@ -175,7 +185,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
     private int createViewLevel;
     private volatile SmallLRUCache<Object, ViewIndex> viewIndexCache;
     private HashMap<Object, ViewIndex> subQueryIndexCache;
-    private boolean forceJoinOrder;
     private boolean lazyQueryExecution;
 
     private BitSet nonKeywords;
@@ -266,14 +275,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
 
     public boolean isLazyQueryExecution() {
         return lazyQueryExecution;
-    }
-
-    public void setForceJoinOrder(boolean forceJoinOrder) {
-        this.forceJoinOrder = forceJoinOrder;
-    }
-
-    public boolean isForceJoinOrder() {
-        return forceJoinOrder;
     }
 
     /**
@@ -1405,14 +1406,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
         return "#" + serialId + " (user: " + (user == null ? "<null>" : user.getName()) + ", " + state.get() + ")";
     }
 
-    public void setUndoLogEnabled(boolean b) {
-        this.undoLogEnabled = b;
-    }
-
-    public boolean isUndoLogEnabled() {
-        return undoLogEnabled;
-    }
-
     /**
      * Begin a transaction.
      */
@@ -1514,35 +1507,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
             viewIndexCache = cache = SmallLRUCache.newInstance(Constants.VIEW_INDEX_CACHE_SIZE);
         }
         return cache;
-    }
-
-    /**
-     * Remember the result set and close it as soon as the transaction is
-     * committed (if it needs to be closed). This is done to delete temporary
-     * files as soon as possible, and free object ids of temporary tables.
-     *
-     * @param result the temporary result set
-     */
-    public void addTemporaryResult(ResultInterface result) {
-        if (!result.needToClose()) {
-            return;
-        }
-        if (temporaryResults == null) {
-            temporaryResults = new HashSet<>();
-        }
-        if (temporaryResults.size() < 100) {
-            // reference at most 100 result sets to avoid memory problems
-            temporaryResults.add(result);
-        }
-    }
-
-    private void closeTemporaryResults() {
-        if (temporaryResults != null) {
-            for (ResultInterface result : temporaryResults) {
-                result.close();
-            }
-            temporaryResults = null;
-        }
     }
 
     public void setQueryTimeout(int queryTimeout) {
@@ -1714,7 +1678,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
             transaction.markStatementEnd();
         }
         startStatement = -1;
-        closeTemporaryResults();
     }
 
     /**
@@ -1840,11 +1803,6 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
             this.value = v;
         }
 
-    }
-
-    @Override
-    public boolean isSupportsGeneratedKeys() {
-        return true;
     }
 
     /**
@@ -2090,6 +2048,22 @@ public final class SessionLocal extends Session implements TransactionStore.Roll
      */
     public boolean isQuirksMode() {
         return quirksMode || database.isStarting();
+    }
+
+    @Override
+    public Session setThreadLocalSession() {
+        Session oldSession = THREAD_LOCAL_SESSION.get();
+        THREAD_LOCAL_SESSION.set(this);
+        return oldSession;
+    }
+
+    @Override
+    public void resetThreadLocalSession(Session oldSession) {
+        if (oldSession == null) {
+            THREAD_LOCAL_SESSION.remove();
+        } else {
+            THREAD_LOCAL_SESSION.set(oldSession);
+        }
     }
 
 }

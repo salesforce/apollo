@@ -44,7 +44,8 @@ import io.grpc.Status;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getViewList().stream()
+        return reconfigure.getViewList()
+                          .stream()
                           .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
                                                     e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
     }
@@ -76,7 +77,8 @@ public interface Committee {
             }
             return successors.add(m);
         });
-        assert successors.size() == baseContext.getRingCount();
+        assert successors.size() == baseContext.getRingCount() : "Invalid successors: " + successors.size() + " != "
+        + baseContext.getRingCount();
         return successors;
     }
 

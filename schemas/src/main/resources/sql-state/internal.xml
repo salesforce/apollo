@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+    <changeSet author="hhildebrand" id="apollo_internal-1">
+        <sql>create schema if not exists apollo_internal</sql>
+
+        <createTable tableName="current"
+            schemaName="apollo_internal">
+            <column name="_u" type="INT">
+                <constraints nullable="false" />
+            </column>
+            <column name="height" type="BIGINT">
+                <constraints nullable="false" />
+            </column>
+            <column name="block_hash" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+            <column name="transaction" type="INT">
+                <constraints nullable="false" />
+            </column>
+            <column name="transaction_hash" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <createTable tableName="trampoline"
+            schemaName="apollo_internal">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="trampoline_pkey" />
+            </column>
+            <column name="channel" type="VARCHAR(256)">
+                <constraints nullable="false" />
+            </column>
+            <column name="body" type="JSON">
+                <constraints nullable="true" />
+            </column>
+        </createTable>
+
+    </changeSet>
+</databaseChangeLog>

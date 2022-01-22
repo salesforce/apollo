@@ -19,7 +19,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -102,14 +101,17 @@ public class RbcTest {
     }
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder().setMaxMessages(100)
+    private static final Parameters.Builder               parameters = Parameters.newBuilder()
+                                                                                 .setMaxMessages(100)
                                                                                  .setFalsePositiveRate(0.0125)
                                                                                  .setBufferSize(500)
                                                                                  .setExec(ForkJoinPool.commonPool());
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(1, 101).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(1, 101)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -131,7 +133,8 @@ public class RbcTest {
         MetricRegistry registry = new MetricRegistry();
         RouterMetrics metrics = new RouterMetricsImpl(registry);
 
-        List<SigningMember> members = certs.values().stream()
+        List<SigningMember> members = certs.values()
+                                           .stream()
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
                                                                               cert.getPrivateKey(),
@@ -143,13 +146,17 @@ public class RbcTest {
         parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 
-        Executor commExec = Executors.newFixedThreadPool(5);
-
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(prefix, node,
-                                                ServerConnectionCache.newBuilder().setMetrics(metrics).setTarget(30),
-                                                commExec);
+            AtomicInteger exec = new AtomicInteger();
+            var comms = new LocalRouter(prefix, node,
+                                        ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
+                                        Executors.newFixedThreadPool(2, r -> {
+                                            Thread thread = new Thread(r, "Router exec" + node.getId() + "["
+                                            + exec.getAndIncrement() + "]");
+                                            thread.setDaemon(true);
+                                            return thread;
+                                        }));
             communications.add(comms);
             comms.start();
             return new ReliableBroadcaster(parameters.setMember(node).build(), comms);
@@ -193,7 +200,10 @@ public class RbcTest {
         }
         System.out.println();
 
-        ConsoleReporter.forRegistry(registry).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build().report();
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 }

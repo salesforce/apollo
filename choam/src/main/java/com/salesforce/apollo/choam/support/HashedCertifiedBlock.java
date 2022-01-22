@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import org.joou.ULong;
+
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -30,8 +32,8 @@ public class HashedCertifiedBlock extends HashedBlock {
         }
 
         @Override
-        public long height() {
-            return -1;
+        public ULong height() {
+            return null;
         }
     }
 

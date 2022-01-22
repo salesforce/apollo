@@ -28,6 +28,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -58,6 +61,24 @@ public class ProtobufEventFactory implements EventFactory {
         }
     }
 
+    public static KeyEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inception) {
+        return switch (inception.getSpecification().getHeader().getIlk()) {
+        case INCEPTION_TYPE -> new InceptionEventImpl(inception);
+        case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(inception);
+        default -> throw new IllegalArgumentException("Unexpected value: "
+        + inception.getSpecification().getHeader().getIlk());
+        };
+    }
+
+    public static KeyEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent rotation) {
+        return switch (rotation.getSpecification().getHeader().getIlk()) {
+        case ROTATION_TYPE -> new RotationEventImpl(rotation);
+        case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(rotation);
+        default -> throw new IllegalArgumentException("Unexpected value: "
+        + rotation.getSpecification().getHeader().getIlk());
+        };
+    }
+
     public static SigningThreshold toSigningThreshold(com.salesfoce.apollo.stereotomy.event.proto.SigningThreshold signingThreshold) {
         if (signingThreshold.getWeightsCount() == 0) {
             return new SigningThreshold.Unweighted() {
@@ -73,7 +94,10 @@ public class ProtobufEventFactory implements EventFactory {
                 @Override
                 public Weight[][] getWeights() {
                     Weight[][] weights = new Weight[signingThreshold.getWeightsCount()][];
-                    signingThreshold.getWeightsList().stream().map(w -> weightArrayFrom(w)).collect(Collectors.toList())
+                    signingThreshold.getWeightsList()
+                                    .stream()
+                                    .map(w -> weightArrayFrom(w))
+                                    .collect(Collectors.toList())
                                     .toArray(new Weight[signingThreshold.getWeightsCount()][]);
                     return weights;
                 }
@@ -127,18 +151,33 @@ public class ProtobufEventFactory implements EventFactory {
     }
 
     @Override
-    public InceptionEvent inception(Identifier identifier, IdentifierSpecification specification) {
-        var inceptionStatement = identifierSpec(identifier, specification);
+    public AttachmentEvent attachment(EstablishmentEvent event, Attachment attachment) {
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
+        builder.setAttachment(attachment.toAttachemente()).setCoordinates(event.getCoordinates().toEventCoords());
+        return new AttachmentEventImpl(builder.build());
+    }
+
+    @Override
+    public <D extends Identifier, E extends Identifier> InceptionEvent inception(E identifier,
+                                                                                 IdentifierSpecification<D> specification) {
+        var delegated = !identifier.equals(Identifier.NONE);
+
+        var inceptionStatement = identifierSpec(identifier, specification, delegated);
 
         var prefix = Identifier.identifier(specification, inceptionStatement.toByteString().asReadOnlyByteBuffer());
-        var bs = identifierSpec(prefix, specification).toByteString();
+        var bs = identifierSpec(prefix, specification, delegated).toByteString();
 
         var common = EventCommon.newBuilder().setAuthentication(specification.getSigner().sign(bs).toSig());
 
         var builder = com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent.newBuilder();
-
-        return new InceptionEventImpl(builder.setIdentifier(prefix.toIdent()).setCommon(common)
-                                             .setSpecification(inceptionStatement).build());
+        if (delegated) {
+            builder.setDelegatingPrefix(identifier.toIdent());
+        }
+        var event = builder.setIdentifier(prefix.toIdent())
+                           .setCommon(common)
+                           .setSpecification(inceptionStatement)
+                           .build();
+        return delegated ? new DelegatedInceptionEventImpl(event) : new InceptionEventImpl(event);
     }
 
     @Override
@@ -146,81 +185,110 @@ public class ProtobufEventFactory implements EventFactory {
         InteractionSpec ispec = interactionSpec(specification);
         final var bs = ispec.toByteString();
         var signatures = specification.getSigner().sign(bs).toSig();
-        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+        var common = EventCommon.newBuilder()
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
-        com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.Builder builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
+        var builder = com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent.newBuilder();
         return new InteractionEventImpl(builder.setSpecification(ispec).setCommon(common).build());
     }
 
     @Override
-    public RotationEvent rotation(RotationSpecification specification) {
-        var rotationSpec = rotationSpec(specification.getIdentifier(), specification);
+    public RotationEvent rotation(RotationSpecification specification, boolean delegated) {
+        var rotationSpec = rotationSpec(specification.getIdentifier(), specification, delegated);
 
         final var bs = rotationSpec.toByteString();
         var signatures = specification.getSigner().sign(bs).toSig();
 
-        var common = EventCommon.newBuilder().setPrevious(specification.getPrevious().toEventCoords())
+        var common = EventCommon.newBuilder()
+                                .setPrevious(specification.getPrevious().toEventCoords())
                                 .setAuthentication(signatures);
         var builder = com.salesfoce.apollo.stereotomy.event.proto.RotationEvent.newBuilder();
-        return new RotationEventImpl(builder.setSpecification(rotationSpec).setCommon(common).build());
+        var event = builder.setSpecification(rotationSpec).setCommon(common).build();
+        return delegated ? new DelegatedRotationEventImpl(event) : new RotationEventImpl(event);
     }
 
     com.salesfoce.apollo.stereotomy.event.proto.Version.Builder toVersion(com.salesforce.apollo.stereotomy.event.Version version) {
         return Version.newBuilder().setMajor(version.getMajor()).setMinor(version.getMinor());
     }
 
-    private IdentifierSpec identifierSpec(Identifier identifier, IdentifierSpecification specification) {
+    private <D extends Identifier> IdentifierSpec identifierSpec(Identifier identifier,
+                                                                 IdentifierSpecification<D> specification,
+                                                                 boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder().setSequenceNumber(0).setVersion(toVersion(specification.getVersion()))
-                           .setPriorEventDigest(Digest.NONE.toDigeste()).setIdentifier(identifier.toIdent())
-                           .setIlk(INCEPTION_TYPE);
+        var header = Header.newBuilder()
+                           .setSequenceNumber(0)
+                           .setVersion(toVersion(specification.getVersion()))
+                           .setPriorEventDigest(Digest.NONE.toDigeste())
+                           .setIdentifier(identifier.toIdent())
+                           .setIlk(delegated ? DELEGATED_INCEPTION_TYPE : INCEPTION_TYPE);
 
-        return IdentifierSpec.newBuilder().setHeader(header).setEstablishment(establishment)
-                             .addAllWitnesses(specification.getWitnesses().stream().map(i -> i.toIdent())
+        return IdentifierSpec.newBuilder()
+                             .setHeader(header)
+                             .setEstablishment(establishment)
+                             .addAllWitnesses(specification.getWitnesses()
+                                                           .stream()
+                                                           .map(i -> i.toIdent())
                                                            .collect(Collectors.toList()))
-                             .addAllConfiguration(specification.getConfigurationTraits().stream().map(ct -> ct.name())
+                             .addAllConfiguration(specification.getConfigurationTraits()
+                                                               .stream()
+                                                               .map(ct -> ct.name())
                                                                .collect(Collectors.toList()))
                              .build();
     }
 
     private InteractionSpec interactionSpec(InteractionSpecification specification) {
 
-        Header header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
+        Header header = Header.newBuilder()
+                              .setSequenceNumber(specification.getSequenceNumber().longValue())
                               .setPriorEventDigest((specification.getPriorEventDigest()).toDigeste())
                               .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                        .name()))
-                              .setIdentifier(specification.getIdentifier().toIdent()).setIlk(INTERACTION_TYPE).build();
+                              .setIdentifier(specification.getIdentifier().toIdent())
+                              .setIlk(INTERACTION_TYPE)
+                              .build();
 
-        return InteractionSpec.newBuilder().setHeader(header)
-                              .addAllSeals(specification.getSeals().stream().map(e -> e.toSealed())
-                                                        .collect(Collectors.toList()))
+        return InteractionSpec.newBuilder()
+                              .setHeader(header)
+                              .addAllSeals(specification.getSeals().stream().map(e -> e.toSealed()).toList())
                               .build();
     }
 
-    private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification) {
+    private RotationSpec rotationSpec(Identifier identifier, RotationSpecification specification, boolean delegated) {
         var establishment = Establishment.newBuilder()
                                          .setSigningThreshold(toSigningThreshold(specification.getSigningThreshold()))
-                                         .addAllKeys(specification.getKeys().stream().map(k -> bs(k))
+                                         .addAllKeys(specification.getKeys()
+                                                                  .stream()
+                                                                  .map(k -> bs(k))
                                                                   .collect(Collectors.toList()))
                                          .setNextKeysDigest((specification.getNextKeys() == null ? Digest.NONE
                                                                                                  : specification.getNextKeys()).toDigeste())
                                          .setWitnessThreshold(specification.getWitnessThreshold());
-        var header = Header.newBuilder().setSequenceNumber(specification.getSequenceNumber())
+        var header = Header.newBuilder()
+                           .setSequenceNumber(specification.getSequenceNumber().longValue())
                            .setVersion(toVersion(specification.getVersion()).setFormat(specification.getFormat()
                                                                                                     .name()))
                            .setPriorEventDigest(specification.getPriorEventDigest().toDigeste())
-                           .setIdentifier(identifier.toIdent()).setIlk(ROTATION_TYPE);
+                           .setIdentifier(identifier.toIdent())
+                           .setIlk(delegated ? DELEGATED_ROTATION_TYPE : ROTATION_TYPE);
 
-        return RotationSpec.newBuilder().setHeader(header).setEstablishment(establishment)
-                           .addAllWitnessesAdded(specification.getAddedWitnesses().stream().map(i -> i.toIdent())
+        return RotationSpec.newBuilder()
+                           .setHeader(header)
+                           .setEstablishment(establishment)
+                           .addAllWitnessesAdded(specification.getAddedWitnesses()
+                                                              .stream()
+                                                              .map(i -> i.toIdent())
                                                               .collect(Collectors.toList()))
-                           .addAllWitnessesRemoved(specification.getRemovedWitnesses().stream().map(i -> i.toIdent())
+                           .addAllWitnessesRemoved(specification.getRemovedWitnesses()
+                                                                .stream()
+                                                                .map(i -> i.toIdent())
                                                                 .collect(Collectors.toList()))
                            .build();
     }

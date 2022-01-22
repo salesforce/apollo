@@ -17,7 +17,6 @@ message Ident {
         utils.PubKey basic = 1; 
         utils.Digeste selfAddressing = 2;
         utils.Sig selfSigning = 3;
-        AID autonomous = 4;
         bool NONE = 5;
     }
 }
@@ -25,7 +24,7 @@ message Ident {
 // Coordinates of an event
 message EventCoords {
     Ident identifier = 1;
-    int64 sequenceNumber = 2;
+    uint64 sequenceNumber = 2;
     string ilk = 3;
     utils.Digeste digest = 4;
 }
@@ -33,16 +32,8 @@ message EventCoords {
 // Location of an event
 message EventLoc {
     Ident identifier = 1;
-    int64 sequenceNumber = 2;
+    uint64 sequenceNumber = 2;
     utils.Digeste digest = 3;
-}
-
-// Location of the delegating event
-message DelegatingEventCoords {
-    Ident identifier = 1;
-    int64 sequenceNumber = 2;
-    EventCoords previous = 3;
-    string ilk = 4;
 }
 
 // Coordinates of a key
@@ -52,25 +43,18 @@ message KeyCoords {
 }
 
 // Sealed content for events
-message Sealed {
+message Sealed { 
     oneof type {
         EventCoords eventCoordinates = 1;
-        DelegatingEventCoords delegatingLocation = 2;
-        utils.Digeste digest = 3;
-        EventLoc event = 4;
-        bytes bits = 5;
+        utils.Digeste digest = 2;
+        EventLoc event = 3;
+        bytes bits = 4;
     }
-}
-
-// Autonomous Identifier
-message AID {
-    Ident prefix = 1;
-    string url = 2;
 }
 
 // Common header for events
 message Header {
-    int64 sequenceNumber = 1;
+    uint64 sequenceNumber = 1;
     Ident identifier = 2;
     utils.Digeste priorEventDigest = 3;
     Version version = 4;
@@ -84,25 +68,10 @@ message EventCommon {
     utils.Sig authentication = 4;
 }
 
-// The interaction specification and common event structure
-message InteractionEvent {
-    InteractionSpec specification = 1;
-    EventCommon common = 2;
-}
-
 // Specification of an interaction
 message InteractionSpec {
     Header header = 1;
     repeated Sealed seals = 2;
-}
-
-// An attactment to an event in the KEL
-message AttachmentEvent {
-    Header header = 1;
-    EventCommon common = 2;
-    EventCoords coordinates = 3;
-    repeated utils.Sig endorsements = 5; 
-    repeated Receipt receipts = 6;
 }
 
 // The establishment criteria and record of a key
@@ -111,13 +80,6 @@ message Establishment {
     repeated utils.PubKey keys = 2;
     utils.Digeste nextKeysDigest = 3;
     int32 witnessThreshold = 4;
-}
-
-// The rotation of a key
-message RotationEvent {
-    RotationSpec specification = 1; 
-    EventCommon common = 2;
-    Sealed delegatingSeal = 3; // Delegated rotation event
 }
 
 // The specification of the rotation of a key
@@ -129,15 +91,6 @@ message RotationSpec {
     repeated Sealed seals = 5;
 }
 
-// The birth of a key
-message InceptionEvent {
-    IdentifierSpec specification = 1;
-    EventCommon common = 2;
-    DelegatingEventCoords delegatingEvent = 3;
-    Ident identifier = 4;
-    Sealed delegatingSeal = 5; // Delegated inception event
-}
-
 // The specification of an identififer
 message IdentifierSpec {
     Header header = 1;
@@ -146,9 +99,49 @@ message IdentifierSpec {
     repeated string configuration = 4;
 }
 
-message Receipt {
-    EventCoords coordinates = 1;
-    utils.Sig signatures = 2;
+// The interaction specification and common event structure
+message InteractionEvent {
+    InteractionSpec specification = 1;
+    EventCommon common = 2;
+}
+
+// An attactment to an event in the KEL
+message AttachmentEvent {
+    Version version = 1;
+    EventCoords coordinates = 2;
+    Attachment attachment = 3;
+}
+
+// The rotation of a key
+message RotationEvent {
+    RotationSpec specification = 1; 
+    EventCommon common = 2;
+}
+
+// The birth of a key
+message InceptionEvent {
+    Ident identifier = 1;
+    IdentifierSpec specification = 2;
+    EventCommon common = 3;
+    Ident delegatingPrefix = 4; // Delegated inception event
+}
+
+message KeyEvent {
+    oneof event {
+        InceptionEvent inception = 1;
+        RotationEvent rotation = 2;
+        InteractionEvent interaction = 3;
+    }
+    Attachment attachment = 4;
+}
+
+message Attachment {
+    map<int32, utils.Sig> endorsements = 1;
+    repeated Sealed seals = 2;
+}
+
+message KERL {
+    repeated KeyEvent events = 1;
 }
 
 message Weight {
@@ -171,7 +164,7 @@ message Version {
     int32 minor = 3;
 }
 
-// This is the Jesus Nut.  KeyState represents the materialized 
+// KeyState represents the materialized 
 // state of an identifier and corresponding public/private keys,
 // KEL and KERL
 message KeyState {
@@ -188,10 +181,52 @@ message KeyState {
     int32 witnessThreshold = 11; 
 }
 
-// A binding
+// A bound value
 message Bound {
-    Ident prefix = 1;
-    google.protobuf.Any value = 2;
-    utils.Sig signature = 3;
-    bool timeout = 4;
+    InceptionEvent identifier = 1; 
+    string uri = 2;
+}
+
+// A signed bound value
+message Binding {
+    Bound value = 1;
+    utils.Sig signature = 2;
+}
+
+// Context routing for Resolver
+
+message IdentifierContext {
+    utils.Digeste context = 1;
+    Ident identifier = 2;
+}
+
+message EventContext {
+    utils.Digeste context = 1;
+    EventCoords coordinates = 2;
+}
+
+message KeyContext {
+    utils.Digeste context = 1;
+    KeyCoords coordinates = 2;
+}
+
+// Resolver API
+service Resolver { 
+    rpc kerl (IdentifierContext) returns (KERL) {}
+    
+    rpc lookup (IdentifierContext) returns (Binding) {}
+    
+    rpc resolve (IdentifierContext) returns (KeyState) {}
+    rpc resolveCoords (EventContext) returns (KeyState) {}
+}
+
+message BindContext {
+    utils.Digeste context = 1;
+    Binding binding = 2;
+}
+
+// Binding API for Resolver
+service Binder {
+    rpc bind(BindContext) returns(google.protobuf.Empty) {}
+    rpc unbind(IdentifierContext) returns(google.protobuf.Empty) {}
 }

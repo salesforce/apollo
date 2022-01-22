@@ -14,6 +14,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.joou.ULong;
+
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
@@ -145,8 +147,8 @@ public class RotationSpecification {
             var removed = new ArrayList<>(currentWitnesses);
             removed.removeAll(witnesses);
 
-            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber() + 1, currentCoords,
-                                             signingThreshold, keys, signer, nextKeyConfigurationDigest,
+            return new RotationSpecification(format, identifier, currentCoords.getSequenceNumber().add(1),
+                                             currentCoords, signingThreshold, keys, signer, nextKeyConfigurationDigest,
                                              witnessThreshold, removed, added, seals, version, currentDigest);
         }
 
@@ -365,20 +367,20 @@ public class RotationSpecification {
     private final Digest                priorEventDigest;
     private final List<BasicIdentifier> removedWitnesses;
     private final List<Seal>            seals;
-    private final long                  sequenceNumber;
+    private final ULong                 sequenceNumber;
     private final Signer                signer;
     private final SigningThreshold      signingThreshold;
     private final Version               version;
     private final int                   witnessThreshold;
 
-    public RotationSpecification(Format format, Identifier identifier, long sequenceNumber,
-                                 EventCoordinates previousEvent, SigningThreshold signingThreshold,
-                                 List<PublicKey> keys, Signer signer, Digest nextKeys, int witnessThreshold,
-                                 List<BasicIdentifier> removedWitnesses, List<BasicIdentifier> addedWitnesses,
-                                 List<Seal> seals, Version version, Digest priorEventDigest) {
+    public RotationSpecification(Format format, Identifier identifier, ULong uLong, EventCoordinates previousEvent,
+                                 SigningThreshold signingThreshold, List<PublicKey> keys, Signer signer,
+                                 Digest nextKeys, int witnessThreshold, List<BasicIdentifier> removedWitnesses,
+                                 List<BasicIdentifier> addedWitnesses, List<Seal> seals, Version version,
+                                 Digest priorEventDigest) {
         this.format = format;
         this.identifier = identifier;
-        this.sequenceNumber = sequenceNumber;
+        this.sequenceNumber = uLong;
         this.previous = previousEvent;
         this.signingThreshold = signingThreshold;
         this.keys = List.copyOf(keys);
@@ -428,7 +430,7 @@ public class RotationSpecification {
         return seals;
     }
 
-    public long getSequenceNumber() {
+    public ULong getSequenceNumber() {
         return sequenceNumber;
     }
 

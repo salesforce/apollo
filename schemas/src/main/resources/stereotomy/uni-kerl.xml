@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+	xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:pro="http://www.liquibase.org/xml/ns/pro"
+	xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+	<changeSet author="hhildebrand" id="uni-kerl-1">
+		<sql>create alias stereotomy.initialize for
+			"com.salesforce.apollo.stereotomy.db.UniKERL.initializeKERL"
+		</sql>
+
+		<sql>create alias stereotomy.append for
+			"com.salesforce.apollo.stereotomy.db.UniKERL.appendEvent"
+		</sql>
+
+        <sql>create alias stereotomy.appendAttachment for
+            "com.salesforce.apollo.stereotomy.db.UniKERL.appendAttachment"
+        </sql>
+
+        <sql>call stereotomy.initialize()</sql>
+
+        <sql>drop alias stereotomy.initialize</sql>
+
+	</changeSet>
+</databaseChangeLog>
