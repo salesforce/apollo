@@ -145,23 +145,6 @@ public class MembershipTests {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
-        final int expected = 3;
-
-        var success = Utils.waitForCondition(30_000, 1000,
-                                             () -> blocks.entrySet()
-                                                         .stream()
-                                                         .filter(e -> !e.getKey().equals(testSubject.getId()))
-                                                         .map(e -> e.getValue())
-                                                         .mapToInt(l -> l.get())
-                                                         .filter(s -> s >= expected)
-                                                         .count() == choams.size() - 1);
-        assertTrue(success,
-                   "Failed: " + blocks.entrySet()
-                                      .stream()
-                                      .filter(e -> !e.getKey().equals(testSubject.getId()))
-                                      .map(e -> e.getValue())
-                                      .map(l -> l.get())
-                                      .toList());
 
         final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
@@ -181,6 +164,7 @@ public class MembershipTests {
         }
 
         transactioneers.forEach(e -> e.start());
+        boolean success;
         try {
             success = countdown.await(30, TimeUnit.SECONDS);
         } finally {
