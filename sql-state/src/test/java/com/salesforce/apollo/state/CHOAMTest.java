@@ -174,7 +174,6 @@ public class CHOAMTest {
     private List<SigningMember>                members;
     private Map<Digest, Router>                routers;
     private ScheduledExecutorService           scheduler;
-    private int                                toleranceLevel;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 
@@ -211,7 +210,6 @@ public class CHOAMTest {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
-        toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
@@ -270,7 +268,6 @@ public class CHOAMTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final ULong waitFor = ULong.valueOf(5);
         final int clientCount = 1000;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
@@ -279,22 +276,7 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        var success = Utils.waitForCondition(60_000,
-                                             () -> members.stream()
-                                                          .map(m -> updaters.get(m))
-                                                          .map(ssm -> ssm.getCurrentBlock())
-                                                          .filter(cb -> cb != null)
-                                                          .map(cb -> cb.height())
-                                                          .filter(l -> l.compareTo(waitFor) >= 0)
-                                                          .count() > toleranceLevel);
-        assertTrue(success,
-                   "Results: " + members.stream()
-                                        .map(m -> updaters.get(m))
-                                        .map(ssm -> ssm.getCurrentBlock())
-                                        .filter(cb -> cb != null)
-                                        .map(cb -> cb.height())
-                                        .filter(l -> l.compareTo(waitFor) >= 0)
-                                        .toList());
+        Thread.sleep(2_000);
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()

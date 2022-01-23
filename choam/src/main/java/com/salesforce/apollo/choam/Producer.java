@@ -276,12 +276,7 @@ public class Producer {
         HashedBlock lb = previousBlock.get();
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
-        if (draining.get() && txns.isEmpty()) {
-            if (last) {
-                log.debug("Draining, no txns. prev: {} height: {} last: {} on: {}", lb.hash, lb.height(), last,
-                          params().member());
-            }
-        } else {
+        if (!txns.isEmpty()) {
             var builder = Executions.newBuilder();
             txns.forEach(e -> builder.addExecutions(e));
 

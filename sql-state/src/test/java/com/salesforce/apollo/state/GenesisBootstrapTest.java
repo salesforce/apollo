@@ -49,7 +49,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final ULong waitFor = ULong.valueOf(5);
         final int clientCount = 1;
         final int max = 1;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
@@ -64,17 +63,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
-        Thread.sleep(1000);
-
-        var success = Utils.waitForCondition(30_000, 100,
-                                             () -> members.stream()
-                                                          .map(m -> updaters.get(m))
-                                                          .map(ssm -> ssm.getCurrentBlock())
-                                                          .filter(cb -> cb != null)
-                                                          .map(cb -> cb.height())
-                                                          .filter(l -> l.compareTo(waitFor) >= 0)
-                                                          .count() > toleranceLevel);
-        assertTrue(success, "States: " + choams.values().stream().map(e -> e.getCurrentState()).toList());
+        Thread.sleep(2_000);
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
@@ -103,7 +92,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         Thread.sleep(1000);
 
         try {
-            success = countdown.await(60, TimeUnit.SECONDS);
+            var success = countdown.await(60, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete transactions: "
             + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
         } finally {

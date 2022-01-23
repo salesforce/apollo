@@ -6,8 +6,9 @@
  */
 package com.salesforce.apollo.choam;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -148,11 +150,11 @@ public class TestCHOAM {
 
     private static final int CARDINALITY = 5;
 
-    private Map<Digest, AtomicInteger> blocks;
-    private Map<Digest, CHOAM>         choams;
-    private List<SigningMember>        members;
-    private Map<Digest, Router>        routers;
-
+    protected CompletableFuture<Boolean>   checkpointOccurred;
+    private Map<Digest, AtomicInteger>     blocks;
+    private Map<Digest, CHOAM>             choams;
+    private List<SigningMember>            members;
+    private Map<Digest, Router>            routers;
     private Map<Digest, List<Transaction>> transactions;
 
     @AfterEach
@@ -197,6 +199,7 @@ public class TestCHOAM {
 
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
+        checkpointOccurred = new CompletableFuture<>();
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
@@ -235,14 +238,15 @@ public class TestCHOAM {
                 }
             };
             params.getProducer().ethereal().setSigner(m);
-            return new CHOAM(params.build(RuntimeParameters.newBuilder()
-                                                           .setMember(m)
-                                                           .setCommunications(routers.get(m.getId()))
-                                                           .setProcessor(processor)
-                                                           .setContext(context)
-                                                           .setExec(exec)
-                                                           .setScheduler(scheduler)
-                                                           .build()));
+            var runtime = RuntimeParameters.newBuilder();
+            return new CHOAM(params.build(runtime.setMember(m)
+                                                 .setCommunications(routers.get(m.getId()))
+                                                 .setProcessor(processor)
+                                                 .setCheckpointer(wrap(runtime.getCheckpointer()))
+                                                 .setContext(context)
+                                                 .setExec(exec)
+                                                 .setScheduler(scheduler)
+                                                 .build()));
         }));
     }
 
@@ -250,31 +254,14 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 88 + (30 * 2);
-        Utils.waitForCondition(300_000, 1_000,
-                               () -> blocks.values()
-                                           .stream()
-                                           .mapToInt(l -> l.get())
-                                           .filter(s -> s >= expected)
-                                           .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).get());
+        Thread.sleep(2_000);
+        assertTrue(checkpointOccurred.get(30, TimeUnit.SECONDS));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 10;
-
-        Utils.waitForCondition(30_000, 1_000,
-                               () -> blocks.values()
-                                           .stream()
-                                           .mapToInt(l -> l.get())
-                                           .filter(s -> s >= expected)
-                                           .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).get());
 
         final Duration timeout = Duration.ofSeconds(3);
 
@@ -319,21 +306,19 @@ public class TestCHOAM {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        final int expected = 3;
         var session = choams.get(members.get(0).getId()).getSession();
-
-        Utils.waitForCondition(30_000, 1_000,
-                               () -> blocks.values()
-                                           .stream()
-                                           .mapToInt(l -> l.get())
-                                           .filter(s -> s >= expected)
-                                           .count() == choams.size());
-        assertEquals(choams.size(), blocks.values().stream().mapToInt(l -> l.get()).filter(s -> s >= expected).count(),
-                     "Failed: " + blocks.get(members.get(0).getId()).get());
+        Thread.sleep(1_000);
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
         CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(30), scheduler);
         result.get(30, TimeUnit.SECONDS);
+    }
+
+    private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
+        return ul -> {
+            checkpointOccurred.complete(true);
+            return checkpointer.apply(ul);
+        };
     }
 }
