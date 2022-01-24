@@ -21,7 +21,7 @@ Apollo isn't designed for coins, rather as essentially a distributed database.  
 
 
 ## WIP
-Note that Apollo Delphinius is very much a _work in progress_.  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed ledger platform.  I am a strong believer in iterative development and believe it is the only way to create robust systems.
+Note that Apollo Delphinius is very much a _work in progress_.  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed ledger platform.
 
 ## Requirements
 Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
@@ -36,13 +36,9 @@ To build Apollo, cd to the root directory of the repository and then do:
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
 
-
-## Builing on Apple M1
-I develop on an M1 MBP, and there is (currently) no _protoc-gen-grpc-java_ for the M1 platform.  If you also build on the M1, until this issue is resolved by essentially using the intel for the arm classivier.  For a simply work around, see [this comment](https://github.com/grpc/grpc-java/issues/7690#issuecomment-772424454).  This works by using the maven settings.xml to hardwire the classifier to intel.  Worked well for me ;)
-
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
 
-## Build Flapping
-Am I right? Still have a flapper or 2.  Apollogies.  Know that I hates it and am working to eliminate them.
+Simple Model stand in for multitenant shards is in place and being worked upon currently.  This integrates Stereotomy and Delphinius using CHOAM.
+
 
