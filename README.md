@@ -16,6 +16,12 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, Stored Procedures, functions.
 * Delphinius - Google Zanzibar RBAC clone. Provides RBAC for CHOAM SQL state machines.
 
+## Protobuf and GRPC
+Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter.
+
+#JOOQ
+Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore, but...
+
 ## Not A Coin Platform(tm)
 Apollo isn't designed for coins, rather as essentially a distributed database.  Of course the systems of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
