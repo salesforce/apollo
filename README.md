@@ -19,7 +19,7 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 ## Protobuf and GRPC
 Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter.
 
-#JOOQ
+##JOOQ
 Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore, but...
 
 ## Not A Coin Platform(tm)
