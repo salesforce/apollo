@@ -36,6 +36,28 @@ To build Apollo, cd to the root directory of the repository and then do:
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
 
+## Code Generation In Apollo
+Apollo requires code generation as part of the build.  This is done in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.
+
+The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for the various serializable forms and network protocols used by Apollo.  The JOOQ code generation is for the JOOQ SQL functionality.
+
+Code generation is output into the <module dir>/target/generated-sources directory.  For GRPC/Proto, there are 2 directory roots: "<module dir>/target/generated-sources/protobuf/grpc-java" and "<module dir>/target/generated-sources/protobuf/java".  For JOOQ, the root directory is "<module dir>/target/generated-sources/jooq".
+
+Again, I stress that because these generated source directories are under the "<module dir>/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
+
+Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
+
+## IDE Integration
+Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are many known gotchas that I literally don't know how to resolve sometimes in Eclipse Maven integration, and I have no idea about IntellJ or Visual Code, so you're on your own there.
+
+What I recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete.
+
+After you do this, you shouldn't have any issue *if* your IDE Maven integration knows about and takes care of using the build-helper plugin to manage compilation directories for the module in the IDE.  However....
+
+Myself, I find that I have to first select the top level Apollo.app module, and then Menu -> Run As -> Maven generate sources.  This *should* generate all the sources required for every submodule, so...  But I have often found that - due to some oddness of Maven and/or Eclipse - that this is insufficient.  Worse, sometimes on import into the IDE, the build-helper is (randomly) ignored and the generated source directories are not added to the module's compilation path.  So, you have to do it manually.  which requires that "mvn generate-sources" has been run...  So.....  Apologies.  Wish it wasn't this complex, but it is what it is, and no Gradle won't solve this problem and I am not going to convert the Apollo build to it anyways, so apologies.
+
+Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience.  I know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
+
 ## Current Status
 Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
 
