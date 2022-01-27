@@ -16,15 +16,15 @@ A membership group is defined by the Context. The Context is an abstraction from
 
 Although not enforced, the Context rings, by convention, have a cardinality = 2 x tolerance + 1.  That is, the number of rings is a function of the provided byzantine tolerance level as well as the cardinality of the Context membership.  Thus, when large changes of membership occur, the Rings may well need to be recalculated to preserve properties.
 
-Contexts provide a sampling function, which will choose a random ring and then sample K members from that ring.  Predicate functionality allows selection and traversal strategies.  The ResevoirSampler, combined with complete membership access, random ring hashes, Predicate driven sampling, etc, provides the tools for a vast domain of sampling schemes, leveraged by Avalanche and Consortium (for example).
+Contexts provide a sampling function, which will choose a random ring and then sample K members from that ring.  Predicate functionality allows selection and traversal strategies.  The ResevoirSampler, combined with complete membership access, random ring hashes, Predicate driven sampling, etc, provides the tools for a vast domain of sampling schemes, leveraged by Aleph and CHOAM (for example).
 
 ## Member
 
-The fundamental Member of a Context.  Knows about its public key, Identity and some other useful behavior.  The Member model is evolving to use the Apollo Stereotomy module for all key and identity managment.  Currently this module is not fully integrated with Stereotomy and thus key and identity management is manual for the most part.
+The fundamental Member of a Context.  Knows about its public key, Identity and some other useful behavior.  The Member model is evolving to use the Apollo Stereotomy module for all key and identity managment.  Currently this module is not fully integrated with Stereotomy and thus key and identity management is manual in testing for the most part.
 
 ## Identity
 
-Each Member has a unique identity.  This identity is represented by a Digest hash, which is guaranteed to label a unique Member in the system Context.
+Each Member has a unique identity.  This identity is represented by the Identifier digest, which is guaranteed to label a unique Member in the system Context.
 
 ## Ring
 
