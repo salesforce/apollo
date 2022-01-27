@@ -30,6 +30,7 @@ import java.util.stream.IntStream;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -54,6 +55,12 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class MembershipTests {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     private class Transactioneer {
         private final static Random entropy = new Random();
 

@@ -29,6 +29,7 @@ import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
@@ -64,6 +65,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class GenesisAssemblyTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(GenesisAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
 
     @Test
     public void genesis() throws Exception {

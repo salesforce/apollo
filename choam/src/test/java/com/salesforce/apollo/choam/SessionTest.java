@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
@@ -48,6 +49,12 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class SessionTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(SessionTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     @Test
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();

@@ -28,6 +28,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
@@ -57,6 +58,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class ViewAssemblyTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(ViewAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
 
     @Test
     public void assembly() throws Exception {

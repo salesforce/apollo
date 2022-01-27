@@ -32,6 +32,7 @@ import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.Counter;
@@ -59,6 +60,12 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     private class Transactioneer {
         private final static Random entropy = new Random();
 
