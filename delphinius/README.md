@@ -1,7 +1,8 @@
 # Delphinius
 Access Control
 ____
-Apollo Delphinius is a Role Based Access Control system implemented in SQL.
+Apollo Delphinius is a Relationship Based Access Control and is a [Google Zanzibar](https://research.google/pubs/pub48190/) clone implemented in SQL and run on Apollo's SQL state machine.
+
 
 ## Model
 Delphinius presents a simple model for Access Control Lists.  An ACL is an asserted Tuple of {Object, Relation, Subject}.  Each of the tuple elements forms a seperate domain class.  Each domain is further qualified with Namespaces.  For example an Object is a tuple of {Namespace, Name}. Subject is likewise a tuple of {Namespace, Name}.
@@ -11,6 +12,8 @@ Each domain class is further arranged in a directed graphs of mappings. These ma
 Assertions are a tuple of {Subject, Object}. This asserts that the Subject has a positive link to the Object.  Remember, both the Subject and Object are {namespace, name, relation} tuples, so this express a great deal of flexibility.  Recall as well that Subject and Object have an internal inference structure, expanding the assertion set based on these transitive relationships.  The Check(Assertion) uses the expanded direct and transitive sets when evaluating.
 
 Note that all domains - Object, Relation and Subject - are both Namespaced and hierarchically related.  While this does allow for bewildering complexity, it is a natural and powerful model that allows concise modeling of rich access control patterns.
+
+For a good explanation and visualization of the Zanzibar model, see the [Zanzibar Academy](https://zanzibar.academy).  This site has a wonderful visual tutorial on the basics, the model and why it's a powerful model.  Links to papers, open source implementations, etc.  Well worth your time ;)
 
 ## API
 The Oracle interface provides the following API:
