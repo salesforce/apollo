@@ -1,20 +1,22 @@
 # Apollo Delphinius
-The Apollo Delphinius project is a distibuted system platform. The underlying membership of Apollo is managed by the Fireflies secure communication overlay.  The consensus layer is supplied by an async bft consensus protocol. At the top is a largely JDBC connectable replicated SQL machine, supported by checkpointed CHOAM linear logs.
+The Apollo Delphinius project is a multi-tenant, distibuted system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via JDBC connectable over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service.
+
+The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency service for managing identity, key management, access control and verifiable credentials such as JWT issuance and validation.
 
 ## Requirements
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
-* Stereotomy - Decentralized Identifier based foundation, based on [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
+* Stereotomy - Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
 * MTLS network communication - Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay
 * Reliable Broadcast - garbage collected, context routed reliable broadcast
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
-* CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - distributed ledgers.  Built on Ethereal.
-* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, Stored Procedures, functions.
-* Delphinius - Google Zanzibar RBAC clone. Provides RBAC for CHOAM SQL state machines.
+* CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines, built on Ethereal.
+* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, stored procedures, functions and triggers.
+* Delphinius - Google Zanzibar clone. Provides Relation Based Access Control hosted on CHOAM SQL state machines.
 
 ## Protobuf and GRPC
 Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter.
