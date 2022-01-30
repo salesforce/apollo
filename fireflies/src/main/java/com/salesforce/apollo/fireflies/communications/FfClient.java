@@ -14,9 +14,9 @@ import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.Null;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
@@ -62,14 +62,18 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests) {
+    public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
         }
         try {
-            SayWhat sw = SayWhat.newBuilder().setContext(context.toDigeste()).setNote(note).setRing(ring)
-                                .setGossip(digests).build();
+            SayWhat sw = SayWhat.newBuilder()
+                                .setContext(context.toDigeste())
+                                .setNote(note)
+                                .setRing(ring)
+                                .setGossip(digests)
+                                .build();
             ListenableFuture<Gossip> result = client.gossip(sw);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(sw.getSerializedSize());

@@ -21,8 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
+import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -212,7 +212,7 @@ public class Participant implements Member {
         return validAccusations.get(ring);
     }
 
-    List<Accusation> getEncodedAccusations(int rings) {
+    List<SignedAccusation> getEncodedAccusations(int rings) {
         return IntStream.range(0, rings)
                         .mapToObj(i -> getEncodedAccusation(i))
                         .filter(e -> e != null)

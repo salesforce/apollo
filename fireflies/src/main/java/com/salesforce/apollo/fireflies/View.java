@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
 import com.salesfoce.apollo.fireflies.proto.CertificateGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
@@ -48,6 +47,8 @@ import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
+import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.Router;
@@ -55,6 +56,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.membership.Context;
@@ -240,7 +242,7 @@ public class View {
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
-        public Gossip rumors(int ring, Digests digests, Digest from, X509Certificate certificate, Note note) {
+        public Gossip rumors(int ring, Digests digests, Digest from, X509Certificate certificate, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
                 log.info("invalid ring {} from {}", ring, from);
                 return emptyGossip();
@@ -257,7 +259,7 @@ public class View {
                 }
             }
 
-            add(new NoteWrapper(getDigestAlgorithm().digest(note.toByteString()), note));
+            add(new NoteWrapper(note, getDigestAlgorithm()));
 
             Participant successor = getRing(ring).successor(member, m -> !m.isFailed());
             if (successor == null) {
@@ -267,7 +269,8 @@ public class View {
                 redirectTo(member, ring, successor);
             }
             long seed = Utils.secureEntropy().nextLong();
-            return Gossip.newBuilder().setRedirect(false)
+            return Gossip.newBuilder()
+                         .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
                                                                     seed, getParameters().falsePositiveRate))
                          .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed,
@@ -286,8 +289,10 @@ public class View {
             node.nextNote();
             recover(node);
             List<Digest> seedList = new ArrayList<>();
-            seeds.stream().map(cert -> new Participant(new MemberImpl(cert), node.getParameters()))
-                 .peek(m -> seedList.add(m.getId())).forEach(m -> addSeed(m));
+            seeds.stream()
+                 .map(cert -> new Participant(new MemberImpl(cert), node.getParameters()))
+                 .peek(m -> seedList.add(m.getId()))
+                 .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
             int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
@@ -320,7 +325,7 @@ public class View {
                 m.setFailed(true);
                 context.offline(m);
             });
-            context.clear(); 
+            context.clear();
         }
 
         /**
@@ -602,7 +607,7 @@ public class View {
         // verify the accusation after all other tests pass, as it's reasonably
         // expensive and we want to filter out all the noise first, before going to all
         // the trouble (and cost) to validate the sig
-        if (!accuser.verify(accusation.getSignature(), AccusationWrapper.forSigning(accusation.getWrapped()))) {
+        if (!accuser.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
             log.debug("Accusation signature invalid ");
             return;
         }
@@ -692,7 +697,7 @@ public class View {
         // we want to filter out all
         // the noise first, before going to all the trouble to validate
 
-        if (!m.verify(note.getSignature(), NoteWrapper.forSigning(note.getWrapped()))) {
+        if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
             log.debug("Note signature invalid: {}", note.getId());
             return false;
         }
@@ -748,12 +753,16 @@ public class View {
      * @param seed
      */
     void addSeed(Participant seed) {
-        Note seedNote = Note.newBuilder().setId(seed.getId().toDigeste()).setEpoch(-1)
-                            .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
-                                                                                Utils.secureEntropy())
-                                                             .toByteArray()))
-                            .build();
-        seed.setNote(new NoteWrapper(getDigestAlgorithm().digest(seedNote.toByteString()), seedNote));
+        SignedNote seedNote = SignedNote.newBuilder()
+                                        .setNote(Note.newBuilder()
+                                                     .setId(seed.getId().toDigeste())
+                                                     .setEpoch(-1)
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
+                                                                                                         Utils.secureEntropy())
+                                                                                      .toByteArray())))
+                                        .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
+                                        .build();
+        seed.setNote(new NoteWrapper(seedNote, getDigestAlgorithm()));
         context.activate(seed);
     }
 
@@ -816,9 +825,11 @@ public class View {
      */
     Digests commonDigests() {
         long seed = Utils.secureEntropy().nextLong();
-        return Digests.newBuilder().setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
+        return Digests.newBuilder()
+                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
                       .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff()).build();
+                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .build();
     }
 
     void gc(Participant member) {
@@ -830,7 +841,10 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
                                                                     getParameters().cardinality * getParameters().rings,
                                                                     p);
-        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(e -> e != null)
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(e -> e != null)
                .forEach(m -> bff.add(m.getHash()));
         return bff;
     }
@@ -880,7 +894,7 @@ public class View {
             completion.run();
             return;
         }
-        Note signedNote = n.getWrapped();
+        SignedNote signedNote = n.getWrapped();
         Digests outbound = commonDigests();
         ListenableFuture<Gossip> futureSailor = link.gossip(context.getId(), signedNote, ring, outbound);
         futureSailor.addListener(() -> {
@@ -1087,7 +1101,10 @@ public class View {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(a -> !bff.contains(a.getHash()))
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
@@ -1100,8 +1117,13 @@ public class View {
         CertificateGossip.Builder builder = CertificateGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        view.values().stream().filter(m -> m.getId().equals(from)).filter(m -> !bff.contains(m.getCertificateHash()))
-            .map(m -> m.getEncodedCertificate()).filter(cert -> cert != null).forEach(cert -> builder.addUpdates(cert));
+        view.values()
+            .stream()
+            .filter(m -> m.getId().equals(from))
+            .filter(m -> !bff.contains(m.getCertificateHash()))
+            .map(m -> m.getEncodedCertificate())
+            .filter(cert -> cert != null)
+            .forEach(cert -> builder.addUpdates(cert));
         builder.setBff(getCertificatesBff(seed, p).toBff());
         CertificateGossip gossip = builder.build();
         log.trace("process certificates produced updates: {}", gossip.getUpdatesCount());
@@ -1124,8 +1146,12 @@ public class View {
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive().stream().filter(m -> m.getNote() != null).filter(m -> !bff.contains(m.getNote().getHash()))
-               .map(m -> m.getNote()).forEach(n -> builder.addUpdates(n.getWrapped()));
+        context.getActive()
+               .stream()
+               .filter(m -> m.getNote() != null)
+               .filter(m -> !bff.contains(m.getNote().getHash()))
+               .map(m -> m.getNote())
+               .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
         log.trace("process notes produded updates: {}", gossip.getUpdatesCount());
@@ -1148,17 +1174,17 @@ public class View {
      * state change driving the view.
      *
      * @param certificatUpdates
-     * @param noteUpdates
-     * @param accusationUpdates
+     * @param list
+     * @param list2
      */
-    void processUpdates(List<EncodedCertificate> certificatUpdates, List<Note> noteUpdates,
-                        List<Accusation> accusationUpdates) {
-        certificatUpdates.stream().map(cert -> certificateFrom(cert)).filter(cert -> cert != null)
+    void processUpdates(List<EncodedCertificate> certificatUpdates, List<SignedNote> list,
+                        List<SignedAccusation> list2) {
+        certificatUpdates.stream()
+                         .map(cert -> certificateFrom(cert))
+                         .filter(cert -> cert != null)
                          .forEach(cert -> add(cert));
-        noteUpdates.stream().map(s -> new NoteWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
-                   .forEach(note -> add(note));
-        accusationUpdates.stream().map(s -> new AccusationWrapper(getDigestAlgorithm().digest(s.toByteString()), s))
-                         .forEach(accusation -> add(accusation));
+        list.stream().map(s -> new NoteWrapper(s, getDigestAlgorithm())).forEach(note -> add(note));
+        list2.stream().map(s -> new AccusationWrapper(s, getDigestAlgorithm())).forEach(accusation -> add(accusation));
 
         if (node.isAccused()) {
             // Rebut the accusations by creating a new note and clearing the accusations
@@ -1201,8 +1227,10 @@ public class View {
 
         log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
 
-        return Gossip.newBuilder().setRedirect(true)
-                     .setCertificates(CertificateGossip.newBuilder().addUpdates(successor.getEncodedCertificate())
+        return Gossip.newBuilder()
+                     .setRedirect(true)
+                     .setCertificates(CertificateGossip.newBuilder()
+                                                       .addUpdates(successor.getEncodedCertificate())
                                                        .build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
                      .setAccusations(AccusationGossip.newBuilder()
@@ -1267,17 +1295,27 @@ public class View {
 
         // certificates
         BloomFilter<Digest> certBff = BloomFilter.from(gossip.getCertificates().getBff());
-        view.values().stream().filter(m -> !certBff.contains((m.getCertificateHash())))
-            .map(m -> m.getEncodedCertificate()).filter(ec -> ec != null)
+        view.values()
+            .stream()
+            .filter(m -> !certBff.contains((m.getCertificateHash())))
+            .map(m -> m.getEncodedCertificate())
+            .filter(ec -> ec != null)
             .forEach(cert -> builder.addCertificates(cert));
 
         // notes
         BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
-        view.values().stream().filter(m -> m.getNote() != null).filter(m -> !notesBff.contains(m.getNote().getHash()))
-            .map(m -> m.getNote().getWrapped()).forEach(n -> builder.addNotes(n));
+        view.values()
+            .stream()
+            .filter(m -> m.getNote() != null)
+            .filter(m -> !notesBff.contains(m.getNote().getHash()))
+            .map(m -> m.getNote().getWrapped())
+            .forEach(n -> builder.addNotes(n));
 
         BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
-        context.getActive().stream().flatMap(m -> m.getAccusations()).filter(a -> !accBff.contains(a.getHash()))
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !accBff.contains(a.getHash()))
                .forEach(a -> builder.addAccusations(a.getWrapped()));
 
         return builder.build();
@@ -1301,20 +1339,22 @@ public class View {
         }
         if (gossip.getAccusations().getUpdatesCount() > 0) {
             // Reset our epoch to whatever the group has recorded for this recovering node
-            long max = gossip.getAccusations().getUpdatesList().stream()
-                             .map(signed -> new AccusationWrapper(getDigestAlgorithm().digest(signed.toByteString()),
-                                                                  signed))
-                             .mapToLong(a -> a.getEpoch()).max().orElse(-1);
+            long max = gossip.getAccusations()
+                             .getUpdatesList()
+                             .stream()
+                             .map(signed -> new AccusationWrapper(signed, getDigestAlgorithm()))
+                             .mapToLong(a -> a.getEpoch())
+                             .max()
+                             .orElse(-1);
             node.nextNote(max + 1);
         }
         CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
         if (certificate != null) {
             add(certificate);
-            Note signed = gossip.getNotes().getUpdates(0);
-            NoteWrapper note = new NoteWrapper(getDigestAlgorithm().digest(signed.toByteString()), signed);
+            SignedNote signed = gossip.getNotes().getUpdates(0);
+            NoteWrapper note = new NoteWrapper(signed, getDigestAlgorithm());
             add(note);
-            gossip.getAccusations().getUpdatesList()
-                  .forEach(s -> add(new AccusationWrapper(getDigestAlgorithm().digest(s.toByteString()), s)));
+            gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, getDigestAlgorithm())));
             log.debug("Redirected from {} to {} on ring {}", member, note.getId(), ring);
         } else {
             log.warn("Redirect certificate from {} on ring {} is null", member, ring);

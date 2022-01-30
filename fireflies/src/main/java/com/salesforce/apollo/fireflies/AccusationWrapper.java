@@ -8,11 +8,9 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
-import java.nio.ByteBuffer;
-
-import com.salesfoce.apollo.fireflies.proto.Accusation;
-import com.salesfoce.apollo.fireflies.proto.AccusationOrBuilder;
+import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
@@ -21,33 +19,24 @@ import com.salesforce.apollo.crypto.JohnHancock;
  */
 public class AccusationWrapper {
 
-    public static ByteBuffer forSigning(AccusationOrBuilder accuse) {
-        byte[] accuser = accuse.getAccuser().toByteArray();
-        byte[] accused = accuse.getAccused().toByteArray();
-        ByteBuffer accusation = ByteBuffer.allocate(8 + 4 + accuser.length + accused.length);
-        accusation.putLong(accuse.getEpoch()).putInt(accuse.getRingNumber()).put(accuser).put(accused);
-        accusation.flip();
-        return accusation;
-    }
+    private final SignedAccusation signedAccusation;
+    private final Digest           hash;
 
-    private final Accusation accusation;
-    private final Digest     hash;
-
-    public AccusationWrapper(Digest hash, Accusation accusation) {
-        this.accusation = accusation;
-        this.hash = hash;
+    public AccusationWrapper(SignedAccusation signedAccusation, DigestAlgorithm algo) {
+        this.signedAccusation = signedAccusation;
+        this.hash = JohnHancock.from(signedAccusation.getSignature()).toDigest(algo);
     }
 
     public Digest getAccused() {
-        return new Digest(accusation.getAccused());
+        return new Digest(signedAccusation.getAccusation().getAccused());
     }
 
     public Digest getAccuser() {
-        return new Digest(accusation.getAccuser());
+        return new Digest(signedAccusation.getAccusation().getAccuser());
     }
 
     public long getEpoch() {
-        return accusation.getEpoch();
+        return signedAccusation.getAccusation().getEpoch();
     }
 
     public Digest getHash() {
@@ -55,14 +44,14 @@ public class AccusationWrapper {
     }
 
     public int getRingNumber() {
-        return accusation.getRingNumber();
+        return signedAccusation.getAccusation().getRingNumber();
     }
 
     public JohnHancock getSignature() {
-        return signature(accusation.getSignature());
+        return signature(signedAccusation.getSignature());
     }
 
-    public Accusation getWrapped() {
-        return accusation;
+    public SignedAccusation getWrapped() {
+        return signedAccusation;
     }
 }

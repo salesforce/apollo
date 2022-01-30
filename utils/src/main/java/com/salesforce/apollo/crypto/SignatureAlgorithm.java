@@ -50,6 +50,85 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  */
 public enum SignatureAlgorithm {
 
+    NULL_SIGNATURE {
+
+        @Override
+        public String algorithmName() {
+            return "Null Algorithm";
+        }
+
+        @Override
+        public String curveName() {
+            return "Null";
+        }
+
+        @Override
+        public byte[] encode(PublicKey publicKey) {
+            return new byte[0];
+        }
+
+        @Override
+        public KeyPair generateKeyPair() {
+            return null;
+        }
+
+        @Override
+        public KeyPair generateKeyPair(SecureRandom secureRandom) {
+            return null;
+        }
+
+        @Override
+        public PrivateKey privateKey(byte[] bytes) {
+            return null;
+        }
+
+        @Override
+        public int privateKeyLength() {
+            return 0;
+        }
+
+        @Override
+        public PublicKey publicKey(byte[] bytes) {
+            return null;
+        }
+
+        @Override
+        public int publicKeyLength() {
+            return 0;
+        }
+
+        @Override
+        public JohnHancock signature(byte[] signatureBytes) {
+            return new JohnHancock(NULL_SIGNATURE, signatureBytes);
+        }
+
+        @Override
+        public byte signatureCode() {
+            return 1;
+        }
+
+        @Override
+        public String signatureInstanceName() {
+            return "Null Algorithm";
+        }
+
+        @Override
+        public int signatureLength() {
+            return 64;
+        }
+
+        @Override
+        protected boolean verify(PublicKey publicKey, byte[] signature, InputStream message) {
+            return false;
+        }
+
+        @Override
+        JohnHancock sign(PrivateKey[] privateKeys, InputStream message) {
+            return new JohnHancock(NULL_SIGNATURE, new byte[64]);
+        }
+
+    },
+
     EC_SECP256K1 {
 
         private final KeyFactory       keyFactory;
@@ -174,7 +253,7 @@ public enum SignatureAlgorithm {
 
         @Override
         public byte signatureCode() {
-            return 1;
+            return 2;
         }
 
         @Override
@@ -266,7 +345,7 @@ public enum SignatureAlgorithm {
 
         @Override
         public byte signatureCode() {
-            return 2;
+            return 3;
         }
 
         @Override
@@ -350,7 +429,7 @@ public enum SignatureAlgorithm {
 
         @Override
         public byte signatureCode() {
-            return 3;
+            return 4;
         }
 
         @Override
@@ -387,10 +466,12 @@ public enum SignatureAlgorithm {
         case 0:
             throw new IllegalArgumentException("Unknown signature code: " + i);
         case 1:
-            yield EC_SECP256K1;
+            yield NULL_SIGNATURE;
         case 2:
-            yield ED_25519;
+            yield EC_SECP256K1;
         case 3:
+            yield ED_25519;
+        case 4:
             yield ED_448;
         default:
             throw new IllegalArgumentException("Unknown signature code: " + i);

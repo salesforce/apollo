@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.AccusationWrapper.forSigning;
-import static com.salesforce.apollo.fireflies.NoteWrapper.forSigning;
 import static com.salesforce.apollo.fireflies.View.isValidMask;
 
 import java.io.InputStream;
@@ -20,16 +18,13 @@ import java.util.Random;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
-import com.salesfoce.apollo.fireflies.proto.Accusation.Builder;
-import com.salesfoce.apollo.fireflies.proto.AccusationOrBuilder;
 import com.salesfoce.apollo.fireflies.proto.Note;
-import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -116,10 +111,17 @@ public class Node extends Participant implements SigningMember {
     }
 
     AccusationWrapper accuse(Participant m, int ringNumber) {
-        Builder builder = Accusation.newBuilder();
-        Accusation accusation = builder.setEpoch(m.getEpoch()).setRingNumber(ringNumber).setAccuser(getId().toDigeste())
-                                       .setAccused(m.getId().toDigeste()).setSignature(sign(builder)).build();
-        return new AccusationWrapper(hashAlgorithm.digest(accusation.toByteString()), accusation);
+        var accusation = Accusation.newBuilder()
+                                   .setEpoch(m.getEpoch())
+                                   .setRingNumber(ringNumber)
+                                   .setAccuser(getId().toDigeste())
+                                   .setAccused(m.getId().toDigeste())
+                                   .build();
+        return new AccusationWrapper(SignedAccusation.newBuilder()
+                                                     .setAccusation(accusation)
+                                                     .setSignature(wrapped.sign(accusation.toByteString()).toSig())
+                                                     .build(),
+                                     hashAlgorithm);
     }
 
     /**
@@ -182,17 +184,15 @@ public class Node extends Participant implements SigningMember {
      * @param newEpoch
      */
     void nextNote(long newEpoch) {
-        Note.Builder builder = Note.newBuilder();
-        Note n = builder.setId(getId().toDigeste()).setEpoch(newEpoch)
-                        .setMask(ByteString.copyFrom(nextMask().toByteArray())).setSignature(sign(builder)).build();
-        note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
-    }
-
-    private Sig sign(AccusationOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
-    }
-
-    private Sig sign(NoteOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
+        var n = Note.newBuilder()
+                    .setId(getId().toDigeste())
+                    .setEpoch(newEpoch)
+                    .setMask(ByteString.copyFrom(nextMask().toByteArray()))
+                    .build();
+        var signedNote = SignedNote.newBuilder()
+                                   .setNote(n)
+                                   .setSignature(wrapped.sign(n.toByteString()).toSig())
+                                   .build();
+        note = new NoteWrapper(signedNote, parameters.hashAlgorithm);
     }
 }
