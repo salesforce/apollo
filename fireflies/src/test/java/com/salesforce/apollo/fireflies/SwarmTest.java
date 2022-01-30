@@ -221,7 +221,7 @@ public class SwarmTest {
                                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                                    new SignerImpl(cert.getPrivateKey()),
                                                                    cert.getX509Certificate().getPublicKey()),
-                                             parameters))
+                                             cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 

@@ -663,8 +663,7 @@ public class View {
             update(member, cert);
             return member;
         }
-        member = new Participant(new MemberImpl(cert.certificate), cert.derEncoded, cert.certificateHash,
-                                 getParameters());
+        member = new Participant(new MemberImpl(cert.certificate), cert.certificate, getParameters());
         log.trace("Adding member via cert: {}", member.getId());
         return add(member);
     }

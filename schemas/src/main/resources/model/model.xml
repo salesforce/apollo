@@ -16,35 +16,12 @@
             </column>
         </createTable>
 
-        <createTable tableName="uri"
-            schemaName="apollo_kernel">
-            <column name="identifier" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" />
-            </column>
-            <column name="lookup" type="VARCHAR(1024)">
-                <constraints nullable="false"
-                    primaryKey="true" />
-            </column>
-            <column name="uri" type="VARCHAR(4096)">
-                <constraints nullable="false" />
-            </column>
-        </createTable>
-
         <addForeignKeyConstraint
             onDelete="CASCADE" baseColumnNames="identifier"
             baseTableName="member" baseTableSchemaName="apollo_kernel"
             constraintName="member_identifier_fk"
             referencedTableName="identifier" referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
-
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="identifier"
-            baseTableName="uri" baseTableSchemaName="apollo_kernel"
-            constraintName="uri_identifier_fk"
-            referencedTableName="member"
-            referencedColumnNames="identifier"
-            referencedTableSchemaName="apollo_kernel" />
 
     </changeSet>
 </databaseChangeLog>

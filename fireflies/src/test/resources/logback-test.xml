@@ -1,32 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-	<!-- Stop output INFO at start -->
-	<statusListener
-		class="ch.qos.logback.core.status.NopStatusListener" />
+    <!-- Stop output INFO at start -->
+    <statusListener
+        class="ch.qos.logback.core.status.NopStatusListener" />
 
-	<appender name="STDOUT"
-		class="ch.qos.logback.core.ConsoleAppender">
-		<encoder>
-			<Pattern>
-				%d{mm:ss.SSS} [%thread] %-5level %logger{0} -
-  %msg%n
-			</Pattern>
-		</encoder>
-	</appender> 
-    
+    <appender name="STDOUT"
+        class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <Pattern>
+                %d{mm:ss.SSS} [%thread] %-5level %logger{0}
+                - %msg%n
+            </Pattern>
+        </encoder>
+    </appender>
+
     <logger name="com.salesforce.apollo.fireflies" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger> 
-    
-	<logger name="com.salesforce.apollo" level="warn"
-		additivity="false">
-		<appender-ref ref="STDOUT" />
-	</logger> 
+    </logger>
 
-	<root level="INFO">
-		<appender-ref ref="STDOUT" />
-	</root>
+    <logger name="com.salesforce.apollo.members" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.comm" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.protocols" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
 
 </configuration>
