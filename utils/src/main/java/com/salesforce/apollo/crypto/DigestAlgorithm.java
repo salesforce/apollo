@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.digests.Blake2sDigest;
@@ -444,6 +445,14 @@ public enum DigestAlgorithm {
 
     public int longLength() {
         return digestLength() / 8;
+    }
+
+    public Digest random(Random random) {
+        var hash = new long[longLength()];
+        for (int i = 0; i < hash.length; i++) {
+            hash[i] = random.nextLong();
+        }
+        return new Digest(digestCode(), hash);
     }
 
     protected MessageDigest createJCA() {

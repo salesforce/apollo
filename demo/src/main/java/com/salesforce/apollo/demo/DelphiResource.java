@@ -7,8 +7,11 @@
 package com.salesforce.apollo.demo;
 
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import javax.ws.rs.Consumes;
@@ -46,10 +49,12 @@ public class DelphiResource {
 
     public record PredicateSubject(Relation predicate, Subject subject) {}
 
-    private final Oracle oracle;
+    private final Oracle   oracle;
+    private final Duration timeout;
 
-    public DelphiResource(Oracle oracle) {
+    public DelphiResource(Oracle oracle, Duration timeout) {
         this.oracle = oracle;
+        this.timeout = timeout;
     }
 
     @PUT
@@ -57,11 +62,13 @@ public class DelphiResource {
     @Path("admin/add/assertion")
     public void add(Assertion assertion) {
         try {
-            oracle.add(assertion).get();
+            oracle.add(assertion).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -70,11 +77,13 @@ public class DelphiResource {
     @Path("admin/add/namespace")
     public void add(Namespace namespace) {
         try {
-            oracle.add(namespace).get();
+            oracle.add(namespace).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -83,11 +92,13 @@ public class DelphiResource {
     @Path("admin/add/object")
     public void add(Object object) {
         try {
-            oracle.add(object).get();
+            oracle.add(object).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -96,11 +107,13 @@ public class DelphiResource {
     @Path("admin/add/relation")
     public void add(Relation relation) {
         try {
-            oracle.add(relation).get();
+            oracle.add(relation).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -109,11 +122,13 @@ public class DelphiResource {
     @Path("admin/add/subject")
     public void add(Subject subject) {
         try {
-            oracle.add(subject).get();
+            oracle.add(subject).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -133,11 +148,13 @@ public class DelphiResource {
     @Path("admin/delete/assertion")
     public void delete(Assertion assertion) {
         try {
-            oracle.delete(assertion).get();
+            oracle.delete(assertion).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -146,11 +163,13 @@ public class DelphiResource {
     @Path("admin/delete/namespace")
     public void delete(Namespace namespace) {
         try {
-            oracle.delete(namespace).get();
+            oracle.delete(namespace).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -159,11 +178,13 @@ public class DelphiResource {
     @Path("admin/delete/object")
     public void delete(Object object) {
         try {
-            oracle.delete(object).get();
+            oracle.delete(object).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -172,11 +193,13 @@ public class DelphiResource {
     @Path("admin/delete/relation")
     public void delete(Relation relation) {
         try {
-            oracle.delete(relation).get();
+            oracle.delete(relation).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -185,11 +208,13 @@ public class DelphiResource {
     @Path("admin/delete/subject")
     public void delete(Subject subject) {
         try {
-            oracle.delete(subject).get();
+            oracle.delete(subject).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -255,11 +280,13 @@ public class DelphiResource {
     @Path("admin/map/relation")
     public void mapRelation(Assocation<Relation> association) {
         try {
-            oracle.map(association.a, association.b).get();
+            oracle.map(association.a, association.b).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -268,11 +295,13 @@ public class DelphiResource {
     @Path("admin/map/subject")
     public void mapSubject(Assocation<Subject> association) {
         try {
-            oracle.map(association.a, association.b).get();
+            oracle.map(association.a, association.b).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -322,11 +351,13 @@ public class DelphiResource {
     @Path("admin/remove/object")
     public void removeObjectMapping(Assocation<Object> association) {
         try {
-            oracle.remove(association.a, association.b).get();
+            oracle.remove(association.a, association.b).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -335,11 +366,13 @@ public class DelphiResource {
     @Path("admin/remove/relation")
     public void removeRelationMapping(Assocation<Relation> association) {
         try {
-            oracle.remove(association.a, association.b).get();
+            oracle.remove(association.a, association.b).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 
@@ -348,11 +381,13 @@ public class DelphiResource {
     @Path("admin/remove/subject")
     public void removeSubjectMapping(Assocation<Subject> association) {
         try {
-            oracle.remove(association.a, association.b).get();
+            oracle.remove(association.a, association.b).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.BAD_REQUEST);
+        } catch (TimeoutException e) {
+            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
         }
     }
 

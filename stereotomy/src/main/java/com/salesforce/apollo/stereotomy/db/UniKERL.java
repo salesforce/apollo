@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.model.schema.tables.Attachment.ATTACHMENT;
-import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
-import static com.salesforce.apollo.model.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
-import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
-import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.model.schema.tables.Receipt.RECEIPT;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toKeyEvent;
+import static com.salesforce.apollo.stereotomy.schema.tables.Attachment.ATTACHMENT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
+import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

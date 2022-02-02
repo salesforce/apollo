@@ -225,8 +225,21 @@ message BindContext {
     Binding binding = 2;
 }
 
+message KERLContext {
+    utils.Digeste context = 1;
+    KERL kerl = 2;
+}
+
+message KeyEventContext {
+    utils.Digeste context = 1;
+    KeyEvent keyEvent = 2;
+}
+
+
 // Binding API for Resolver
 service Binder {
     rpc bind(BindContext) returns(google.protobuf.Empty) {}
     rpc unbind(IdentifierContext) returns(google.protobuf.Empty) {}
+    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
+    rpc append(KeyEventContext) returns(google.protobuf.Empty) {}
 }

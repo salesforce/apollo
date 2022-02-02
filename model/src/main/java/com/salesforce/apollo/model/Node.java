@@ -7,6 +7,8 @@
 package com.salesforce.apollo.model;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
+import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
 import static java.nio.file.Path.of;
 
 import java.io.File;
@@ -15,6 +17,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.sql.JDBCType;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,7 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,10 +45,12 @@ import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
@@ -55,17 +63,91 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
+import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderService;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class Node {
+
+    public static void addMembers(Connection connection, List<byte[]> members) {
+        var context = DSL.using(connection, SQLDialect.H2);
+        for (var m : members) {
+            context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
+            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
+            context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
+        }
+    }
+
+    private class ProtoBinder implements BinderService {
+
+        @Override
+        public CompletableFuture<Boolean> bind(Binding binding) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+        @Override
+        public CompletableFuture<List<KeyState>> publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) {
+            var events = new ArrayList<com.salesforce.apollo.stereotomy.event.KeyEvent>();
+            var attachments = new ArrayList<com.salesforce.apollo.stereotomy.event.AttachmentEvent>();
+            kerl.getEventsList().stream().forEach(ke -> {
+                var event = switch (ke.getEventCase()) {
+                case EVENT_NOT_SET -> null;
+                case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+                case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+                case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+                default -> null;
+                };
+                if (event != null) {
+                    events.add(event);
+                }
+                if (ke.hasAttachment()) {
+                    var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
+                    builder.setAttachment(ke.getAttachment()).setCoordinates(event.getCoordinates().toEventCoords());
+                    attachments.add(new AttachmentEventImpl(builder.build()));
+                }
+            });
+            if (events.isEmpty()) {
+                var completed = new CompletableFuture<List<KeyState>>();
+                completed.complete(Collections.emptyList());
+                return completed;
+            }
+            return commonKERL.append(events, attachments)
+                             .thenApply(ks -> ks.stream().map(e -> e.toKeyState()).toList());
+        }
+
+        @Override
+        public CompletableFuture<KeyState> append(KeyEvent ke) {
+            var event = switch (ke.getEventCase()) {
+            case EVENT_NOT_SET -> null;
+            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+            default -> null;
+            };
+            if (event == null) {
+                var completed = new CompletableFuture<KeyState>();
+                completed.complete(null);
+                return completed;
+            }
+            return commonKERL.append(event).thenApply(ks -> ks.toKeyState());
+        }
+
+        @Override
+        public CompletableFuture<Boolean> unbind(Ident identifier) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+
+    }
 
     private class ProtoResolver implements ProtoResolverService {
 
@@ -193,7 +275,14 @@ public class Node {
     }
 
     /**
-     * @return the ProtoResolverService that provides raw Protobuf access to the
+     * @return the BinderService that provides raw Protobuf bindings
+     */
+    public ProtoResolverService.BinderService getProtoBinder() {
+        return new ProtoBinder();
+    }
+
+    /**
+     * @return the ResolverService that provides raw Protobuf access to the
      *         underlying KERI resolution
      */
     public ProtoResolverService getProtoResolver() {
@@ -221,7 +310,23 @@ public class Node {
               .filter(t -> t != null)
               .flatMap(l -> l.stream())
               .forEach(t -> transactions.add(t));
+        transactions.add(initalMembership(params.runtime()
+                                                .foundation()
+                                                .getFoundation()
+                                                .getMembershipList()
+                                                .stream()
+                                                .map(d -> Digest.from(d))
+                                                .toList()));
         return transactions;
+    }
+
+    private Transaction initalMembership(List<Digest> digests) {
+        var call = mutator.call("{ call apollo_kernel.add_members(?) }", Collections.singletonList(JDBCType.OTHER),
+                                digests.stream()
+                                       .map(d -> new SelfAddressingIdentifier(d))
+                                       .map(id -> id.toIdent().toByteArray())
+                                       .toList());
+        return transactionOf(Txn.newBuilder().setCall(call).build());
     }
 
     // Answer the KERL of this node

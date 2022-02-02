@@ -189,7 +189,7 @@
                             </database>
                             <generate></generate>
                             <target>
-                                <packageName>com.salesforce.apollo.model.schema</packageName>
+                                <packageName>com.salesforce.apollo.stereotomy.schema</packageName>
                                 <directory>target/generated-sources/jooq</directory>
                             </target>
                         </generator>
