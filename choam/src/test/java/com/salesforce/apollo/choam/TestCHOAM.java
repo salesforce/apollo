@@ -293,7 +293,7 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            countdown.await(300, TimeUnit.SECONDS);
+            countdown.await(60, TimeUnit.SECONDS);
         } finally {
             proceed.set(false);
             after();

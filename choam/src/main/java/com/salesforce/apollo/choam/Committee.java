@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
@@ -73,6 +71,9 @@ public interface Committee {
         Set<Member> successors = new HashSet<>();
         baseContext.successors(hash, m -> {
             if (successors.size() == baseContext.getRingCount()) {
+                return false;
+            }
+            if (baseContext.isOffline(m.getId())) {
                 return false;
             }
             return successors.add(m);
@@ -166,11 +167,6 @@ public interface Committee {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        var validators = validatorsOf(reconfigure, params().context());
-        ArrayList<Member> diff = new ArrayList<>(Sets.difference(validators.keySet(),
-                                                                 viewMembersOf(new Digest(reconfigure.getId()),
-                                                                               params().context())));
-        diff.forEach(m -> validators.remove(m));
-        return validate(hb, validators);
+        return validate(hb, validatorsOf(reconfigure, params().context()));
     }
 }

@@ -6,7 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>delphinius</artifactId>
-    <name>Delphinius: Role Based Access Control</name>
+    <name>Delphinius: Relation Based Access Control</name>
 
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>

@@ -321,7 +321,7 @@ public class Node {
     }
 
     private Transaction initalMembership(List<Digest> digests) {
-        var call = mutator.call("{ call apollo_kernel.add_members(?) }", Collections.singletonList(JDBCType.OTHER),
+        var call = mutator.call("{ call apollo_kernel.add_members(?) }",
                                 digests.stream()
                                        .map(d -> new SelfAddressingIdentifier(d))
                                        .map(id -> id.toIdent().toByteArray())

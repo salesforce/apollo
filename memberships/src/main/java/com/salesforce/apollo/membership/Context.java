@@ -82,6 +82,10 @@ public class Context<T extends Member> {
 
     private record Tracked<M> (M member, Digest[] hashes, AtomicBoolean active) {
 
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+        }
+
         private boolean isActive() {
             return active.get();
         }
@@ -156,7 +160,7 @@ public class Context<T extends Member> {
     private final ConcurrentHashMap<Digest, Tracked<T>> members             = new ConcurrentHashMap<>();
     private final List<MembershipListener<T>>           membershipListeners = new CopyOnWriteArrayList<>();
     private final double                                pByz;
-    private final Ring<T>[]                             rings;
+    private final List<Ring<T>>                         rings               = new ArrayList<>();
 
     public Context(Digest id) {
         this(id, 1);
@@ -201,14 +205,12 @@ public class Context<T extends Member> {
         this(0.0, 2, id, r);
     }
 
-    @SuppressWarnings("unchecked")
     public Context(double pbyz, int bias, Digest id, int r) {
         this.pByz = pbyz;
         this.id = id;
-        this.rings = new Ring[r];
         this.bias = bias;
         for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
+            rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
         }
     }
 
@@ -327,7 +329,7 @@ public class Context<T extends Member> {
     }
 
     public int getRingCount() {
-        return rings.length;
+        return rings.size();
     }
 
     @Override
@@ -335,13 +337,18 @@ public class Context<T extends Member> {
         return id.hashCode();
     }
 
-    public boolean isActive(T m) {
-        assert m != null;
-        var member = members.get(m.getId());
+    public boolean isActive(Digest id) {
+        assert id != null;
+        var member = members.get(id);
         if (member == null) {
             return false;
         }
         return member.isActive();
+    }
+
+    public boolean isActive(T m) {
+        assert m != null;
+        return isActive(m.getId());
     }
 
     public boolean isOffline(Digest digest) {
@@ -355,11 +362,7 @@ public class Context<T extends Member> {
 
     public boolean isOffline(T m) {
         assert m != null;
-        var member = members.get(m.getId());
-        if (member == null) {
-            return true;
-        }
-        return !member.isActive();
+        return isOffline(m.getId());
     }
 
     public int majority() {
@@ -449,8 +452,8 @@ public class Context<T extends Member> {
      */
     public void remove(T m) {
         members.remove(m.getId());
-        for (int i = 0; i < rings.length; i++) {
-            rings[i].delete(m);
+        for (int i = 0; i < rings.size(); i++) {
+            rings.get(i).delete(m);
         }
     }
 
@@ -458,17 +461,17 @@ public class Context<T extends Member> {
      * @return the indexed Ring<T>
      */
     public Ring<T> ring(int index) {
-        if (index < 0 || index >= rings.length) {
+        if (index < 0 || index >= rings.size()) {
             throw new IllegalArgumentException("Not a valid ring #: " + index);
         }
-        return rings[index];
+        return rings.get(index);
     }
 
     /**
      * @return the Stream of rings managed by the context
      */
     public Stream<Ring<T>> rings() {
-        return Arrays.asList(rings).stream();
+        return rings.stream();
     }
 
     /**
@@ -483,7 +486,9 @@ public class Context<T extends Member> {
      */
     public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
         Member excluded = getMember(exc);
-        return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
+        return rings.get(entropy.nextInt(rings.size()))
+                    .stream()
+                    .collect(new ReservoirSampler<T>(excluded, range, entropy));
     }
 
     /**
@@ -535,7 +540,7 @@ public class Context<T extends Member> {
      * members in the context, using the rings of the receiver as a gossip graph
      */
     public int timeToLive() {
-        return (rings.length * diameter()) + 1;
+        return (rings.size() * diameter()) + 1;
     }
 
     /**
@@ -543,7 +548,7 @@ public class Context<T extends Member> {
      * context has been constructed from FF parameters
      */
     public int toleranceLevel() {
-        return (rings.length - 1) / 2;
+        return (rings.size() - 1) / 2;
     }
 
     @Override
@@ -560,8 +565,8 @@ public class Context<T extends Member> {
     }
 
     private Digest[] hashesFor(T m) {
-        Digest[] s = new Digest[rings.length];
-        for (int ring = 0; ring < rings.length; ring++) {
+        Digest[] s = new Digest[rings.size()];
+        for (int ring = 0; ring < rings.size(); ring++) {
             Digest key = m.getId();
             s[ring] = key.getAlgorithm()
                          .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
