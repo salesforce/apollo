@@ -32,6 +32,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -59,6 +60,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
+import com.salesforce.apollo.fireflies.communications.Fireflies;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
@@ -290,7 +292,7 @@ public class View {
             recover(node);
             List<Digest> seedList = new ArrayList<>();
             seeds.stream()
-                 .map(cert -> new Participant(new MemberImpl(cert), node.getParameters()))
+                 .map(cert -> new Participant(memberConstructor.apply(cert), node.getParameters()))
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
@@ -411,6 +413,11 @@ public class View {
      */
     private final int diameter;
 
+    /**
+     * Constructor for Member implementations
+     */
+    private final Function<X509Certificate, Member> memberConstructor;
+
     private final FireflyMetrics metrics;
 
     /**
@@ -448,9 +455,11 @@ public class View {
      */
     private final ConcurrentMap<Digest, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Digest id, Node node, Router communications, FireflyMetrics metrics) {
+    public View(Digest id, Node node, Function<X509Certificate, Member> memberConstructor, Router communications,
+                FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
+        this.memberConstructor = memberConstructor;
         this.comm = communications.create(node, id, service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -460,6 +469,10 @@ public class View {
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
+    }
+
+    public View(Digest id, Node node, Router communications, FireflyMetrics metrics) {
+        this(id, node, c -> new MemberImpl(c), communications, metrics);
     }
 
     public Context<? extends Member> getContext() {
@@ -663,7 +676,7 @@ public class View {
             update(member, cert);
             return member;
         }
-        member = new Participant(new MemberImpl(cert.certificate), cert.certificate, getParameters());
+        member = new Participant(memberConstructor.apply(cert.certificate), cert.certificate, getParameters());
         log.trace("Adding member via cert: {}", member.getId());
         return add(member);
     }

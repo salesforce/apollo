@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies;
+package com.salesforce.apollo.fireflies.communications;
 
 import java.io.IOException;
 
@@ -15,6 +15,7 @@ import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**

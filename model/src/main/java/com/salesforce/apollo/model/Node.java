@@ -13,12 +13,15 @@ import static java.nio.file.Path.of;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.JDBCType;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -52,9 +55,12 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
 import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
@@ -77,16 +83,24 @@ import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderServ
  */
 public class Node {
 
-    public static void addMembers(Connection connection, List<byte[]> members) {
-        var context = DSL.using(connection, SQLDialect.H2);
-        for (var m : members) {
-            context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
-            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
-            context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
-        }
-    }
-
     private class ProtoBinder implements BinderService {
+
+        @Override
+        public CompletableFuture<KeyState> append(KeyEvent ke) {
+            var event = switch (ke.getEventCase()) {
+            case EVENT_NOT_SET -> null;
+            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+            default -> null;
+            };
+            if (event == null) {
+                var completed = new CompletableFuture<KeyState>();
+                completed.complete(null);
+                return completed;
+            }
+            return commonKERL.append(event).thenApply(ks -> ks.toKeyState());
+        }
 
         @Override
         public CompletableFuture<Boolean> bind(Binding binding) {
@@ -122,23 +136,6 @@ public class Node {
             }
             return commonKERL.append(events, attachments)
                              .thenApply(ks -> ks.stream().map(e -> e.toKeyState()).toList());
-        }
-
-        @Override
-        public CompletableFuture<KeyState> append(KeyEvent ke) {
-            var event = switch (ke.getEventCase()) {
-            case EVENT_NOT_SET -> null;
-            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-            default -> null;
-            };
-            if (event == null) {
-                var completed = new CompletableFuture<KeyState>();
-                completed.complete(null);
-                return completed;
-            }
-            return commonKERL.append(event).thenApply(ks -> ks.toKeyState());
         }
 
         @Override
@@ -179,6 +176,15 @@ public class Node {
     }
 
     private static final Logger log = LoggerFactory.getLogger(Node.class);
+
+    public static void addMembers(Connection connection, List<byte[]> members) {
+        var context = DSL.using(connection, SQLDialect.H2);
+        for (var m : members) {
+            context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
+            var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
+            context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
+        }
+    }
 
     public static Txn boostrapMigration() {
         Map<Path, URL> resources = new HashMap<>();
@@ -274,6 +280,10 @@ public class Node {
         return identifier.getIdentifier();
     }
 
+    public SigningMember getMember() {
+        return params.member();
+    }
+
     /**
      * @return the BinderService that provides raw Protobuf bindings
      */
@@ -287,6 +297,11 @@ public class Node {
      */
     public ProtoResolverService getProtoResolver() {
         return new ProtoResolver();
+    }
+
+    public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Duration duration,
+                                                         SignatureAlgorithm signatureAlgorithm) {
+        return identifier.provision(endpoint, Instant.now(), duration, signatureAlgorithm);
     }
 
     public void start() {
