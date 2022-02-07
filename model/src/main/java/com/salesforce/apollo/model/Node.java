@@ -219,7 +219,8 @@ public class Node {
         return dir;
     }
 
-    private final CHOAM                                          choam;
+    private final CHOAM choam;
+
     private final KERL                                           commonKERL;
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
     private final Mutator                                        mutator;
@@ -299,9 +300,10 @@ public class Node {
         return new ProtoResolver();
     }
 
-    public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Duration duration,
+    public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,
+                                                         InetSocketAddress endpoint, Duration duration,
                                                          SignatureAlgorithm signatureAlgorithm) {
-        return identifier.provision(endpoint, Instant.now(), duration, signatureAlgorithm);
+        return identifier.provision(validators, endpoint, Instant.now(), duration, signatureAlgorithm);
     }
 
     public void start() {
@@ -310,6 +312,11 @@ public class Node {
 
     public void stop() {
         choam.stop();
+    }
+
+    @Override
+    public String toString() {
+        return "Node[" + getIdentifier() + "]";
     }
 
     // Provide the list of transactions establishing the unified KERL of the group

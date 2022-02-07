@@ -26,7 +26,7 @@ public interface Verifier {
         private final PublicKey[] keys;
 
         public DefaultVerifier(List<PublicKey> keys) {
-            this((PublicKey[]) keys.toArray());
+            this((PublicKey[]) keys.toArray(new PublicKey[keys.size()]));
         }
 
         public DefaultVerifier(PublicKey key) {

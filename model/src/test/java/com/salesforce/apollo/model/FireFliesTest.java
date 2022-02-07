@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +35,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
@@ -62,7 +62,6 @@ public class FireFliesTest {
     private final List<Node>             nodes   = new ArrayList<>();
     private final Map<Node, LocalRouter> routers = new HashMap<>();
     private final Map<Node, View>        views   = new HashMap<>();
-    private final List<X509Certificate>  seeds   = new ArrayList<>();
 
     @AfterEach
     public void after() {
@@ -89,13 +88,12 @@ public class FireFliesTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
-            seeds.add(cert.get().getX509Certificate());
+            var member = new SigningMemberImpl(id.getIdentifier().getDigest(), cert.get().getX509Certificate(),
+                                               cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0));
+            members.put(member, id);
 
-            members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
-                                              cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0)),
-                        id);
         }
 
         members.keySet().forEach(m -> context.activate(m));
@@ -125,18 +123,31 @@ public class FireFliesTest {
             localRouter.start();
         });
 
-        var ffParams = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
-        Function<X509Certificate, Member> constructor = cert -> {
-            var decoded = Stereotomy.decode(cert).get();
-            return new MemberImpl(((SelfAddressingIdentifier) decoded.identifier()).getDigest(), cert,
-                                  cert.getPublicKey());
+        var ffParams = FirefliesParameters.newBuilder()
+                                          .setCertificateValidator(CertificateValidator.NONE)
+                                          .setCardinality(CARDINALITY)
+                                          .build();
+        var certToMember = new View.CertToMember() {
+
+            @Override
+            public Member from(X509Certificate cert) {
+                var decoded = Stereotomy.decode(cert).get();
+                return new MemberImpl(((SelfAddressingIdentifier) decoded.identifier()).getDigest(), cert,
+                                      decoded.keyEvent().getKeys().get(0));
+            }
+
+            @Override
+            public Digest idOf(X509Certificate cert) {
+                var decoded = Stereotomy.decode(cert).get();
+                return ((SelfAddressingIdentifier) decoded.identifier()).getDigest();
+            }
         };
         nodes.forEach(m -> {
-            var cert = m.provision(new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
+            var cert = m.provision(null, new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
                                    SignatureAlgorithm.DEFAULT)
                         .get();
             var node = new com.salesforce.apollo.fireflies.Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(DigestAlgorithm.DEFAULT.getOrigin(), node, constructor, routers.get(m), null));
+            views.put(m, new View(DigestAlgorithm.DEFAULT.getOrigin(), node, certToMember, routers.get(m), null));
         });
     }
 
@@ -144,7 +155,10 @@ public class FireFliesTest {
     public void smokin() throws Exception {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         nodes.forEach(n -> n.start());
-        views.values().forEach(v -> v.getService().start(Duration.ofMillis(10), seeds, scheduler));
+        views.values()
+             .forEach(v -> v.getService()
+                            .start(Duration.ofMillis(10),
+                                   nodes.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
         Thread.sleep(5000);
     }
 

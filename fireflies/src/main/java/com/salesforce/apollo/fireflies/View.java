@@ -32,7 +32,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -121,6 +120,12 @@ public class View {
             result = prime * result + ring;
             return result;
         }
+    }
+
+    public interface CertToMember {
+        Member from(X509Certificate cert);
+
+        Digest idOf(X509Certificate cert);
     }
 
     public static class CertWithHash {
@@ -292,7 +297,7 @@ public class View {
             recover(node);
             List<Digest> seedList = new ArrayList<>();
             seeds.stream()
-                 .map(cert -> new Participant(memberConstructor.apply(cert), node.getParameters()))
+                 .map(cert -> new Participant(certToMember.from(cert), node.getParameters()))
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
@@ -399,6 +404,11 @@ public class View {
     }
 
     /**
+     * Constructor for Member implementations
+     */
+    private final CertToMember certToMember;
+
+    /**
      * Communications with other members
      */
     private final CommonCommunications<Fireflies, Service> comm;
@@ -412,11 +422,6 @@ public class View {
      * The analytical diameter of the graph of members
      */
     private final int diameter;
-
-    /**
-     * Constructor for Member implementations
-     */
-    private final Function<X509Certificate, Member> memberConstructor;
 
     private final FireflyMetrics metrics;
 
@@ -455,11 +460,10 @@ public class View {
      */
     private final ConcurrentMap<Digest, Participant> view = new ConcurrentHashMap<>();
 
-    public View(Digest id, Node node, Function<X509Certificate, Member> memberConstructor, Router communications,
-                FireflyMetrics metrics) {
+    public View(Digest id, Node node, CertToMember certToMember, Router communications, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
-        this.memberConstructor = memberConstructor;
+        this.certToMember = certToMember;
         this.comm = communications.create(node, id, service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -472,7 +476,18 @@ public class View {
     }
 
     public View(Digest id, Node node, Router communications, FireflyMetrics metrics) {
-        this(id, node, c -> new MemberImpl(c), communications, metrics);
+        this(id, node, new CertToMember() {
+
+            @Override
+            public Member from(X509Certificate cert) {
+                return new MemberImpl(cert);
+            }
+
+            @Override
+            public Digest idOf(X509Certificate cert) {
+                return Member.getMemberIdentifier(cert);
+            }
+        }, communications, metrics);
     }
 
     public Context<? extends Member> getContext() {
@@ -670,13 +685,13 @@ public class View {
      * @return the added member or the real member associated with this certificate
      */
     Participant add(CertWithHash cert) {
-        Digest id = Member.getMemberIdentifier(cert.certificate);
+        Digest id = certToMember.idOf(cert.certificate);
         Participant member = view.get(id);
         if (member != null) {
             update(member, cert);
             return member;
         }
-        member = new Participant(memberConstructor.apply(cert.certificate), cert.certificate, getParameters());
+        member = new Participant(certToMember.from(cert.certificate), cert.certificate, getParameters());
         log.trace("Adding member via cert: {}", member.getId());
         return add(member);
     }
@@ -740,7 +755,7 @@ public class View {
             if (!member.isFailed()) {
                 recover(member);
             }
-            log.trace("Adding member: {}, recovering: {}", member.getId(), !member.isFailed());
+            log.trace("Adding member: {}, recovering: {} on: {}", member.getId(), !member.isFailed(), node);
             return member;
         }
         return previous;
@@ -1214,9 +1229,9 @@ public class View {
         if (context.isOffline(member)) {
             context.activate(member);
             member.setFailed(false);
-            log.info("Recovering: {}", member.getId());
+            log.info("Recovering: {} on: {}", member.getId(), node);
         } else {
-            log.trace("Already active: {}", member.getId());
+            log.trace("Already active: {} on: {}", member.getId(), node);
         }
     }
 
@@ -1233,11 +1248,11 @@ public class View {
         assert member != null;
         assert successor != null;
         if (successor.getNote() == null) {
-            log.debug("Cannot redirect from {} to {} on ring {} as note is null", node, successor, ring);
+            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring, node);
             return Gossip.getDefaultInstance();
         }
 
-        log.debug("Redirecting from {} to {} on ring {}", node, successor, ring);
+        log.debug("Redirecting from {} to {} on ring {} on: {}", member, successor, ring, node);
 
         return Gossip.newBuilder()
                      .setRedirect(true)
@@ -1277,7 +1292,7 @@ public class View {
 
     void stopRebutalTimer(Participant m) {
         m.clearAccusations();
-        log.info("New note, epoch {}, clearing accusations on {}", m.getEpoch(), m.getId());
+        log.info("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node);
         FutureRebutal pending = pendingRebutals.remove(m.getId());
         if (pending != null) {
             scheduledRebutals.remove(pending);
@@ -1337,16 +1352,16 @@ public class View {
         try {
             return comm.apply(m, node);
         } catch (Throwable e) {
-            log.debug("error opening connection to {}: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage());
+            log.debug("error opening connection to {}: {} on: {}", m.getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage(), node);
         }
         return null;
     }
 
     private void redirect(Participant member, Gossip gossip, int ring) {
         if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
-            log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note",
-                     member, ring);
+            log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note on: {}",
+                     member, ring, node);
             return;
         }
         if (gossip.getAccusations().getUpdatesCount() > 0) {
@@ -1367,9 +1382,9 @@ public class View {
             NoteWrapper note = new NoteWrapper(signed, getDigestAlgorithm());
             add(note);
             gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, getDigestAlgorithm())));
-            log.debug("Redirected from {} to {} on ring {}", member, note.getId(), ring);
+            log.debug("Redirected from {} to {} on ring {} on: {}", member, note.getId(), ring, node);
         } else {
-            log.warn("Redirect certificate from {} on ring {} is null", member, ring);
+            log.warn("Redirect certificate from {} on ring {} is null on: {}", member, ring, node);
         }
     }
 }

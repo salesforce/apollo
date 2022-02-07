@@ -39,7 +39,8 @@ import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment.AttachmentImpl;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -275,12 +276,17 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom,
-                                                             Duration valid, List<CertExtension> extensions,
-                                                             SignatureAlgorithm algo) {
+        public Optional<CertificateWithPrivateKey> provision(Attachment validations, InetSocketAddress endpoint,
+                                                             Instant validFrom, Duration valid,
+                                                             List<CertExtension> extensions, SignatureAlgorithm algo) {
 
-            var lastEstablishing = getState().getLastEstablishmentEvent();
-            var keyCoordinates = new KeyCoordinates(lastEstablishing, 0);
+            var coords = getState().getLastEstablishmentEvent();
+            var lastEstablishing = kerl.getKeyEvent(coords);
+            if (lastEstablishing.isEmpty()) {
+                log.warn("Cannot get last establishing event for: {}", getIdentifier());
+                return Optional.empty();
+            }
+            var ewa = new EventWithAttachments(lastEstablishing.get(), validations);
             var signer = getSigner();
             if (signer.isEmpty()) {
                 log.warn("Cannot get signer for: {}", getIdentifier());
@@ -292,7 +298,7 @@ public class StereotomyImpl implements Stereotomy {
             var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
             var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", endpoint.getHostName(),
-                                                        endpoint.getPort(), qb64(keyCoordinates), qb64(signature)));
+                                                        endpoint.getPort(), ewa.toBase64(), qb64(signature)));
 
             return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
                                                                                    validFrom, validFrom.plus(valid),

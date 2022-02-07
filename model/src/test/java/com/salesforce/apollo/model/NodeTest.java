@@ -76,7 +76,7 @@ public class NodeTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
 
             members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),

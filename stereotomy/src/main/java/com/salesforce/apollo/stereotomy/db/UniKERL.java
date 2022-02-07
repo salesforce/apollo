@@ -42,6 +42,7 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
@@ -288,7 +289,7 @@ abstract public class UniKERL implements KERL {
                           })
                           .filter(s -> s != null)
                           .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
-        return Optional.of(new Attachment.AttachmentImpl(seals, receipts));
+        return Optional.of(new AttachmentImpl(seals, receipts));
     }
 
     @Override

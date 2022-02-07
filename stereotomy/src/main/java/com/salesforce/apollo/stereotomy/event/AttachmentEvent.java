@@ -21,45 +21,28 @@ import com.salesforce.apollo.stereotomy.EventCoordinates;
  */
 public interface AttachmentEvent {
     interface Attachment {
-        static class AttachmentImpl implements Attachment {
-            private final Map<Integer, JohnHancock> endorsements;
-            private final List<Seal>                seals;
 
-            public AttachmentImpl(List<Seal> seals) {
-                this.seals = seals;
-                this.endorsements = Collections.emptyMap();
-            }
-
-            public AttachmentImpl(List<Seal> seals, Map<Integer, JohnHancock> endorsements) {
-                this.seals = seals;
-                this.endorsements = endorsements;
-            }
-
-            public AttachmentImpl(Map<Integer, JohnHancock> endorsements) {
-                this.seals = Collections.emptyList();
-                this.endorsements = endorsements;
-            }
-
-            public AttachmentImpl(Seal... seals) {
-                this.seals = Arrays.asList(seals);
-                this.endorsements = Collections.emptyMap();
-            }
+        Attachment EMPTY = new Attachment() {
 
             @Override
             public Map<Integer, JohnHancock> endorsements() {
-                return endorsements;
+                return Collections.emptyMap();
             }
 
             @Override
             public List<Seal> seals() {
-                return seals;
+                return Collections.emptyList();
             }
+        };
 
-        }
-
-        static Attachment of(Seal... seals) {
-            return null;
-        }
+        static Attachment of(com.salesfoce.apollo.stereotomy.event.proto.Attachment attachment) {
+            return new AttachmentImpl(attachment.getSealsList().stream().map(s -> Seal.from(s)).toList(),
+                                      attachment.getEndorsementsMap()
+                                                .entrySet()
+                                                .stream()
+                                                .collect(Collectors.toMap(e -> e.getKey(),
+                                                                          e -> JohnHancock.of(e.getValue()))));
+        };
 
         Map<Integer, JohnHancock> endorsements();
 
@@ -74,6 +57,46 @@ public interface AttachmentEvent {
                                                                                e -> e.getValue().toSig())));
             return builder.build();
         }
+    }
+
+    static class AttachmentImpl implements Attachment {
+        private final Map<Integer, JohnHancock> endorsements;
+        private final List<Seal>                seals;
+
+        public AttachmentImpl(List<Seal> seals) {
+            this.seals = seals;
+            this.endorsements = Collections.emptyMap();
+        }
+
+        public AttachmentImpl(List<Seal> seals, Map<Integer, JohnHancock> endorsements) {
+            this.seals = seals;
+            this.endorsements = endorsements;
+        }
+
+        public AttachmentImpl(Map<Integer, JohnHancock> endorsements) {
+            this.seals = Collections.emptyList();
+            this.endorsements = endorsements;
+        }
+
+        public AttachmentImpl(Seal... seals) {
+            this.seals = Arrays.asList(seals);
+            this.endorsements = Collections.emptyMap();
+        }
+
+        @Override
+        public Map<Integer, JohnHancock> endorsements() {
+            return endorsements;
+        }
+
+        @Override
+        public List<Seal> seals() {
+            return seals;
+        }
+
+    }
+
+    static Attachment of(Seal... seals) {
+        return new AttachmentImpl(Arrays.asList(seals));
     }
 
     Attachment attachments();

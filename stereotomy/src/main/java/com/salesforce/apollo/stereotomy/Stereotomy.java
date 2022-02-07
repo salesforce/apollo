@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
-import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.keyCoordinates;
 
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
@@ -23,6 +22,9 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -35,17 +37,14 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  */
 public interface Stereotomy {
 
-    record Decoded(KeyCoordinates coordinates, InetSocketAddress endpoint, JohnHancock signature) {
+    record Decoded(EstablishmentEvent keyEvent, Attachment attachments, InetSocketAddress endpoint,
+                   JohnHancock signature) {
         public Identifier identifier() {
-            return coordinates.getEstablishmentEvent().getIdentifier();
+            return keyEvent.getIdentifier();
         }
 
-        public Optional<Verifier> verifier(Stereotomy controller) {
-            return controller.getVerifier(coordinates);
-        }
-
-        public Optional<Verifier> verifier(KEL kel) {
-            return kel.getVerifier(coordinates);
+        public Verifier verifier() {
+            return new Verifier.DefaultVerifier(keyEvent.getKeys());
         }
     }
 
@@ -100,8 +99,15 @@ public interface Stereotomy {
             getLogger().warn("Invalid certificate, missing \\\"DC\\\" of dn= {}", dn);
             return Optional.empty();
         }
-        return Optional.of(new Decoded(keyCoordinates(id), new InetSocketAddress(hostName, port),
-                                       signature(signature)));
+        var ewa = EventWithAttachments.fromBase64(id);
+        if (ewa.event() instanceof EstablishmentEvent ee) {
+            return Optional.of(new Decoded(ee, ewa.attachments(), new InetSocketAddress(hostName, port),
+                                           signature(signature)));
+        } else {
+            getLogger().warn("Invalid certificate, keyEvent is not an EstablishmentEvent: {}",
+                             ewa.event().getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     /**
