@@ -19,7 +19,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+import org.checkerframework.common.value.qual.IntRange;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -208,6 +210,28 @@ public class RingTest {
                     int t = Context.minMajority(pByz, card, epsilon, 3);
                     System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
                                                      pByz, card));
+                } catch (Exception e) {
+                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void incrementBreaksTwoThirdsMajority() {
+        double epsilon = 0.8;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
+
+        for (double pByz : probabilityByzantine) {
+            int tPrev = 0;
+            for (int card = 4; card < 10_000; card++) {
+                try {
+                    var t = Context.minMajority(pByz, card, epsilon, 3);
+                    if (t != tPrev && t % 2 > 0) {
+                        System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
+                                                         pByz, card));
+                    }
+                    tPrev = t;
                 } catch (Exception e) {
                     System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
                 }

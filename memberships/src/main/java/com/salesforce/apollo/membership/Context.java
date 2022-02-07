@@ -8,16 +8,13 @@ package com.salesforce.apollo.membership;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -31,52 +28,33 @@ import com.salesforce.apollo.crypto.Digest;
 /**
  * Provides a Context for Membership and is uniquely identified by a Digest;.
  * Members may be either active or offline. The Context maintains a number of
- * Rings (may be zero) that the Context provides for Firefly type ordering
- * operators. Each ring has a unique hash of each individual member, and thus
- * each ring has a different ring order of the same membership set. Hashes for
- * Context level operators include the ID of the ring. Hashes computed for each
- * member, per ring include the ID of the enclosing Context.
+ * Rings (may be zero) that the Context provides for Firefly type consistent
+ * hash ring ordering operators. Each ring has a unique hash of each individual
+ * member, and thus each ring has a different ring order of the same membership
+ * set. Hashes for Context level operators include the ID of the ring. Hashes
+ * computed for each member, per ring include the ID of the enclosing Context.
  * 
  * @author hal.hildebrand
  *
  */
 public class Context<T extends Member> {
 
-    public static class Counter {
-        private Integer       current = 0;
-        private List<Integer> indices;
-
-        public Counter(Set<Integer> indices) {
-            this.indices = new ArrayList<>(indices);
-            Collections.sort(this.indices);
-        }
-
-        public boolean accept() {
-            boolean accepted = indices.isEmpty() ? false : current.equals(indices.get(0));
-            if (accepted) {
-                indices = indices.subList(1, indices.size());
-            }
-            current = current + 1;
-            return accepted;
-        }
-    }
-
-    public interface MembershipListener<T> {
+    public interface MembershipListener<T extends Member> {
 
         /**
-         * A member has failed
+         * A new member has recovered and is now active
          * 
          * @param member
          */
-        default void fail(Member member) {
+        default void active(T member) {
         };
 
         /**
-         * A new member has recovered and is now live
+         * A member is offline
          * 
          * @param member
          */
-        default void recover(Member member) {
+        default void offline(T member) {
         };
     }
 
@@ -90,27 +68,16 @@ public class Context<T extends Member> {
             return active.get();
         }
 
-        private void offline() {
-            active.set(false);
+        private boolean offline() {
+            return active.compareAndExchange(true, false);
         }
 
-        private void activate() {
-            active.set(true);
+        private boolean activate() {
+            return active.compareAndExchange(false, true);
         }
     }
 
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE = ThreadLocal.withInitial(() -> {
-        try {
-            return MessageDigest.getInstance(Context.SHA_256);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    });
-
-    public static final String SHA_256 = "sha-256";
-
-    private static final Logger log = LoggerFactory.getLogger(Context.class);
-
+    private static final Logger log                = LoggerFactory.getLogger(Context.class);
     private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     public static int minMajority(double pByz, int cardinality) {
@@ -155,12 +122,12 @@ public class Context<T extends Member> {
         return minMajority(pByz, cardinality, 0.99, bias);
     }
 
-    private final int                                   bias;
-    private final Digest                                id;
-    private final ConcurrentHashMap<Digest, Tracked<T>> members             = new ConcurrentHashMap<>();
-    private final List<MembershipListener<T>>           membershipListeners = new CopyOnWriteArrayList<>();
-    private final double                                pByz;
-    private final List<Ring<T>>                         rings               = new ArrayList<>();
+    private final int                              bias;
+    private final Digest                           id;
+    private final Map<Digest, Tracked<T>>          members             = new ConcurrentHashMap<>();
+    private final Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
+    private final double                           pByz;
+    private final List<Ring<T>>                    rings               = new ArrayList<>();
 
     public Context(Digest id) {
         this(id, 1);
@@ -222,15 +189,31 @@ public class Context<T extends Member> {
      * Mark a member as active in the context
      */
     public void activate(T m) {
-        tracking(m).activate();
+        if (tracking(m).activate()) {
+            membershipListeners.values().stream().forEach(l -> {
+                try {
+                    l.active(m);
+                } catch (Throwable e) {
+                    log.error("error recoving member in listener: " + l, e);
+                }
+            });
+        }
+    }
 
-        membershipListeners.stream().forEach(l -> {
-            try {
-                l.recover(m);
-            } catch (Throwable e) {
-                log.error("error recoving member in listener: " + l, e);
-            }
-        });
+    /**
+     * Mark a member as active in the context
+     */
+    public void activateIfMember(T m) {
+        var member = members.get(m.getId());
+        if (member != null && member.activate()) {
+            membershipListeners.values().stream().forEach(l -> {
+                try {
+                    l.active(m);
+                } catch (Throwable e) {
+                    log.error("error recoving member in listener: " + l, e);
+                }
+            });
+        }
     }
 
     public int activeCount() {
@@ -262,6 +245,20 @@ public class Context<T extends Member> {
             ring.clear();
         }
         members.clear();
+    }
+
+    public UUID dependUpon(Context<T> foundation) {
+        return foundation.register(new MembershipListener<T>() {
+            @Override
+            public void active(T member) {
+                activateIfMember(member);
+            }
+
+            @Override
+            public void offline(T member) {
+                offlineIfMember(member);
+            }
+        });
     }
 
     /**
@@ -381,18 +378,35 @@ public class Context<T extends Member> {
      * Take a member offline
      */
     public void offline(T m) {
-        tracking(m).offline();
-        membershipListeners.stream().forEach(l -> {
-            try {
-                l.fail(m);
-            } catch (Throwable e) {
-                log.error("error sending fail to listener: " + l, e);
-            }
-        });
+        if (tracking(m).offline()) {
+            membershipListeners.values().forEach(l -> {
+                try {
+                    l.offline(m);
+                } catch (Throwable e) {
+                    log.error("error sending fail to listener: " + l, e);
+                }
+            });
+        }
     }
 
     public int offlineCount() {
         return (int) members.values().stream().filter(e -> !e.isActive()).count();
+    }
+
+    /**
+     * Take a member offline if already a member
+     */
+    public void offlineIfMember(T m) {
+        var member = members.get(m.getId());
+        if (member != null && member.offline()) {
+            membershipListeners.values().forEach(l -> {
+                try {
+                    l.offline(m);
+                } catch (Throwable e) {
+                    log.error("error offlining member in listener: " + l, e);
+                }
+            });
+        }
     }
 
     /**
@@ -439,8 +453,10 @@ public class Context<T extends Member> {
         return predecessors;
     }
 
-    public void register(MembershipListener<T> listener) {
-        membershipListeners.add(listener);
+    public UUID register(MembershipListener<T> listener) {
+        var uuid = UUID.randomUUID();
+        membershipListeners.put(uuid, listener);
+        return uuid;
     }
 
     public void remove(Collection<T> members) {

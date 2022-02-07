@@ -14,6 +14,9 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
+            <column name="state" type="VARCHAR(7)">
+                <!-- <constraints nullable="false" /> -->
+            </column>
         </createTable>
 
         <addForeignKeyConstraint
@@ -22,6 +25,11 @@
             constraintName="member_identifier_fk"
             referencedTableName="identifier" referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
+
+        <sql>alter table apollo_kernel.member add constraint
+            member_state_validate check (state in ('offline', 'active',
+            'joining', 'leaving'))
+        </sql>
 
     </changeSet>
 </databaseChangeLog>
