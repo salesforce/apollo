@@ -44,6 +44,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -142,7 +143,7 @@ public class RbcTest {
                                                                               cert.getX509Certificate().getPublicKey()))
                                            .collect(Collectors.toList());
 
-        Context<Member> context = new Context<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
+        Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin(), 0.01, members.size());
         parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 

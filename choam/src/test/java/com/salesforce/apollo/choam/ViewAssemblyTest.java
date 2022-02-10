@@ -48,6 +48,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -75,7 +76,7 @@ public class ViewAssemblyTest {
                                         .map(cpk -> new SigningMemberImpl(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new Context<>(viewId, 0.1, members.size(), 3);
+        Context<Member> base = new ContextImpl<>(viewId, 0.1, members.size(), 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 

@@ -24,12 +24,12 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
-import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
@@ -71,7 +71,7 @@ public class Emulator {
         params = Parameters.newBuilder()
                            .build(RuntimeParameters.newBuilder()
                                                    .setMember(new SigningMemberImpl(Utils.getMember(0)))
-                                                   .setContext(new Context<>(base, 0.01, 5, 3))
+                                                   .setContext(new ContextImpl<>(base, 0.01, 5, 3))
                                                    .build());
         var algorithm = base.getAlgorithm();
         Session session = new Session(params, st -> {

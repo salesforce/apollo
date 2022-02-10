@@ -61,6 +61,7 @@ import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
 import com.salesforce.apollo.fireflies.communications.Fireflies;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.impl.MemberImpl;
@@ -468,7 +469,7 @@ public class View {
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
-        context = new Context<>(id, getParameters().rings);
+        context = new ContextImpl<>(id, getParameters().rings);
         diameter = context.diameter(getParameters().cardinality);
         assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         add(node);

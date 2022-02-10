@@ -83,6 +83,14 @@ import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderServ
  */
 public class Node {
 
+    public enum MemberState {
+        ACTIVE, JOINING, LEAVING, OFFLINE;
+
+        public String toColumn() {
+            return name().toLowerCase();
+        }
+    }
+
     private class ProtoBinder implements BinderService {
 
         @Override

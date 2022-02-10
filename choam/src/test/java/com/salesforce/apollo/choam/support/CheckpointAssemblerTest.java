@@ -54,6 +54,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -109,7 +110,7 @@ public class CheckpointAssemblerTest {
             gos.close();
         }
 
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin());
         List<SigningMember> members = certs.values()
                                            .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),

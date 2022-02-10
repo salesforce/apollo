@@ -43,6 +43,7 @@ import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.creator.CreatorTest;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -96,7 +97,7 @@ public class EtherealTest {
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
                                                .toList();
 
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
         for (Member m : members) {
             context.activate(m);
         }

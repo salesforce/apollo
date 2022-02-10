@@ -31,6 +31,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 
 import io.grpc.Status;
@@ -53,8 +54,8 @@ public interface Committee {
      * base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new Context<>(hash, baseContext.getProbabilityByzantine(), baseContext.getRingCount(),
-                                                baseContext.getBias());
+        Context<Member> newView = new ContextImpl<>(hash, baseContext.getProbabilityByzantine(),
+                                                    baseContext.getRingCount(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> {
             if (baseContext.isActive(e)) {

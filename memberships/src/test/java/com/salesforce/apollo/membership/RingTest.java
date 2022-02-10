@@ -19,9 +19,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-import org.checkerframework.common.value.qual.IntRange;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new Context<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
+        context = new ContextImpl<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -129,7 +127,7 @@ public class RingTest {
 
     @Test
     public void noRing() {
-        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
+        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin());
         assertEquals(1, context.getRingCount());
         members.forEach(m -> context.activate(m));
         assertEquals(MEMBER_COUNT, context.getActive().size());

@@ -52,9 +52,14 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
                          Digest genesisViewId, int checkpointBlockSize, DigestAlgorithm digestAlgorithm,
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
-                         int regenerationCycles, Duration synchronizeTimeout, int toleranceLevel,
-                         BootstrapParameters bootstrap, ProducerParameters producer, int txnPermits,
-                         ExponentialBackoff.Builder<Status> clientBackoff, MvStoreBuilder mvBuilder) {
+                         int regenerationCycles, Duration synchronizeTimeout, BootstrapParameters bootstrap,
+                         ProducerParameters producer, int txnPermits, ExponentialBackoff.Builder<Status> clientBackoff,
+                         MvStoreBuilder mvBuilder) {
+
+    public int toleranceLevel() {
+        final double n = runtime.context.getRingCount();
+        return Dag.minimalQuorum((short) n, 3);
+    }
 
     public static class MvStoreBuilder {
         private int     autoCommitBufferSize = -1;
@@ -417,12 +422,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
-            final double n = runtime.context.getRingCount();
-            var toleranceLevel = Dag.minimalQuorum((short) n, 3);
             return new Parameters(runtime, combineParams, gossipDuration, maxCheckpointSegments, submitTimeout,
                                   genesisViewId, checkpointBlockSize, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, synchronizeDuration, regenerationCycles, synchronizeTimeout,
-                                  toleranceLevel, bootstrap, producer, txnPermits, clientBackoff, mvBuilder);
+                                  bootstrap, producer, txnPermits, clientBackoff, mvBuilder);
         }
 
         public Builder clone() {
