@@ -107,7 +107,7 @@ public class ViewAssemblyTest {
                 }
             });
         });
-        CountDownLatch complete = new CountDownLatch(committee.cardinality());
+        CountDownLatch complete = new CountDownLatch(committee.size());
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream()
                                                     .collect(Collectors.toMap(m -> m,
@@ -167,7 +167,7 @@ public class ViewAssemblyTest {
             recons.values().forEach(r -> r.assembled());
 
             complete.await(20, TimeUnit.SECONDS);
-            assertEquals(committee.cardinality(), published.size());
+            assertEquals(committee.size(), published.size());
         } finally {
             recons.values().forEach(r -> r.stop());
             communications.values().forEach(r -> r.close());

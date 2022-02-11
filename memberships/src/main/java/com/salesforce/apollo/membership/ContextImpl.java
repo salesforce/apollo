@@ -53,43 +53,12 @@ public class ContextImpl<T extends Member> implements Context<T> {
         this(id, 1);
     }
 
-    /**
-     * Construct a context with the given id and cardinality where the number of
-     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
-     * calculated by the minMajority of the input probability of any member being
-     * byzantine and the epsilon indicating how close to probability 1 that a member
-     * will not be unfortunate
-     * 
-     * @param id
-     * @param pByz
-     * @param cardinality
-     */
-    public ContextImpl(Digest id, double pByz, int cardinality) {
-        this(pByz, 2, id, minMajority(pByz, cardinality) * 2 + 1);
-    }
-
-    /**
-     * Construct a context with the given id and cardinality where the number of
-     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
-     * calculated by the minMajority of the input probability of any member being
-     * byzantine and the epsilon indicating how close to probability 1 that a member
-     * will not be unfortunate
-     * 
-     * @param id
-     * @param pByz
-     * @param cardinality
-     * @param epsilon
-     */
-    public ContextImpl(Digest id, double pByz, int cardinality, double epsilon, int bias) {
-        this(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
-    }
-
     public ContextImpl(Digest id, double pByz, int cardinality, int bias) {
         this(pByz, bias, id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
     }
 
     public ContextImpl(Digest id, int r) {
-        this(0.0, 2, id, r);
+        this(0.01, 2, id, r);
     }
 
     public ContextImpl(double pbyz, int bias, Digest id, int r) {
@@ -146,7 +115,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public List<T> activeMembers() {
-        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member()).toList();
+        return members.values().stream().filter(e -> e.isActive()).map(e -> (T) e.member()).toList();
     }
 
     @Override
@@ -162,11 +131,6 @@ public class ContextImpl<T extends Member> implements Context<T> {
     @Override
     public Stream<T> allMembers() {
         return members.values().stream().map(e -> e.member());
-    }
-
-    @Override
-    public int cardinality() {
-        return members.size();
     }
 
     @Override
@@ -198,7 +162,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public int diameter() {
-        return diameter(cardinality());
+        return diameter(size());
     }
 
     /**
@@ -475,6 +439,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
         return rings.get(entropy.nextInt(rings.size()))
                     .stream()
                     .collect(new ReservoirSampler<T>(excluded, range, entropy));
+    }
+
+    @Override
+    public int size() {
+        return members.size();
     }
 
     /**

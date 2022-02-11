@@ -71,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new ContextImpl<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
+        context =  new ContextImpl<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -217,7 +217,7 @@ public class RingTest {
 
     @Test
     public void incrementBreaksTwoThirdsMajority() {
-        double epsilon = 0.8;
+        double epsilon = 0.01;
         double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
 
         for (double pByz : probabilityByzantine) {

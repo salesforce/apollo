@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 import org.apache.commons.math3.random.BitsStreamGenerator;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * Provides a Context for Membership and is uniquely identified by a Digest;.
@@ -25,12 +26,68 @@ import com.salesforce.apollo.crypto.Digest;
  * hash ring ordering operators. Each ring has a unique hash of each individual
  * member, and thus each ring has a different ring order of the same membership
  * set. Hashes for Context level operators include the ID of the ring. Hashes
- * computed for each member, per ring include the ID of the enclosing Context.
+ * computed and cached for each member, per ring include the ID of the enclosing
+ * Context.
  * 
  * @author hal.hildebrand
  *
  */
 public interface Context<T extends Member> {
+
+    abstract class Builder<Z extends Member, Q extends Context<Z>> {
+        protected int    bias    = 2;
+        protected int    cardinality;
+        protected double epsilon = 0.01;
+        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
+        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
+
+        public abstract Q build();
+
+        public int getBias() {
+            return bias;
+        }
+
+        public int getCardinality() {
+            return cardinality;
+        }
+
+        public double getEpsilon() {
+            return epsilon;
+        }
+
+        public Digest getId() {
+            return id;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder<Z, Q> setBias(int bias) {
+            this.bias = bias;
+            return this;
+        }
+
+        public Builder<Z, Q> setCardinality(int cardinality) {
+            this.cardinality = cardinality;
+            return this;
+        }
+
+        public Builder<Z, Q> setEpsilon(double epsilon) {
+            this.epsilon = epsilon;
+            return this;
+        }
+
+        public Builder<Z, Q> setId(Digest id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder<Z, Q> setpByz(double pByz) {
+            this.pByz = pByz;
+            return this;
+        }
+    }
 
     interface MembershipListener<T extends Member> {
 
@@ -53,6 +110,7 @@ public interface Context<T extends Member> {
 
     record Tracked<M> (M member, Digest[] hashes, AtomicBoolean active) {
 
+        @Override
         public String toString() {
             return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
         }
@@ -118,6 +176,19 @@ public interface Context<T extends Member> {
         return minMajority(pByz, cardinality, 0.99, bias);
     }
 
+    static <Z extends Member, Q extends Context<Z>> Builder<Z, Q> newBuilder() {
+        return new Builder<Z, Q>() {
+
+            @Override
+            public Q build() {
+                @SuppressWarnings("unchecked")
+                var ctx = (Q) new ContextImpl<Z>(pByz, bias, id,
+                                                 minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
+                return ctx;
+            }
+        };
+    }
+
     /**
      * Activate the supplied collection of members
      */
@@ -157,11 +228,6 @@ public interface Context<T extends Member> {
      * Answer a stream over all members, offline and active
      */
     Stream<T> allMembers();
-
-    /**
-     * Answer the maximum number of members the context is parameterized for
-     */
-    int cardinality();
 
     /**
      * Clear all members from the receiver
@@ -226,6 +292,8 @@ public interface Context<T extends Member> {
      * Answer the number of rings in the context
      */
     int getRingCount();
+
+    Digest hashFor(T m, int index);
 
     /**
      * Answer true if the member who's id is active
@@ -335,6 +403,11 @@ public interface Context<T extends Member> {
     <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
 
     /**
+     * Answer the total count of active and offline members of this context
+     */
+    int size();
+
+    /**
      * @return the list of successors to the key on each ring
      */
     List<T> successors(Digest key);
@@ -367,7 +440,5 @@ public interface Context<T extends Member> {
      * context has been constructed from FF parameters
      */
     int toleranceLevel();
-
-    Digest hashFor(T m, int index);
 
 }
