@@ -929,6 +929,13 @@ public class View {
                 } else {
                     log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
                 }
+                try {
+                    link.close();
+                } catch (IOException e1) {
+                }
+                if (completion != null) {
+                    completion.run();
+                }
                 return;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
@@ -940,6 +947,13 @@ public class View {
                     }
                 } else {
                     log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e.getCause());
+                }
+                try {
+                    link.close();
+                } catch (IOException e1) {
+                }
+                if (completion != null) {
+                    completion.run();
                 }
                 return;
             } catch (Throwable e) {
