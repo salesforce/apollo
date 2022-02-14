@@ -21,7 +21,7 @@ public class FirefliesParameters {
         public int                   cardinality;
         public double                probabilityByzantine = 0.10;
         private CertificateValidator certificateValidator;
-        private double               falsePositiveRate    = 0.125;
+        private double               falsePositiveRate    = 0.0125;
         private DigestAlgorithm      hashAlgorithm        = DigestAlgorithm.DEFAULT;
 
         public FirefliesParameters build() {

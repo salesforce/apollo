@@ -37,7 +37,9 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
+import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -78,7 +80,6 @@ public class FireFliesTest {
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase.toFile());
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
@@ -96,10 +97,12 @@ public class FireFliesTest {
 
         }
 
-        members.keySet().forEach(m -> context.activate(m));
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
+        var foundations = new HashMap<Member, Context<Participant>>();
+        
         members.forEach((member, id) -> {
+            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), 0.2, CARDINALITY, 3);
             AtomicInteger execC = new AtomicInteger();
 
             var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
@@ -110,8 +113,9 @@ public class FireFliesTest {
                                                   return thread;
                                               }));
             params.getProducer().ethereal().setSigner(member);
-            var exec = Router.createFjPool();
-            var node = new Node(id, params,
+            var exec = Router.createFjPool(); 
+            var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            var node = new Node(foundation, id, params,
                                 RuntimeParameters.newBuilder()
                                                  .setScheduler(scheduler)
                                                  .setMember(member)
@@ -119,6 +123,7 @@ public class FireFliesTest {
                                                  .setExec(exec)
                                                  .setCommunications(localRouter));
             nodes.add(node);
+            foundations.put(member, foundation);
             routers.put(node, localRouter);
             localRouter.start();
         });
@@ -147,7 +152,7 @@ public class FireFliesTest {
                                    SignatureAlgorithm.DEFAULT)
                         .get();
             var node = new com.salesforce.apollo.fireflies.Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(DigestAlgorithm.DEFAULT.getOrigin(), node, certToMember, routers.get(m), null));
+            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m), null));
         });
     }
 
@@ -159,7 +164,7 @@ public class FireFliesTest {
              .forEach(v -> v.getService()
                             .start(Duration.ofMillis(10),
                                    nodes.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
-        Thread.sleep(5000);
+        Thread.sleep(30_000);
     }
 
     private Builder params() {

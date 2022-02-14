@@ -33,11 +33,11 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Service;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -111,7 +111,8 @@ public class SuccessorTest {
             LocalRouter comms = new LocalRouter(prefix, node, builder, executor);
             communications.add(comms);
             comms.start();
-            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            return new View(context, node, comms, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
@@ -126,8 +127,8 @@ public class SuccessorTest {
             });
 
             for (View view : views.values()) {
-                for (Participant m : view.getView().values()) {
-                    assertTrue(m.getEpoch() > 0);
+                for (Participant m : view.getContext().allMembers().toList()) {
+                    assertTrue(m.getEpoch() > 0, "Participant epoch <= 0: " + m);
                 }
                 for (int r = 0; r < parameters.rings; r++) {
                     Ring<Participant> ring = view.getRing(r);
@@ -143,18 +144,24 @@ public class SuccessorTest {
             Field lastRing = Service.class.getDeclaredField("lastRing");
             lastRing.setAccessible(true);
             int ring = (lastRing.getInt(test.getService()) + 1) % test.getRings().size();
-            Participant successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+            Participant successor = test.getRing(ring).successor(test.getNode(), m -> test.getContext().isActive(m));
             System.out.println("ring: " + ring + " successor: " + successor);
-            assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-            assertTrue(successor.isLive());
+            assertEquals(successor,
+                         views.get(successor)
+                              .getRing(ring)
+                              .successor(test.getNode(), m -> test.getContext().isActive(m)));
+            assertTrue(test.getContext().isActive(successor));
             test.getService().gossip(() -> {
             });
 
             ring = (ring + 1) % test.getRings().size();
-            successor = test.getRing(ring).successor(test.getNode(), m -> !m.isFailed());
+            successor = test.getRing(ring).successor(test.getNode(), m -> test.getContext().isActive(m));
             System.out.println("ring: " + ring + " successor: " + successor);
-            assertEquals(successor, views.get(successor).getRing(ring).successor(test.getNode(), m -> !m.isFailed()));
-            assertTrue(successor.isLive());
+            assertEquals(successor,
+                         views.get(successor)
+                              .getRing(ring)
+                              .successor(test.getNode(), m -> test.getContext().isActive(m)));
+            assertTrue(test.getContext().isActive(successor));
             test.getService().gossip(null);
         } finally {
             views.values().forEach(e -> e.getService().stop());

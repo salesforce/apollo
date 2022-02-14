@@ -59,6 +59,8 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -88,6 +90,18 @@ public class Node {
 
         public String toColumn() {
             return name().toLowerCase();
+        }
+    }
+
+    private class Listener<T extends Member> implements MembershipListener<T> {
+        @Override
+        public void active(T member) {
+            memberActive(member);
+        }
+
+        @Override
+        public void offline(T member) {
+            memberOffline(member);
         }
     }
 
@@ -227,26 +241,29 @@ public class Node {
         return dir;
     }
 
-    private final CHOAM choam;
-
+    private final CHOAM                                          choam;
     private final KERL                                           commonKERL;
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
     private final Mutator                                        mutator;
     private final Oracle                                         oracle;
+    @SuppressWarnings("unused")
+    private final Context<? extends Member>                      overlay;
     private final Parameters                                     params;
     private final SqlStateMachine                                sqlStateMachine;
 
-    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, Builder runtime) {
-        this(id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
+    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+                Parameters.Builder params, Builder runtime) {
+        this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
     }
 
-    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, Path checkpointBaseDir,
-                RuntimeParameters.Builder runtime) {
-        this(id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
+    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+                Parameters.Builder params, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+        this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
     }
 
-    public Node(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
-                Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+                Parameters.Builder params, String dbURL, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+        this.overlay = overlay;
         params = params.clone();
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
@@ -273,6 +290,7 @@ public class Node {
                                         params.getSubmitTimeout(), runtime.getExec());
         this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(), runtime.getExec());
+        overlay.register(new Listener<>());
     }
 
     /**
@@ -374,6 +392,16 @@ public class Node {
     // is validated as a side effect and if invalid, NULL is returned.
     private List<Transaction> manifest(Join join) {
         return join.getKerl().getEventsList().stream().map(ke -> transactionOf(ke)).toList();
+    }
+
+    private void memberActive(Member member) {
+        log.warn("Member active: {} on: {}", member, params.member());
+        params.context().activate(member);
+    }
+
+    private void memberOffline(Member member) {
+        log.warn("Member offline: {} on: {}", member, params.member());
+        params.context().offline(member);
     }
 
     private Transaction transactionOf(KeyEvent ke) {

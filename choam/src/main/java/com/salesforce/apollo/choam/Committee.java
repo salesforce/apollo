@@ -64,7 +64,6 @@ public interface Committee {
                 newView.offline(e);
             }
         });
-        assert newView.getActive().size() + newView.getOffline().size() == baseContext.getRingCount();
         return newView;
     }
 
@@ -79,8 +78,6 @@ public interface Committee {
             }
             return successors.add(m);
         });
-        assert successors.size() == baseContext.getRingCount() : "Invalid successors: " + successors.size() + " != "
-        + baseContext.getRingCount();
         return successors;
     }
 

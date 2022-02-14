@@ -9,7 +9,6 @@ package com.salesforce.apollo.fireflies;
 import java.io.InputStream;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,15 +39,10 @@ import com.salesforce.apollo.membership.Member;
 public class Participant implements Member {
     private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
-    protected final DigestAlgorithm                     hashAlgorithm;
     /**
-     * The member's latest note
+     * Certificate
      */
-    protected volatile NoteWrapper                      note;
-    /**
-     * The valid accusatons for this member
-     */
-    protected final Map<Integer, AccusationWrapper>     validAccusations = new ConcurrentHashMap<>();
+    protected volatile X509Certificate                  certificate;
     /**
      * The hash of the member's certificate
      */
@@ -57,16 +51,22 @@ public class Participant implements Member {
      * The DER serialized certificate
      */
     protected final byte[]                              derEncodedCertificate;
+    protected final AtomicReference<EncodedCertificate> encoded = new AtomicReference<>();
+    protected final DigestAlgorithm                     hashAlgorithm;
     /**
-     * Certificate
+     * The member's latest note
      */
-    protected volatile X509Certificate                  certificate;
+    protected volatile NoteWrapper                      note;
+
     /**
-     * Instant when a member failed, null if not failed
+     * The valid accusatons for this member
      */
-    private volatile Instant                            failedAt         = Instant.now();
-    private final Member                                wrapped;
-    protected final AtomicReference<EncodedCertificate> encoded          = new AtomicReference<>();
+    protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
+    private final Member                            wrapped;
+
+    public Participant(Member wrapped, FirefliesParameters parameters) {
+        this(wrapped, wrapped.getCertificate(), parameters);
+    }
 
     public Participant(Member wrapped, X509Certificate certificate, FirefliesParameters parameters) {
         assert wrapped != null;
@@ -79,10 +79,6 @@ public class Participant implements Member {
             throw new IllegalArgumentException("Cannot encode certifiate for member: " + getId(), e);
         }
         this.certificateHash = DigestAlgorithm.DEFAULT.digest(derEncodedCertificate);
-    }
-
-    public Participant(Member wrapped, FirefliesParameters parameters) {
-        this(wrapped, wrapped.getCertificate(), parameters);
     }
 
     @Override
@@ -105,13 +101,6 @@ public class Participant implements Member {
         return certificate;
     }
 
-    /**
-     * @return the Instant this member was determined as failing
-     */
-    public Instant getFailedAt() {
-        return failedAt;
-    }
-
     @Override
     public Digest getId() {
         return wrapped.getId();
@@ -120,15 +109,6 @@ public class Participant implements Member {
     @Override
     public int hashCode() {
         return wrapped.hashCode();
-    }
-
-    public boolean isFailed() {
-        Instant current = failedAt;
-        return current != null;
-    }
-
-    public boolean isLive() {
-        return !isFailed();
     }
 
     @Override
@@ -235,15 +215,10 @@ public class Participant implements Member {
     }
 
     void reset() {
-        failedAt = Instant.now();
         note = null;
         encoded.set(null);
         validAccusations.clear();
         log.trace("Reset {}", getId());
-    }
-
-    void setFailed(boolean failed) {
-        this.failedAt = failed ? Instant.now() : null;
     }
 
     void setNote(NoteWrapper next) {
@@ -251,8 +226,8 @@ public class Participant implements Member {
         if (current != null) {
             long nextEpoch = next.getEpoch();
             long currentEpoch = current.getEpoch();
-            if (currentEpoch < nextEpoch - 1) {
-                log.info("discarding note for {} with wrong previous epoch {} : {}" + getId(), nextEpoch, currentEpoch);
+            if (currentEpoch > 0 && currentEpoch < nextEpoch - 1) {
+                log.info("discarding note for {} with wrong previous epoch {} : {}", getId(), nextEpoch, currentEpoch);
                 return;
             }
         }
@@ -263,7 +238,6 @@ public class Participant implements Member {
                                       .setHash(certificateHash.toDigeste())
                                       .setContent(ByteString.copyFrom(derEncodedCertificate))
                                       .build());
-        failedAt = null;
         clearAccusations();
     }
 }

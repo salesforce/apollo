@@ -100,7 +100,7 @@ public class NodeTest {
             routers.add(localRouter);
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
-            nodes.add(new Node(id, params,
+            nodes.add(new Node(context, id, params,
                                RuntimeParameters.newBuilder()
                                                 .setScheduler(scheduler)
                                                 .setMember(member)

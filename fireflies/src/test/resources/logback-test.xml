@@ -10,7 +10,7 @@
         <encoder>
             <Pattern>
                 %d{mm:ss.SSS} [%thread] %-5level %logger{0}
-                - %msg%n
+  - %msg%n
             </Pattern>
         </encoder>
     </appender>

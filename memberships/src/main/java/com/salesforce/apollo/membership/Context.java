@@ -15,6 +15,8 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -34,14 +36,14 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
  */
 public interface Context<T extends Member> {
 
-    abstract class Builder<Z extends Member, Q extends Context<Z>> {
+    abstract class Builder<Z extends Member> {
         protected int    bias    = 2;
         protected int    cardinality;
         protected double epsilon = 0.01;
         protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
         protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
 
-        public abstract Q build();
+        public abstract Context<Z> build();
 
         public int getBias() {
             return bias;
@@ -63,27 +65,27 @@ public interface Context<T extends Member> {
             return pByz;
         }
 
-        public Builder<Z, Q> setBias(int bias) {
+        public Builder<Z> setBias(int bias) {
             this.bias = bias;
             return this;
         }
 
-        public Builder<Z, Q> setCardinality(int cardinality) {
+        public Builder<Z> setCardinality(int cardinality) {
             this.cardinality = cardinality;
             return this;
         }
 
-        public Builder<Z, Q> setEpsilon(double epsilon) {
+        public Builder<Z> setEpsilon(double epsilon) {
             this.epsilon = epsilon;
             return this;
         }
 
-        public Builder<Z, Q> setId(Digest id) {
+        public Builder<Z> setId(Digest id) {
             this.id = id;
             return this;
         }
 
-        public Builder<Z, Q> setpByz(double pByz) {
+        public Builder<Z> setpByz(double pByz) {
             this.pByz = pByz;
             return this;
         }
@@ -108,27 +110,49 @@ public interface Context<T extends Member> {
         };
     }
 
-    record Tracked<M> (M member, Digest[] hashes, AtomicBoolean active) {
+    public static class Tracked<M extends Member> {
 
-        @Override
-        public String toString() {
-            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
+        private static final Logger log    = LoggerFactory.getLogger(Tracked.class);
+        private final AtomicBoolean active = new AtomicBoolean(false);
+        private final Digest[]      hashes;
+        private final M             member;
+
+        public Tracked(M member, Digest[] hashes) {
+            this.member = member;
+            this.hashes = hashes;
+        }
+
+        public boolean activate() {
+            var activated = active.compareAndExchange(false, true);
+            if (activated) {
+                log.trace("Activated: {}", member.getId());
+            }
+            return activated;
+        }
+
+        public Digest hash(int index) {
+            return hashes[index];
         }
 
         public boolean isActive() {
             return active.get();
         }
 
+        public M member() {
+            return member;
+        }
+
         public boolean offline() {
-            return active.compareAndExchange(true, false);
+            var offlined = active.compareAndExchange(true, false);
+            if (offlined) {
+                log.trace("Offlined: {}", member.getId());
+            }
+            return offlined;
         }
 
-        public boolean activate() {
-            return active.compareAndExchange(false, true);
-        }
-
-        public Digest hash(int index) {
-            return hashes[index];
+        @Override
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
         }
     }
 
@@ -176,15 +200,12 @@ public interface Context<T extends Member> {
         return minMajority(pByz, cardinality, 0.99, bias);
     }
 
-    static <Z extends Member, Q extends Context<Z>> Builder<Z, Q> newBuilder() {
-        return new Builder<Z, Q>() {
+    static <Z extends Member> Builder<Z> newBuilder() {
+        return new Builder<Z>() {
 
             @Override
-            public Q build() {
-                @SuppressWarnings("unchecked")
-                var ctx = (Q) new ContextImpl<Z>(pByz, bias, id,
-                                                 minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
-                return ctx;
+            public Context<Z> build() {
+                return new ContextImpl<Z>(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
             }
         };
     }
@@ -197,12 +218,12 @@ public interface Context<T extends Member> {
     /**
      * Mark a member as active in the context
      */
-    void activate(T m);
+    boolean activate(T m);
 
     /**
      * Mark a member as active in the context
      */
-    void activateIfMember(T m);
+    boolean activateIfMember(T m);
 
     /**
      * Answer the count of active members

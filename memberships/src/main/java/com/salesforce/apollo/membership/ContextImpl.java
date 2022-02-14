@@ -79,7 +79,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      * Mark a member as active in the context
      */
     @Override
-    public void activate(T m) {
+    public boolean activate(T m) {
         if (tracking(m).activate()) {
             membershipListeners.values().stream().forEach(l -> {
                 try {
@@ -88,14 +88,16 @@ public class ContextImpl<T extends Member> implements Context<T> {
                     log.error("error recoving member in listener: " + l, e);
                 }
             });
+            return true;
         }
+        return false;
     }
 
     /**
      * Mark a member as active in the context
      */
     @Override
-    public void activateIfMember(T m) {
+    public boolean activateIfMember(T m) {
         var member = members.get(m.getId());
         if (member != null && member.activate()) {
             membershipListeners.values().stream().forEach(l -> {
@@ -105,7 +107,9 @@ public class ContextImpl<T extends Member> implements Context<T> {
                     log.error("error recoving member in listener: " + l, e);
                 }
             });
+            return true;
         }
+        return false;
     }
 
     @Override
@@ -243,7 +247,8 @@ public class ContextImpl<T extends Member> implements Context<T> {
     public Digest hashFor(T m, int index) {
         var tracked = members.get(m.getId());
         if (tracked == null) {
-            throw new IllegalArgumentException(m + " is not part of this group " + id);
+            log.debug("{} is not part of this group: {} on: {} ", m, id);
+            return null;
         }
         return tracked.hash(index);
     }
@@ -514,7 +519,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public String toString() {
-        return "Context [id=" + id + " " + ring(0) + "]";
+        return "Context [" + id + "]";
     }
 
     private Digest[] hashesFor(T m) {
@@ -531,7 +536,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         var added = new AtomicBoolean();
         var member = members.computeIfAbsent(m.getId(), id -> {
             added.set(true);
-            return new Tracked<>(m, hashesFor(m), new AtomicBoolean());
+            return new Tracked<>(m, hashesFor(m));
         });
         if (added.get()) {
             for (var ring : rings) {

@@ -35,10 +35,10 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -177,7 +177,8 @@ public class LargeTest {
                                                                      .setMetrics(fireflyMetricsImpl),
                                                 executor);
             communications.add(comms);
-            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, fireflyMetricsImpl);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            return new View(context, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }
