@@ -923,16 +923,18 @@ public class View {
             try {
                 gossip = futureSailor.get();
             } catch (StatusRuntimeException e) {
-                if (e.getStatus() == Status.NOT_FOUND) {
-                    log.trace("Cannot find: {} on: {}", link.getMember(), node.getId());
+                if (e.getStatus() == Status.NOT_FOUND || e.getStatus() == Status.UNAVAILABLE ||
+                    e.getStatus() == Status.UNKNOWN) {
+                    log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
                 } else {
                     log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
                 }
                 return;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    if (sre.getStatus() == Status.NOT_FOUND) {
-                        log.trace("Cannot find: {} on: {}", link.getMember(), node.getId());
+                    if (sre.getStatus() == Status.NOT_FOUND || sre.getStatus() == Status.UNAVAILABLE ||
+                        sre.getStatus() == Status.UNKNOWN) {
+                        log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
                     } else {
                         log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
                     }
