@@ -395,12 +395,12 @@ public class Node {
     }
 
     private void memberActive(Member member) {
-        log.warn("Member active: {} on: {}", member, params.member());
+        log.trace("Member active: {} on: {}", member, params.member());
         params.context().activate(member);
     }
 
     private void memberOffline(Member member) {
-        log.warn("Member offline: {} on: {}", member, params.member());
+        log.trace("Member offline: {} on: {}", member, params.member());
         params.context().offline(member);
     }
 
