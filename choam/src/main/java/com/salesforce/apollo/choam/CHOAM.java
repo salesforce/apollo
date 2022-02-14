@@ -979,8 +979,7 @@ public class CHOAM {
             return false;
         }
         final var h = head.get();
-        if ((h.height() == null && next.height().equals(ULong.valueOf(0))) ||
-            (next.height().equals(h.height().add(1)))) {
+        if (h.height() == null && next.height().equals(ULong.valueOf(0))) {
             return true;
         }
         final Digest prev = next.getPrevious();

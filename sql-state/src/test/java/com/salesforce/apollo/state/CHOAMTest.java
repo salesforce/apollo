@@ -39,6 +39,7 @@ import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.Counter;
@@ -59,6 +60,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -69,6 +71,12 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     private class Transactioneer {
         private final static Random entropy = new Random();
 
@@ -209,7 +217,7 @@ public class CHOAMTest {
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);

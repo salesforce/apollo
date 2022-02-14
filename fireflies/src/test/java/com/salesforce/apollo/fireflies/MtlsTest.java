@@ -25,6 +25,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
@@ -35,11 +36,11 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -88,7 +89,7 @@ public class MtlsTest {
         }
     }
 
-//    @Test
+    @Test
     public void smoke() throws Exception {
         Random entropy = new Random(0x666);
         MetricRegistry registry = new MetricRegistry();
@@ -97,12 +98,12 @@ public class MtlsTest {
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()
                                   .stream()
-                                  .map(cert -> new Node(
-                                          new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                  cert.getX509Certificate(), cert.getPrivateKey(),
-                                                  new SignerImpl(cert.getPrivateKey()),
-                                                  cert.getX509Certificate().getPublicKey()),
-                                          parameters))
+                                  .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                                              cert.getX509Certificate(),
+                                                                              cert.getPrivateKey(),
+                                                                              new SignerImpl(cert.getPrivateKey()),
+                                                                              cert.getX509Certificate().getPublicKey()),
+                                                        cert, parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -123,12 +124,13 @@ public class MtlsTest {
             builder.setMetrics(metrics);
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, metrics);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            return new View(context, node, comms, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(500), seeds, scheduler));
+        views.forEach(view -> view.getService().start(Duration.ofMillis(200), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -136,9 +138,9 @@ public class MtlsTest {
                         .filter(view -> view != null)
                         .count() == 0;
         }), "view did not stabilize: "
-                + views.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
+        + views.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-                + views.size() + " members");
+        + views.size() + " members");
 
         System.out.println("Checking views for consistency");
         List<View> invalid = views.stream()

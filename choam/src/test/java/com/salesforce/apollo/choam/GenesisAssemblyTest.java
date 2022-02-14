@@ -29,6 +29,7 @@ import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Assemble;
 import com.salesfoce.apollo.choam.proto.Block;
@@ -54,6 +55,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -64,6 +66,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class GenesisAssemblyTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(GenesisAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
 
     @Test
     public void genesis() throws Exception {
@@ -76,7 +83,7 @@ public class GenesisAssemblyTest {
                                         .map(cpk -> new SigningMemberImpl(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new Context<>(viewId, 0.33, members.size(), 3);
+        Context<Member> base = new ContextImpl<>(viewId, 0.33, members.size(), 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 

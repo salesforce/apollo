@@ -14,20 +14,8 @@
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-        </createTable>
-
-        <createTable tableName="uri"
-            schemaName="apollo_kernel">
-            <column name="identifier" type="INT8">
-                <constraints nullable="false"
-                    primaryKey="true" />
-            </column>
-            <column name="lookup" type="VARCHAR(1024)">
-                <constraints nullable="false"
-                    primaryKey="true" />
-            </column>
-            <column name="uri" type="VARCHAR(4096)">
-                <constraints nullable="false" />
+            <column name="state" type="VARCHAR(7)">
+                <!-- <constraints nullable="false" /> -->
             </column>
         </createTable>
 
@@ -38,13 +26,10 @@
             referencedTableName="identifier" referencedColumnNames="id"
             referencedTableSchemaName="stereotomy" />
 
-        <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="identifier"
-            baseTableName="uri" baseTableSchemaName="apollo_kernel"
-            constraintName="uri_identifier_fk"
-            referencedTableName="member"
-            referencedColumnNames="identifier"
-            referencedTableSchemaName="apollo_kernel" />
+        <sql>alter table apollo_kernel.member add constraint
+            member_state_validate check (state in ('offline', 'active',
+            'joining', 'leaving'))
+        </sql>
 
     </changeSet>
 </databaseChangeLog>

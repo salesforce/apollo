@@ -6,30 +6,29 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.fireflies.AccusationWrapper.forSigning;
-import static com.salesforce.apollo.fireflies.NoteWrapper.forSigning;
 import static com.salesforce.apollo.fireflies.View.isValidMask;
 
 import java.io.InputStream;
+import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
-import com.salesfoce.apollo.fireflies.proto.Accusation.Builder;
-import com.salesfoce.apollo.fireflies.proto.AccusationOrBuilder;
+import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
 import com.salesfoce.apollo.fireflies.proto.Note;
-import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
-import com.salesfoce.apollo.utils.proto.Sig;
+import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
+import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -49,7 +48,7 @@ public class Node extends Participant implements SigningMember {
      * @param toleranceLevel - t
      * @return the mask
      */
-    public static BitSet createInitialMask(int toleranceLevel, Random entropy) {
+    public static BitSet createInitialMask(int toleranceLevel, SecureRandom entropy) {
         int nbits = 2 * toleranceLevel + 1;
         BitSet mask = new BitSet(nbits);
         List<Boolean> random = new ArrayList<>();
@@ -70,11 +69,13 @@ public class Node extends Participant implements SigningMember {
 
     private final FirefliesParameters parameters;
     private final SigningMember       wrapped;
+    private volatile PrivateKey       privateKey;
 
-    public Node(SigningMember wrapped, FirefliesParameters p) {
-        super(wrapped, p);
+    public Node(SigningMember wrapped, CertificateWithPrivateKey cert, FirefliesParameters p) {
+        super(wrapped, cert.getX509Certificate(), p);
         this.wrapped = wrapped;
         this.parameters = p;
+        this.privateKey = cert.getPrivateKey();
     }
 
     @Override
@@ -85,13 +86,13 @@ public class Node extends Participant implements SigningMember {
     @Override
     public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
-        return wrapped.forClient(clientAuth, alias, validator, provider, tlsVersion);
+        return MtlsServer.forClient(clientAuth, alias, certificate, privateKey, validator);
     }
 
     @Override
     public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
                                 String tlsVersion) {
-        return wrapped.forServer(clientAuth, alias, validator, provider, tlsVersion);
+        return MtlsServer.forServer(clientAuth, alias, certificate, privateKey, validator);
     }
 
     /**
@@ -116,10 +117,17 @@ public class Node extends Participant implements SigningMember {
     }
 
     AccusationWrapper accuse(Participant m, int ringNumber) {
-        Builder builder = Accusation.newBuilder();
-        Accusation accusation = builder.setEpoch(m.getEpoch()).setRingNumber(ringNumber).setAccuser(getId().toDigeste())
-                                       .setAccused(m.getId().toDigeste()).setSignature(sign(builder)).build();
-        return new AccusationWrapper(hashAlgorithm.digest(accusation.toByteString()), accusation);
+        var accusation = Accusation.newBuilder()
+                                   .setEpoch(m.getEpoch())
+                                   .setRingNumber(ringNumber)
+                                   .setAccuser(getId().toDigeste())
+                                   .setAccused(m.getId().toDigeste())
+                                   .build();
+        return new AccusationWrapper(SignedAccusation.newBuilder()
+                                                     .setAccusation(accusation)
+                                                     .setSignature(wrapped.sign(accusation.toByteString()).toSig())
+                                                     .build(),
+                                     hashAlgorithm);
     }
 
     /**
@@ -182,17 +190,22 @@ public class Node extends Participant implements SigningMember {
      * @param newEpoch
      */
     void nextNote(long newEpoch) {
-        Note.Builder builder = Note.newBuilder();
-        Note n = builder.setId(getId().toDigeste()).setEpoch(newEpoch)
-                        .setMask(ByteString.copyFrom(nextMask().toByteArray())).setSignature(sign(builder)).build();
-        note = new NoteWrapper(parameters.hashAlgorithm.digest(n.toByteString()), n);
-    }
+        var n = Note.newBuilder()
+                    .setId(getId().toDigeste())
+                    .setEpoch(newEpoch)
+                    .setMask(ByteString.copyFrom(nextMask().toByteArray()))
+                    .build();
+        var signedNote = SignedNote.newBuilder()
+                                   .setNote(n)
+                                   .setSignature(wrapped.sign(n.toByteString()).toSig())
+                                   .build();
+        note = new NoteWrapper(signedNote, parameters.hashAlgorithm);
 
-    private Sig sign(AccusationOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
-    }
-
-    private Sig sign(NoteOrBuilder builder) {
-        return wrapped.sign(BbBackedInputStream.aggregate(forSigning(builder))).toSig();
+        encoded.set(EncodedCertificate.newBuilder()
+                                      .setId(getId().toDigeste())
+                                      .setEpoch(note.getEpoch())
+                                      .setHash(certificateHash.toDigeste())
+                                      .setContent(ByteString.copyFrom(derEncodedCertificate))
+                                      .build());
     }
 }

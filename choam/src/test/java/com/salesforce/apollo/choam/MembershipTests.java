@@ -30,6 +30,7 @@ import java.util.stream.IntStream;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -44,7 +45,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -54,6 +55,12 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class MembershipTests {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     private class Transactioneer {
         private final static Random entropy = new Random();
 
@@ -186,7 +193,7 @@ public class MembershipTests {
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
 
         var exec = Router.createFjPool();

@@ -27,8 +27,7 @@ import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientIntercep
 import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
-import com.netflix.concurrency.limits.limit.Gradient2Limit;
-import com.netflix.concurrency.limits.limit.WindowedLimit;
+import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -147,17 +146,11 @@ public class LocalRouter extends Router {
     private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
 
     public static Limit defaultClientLimit() {
-        return WindowedLimit.newBuilder()
-                            .minWindowTime(500, TimeUnit.MILLISECONDS)
-                            .windowSize(1000)
-                            .build(Gradient2Limit.newBuilder().build());
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
     public static Limit defaultServerLimit() {
-        return WindowedLimit.newBuilder()
-                            .minWindowTime(500, TimeUnit.MILLISECONDS)
-                            .windowSize(1000)
-                            .build(Gradient2Limit.newBuilder().build());
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
     private final Member member;

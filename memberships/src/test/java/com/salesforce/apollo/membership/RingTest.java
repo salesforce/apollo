@@ -71,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new Context<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
+        context =  new ContextImpl<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -127,7 +127,7 @@ public class RingTest {
 
     @Test
     public void noRing() {
-        context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin());
+        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin());
         assertEquals(1, context.getRingCount());
         members.forEach(m -> context.activate(m));
         assertEquals(MEMBER_COUNT, context.getActive().size());
@@ -208,6 +208,28 @@ public class RingTest {
                     int t = Context.minMajority(pByz, card, epsilon, 3);
                     System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
                                                      pByz, card));
+                } catch (Exception e) {
+                    System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void incrementBreaksTwoThirdsMajority() {
+        double epsilon = 0.01;
+        double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
+
+        for (double pByz : probabilityByzantine) {
+            int tPrev = 0;
+            for (int card = 4; card < 10_000; card++) {
+                try {
+                    var t = Context.minMajority(pByz, card, epsilon, 3);
+                    if (t != tPrev && t % 2 > 0) {
+                        System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
+                                                         pByz, card));
+                    }
+                    tPrev = t;
                 } catch (Exception e) {
                     System.out.println(String.format("Cannot calulate Pbyz: %s Cardinality: %s", pByz, card));
                 }

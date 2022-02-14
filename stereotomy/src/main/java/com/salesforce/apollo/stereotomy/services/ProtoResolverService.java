@@ -6,13 +6,16 @@
  */
 package com.salesforce.apollo.stereotomy.services;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
 
 /**
@@ -28,9 +31,13 @@ public interface ProtoResolverService {
      * of the identifier of the binding.
      */
     interface BinderService {
-        void bind(Binding binding) throws TimeoutException;
+        CompletableFuture<Boolean> bind(Binding binding) throws TimeoutException;
 
-        void unbind(Ident identifier) throws TimeoutException;
+        CompletableFuture<List<KeyState>> publish(KERL kerl);
+
+        CompletableFuture<KeyState> append(KeyEvent keyEvent);
+
+        CompletableFuture<Boolean> unbind(Ident identifier) throws TimeoutException;
     }
 
     /**

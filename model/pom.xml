@@ -12,15 +12,11 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>schemas</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
             <artifactId>sql-state</artifactId>
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>stereotomy</artifactId>
+            <artifactId>fireflies</artifactId>
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>

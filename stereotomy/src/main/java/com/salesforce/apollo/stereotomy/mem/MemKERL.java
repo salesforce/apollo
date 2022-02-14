@@ -92,7 +92,7 @@ public class MemKERL implements KERL {
     private final KeyEventProcessor processor = new KeyEventProcessor(this);
 
     // Order by <receiptOrdering>
-    private final Map<String, AttachmentEvent.Attachment> receipts = new ConcurrentHashMap<>();
+    private final Map<String, Attachment> receipts = new ConcurrentHashMap<>();
 
     public MemKERL(DigestAlgorithm digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
@@ -198,7 +198,7 @@ public class MemKERL implements KERL {
         keyStateByIdentifier.put(qb64(event.getIdentifier()), coordinates);
     }
 
-    private void appendAttachments(EventCoordinates coordinates, AttachmentEvent.Attachment attachment) {
+    private void appendAttachments(EventCoordinates coordinates, Attachment attachment) {
         var key = coordinateOrdering(coordinates);
         var previous = receipts.get(key);
         receipts.put(key, combine(attachment, previous));
@@ -213,7 +213,7 @@ public class MemKERL implements KERL {
         Map<Integer, JohnHancock> endorsements = new HashMap<>(previous.endorsements());
         endorsements.putAll(attachment.endorsements());
 
-        return new AttachmentEvent.Attachment() {
+        return new Attachment() {
 
             @Override
             public Map<Integer, JohnHancock> endorsements() {

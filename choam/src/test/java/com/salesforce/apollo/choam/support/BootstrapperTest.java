@@ -42,6 +42,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -68,7 +69,7 @@ public class BootstrapperTest {
 
     @Test
     public void smoke() throws Exception {
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 

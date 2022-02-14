@@ -32,6 +32,9 @@ public class TestCertificates {
     public void selfSigned() throws Exception {
         boolean failed = false;
         for (SignatureAlgorithm s : SignatureAlgorithm.values()) {
+            if (s.equals(SignatureAlgorithm.NULL_SIGNATURE)) {
+                break;
+            }
             KeyPair keyPair;
             try {
                 keyPair = s.generateKeyPair();

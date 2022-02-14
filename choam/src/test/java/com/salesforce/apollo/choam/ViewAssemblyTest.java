@@ -28,6 +28,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
@@ -47,6 +48,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -57,6 +59,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class ViewAssemblyTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(ViewAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
 
     @Test
     public void assembly() throws Exception {
@@ -69,7 +76,7 @@ public class ViewAssemblyTest {
                                         .map(cpk -> new SigningMemberImpl(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new Context<>(viewId, 0.1, members.size(), 3);
+        Context<Member> base = new ContextImpl<>(viewId, 0.1, members.size(), 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
@@ -100,7 +107,7 @@ public class ViewAssemblyTest {
                 }
             });
         });
-        CountDownLatch complete = new CountDownLatch(committee.cardinality());
+        CountDownLatch complete = new CountDownLatch(committee.size());
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream()
                                                     .collect(Collectors.toMap(m -> m,
@@ -160,7 +167,7 @@ public class ViewAssemblyTest {
             recons.values().forEach(r -> r.assembled());
 
             complete.await(20, TimeUnit.SECONDS);
-            assertEquals(committee.cardinality(), published.size());
+            assertEquals(committee.size(), published.size());
         } finally {
             recons.values().forEach(r -> r.stop());
             communications.values().forEach(r -> r.close());

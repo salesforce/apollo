@@ -9,12 +9,11 @@ package com.salesforce.apollo.fireflies;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 
-import com.salesfoce.apollo.fireflies.proto.Note;
-import com.salesfoce.apollo.fireflies.proto.NoteOrBuilder;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 
 /**
@@ -22,29 +21,19 @@ import com.salesforce.apollo.crypto.JohnHancock;
  *
  */
 public class NoteWrapper {
+    private final Digest     hash;
+    private final BitSet     mask;
+    private final SignedNote note;
 
-    public static ByteBuffer forSigning(NoteOrBuilder n) {
-        byte[] id = n.getId().toByteArray();
-        byte[] mask = n.getMask().toByteArray();
-        ByteBuffer note = ByteBuffer.allocate(8 + 4 + id.length + mask.length);
-        note.putLong(n.getEpoch()).put(id).put(mask);
-        note.flip();
-        return note;
-    }
-
-    private final Digest hash;
-    private final BitSet mask;
-    private final Note   note;
-
-    public NoteWrapper(Digest hash, Note note) {
-        assert hash != null && note != null;
+    public NoteWrapper(SignedNote note, DigestAlgorithm algo) {
+        assert note != null;
         this.note = note;
-        this.hash = hash;
-        this.mask = BitSet.valueOf(note.getMask().asReadOnlyByteBuffer());
+        this.hash = JohnHancock.from(note.getSignature()).toDigest(algo);
+        this.mask = BitSet.valueOf(note.getNote().getMask().asReadOnlyByteBuffer());
     }
 
     public long getEpoch() {
-        return note.getEpoch();
+        return note.getNote().getEpoch();
     }
 
     public Digest getHash() {
@@ -52,7 +41,7 @@ public class NoteWrapper {
     }
 
     public Digest getId() {
-        return digest(note.getId());
+        return digest(note.getNote().getId());
     }
 
     public BitSet getMask() {
@@ -63,7 +52,7 @@ public class NoteWrapper {
         return signature(note.getSignature());
     }
 
-    public Note getWrapped() {
+    public SignedNote getWrapped() {
         return note;
     }
 }

@@ -4,17 +4,18 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies;
+package com.salesforce.apollo.fireflies.communications;
 
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Note;
+import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -36,7 +37,7 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests) {
+            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
                 return null;
             }
 
@@ -51,7 +52,7 @@ public interface Fireflies extends Link {
         };
     }
 
-    ListenableFuture<Gossip> gossip(Digest context, Note note, int ring, Digests digests);
+    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests);
 
     int ping(Digest context, int ping);
 

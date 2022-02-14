@@ -47,6 +47,7 @@ import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -89,8 +90,8 @@ public class GenesisAssembly implements Genesis {
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        Context<Member> reContext = new Context<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
-                                                        view.context().memberCount(), view.context().getBias());
+        Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
+                                                            view.context().memberCount(), view.context().getBias());
         reContext.activate(view.context().activeMembers());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);

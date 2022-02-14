@@ -67,6 +67,8 @@ public class QualifiedBase64 {
         case ED_25519 -> "A" + base64(index, 1);
         case EC_SECP256K1 -> "B" + base64(index, 1);
         case ED_448 -> "0A" + base64(index, 2);
+        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
+        default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
         };
     }
 
@@ -97,7 +99,9 @@ public class QualifiedBase64 {
 
     public static PubKey bs(PublicKey publicKey) {
         SignatureAlgorithm algo = SignatureAlgorithm.lookup(publicKey);
-        return PubKey.newBuilder().setCode(algo.signatureCode()).setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
+        return PubKey.newBuilder()
+                     .setCode(algo.signatureCode())
+                     .setEncoded(ByteString.copyFrom(algo.encode(publicKey)))
                      .build();
     }
 
@@ -153,6 +157,8 @@ public class QualifiedBase64 {
         case EC_SECP256K1 -> "1AAA";
         case ED_25519 -> "B";
         case ED_448 -> "1AAC";
+        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + a);
+        default -> throw new IllegalArgumentException("Unexpected value: " + a);
         };
     }
 
@@ -278,6 +284,8 @@ public class QualifiedBase64 {
         case ED_25519 -> "0B";
         case EC_SECP256K1 -> "0C";
         case ED_448 -> "1AAE";
+        case NULL_SIGNATURE -> throw new UnsupportedOperationException("Unimplemented case: " + algorithm);
+        default -> throw new IllegalArgumentException("Unexpected value: " + algorithm);
         };
     }
 

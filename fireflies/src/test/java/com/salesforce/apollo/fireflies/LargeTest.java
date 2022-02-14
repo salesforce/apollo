@@ -35,10 +35,10 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -54,13 +54,17 @@ public class LargeTest {
     private static final int                              CARDINALITY = 100;
 
     static {
-        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE).build();
+        parameters = FirefliesParameters.newBuilder()
+                                        .setCardinality(CARDINALITY)
+                                        .setCertificateValidator(CertificateValidator.NONE)
+                                        .build();
     }
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY).parallel().mapToObj(i -> Utils.getMember(i))
+        certs = IntStream.range(0, CARDINALITY)
+                         .parallel()
+                         .mapToObj(i -> Utils.getMember(i))
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
@@ -107,8 +111,10 @@ public class LargeTest {
             }
         }
 
-        List<View> invalid = views.stream().map(view -> view.getLive().size() != views.size() ? view : null)
-                                  .filter(view -> view != null).collect(Collectors.toList());
+        List<View> invalid = views.stream()
+                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .filter(view -> view != null)
+                                  .collect(Collectors.toList());
         assertEquals(0, invalid.size());
 
         Graph<Participant> testGraph = new Graph<>();
@@ -129,8 +135,11 @@ public class LargeTest {
         }
 
         views.forEach(view -> view.getService().stop());
-        ConsoleReporter.forRegistry(node0Registry).convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS).build().report();
+        ConsoleReporter.forRegistry(node0Registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private void initialize() {
@@ -139,12 +148,13 @@ public class LargeTest {
         node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
-        members = certs.values().stream()
+        members = certs.values()
+                       .stream()
                        .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                                    new SignerImpl(cert.getPrivateKey()),
                                                                    cert.getX509Certificate().getPublicKey()),
-                                             parameters))
+                                             cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -161,11 +171,14 @@ public class LargeTest {
         views = members.stream().map(node -> {
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);
-            LocalRouter comms = new LocalRouter(prefix, node, ServerConnectionCache.newBuilder().setTarget(2)
-                                                                                   .setMetrics(fireflyMetricsImpl),
+            LocalRouter comms = new LocalRouter(prefix, node,
+                                                ServerConnectionCache.newBuilder()
+                                                                     .setTarget(2)
+                                                                     .setMetrics(fireflyMetricsImpl),
                                                 executor);
             communications.add(comms);
-            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, fireflyMetricsImpl);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            return new View(context, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

@@ -18,6 +18,7 @@ import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification.Builder;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
@@ -65,11 +66,13 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * <ul>
      * <li>CN - Host name of the supplied endpoint</li>
      * <li>L - Port number of supplied endpoint</li>
-     * <li>UID - QB64 encoding of the KeyCoordinates of the keystate used</li>
+     * <li>UID -B64 encoding of the KeyEvent used by the member for signing</li>
      * <li>DC - The signature of the key state of the coordinates in UID of the
      * generated public key that signs the certificate</li>
      * </ul>
      * 
+     * @param validations        - the Attachment containing the validation
+     *                           signatures for the published keystate
      * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
@@ -79,8 +82,9 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                  List<CertExtension> extensions, SignatureAlgorithm algo);
+    Optional<CertificateWithPrivateKey> provision(Attachment validations, InetSocketAddress endpoint, Instant validFrom,
+                                                  Duration valid, List<CertExtension> extensions,
+                                                  SignatureAlgorithm algo);
 
     /**
      * Provision a certificate that encodes the host, port and this identifier using
@@ -101,6 +105,8 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * generated public key that signs the certificate</li>
      * </ul>
      * 
+     * @param validations        - the Attachment containing the validation
+     *                           signatures for the published keystate
      * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
@@ -109,9 +115,9 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    default Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                          SignatureAlgorithm algo) {
-        return provision(endpoint, validFrom, valid, Collections.emptyList(), algo);
+    default Optional<CertificateWithPrivateKey> provision(Attachment validations, InetSocketAddress endpoint,
+                                                          Instant validFrom, Duration valid, SignatureAlgorithm algo) {
+        return provision(validations, endpoint, validFrom, valid, Collections.emptyList(), algo);
     }
 
     /**

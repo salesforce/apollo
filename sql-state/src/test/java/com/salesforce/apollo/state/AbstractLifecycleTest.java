@@ -55,6 +55,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -225,7 +226,7 @@ abstract public class AbstractLifecycleTest {
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         toleranceLevel = context.toleranceLevel();
         scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);

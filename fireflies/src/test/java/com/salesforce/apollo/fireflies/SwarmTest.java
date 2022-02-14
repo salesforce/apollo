@@ -34,10 +34,10 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -103,7 +103,12 @@ public class SwarmTest {
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
-            }), "views: " + testViews.stream().map(view -> view.getLive().size()).collect(Collectors.toList()));
+            }), " size: " + testViews.size() + " views: "
+            + testViews.stream()
+                       .filter(e -> e.getLive().size() != testViews.size())
+                       .map(v -> String.format("%s : %s", v.getContext().getId(),
+                                               v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
+                       .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
@@ -121,12 +126,16 @@ public class SwarmTest {
             long then = System.currentTimeMillis();
             testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
 
-            boolean stabilized = Utils.waitForCondition(15_000, 1_000, () -> {
+            boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
             });
 
             assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
-            + testViews.stream().map(e -> e.getLive().size()).toList());
+            + testViews.stream()
+                       .filter(e -> e.getLive().size() != testViews.size())
+                       .map(v -> String.format("%s : %s", v.getContext().getId(),
+                                               v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
+                       .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
@@ -221,7 +230,7 @@ public class SwarmTest {
                                                                    cert.getX509Certificate(), cert.getPrivateKey(),
                                                                    new SignerImpl(cert.getPrivateKey()),
                                                                    cert.getX509Certificate().getPublicKey()),
-                                             parameters))
+                                             cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
@@ -244,7 +253,8 @@ public class SwarmTest {
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            return new View(DigestAlgorithm.DEFAULT.getOrigin(), node, comms, fireflyMetricsImpl);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            return new View(context, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

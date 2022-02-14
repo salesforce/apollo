@@ -512,6 +512,9 @@ public class Ring<T extends Member> implements Iterable<T> {
     }
 
     private T succ(Digest hash, Predicate<T> predicate) {
+        if (hash == null) {
+            return null;
+        }
         for (T member : ring.tailMap(hash, false).values()) {
             if (predicate.test(member)) {
                 return member;

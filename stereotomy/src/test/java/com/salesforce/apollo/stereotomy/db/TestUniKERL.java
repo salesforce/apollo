@@ -74,6 +74,17 @@ public class TestUniKERL {
         doOne(factory, connection, uni);
         doOne(factory, connection, uni);
         doOne(factory, connection, uni);
+
+        var statement = connection.createStatement();
+        statement.execute("select content from stereotomy.event");
+        var result = statement.getResultSet();
+        int sum = 0;
+        int count = 0;
+        while (result.next()) {
+            sum += result.getBytes(1).length;
+            count++;
+        }
+        System.out.println("Average size: " + sum / count);
     }
 
     private byte[] append(KeyEvent event, Connection connection) {

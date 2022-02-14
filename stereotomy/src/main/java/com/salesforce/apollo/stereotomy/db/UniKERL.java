@@ -6,13 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy.db;
 
-import static com.salesforce.apollo.model.schema.tables.Attachment.ATTACHMENT;
-import static com.salesforce.apollo.model.schema.tables.Coordinates.COORDINATES;
-import static com.salesforce.apollo.model.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
-import static com.salesforce.apollo.model.schema.tables.Event.EVENT;
-import static com.salesforce.apollo.model.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.model.schema.tables.Receipt.RECEIPT;
 import static com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory.toKeyEvent;
+import static com.salesforce.apollo.stereotomy.schema.tables.Attachment.ATTACHMENT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.stereotomy.schema.tables.CurrentKeyState.CURRENT_KEY_STATE;
+import static com.salesforce.apollo.stereotomy.schema.tables.Event.EVENT;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -42,6 +42,7 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
@@ -288,7 +289,7 @@ abstract public class UniKERL implements KERL {
                           })
                           .filter(s -> s != null)
                           .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
-        return Optional.of(new Attachment.AttachmentImpl(seals, receipts));
+        return Optional.of(new AttachmentImpl(seals, receipts));
     }
 
     @Override

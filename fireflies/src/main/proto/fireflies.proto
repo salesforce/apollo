@@ -28,7 +28,7 @@ message Null {
 
 message SayWhat {
     utils.Digeste context = 1;
-    Note note = 2;
+    SignedNote note = 2;
     int32 ring = 3;
     Digests gossip = 4;
 }
@@ -45,26 +45,34 @@ message Accusation {
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
     bytes content = 5;
-    utils.Sig signature = 6;
+}
+
+message SignedAccusation {
+    Accusation accusation = 1;
+    utils.Sig signature = 2;
 }
 
 message Note {
     int64 epoch = 1;
     utils.Digeste id = 2;
     bytes mask = 3;
-    utils.Sig signature = 4;
+}
+
+message SignedNote {
+    Note note = 1; 
+    utils.Sig signature = 2;
 }
 
 message AccusationGossip {
     utils.Biff bff = 1;
-    repeated Accusation updates = 2;
+    repeated SignedAccusation updates = 2;
 } 
 
 message EncodedCertificate {
     utils.Digeste id = 1;
     int64 epoch = 2;
     utils.Digeste hash = 3;
-    bytes content = 4; 
+    bytes content = 4;
 }
 
 message CertificateGossip {
@@ -74,7 +82,7 @@ message CertificateGossip {
 
 message NoteGossip {
     utils.Biff bff = 1;
-    repeated Note updates = 2;
+    repeated SignedNote updates = 2;
 }
 
 message Digests { 
@@ -92,7 +100,7 @@ message Gossip {
 
 message Update {
     repeated EncodedCertificate certificates = 1;
-    repeated Note notes = 2;
-    repeated Accusation accusations = 3; 
+    repeated SignedNote notes = 2;
+    repeated SignedAccusation accusations = 3; 
 }
 

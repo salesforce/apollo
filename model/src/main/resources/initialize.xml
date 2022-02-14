@@ -8,4 +8,10 @@
     <include file="stereotomy/initialize.xml" relativeToChangelogFile="true" />
     <include file="delphinius/initialize.xml" relativeToChangelogFile="true" />
     <include file="model/model.xml" relativeToChangelogFile="true" />
+
+    <changeSet id="addmember-proto-0" author="hhildebrand"> 
+        <sql>create alias apollo_kernel.add_members for
+            "com.salesforce.apollo.model.Node.addMembers"
+        </sql>
+    </changeSet>
 </databaseChangeLog>

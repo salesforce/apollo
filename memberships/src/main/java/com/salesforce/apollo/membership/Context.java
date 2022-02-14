@@ -1,23 +1,15 @@
 /*
- * Copyright (c) 2020, salesforce.com, inc.
+ * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 package com.salesforce.apollo.membership;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
-
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -27,93 +19,150 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 
 /**
  * Provides a Context for Membership and is uniquely identified by a Digest;.
  * Members may be either active or offline. The Context maintains a number of
- * Rings (may be zero) that the Context provides for Firefly type ordering
- * operators. Each ring has a unique hash of each individual member, and thus
- * each ring has a different ring order of the same membership set. Hashes for
- * Context level operators include the ID of the ring. Hashes computed for each
- * member, per ring include the ID of the enclosing Context.
+ * Rings (may be zero) that the Context provides for Firefly type consistent
+ * hash ring ordering operators. Each ring has a unique hash of each individual
+ * member, and thus each ring has a different ring order of the same membership
+ * set. Hashes for Context level operators include the ID of the ring. Hashes
+ * computed and cached for each member, per ring include the ID of the enclosing
+ * Context.
  * 
  * @author hal.hildebrand
  *
  */
-public class Context<T extends Member> {
+public interface Context<T extends Member> {
 
-    public static class Counter {
-        private Integer       current = 0;
-        private List<Integer> indices;
+    abstract class Builder<Z extends Member> {
+        protected int    bias    = 2;
+        protected int    cardinality;
+        protected double epsilon = 0.01;
+        protected Digest id      = DigestAlgorithm.DEFAULT.getOrigin();
+        protected double pByz    = 0.1;                                // 10% chance any node is out to get ya
 
-        public Counter(Set<Integer> indices) {
-            this.indices = new ArrayList<>(indices);
-            Collections.sort(this.indices);
+        public abstract Context<Z> build();
+
+        public int getBias() {
+            return bias;
         }
 
-        public boolean accept() {
-            boolean accepted = indices.isEmpty() ? false : current.equals(indices.get(0));
-            if (accepted) {
-                indices = indices.subList(1, indices.size());
+        public int getCardinality() {
+            return cardinality;
+        }
+
+        public double getEpsilon() {
+            return epsilon;
+        }
+
+        public Digest getId() {
+            return id;
+        }
+
+        public double getpByz() {
+            return pByz;
+        }
+
+        public Builder<Z> setBias(int bias) {
+            this.bias = bias;
+            return this;
+        }
+
+        public Builder<Z> setCardinality(int cardinality) {
+            this.cardinality = cardinality;
+            return this;
+        }
+
+        public Builder<Z> setEpsilon(double epsilon) {
+            this.epsilon = epsilon;
+            return this;
+        }
+
+        public Builder<Z> setId(Digest id) {
+            this.id = id;
+            return this;
+        }
+
+        public Builder<Z> setpByz(double pByz) {
+            this.pByz = pByz;
+            return this;
+        }
+    }
+
+    interface MembershipListener<T extends Member> {
+
+        /**
+         * A new member has recovered and is now active
+         * 
+         * @param member
+         */
+        default void active(T member) {
+        };
+
+        /**
+         * A member is offline
+         * 
+         * @param member
+         */
+        default void offline(T member) {
+        };
+    }
+
+    public static class Tracked<M extends Member> {
+
+        private static final Logger log    = LoggerFactory.getLogger(Tracked.class);
+        private final AtomicBoolean active = new AtomicBoolean(false);
+        private final Digest[]      hashes;
+        private final M             member;
+
+        public Tracked(M member, Digest[] hashes) {
+            this.member = member;
+            this.hashes = hashes;
+        }
+
+        public boolean activate() {
+            var activated = active.compareAndExchange(false, true);
+            if (activated) {
+                log.trace("Activated: {}", member.getId());
             }
-            current = current + 1;
-            return accepted;
+            return activated;
         }
-    }
 
-    public interface MembershipListener<T> {
+        public Digest hash(int index) {
+            return hashes[index];
+        }
 
-        /**
-         * A member has failed
-         * 
-         * @param member
-         */
-        default void fail(Member member) {
-        };
-
-        /**
-         * A new member has recovered and is now live
-         * 
-         * @param member
-         */
-        default void recover(Member member) {
-        };
-    }
-
-    private record Tracked<M> (M member, Digest[] hashes, AtomicBoolean active) {
-
-        private boolean isActive() {
+        public boolean isActive() {
             return active.get();
         }
 
-        private void offline() {
-            active.set(false);
+        public M member() {
+            return member;
         }
 
-        private void activate() {
-            active.set(true);
+        public boolean offline() {
+            var offlined = active.compareAndExchange(true, false);
+            if (offlined) {
+                log.trace("Offlined: {}", member.getId());
+            }
+            return offlined;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s:%s %s", member, active.get(), Arrays.asList(hashes));
         }
     }
 
-    public static final ThreadLocal<MessageDigest> DIGEST_CACHE = ThreadLocal.withInitial(() -> {
-        try {
-            return MessageDigest.getInstance(Context.SHA_256);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    });
+    static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
-    public static final String SHA_256 = "sha-256";
-
-    private static final Logger log = LoggerFactory.getLogger(Context.class);
-
-    private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
-
-    public static int minMajority(double pByz, int cardinality) {
+    static int minMajority(double pByz, int cardinality) {
         return minMajority(pByz, cardinality, 0.99, 2);
     }
 
-    public static int minMajority(double pByz, int card, double epsilon) {
+    static int minMajority(double pByz, int card, double epsilon) {
         return minMajority(pByz, card, epsilon, 2);
     }
 
@@ -122,7 +171,7 @@ public class Context<T extends Member> {
      *         t+1 monitors are correct with probability e/size given the uniform
      *         probability pByz that a monitor is Byzantine.
      */
-    public static int minMajority(double pByz, int cardinality, double epsilon, int bias) {
+    static int minMajority(double pByz, int cardinality, double epsilon, int bias) {
         if (epsilon > 1.0 || epsilon <= 0.0) {
             throw new IllegalArgumentException("epsilon must be > 0 and <= 1 : " + epsilon);
         }
@@ -147,329 +196,220 @@ public class Context<T extends Member> {
      *         monitors are correct with probability e/size given the uniform
      *         probability pByz that a monitor is Byzantine.
      */
-    public static int minMajority(int bias, double pByz, int cardinality) {
+    static int minMajority(int bias, double pByz, int cardinality) {
         return minMajority(pByz, cardinality, 0.99, bias);
     }
 
-    private final int                                   bias;
-    private final Digest                                id;
-    private final ConcurrentHashMap<Digest, Tracked<T>> members             = new ConcurrentHashMap<>();
-    private final List<MembershipListener<T>>           membershipListeners = new CopyOnWriteArrayList<>();
-    private final double                                pByz;
-    private final Ring<T>[]                             rings;
+    static <Z extends Member> Builder<Z> newBuilder() {
+        return new Builder<Z>() {
 
-    public Context(Digest id) {
-        this(id, 1);
+            @Override
+            public Context<Z> build() {
+                return new ContextImpl<Z>(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
+            }
+        };
     }
 
     /**
-     * Construct a context with the given id and cardinality where the number of
-     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
-     * calculated by the minMajority of the input probability of any member being
-     * byzantine and the epsilon indicating how close to probability 1 that a member
-     * will not be unfortunate
-     * 
-     * @param id
-     * @param pByz
-     * @param cardinality
+     * Activate the supplied collection of members
      */
-    public Context(Digest id, double pByz, int cardinality) {
-        this(pByz, 2, id, minMajority(pByz, cardinality) * 2 + 1);
-    }
-
-    /**
-     * Construct a context with the given id and cardinality where the number of
-     * rings is 2 * T + 1, where T is the tolerance level. The tolerance level is
-     * calculated by the minMajority of the input probability of any member being
-     * byzantine and the epsilon indicating how close to probability 1 that a member
-     * will not be unfortunate
-     * 
-     * @param id
-     * @param pByz
-     * @param cardinality
-     * @param epsilon
-     */
-    public Context(Digest id, double pByz, int cardinality, double epsilon, int bias) {
-        this(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
-    }
-
-    public Context(Digest id, double pByz, int cardinality, int bias) {
-        this(pByz, bias, id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
-    }
-
-    public Context(Digest id, int r) {
-        this(0.0, 2, id, r);
-    }
-
-    @SuppressWarnings("unchecked")
-    public Context(double pbyz, int bias, Digest id, int r) {
-        this.pByz = pbyz;
-        this.id = id;
-        this.rings = new Ring[r];
-        this.bias = bias;
-        for (int i = 0; i < r; i++) {
-            rings[i] = new Ring<T>(i, (m, ring) -> hashFor(m, ring));
-        }
-    }
-
-    public void activate(Collection<T> activeMembers) {
-        activeMembers.forEach(m -> activate(m));
-    }
+    void activate(Collection<T> activeMembers);
 
     /**
      * Mark a member as active in the context
      */
-    public void activate(T m) {
-        tracking(m).activate();
+    boolean activate(T m);
 
-        membershipListeners.stream().forEach(l -> {
-            try {
-                l.recover(m);
-            } catch (Throwable e) {
-                log.error("error recoving member in listener: " + l, e);
-            }
-        });
-    }
+    /**
+     * Mark a member as active in the context
+     */
+    boolean activateIfMember(T m);
 
-    public int activeCount() {
-        return (int) members.values().stream().filter(e -> e.isActive()).count();
-    }
+    /**
+     * Answer the count of active members
+     */
+    int activeCount();
 
-    public List<T> activeMembers() {
-        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member).toList();
-    }
+    /**
+     * Answer the list of active members
+     */
+    List<T> activeMembers();
 
-    public void add(Collection<T> members) {
-        members.forEach(m -> add(m));
-    }
+    /**
+     * Add a collection of members in the offline state
+     */
+    void add(Collection<T> members);
 
-    public void add(T m) {
-        offline(m);
-    }
+    /**
+     * Add a member in the offline state
+     */
+    void add(T m);
 
-    public Stream<T> allMembers() {
-        return members.values().stream().map(e -> e.member);
-    }
+    /**
+     * Answer a stream over all members, offline and active
+     */
+    Stream<T> allMembers();
 
-    public int cardinality() {
-        return members.size();
-    }
+    /**
+     * Clear all members from the receiver
+     */
+    void clear();
 
-    public void clear() {
-        for (Ring<T> ring : rings) {
-            ring.clear();
-        }
-        members.clear();
-    }
+    /**
+     * Link the lifecycle of member in receiver context with the foundation
+     */
+    UUID dependUpon(Context<T> foundation);
 
     /**
      * Answer the aproximate diameter of the receiver, assuming the rings were built
      * with FF parameters, with the rings forming random graph connections segments.
      */
-    public int diameter() {
-        return diameter(cardinality());
-    }
+    int diameter();
 
     /**
      * Answer the aproximate diameter of the receiver, assuming the rings were built
      * with FF parameters, with the rings forming random graph connections segments
      * with the supplied cardinality
      */
-    public int diameter(int c) {
-        double pN = ((double) (2 * toleranceLevel())) / ((double) c);
-        double logN = Math.log(c);
-        return (int) (logN / Math.log(c * pN));
-    }
+    int diameter(int c);
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if ((obj == null) || (getClass() != obj.getClass()))
-            return false;
-        Context<?> other = (Context<?>) obj;
-        if (id == null) {
-            if (other.id != null)
-                return false;
-        } else if (!id.equals(other.id))
-            return false;
-        return true;
-    }
+    /**
+     * Answer the collection of active members
+     */
+    Collection<T> getActive();
 
-    public Collection<T> getActive() {
-        return activeMembers();
-    }
+    /**
+     * Answer the active member having the id, or null if offline or non-existent
+     */
+    T getActiveMember(Digest memberID);
 
-    public T getActiveMember(Digest memberID) {
-        var tracked = members.get(memberID);
-        return tracked == null ? null : tracked.member;
-    }
+    /**
+     * Answer the bias of the context. The bias is the multiple of the number of
+     * byzantine members the context is designed to foil
+     */
+    int getBias();
 
-    public int getBias() {
-        return bias;
-    }
+    /**
+     * Answer the identifier of the context
+     */
+    Digest getId();
 
-    public Digest getId() {
-        return id;
-    }
+    /**
+     * Answer the member matching the id, or null if none.
+     */
+    T getMember(Digest memberID);
 
-    public T getMember(Digest memberID) {
-        var tracked = members.get(memberID);
-        return tracked == null ? null : tracked.member;
-    }
+    /**
+     * Answer the collection of offline members
+     */
+    Collection<T> getOffline();
 
-    public Collection<T> getOffline() {
-        return members.values().stream().filter(e -> !e.isActive()).map(e -> e.member).toList();
-    }
+    /**
+     * Answer the probability {0, 1} that any given member is byzantine
+     */
+    double getProbabilityByzantine();
 
-    public double getProbabilityByzantine() {
-        return pByz;
-    }
+    /**
+     * Answer the number of rings in the context
+     */
+    int getRingCount();
 
-    public int getRingCount() {
-        return rings.length;
-    }
+    Digest hashFor(T m, int index);
 
-    @Override
-    public int hashCode() {
-        return id.hashCode();
-    }
+    /**
+     * Answer true if the member who's id is active
+     */
+    boolean isActive(Digest id);
 
-    public boolean isActive(T m) {
-        assert m != null;
-        var member = members.get(m.getId());
-        if (member == null) {
-            return false;
-        }
-        return member.isActive();
-    }
+    /**
+     * Answer true if the member is active
+     */
+    boolean isActive(T m);
 
-    public boolean isOffline(Digest digest) {
-        assert digest != null;
-        var member = members.get(digest);
-        if (member == null) {
-            return true;
-        }
-        return !member.isActive();
-    }
+    /**
+     * Answer true if a member who's id is the supplied digest is offline
+     */
+    boolean isOffline(Digest digest);
 
-    public boolean isOffline(T m) {
-        assert m != null;
-        var member = members.get(m.getId());
-        if (member == null) {
-            return true;
-        }
-        return !member.isActive();
-    }
+    /**
+     * Answer true if a member is offline
+     */
+    boolean isOffline(T m);
 
-    public int majority() {
-        return getRingCount() - toleranceLevel();
-    }
+    /**
+     * Answer the majority cardinality of the context, based on the current ring
+     * count
+     */
+    int majority();
 
-    public int memberCount() {
-        return members.size();
-    }
+    /**
+     * Answer the total member count (offline + active) tracked by this context
+     */
+    int memberCount();
 
-    public void offline(Collection<T> members) {
-        members.forEach(m -> offline(m));
-    }
+    /**
+     * Take the collection of members offline
+     */
+    void offline(Collection<T> members);
 
     /**
      * Take a member offline
      */
-    public void offline(T m) {
-        tracking(m).offline();
-        membershipListeners.stream().forEach(l -> {
-            try {
-                l.fail(m);
-            } catch (Throwable e) {
-                log.error("error sending fail to listener: " + l, e);
-            }
-        });
-    }
+    void offline(T m);
 
-    public int offlineCount() {
-        return (int) members.values().stream().filter(e -> !e.isActive()).count();
-    }
+    int offlineCount();
+
+    /**
+     * Take a member offline if already a member
+     */
+    void offlineIfMember(T m);
 
     /**
      * @return the predecessor on each ring for the provided key
      */
-    public List<T> predecessors(Digest key) {
-        return predecessors(key, t -> true);
-    }
+    List<T> predecessors(Digest key);
 
     /**
      * @return the predecessor on each ring for the provided key that pass the
      *         provided predicate
      */
-    public List<T> predecessors(Digest key, Predicate<T> test) {
-        List<T> predecessors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            T predecessor = ring.predecessor(key, test);
-            if (predecessor != null) {
-                predecessors.add(predecessor);
-            }
-        }
-        return predecessors;
-    }
+    List<T> predecessors(Digest key, Predicate<T> test);
 
     /**
      * @return the predecessor on each ring for the provided key
      */
-    public List<T> predecessors(T key) {
-        return predecessors(key, t -> true);
-    }
+    List<T> predecessors(T key);
 
     /**
      * @return the predecessor on each ring for the provided key that pass the
      *         provided predicate
      */
-    public List<T> predecessors(T key, Predicate<T> test) {
-        List<T> predecessors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            T predecessor = ring.predecessor(key, test);
-            if (predecessor != null) {
-                predecessors.add(predecessor);
-            }
-        }
-        return predecessors;
-    }
+    List<T> predecessors(T key, Predicate<T> test);
 
-    public void register(MembershipListener<T> listener) {
-        membershipListeners.add(listener);
-    }
+    /**
+     * Register a listener for membership events, answer the UUID that identifies it
+     */
+    UUID register(MembershipListener<T> listener);
 
-    public void remove(Collection<T> members) {
-        members.forEach(m -> remove(m));
-    }
+    /**
+     * Remove the members from the context
+     */
+    void remove(Collection<T> members);
 
     /**
      * remove a member from the receiving Context
      */
-    public void remove(T m) {
-        members.remove(m.getId());
-        for (int i = 0; i < rings.length; i++) {
-            rings[i].delete(m);
-        }
-    }
+    void remove(T m);
 
     /**
      * @return the indexed Ring<T>
      */
-    public Ring<T> ring(int index) {
-        if (index < 0 || index >= rings.length) {
-            throw new IllegalArgumentException("Not a valid ring #: " + index);
-        }
-        return rings[index];
-    }
+    Ring<T> ring(int index);
 
     /**
      * @return the Stream of rings managed by the context
      */
-    public Stream<Ring<T>> rings() {
-        return Arrays.asList(rings).stream();
-    }
+    Stream<Ring<T>> rings();
 
     /**
      * Answer a random sample of at least range size from the active members of the
@@ -481,105 +421,45 @@ public class Context<T extends Member> {
      * @return a random sample set of the view's live members. May be limited by the
      *         number of active members.
      */
-    public <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc) {
-        Member excluded = getMember(exc);
-        return rings[entropy.nextInt(rings.length)].stream().collect(new ReservoirSampler<T>(excluded, range, entropy));
-    }
+    <N extends T> List<T> sample(int range, BitsStreamGenerator entropy, Digest exc);
+
+    /**
+     * Answer the total count of active and offline members of this context
+     */
+    int size();
 
     /**
      * @return the list of successors to the key on each ring
      */
-    public List<T> successors(Digest key) {
-        return successors(key, t -> true);
-    }
+    List<T> successors(Digest key);
 
     /**
      * @return the list of successor to the key on each ring that pass the provided
      *         predicate test
      */
-    public List<T> successors(Digest key, Predicate<T> test) {
-        List<T> successors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            T successor = ring.successor(key, test);
-            if (successor != null) {
-                successors.add(successor);
-            }
-        }
-        return successors;
-    }
+    List<T> successors(Digest key, Predicate<T> test);
 
     /**
      * @return the list of successors to the key on each ring
      */
-    public List<T> successors(T key) {
-        return successors(key, t -> true);
-    }
+    List<T> successors(T key);
 
     /**
      * @return the list of successor to the key on each ring that pass the provided
      *         predicate test
      */
-    public List<T> successors(T key, Predicate<T> test) {
-        List<T> successors = new ArrayList<>();
-        for (Ring<T> ring : rings) {
-            T successor = ring.successor(key, test);
-            if (successor != null) {
-                successors.add(successor);
-            }
-        }
-        return successors;
-    }
+    List<T> successors(T key, Predicate<T> test);
 
     /**
      * The number of iterations until a given message has been distributed to all
      * members in the context, using the rings of the receiver as a gossip graph
      */
-    public int timeToLive() {
-        return (rings.length * diameter()) + 1;
-    }
+    int timeToLive();
 
     /**
      * Answer the tolerance level of the context to byzantine members, assuming this
      * context has been constructed from FF parameters
      */
-    public int toleranceLevel() {
-        return (rings.length - 1) / 2;
-    }
+    int toleranceLevel();
 
-    @Override
-    public String toString() {
-        return "Context [id=" + id + " " + ring(0) + "]";
-    }
-
-    Digest hashFor(T m, int index) {
-        var tracked = members.get(m.getId());
-        if (tracked == null) {
-            throw new IllegalArgumentException(m + " is not part of this group " + id);
-        }
-        return tracked.hashes[index];
-    }
-
-    private Digest[] hashesFor(T m) {
-        Digest[] s = new Digest[rings.length];
-        for (int ring = 0; ring < rings.length; ring++) {
-            Digest key = m.getId();
-            s[ring] = key.getAlgorithm()
-                         .digest(String.format(RING_HASH_TEMPLATE, qb64(id), qb64(key), ring).getBytes());
-        }
-        return s;
-    }
-
-    private Tracked<T> tracking(T m) {
-        var added = new AtomicBoolean();
-        var member = members.computeIfAbsent(m.getId(), id -> {
-            added.set(true);
-            return new Tracked<>(m, hashesFor(m), new AtomicBoolean());
-        });
-        if (added.get()) {
-            for (var ring : rings) {
-                ring.insert(m);
-            }
-        }
-        return member;
-    }
 }

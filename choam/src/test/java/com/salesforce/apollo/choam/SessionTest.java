@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
@@ -36,6 +37,7 @@ import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
@@ -48,10 +50,16 @@ import io.grpc.StatusRuntimeException;
  *
  */
 public class SessionTest {
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(SessionTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     @Test
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
@@ -87,7 +95,7 @@ public class SessionTest {
     @Test
     public void scalingTest() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        Context<Member> context = new Context<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         Parameters params = Parameters.newBuilder()
                                       .setTxnPermits(100_000_000)
                                       .build(RuntimeParameters.newBuilder()

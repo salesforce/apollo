@@ -8,7 +8,6 @@ package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.publicKey;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
@@ -33,6 +31,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 
 import io.grpc.Status;
@@ -55,8 +54,8 @@ public interface Committee {
      * base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new Context<>(hash, baseContext.getProbabilityByzantine(), baseContext.getRingCount(),
-                                                baseContext.getBias());
+        Context<Member> newView = new ContextImpl<>(hash, baseContext.getProbabilityByzantine(),
+                                                    baseContext.getRingCount(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> {
             if (baseContext.isActive(e)) {
@@ -65,7 +64,6 @@ public interface Committee {
                 newView.offline(e);
             }
         });
-        assert newView.getActive().size() + newView.getOffline().size() == baseContext.getRingCount();
         return newView;
     }
 
@@ -75,10 +73,11 @@ public interface Committee {
             if (successors.size() == baseContext.getRingCount()) {
                 return false;
             }
+            if (baseContext.isOffline(m.getId())) {
+                return false;
+            }
             return successors.add(m);
         });
-        assert successors.size() == baseContext.getRingCount() : "Invalid successors: " + successors.size() + " != "
-        + baseContext.getRingCount();
         return successors;
     }
 
@@ -166,11 +165,6 @@ public interface Committee {
             return false;
         }
         var reconfigure = hb.block.getGenesis().getInitialView();
-        var validators = validatorsOf(reconfigure, params().context());
-        ArrayList<Member> diff = new ArrayList<>(Sets.difference(validators.keySet(),
-                                                                 viewMembersOf(new Digest(reconfigure.getId()),
-                                                                               params().context())));
-        diff.forEach(m -> validators.remove(m));
-        return validate(hb, validators);
+        return validate(hb, validatorsOf(reconfigure, params().context()));
     }
 }
