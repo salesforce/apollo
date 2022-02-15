@@ -244,10 +244,13 @@ public class GenesisAssembly implements Genesis {
                      params().member());
             return;
         }
-        witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);
-        if (witnesses.size() > params().toleranceLevel()) {
-            if (published.compareAndSet(false, true)) {
-                publish();
+        var member = view.context().getMember(Digest.from(v.getWitness().getId()));
+        if (member != null) {
+            witnesses.put(member, v);
+            if (witnesses.size() > params().toleranceLevel()) {
+                if (published.compareAndSet(false, true)) {
+                    publish();
+                }
             }
         }
     }

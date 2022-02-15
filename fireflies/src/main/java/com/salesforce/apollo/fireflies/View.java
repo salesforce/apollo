@@ -923,8 +923,9 @@ public class View {
             try {
                 gossip = futureSailor.get();
             } catch (StatusRuntimeException e) {
-                if (e.getStatus() == Status.NOT_FOUND || e.getStatus() == Status.UNAVAILABLE ||
-                    e.getStatus() == Status.UNKNOWN) {
+                if (e.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
+                    e.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
+                    e.getStatus().getCode() == Status.UNKNOWN.getCode()) {
                     log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
                 } else {
                     log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
@@ -939,8 +940,9 @@ public class View {
                 return;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {
-                    if (sre.getStatus() == Status.NOT_FOUND || sre.getStatus() == Status.UNAVAILABLE ||
-                        sre.getStatus() == Status.UNKNOWN) {
+                    if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
+                        sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
+                        sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
                         log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
                     } else {
                         log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
