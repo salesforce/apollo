@@ -6,6 +6,11 @@
  */
 package com.salesforce.apollo.model;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
@@ -13,9 +18,13 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
@@ -32,6 +41,8 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.delphinius.Oracle;
+import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -114,8 +125,11 @@ public class NodeTest {
     @Test
     public void smoke() throws Exception {
         nodes.forEach(n -> n.start());
-
-        Thread.sleep(5000);
+        Thread.sleep(5_000);
+        var oracle = nodes.get(0).getDelphi();
+        System.out.println("**** testing");
+        oracle.add(new Oracle.Namespace("test")).get(10, TimeUnit.SECONDS);
+//        smoke(oracle);
     }
 
     private Builder params() {
@@ -141,5 +155,146 @@ public class NodeTest {
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
+    }
+
+    @SuppressWarnings("unused")
+    private void smoke(Oracle oracle) throws Exception {
+        // Namespace
+        var ns = Oracle.namespace("my-org");
+
+        // relations
+        var member = ns.relation("member");
+        var flag = ns.relation("flag");
+
+        // Group membersip
+        var userMembers = ns.subject("Users", member);
+        var adminMembers = ns.subject("Admins", member);
+        var helpDeskMembers = ns.subject("HelpDesk", member);
+        var managerMembers = ns.subject("Managers", member);
+        var technicianMembers = ns.subject("Technicians", member);
+        var abcTechMembers = ns.subject("ABCTechnicians", member);
+        var flaggedTechnicianMembers = ns.subject(abcTechMembers.name(), flag);
+
+        // Flagged subjects for testing
+        var egin = ns.subject("Egin", flag);
+        var ali = ns.subject("Ali", flag);
+        var gl = ns.subject("G l", flag);
+        var fuat = ns.subject("Fuat", flag);
+
+        // Subjects
+        var jale = ns.subject("Jale");
+        var irmak = ns.subject("Irmak");
+        var hakan = ns.subject("Hakan");
+        var demet = ns.subject("Demet");
+        var can = ns.subject("Can");
+        var burcu = ns.subject("Burcu");
+
+        // Map direct edges. Transitive edges added as a side effect
+        var completions = new ArrayList<CompletableFuture<?>>();
+
+        completions.add(oracle.map(helpDeskMembers, adminMembers));
+        completions.add(oracle.map(ali, adminMembers));
+        completions.add(oracle.map(ali, userMembers));
+        completions.add(oracle.map(burcu, userMembers));
+        completions.add(oracle.map(can, userMembers));
+        completions.add(oracle.map(managerMembers, userMembers));
+        completions.add(oracle.map(technicianMembers, userMembers));
+        completions.add(oracle.map(demet, helpDeskMembers));
+        completions.add(oracle.map(egin, helpDeskMembers));
+        completions.add(oracle.map(egin, userMembers));
+        completions.add(oracle.map(fuat, managerMembers));
+        completions.add(oracle.map(gl, managerMembers));
+        completions.add(oracle.map(hakan, technicianMembers));
+        completions.add(oracle.map(irmak, technicianMembers));
+        completions.add(oracle.map(abcTechMembers, technicianMembers));
+        completions.add(oracle.map(flaggedTechnicianMembers, technicianMembers));
+        completions.add(oracle.map(jale, abcTechMembers));
+
+        completions.forEach(cf -> {
+            try {
+                cf.get();
+            } catch (InterruptedException | ExecutionException e) {
+                fail("Failed completion");
+            }
+        });
+
+        // Protected resource namespace
+        var docNs = Oracle.namespace("Document");
+        // Permission
+        var view = docNs.relation("View");
+        // Protected Object
+        var object123View = docNs.object("123", view);
+
+        // Users can View Document 123
+        Assertion tuple = userMembers.assertion(object123View);
+        oracle.add(tuple).get();
+
+        // Direct subjects that can View the document
+        var viewers = oracle.read(object123View);
+        assertEquals(1, viewers.size());
+        assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
+
+        // Direct objects that can User member can view
+        var viewable = oracle.read(userMembers);
+        assertEquals(1, viewable.size());
+        assertTrue(viewable.contains(object123View), "Should contain: " + object123View);
+
+        // Assert flagged technicians can directly view the document
+        Assertion grantTechs = flaggedTechnicianMembers.assertion(object123View);
+        oracle.add(grantTechs).get();
+
+        // Now have 2 direct subjects that can view the doc
+        viewers = oracle.read(object123View);
+        assertEquals(2, viewers.size());
+        assertTrue(viewers.contains(userMembers), "Should contain: " + userMembers);
+        assertTrue(viewers.contains(flaggedTechnicianMembers), "Should contain: " + flaggedTechnicianMembers);
+
+        // flagged has direct view
+        viewable = oracle.read(flaggedTechnicianMembers);
+        assertEquals(1, viewable.size());
+        assertTrue(viewable.contains(object123View), "Should contain: " + object123View);
+
+        // Filter direct on flagged relation
+        var flaggedViewers = oracle.read(flag, object123View);
+        assertEquals(1, flaggedViewers.size());
+        assertTrue(flaggedViewers.contains(flaggedTechnicianMembers), "Should contain: " + flaggedTechnicianMembers);
+
+        // Transitive subjects that can view the document
+        var inferredViewers = oracle.expand(object123View);
+        assertEquals(14, inferredViewers.size());
+        for (var s : Arrays.asList(ali, jale, egin, irmak, hakan, gl, fuat, can, burcu, managerMembers,
+                                   technicianMembers, abcTechMembers, userMembers, flaggedTechnicianMembers)) {
+            assertTrue(inferredViewers.contains(s), "Should contain: " + s);
+        }
+
+        // Transitive subjects filtered by flag predicate
+        var inferredFlaggedViewers = oracle.expand(flag, object123View);
+        assertEquals(5, inferredFlaggedViewers.size());
+        for (var s : Arrays.asList(egin, ali, gl, fuat, flaggedTechnicianMembers)) {
+            assertTrue(inferredFlaggedViewers.contains(s), "Should contain: " + s);
+        }
+
+        // Check some assertions
+        assertTrue(oracle.check(object123View.assertion(jale)));
+        assertTrue(oracle.check(object123View.assertion(egin)));
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+
+        // Remove them
+        oracle.remove(abcTechMembers, technicianMembers).get();
+
+        assertFalse(oracle.check(object123View.assertion(jale)));
+        assertTrue(oracle.check(object123View.assertion(egin)));
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+
+        // Remove our assertion
+        oracle.delete(tuple).get();
+
+        assertFalse(oracle.check(object123View.assertion(jale)));
+        assertFalse(oracle.check(object123View.assertion(egin)));
+        assertFalse(oracle.check(object123View.assertion(helpDeskMembers)));
+
+        // Some deletes
+        oracle.delete(abcTechMembers).get();
+        oracle.delete(flaggedTechnicianMembers).get();
     }
 }
