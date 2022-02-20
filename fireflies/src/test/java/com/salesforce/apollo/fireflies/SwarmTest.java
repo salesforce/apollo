@@ -33,6 +33,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
@@ -249,7 +250,8 @@ public class SwarmTest {
             Router comms = new LocalRouter(prefix, node,
                                            ServerConnectionCache.newBuilder()
                                                                 .setTarget(2)
-                                                                .setMetrics(fireflyMetricsImpl),
+                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                        : registry)),
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);

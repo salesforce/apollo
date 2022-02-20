@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
+import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
@@ -17,5 +18,7 @@ import com.salesforce.apollo.crypto.Digest;
 public interface GossiperService {
 
     Update gossip(Gossip request, Digest from);
+
+    void update(ContextUpdate request, Digest from);
 
 }

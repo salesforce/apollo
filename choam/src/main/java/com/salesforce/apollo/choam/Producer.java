@@ -203,7 +203,8 @@ public class Producer {
         controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                                   epoch -> newEpoch(epoch));
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
-                                          params().exec(), params().metrics());
+                                          params().exec(),
+                                          params().metrics() == null ? null : params().metrics().getProducerMetrics());
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 

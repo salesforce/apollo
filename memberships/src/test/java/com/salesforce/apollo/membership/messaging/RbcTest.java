@@ -36,9 +36,8 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
-import com.salesforce.apollo.comm.RouterMetrics;
-import com.salesforce.apollo.comm.RouterMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
@@ -46,6 +45,8 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
+import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
@@ -130,7 +131,7 @@ public class RbcTest {
     @Test
     public void broadcast() throws Exception {
         MetricRegistry registry = new MetricRegistry();
-        RouterMetrics metrics = new RouterMetricsImpl(registry);
+        RbcMetrics metrics = new RbcMetricsImpl(registry);
 
         List<SigningMember> members = certs.values()
                                            .stream()
@@ -149,7 +150,9 @@ public class RbcTest {
         messengers = members.stream().map(node -> {
             AtomicInteger exec = new AtomicInteger();
             var comms = new LocalRouter(prefix, node,
-                                        ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics),
+                                        ServerConnectionCache.newBuilder()
+                                                             .setTarget(30)
+                                                             .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
                                         Executors.newFixedThreadPool(2, r -> {
                                             Thread thread = new Thread(r, "Router exec" + node.getId() + "["
                                             + exec.getAndIncrement() + "]");
@@ -197,6 +200,8 @@ public class RbcTest {
                 receiver.reset();
             }
         }
+        communications.forEach(e -> e.close());
+
         System.out.println();
 
         ConsoleReporter.forRegistry(registry)

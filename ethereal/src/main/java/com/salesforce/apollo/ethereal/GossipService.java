@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -29,22 +28,22 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  * @author hal.hildebrand
  *
  */
-public class Gossiper {
-    private static final Logger log = LoggerFactory.getLogger(Gossiper.class);
+public class GossipService {
+    private static final Logger log = LoggerFactory.getLogger(GossipService.class);
 
-    private final Orderer                   orderer;
     private final List<BloomFilter<Digest>> biffs;
     private final Lock                      mx = new ReentrantLock();
+    private final Orderer                   orderer;
 
-    public Gossiper(Controller controller) {
+    public GossipService(Controller controller) {
         this(controller.orderer());
     }
 
-    public Gossiper(Orderer orderer) {
+    public GossipService(Orderer orderer) {
         this.orderer = orderer;
         biffs = new ArrayList<>();
         Config config = orderer.getConfig();
-        int count = Math.max(4, config.nProc()); 
+        int count = Math.max(4, config.nProc());
         for (int i = 0; i < count; i++) {
             biffs.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
                                             config.epochLength() * config.numberOfEpochs() * config.nProc() * 2,
@@ -52,37 +51,37 @@ public class Gossiper {
         }
     }
 
-    public Gossip gossip() {
-        return gossip(DigestAlgorithm.DEFAULT.getOrigin());
-    }
-
-    public Gossip gossip(Digest context) {
+    public Gossip gossip(Digest context, int ring) {
         log.trace("Gossiping for: {} on: {}", context, orderer.getConfig().pid());
         mx.lock();
         try {
-            return Gossip.newBuilder().setContext(context.toDigeste())
-                         .setHave(biffs.get(Utils.bitStreamEntropy().nextInt(biffs.size())).toBff()).build();
+            return Gossip.newBuilder()
+                         .setContext(context.toDigeste())
+                         .setRing(ring)
+                         .setHave(biffs.get(Utils.bitStreamEntropy().nextInt(biffs.size())).toBff())
+                         .build();
         } finally {
             mx.unlock();
         }
     }
 
     public Update gossip(Gossip gossip) {
-        Update update = orderer.missing(BloomFilter.from(gossip.getHave()));
-        log.trace("Gossip received for: {} missing: {} on: {}", Digest.from(gossip.getContext()),
+        Update.Builder update = orderer.missing(BloomFilter.from(gossip.getHave()));
+        log.trace("GossipService received for: {} missing: {} on: {}", Digest.from(gossip.getContext()),
                   update.getMissingCount(), orderer.getConfig().pid());
-        return update;
+        return update.setHave(biffs.get(Utils.bitStreamEntropy().nextInt(biffs.size())).toBff()).build();
     }
 
     public void update(Update update) {
-        List<PreUnit> missing = update.getMissingList().stream()
+        List<PreUnit> missing = update.getMissingList()
+                                      .stream()
                                       .map(pus -> PreUnit.from(pus, orderer.getConfig().digestAlgorithm()))
 //                                      .filter(pu -> pu.verify(config.verifiers()))
                                       .toList();
         if (missing.isEmpty()) {
             return;
         }
-        log.trace("Gossip update: {} on: {}", missing.size(), orderer.getConfig().pid());
+        log.trace("GossipService update: {} on: {}", missing.size(), orderer.getConfig().pid());
         mx.lock();
         try {
             missing.forEach(pu -> {
@@ -92,5 +91,10 @@ public class Gossiper {
             mx.unlock();
         }
         orderer.addPreunits(PreUnit.topologicalSort(new ArrayList<>(missing)));
+    }
+
+    public Update updateFor(BloomFilter<Digest> have) {
+        Update.Builder update = orderer.missing(have);
+        return update.setHave(biffs.get(Utils.bitStreamEntropy().nextInt(biffs.size())).toBff()).build();
     }
 }

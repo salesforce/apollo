@@ -50,7 +50,8 @@ public class TxDataSource implements DataSource {
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
     private final Member                             member;
-    private AtomicReference<Mode>                    mode        = new AtomicReference<>(Mode.UNIT);
+    private final ChoamMetrics                       metrics;
+    private final AtomicReference<Mode>              mode        = new AtomicReference<>(Mode.UNIT);
     private final CapacityBatchingQueue<Transaction> processing;
     private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
 
@@ -61,6 +62,7 @@ public class TxDataSource implements DataSource {
         processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
                                                             maxBatchCount, maxBatchByteSize,
                                                             tx -> tx.toByteString().size(), 5);
+        this.metrics = metrics;
     }
 
     public void close() {
@@ -70,6 +72,9 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
+        if (metrics != null) {
+            metrics.dropped(processing.size(), validations.size());
+        }
         log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size(),
                   member);
     }
@@ -124,7 +129,9 @@ public class TxDataSource implements DataSource {
 
         final var data = builder.build();
         final var bs = data.toByteString();
-
+        if (metrics != null) {
+            metrics.publishedBatch(data.getTransactionsCount(), bs.size(), data.getValidationsCount());
+        }
         log.trace("Unit data: {} txns, {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
                   data.getValidationsCount(), bs.size(), member);
         return bs;

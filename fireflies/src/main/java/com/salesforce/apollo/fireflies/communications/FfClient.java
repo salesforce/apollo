@@ -76,8 +76,7 @@ public class FfClient implements Fireflies {
             ListenableFuture<Gossip> result = client.gossip(sw);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(sw.getSerializedSize());
-                metrics.outboundGossip().update(sw.getSerializedSize());
-                metrics.outboundGossipRate().mark();
+                metrics.outboundGossip().mark(sw.getSerializedSize());
             }
             result.addListener(() -> {
                 if (metrics != null) {
@@ -89,7 +88,7 @@ public class FfClient implements Fireflies {
                         return;
                     }
                     metrics.inboundBandwidth().mark(gossip.getSerializedSize());
-                    metrics.gossipResponse().update(gossip.getSerializedSize());
+                    metrics.gossipResponse().mark(gossip.getSerializedSize());
                 }
             }, r -> r.run());
             return result;
@@ -106,13 +105,10 @@ public class FfClient implements Fireflies {
     public int ping(Digest context, int ping) {
         Context timer = null;
         if (metrics != null) {
-            timer = metrics.outboundPingTimer().time();
+            timer = metrics.outboundPingRate().time();
         }
         try {
             client.ping(Null.newBuilder().setContext(context.toDigeste()).build());
-            if (metrics != null) {
-                metrics.outboundPingRate().mark();
-            }
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         } finally {
@@ -143,8 +139,7 @@ public class FfClient implements Fireflies {
             client.update(state);
             if (metrics != null) {
                 metrics.outboundBandwidth().mark(state.getSerializedSize());
-                metrics.outboundUpdate().update(state.getSerializedSize());
-                metrics.outboundUpdateRate().mark();
+                metrics.outboundUpdate().mark(state.getSerializedSize());
             }
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

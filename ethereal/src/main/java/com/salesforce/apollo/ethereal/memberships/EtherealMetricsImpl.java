@@ -1,52 +1,51 @@
 /*
- * Copyright (c) 2020, salesforce.com, inc.
+ * Copyright (c) 2021, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.fireflies;
+package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
+import com.salesforce.apollo.protocols.BandwidthMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyMetrics {
+public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
+    private final Meter inboundBandwidth;
     private final Meter gossipReply;
     private final Meter gossipResponse;
     private final Timer gossipRoundDuration;
     private final Meter inboundGossip;
     private final Timer inboundGossipTimer;
-    private final Meter inboundPingRate;
     private final Meter inboundUpdate;
     private final Timer inboundUpdateTimer;
+    private final Meter outboundBandwidth;
     private final Meter outboundGossip;
     private final Timer outboundGossipTimer;
-    private final Timer outboundPingRate;
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
-    public FireflyMetricsImpl(MetricRegistry registry) {
-        super(registry);
-        outboundUpdateTimer = registry.timer("ff.update.outbound.duration");
-        inboundUpdateTimer = registry.timer("ff.update.inbound.duration");
-        outboundUpdate = registry.meter("ff.update.outbound.bytes");
-        inboundUpdate = registry.meter("ff.update.inbound.bytes");
+    public EtherealMetricsImpl(MetricRegistry registry) {
+        inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
+        outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
 
-        outboundGossipTimer = registry.timer("ff.gossip.outbound.duration");
-        inboundGossipTimer = registry.timer("ff.gossip.inbound.duration");
-        outboundGossip = registry.meter("ff.gossip.outbound.bytes");
-        gossipResponse = registry.meter("ff.gossip.reply.inbound.bytes");
-        inboundGossip = registry.meter("ff.gossip.inbound.bytes");
-        gossipReply = registry.meter("ff.gossip.reply.outbound.bytes");
-        gossipRoundDuration = registry.timer("ff.gossip.round.duration");
+        outboundUpdateTimer = registry.timer("ethereal.update.outbound.duration");
+        inboundUpdateTimer = registry.timer("ethereal.update.inbound.duration");
+        outboundUpdate = registry.meter("ethereal.update.outbound.bytes");
+        inboundUpdate = registry.meter("ethereal.update.inbound.bytes");
 
-        outboundPingRate = registry.timer("ff.ping.outbound.duration");
-        inboundPingRate = registry.meter("ff.ping.inbound");
+        outboundGossipTimer = registry.timer("ethereal.outbound.gossip.duration");
+        inboundGossipTimer = registry.timer("ethereal.inbound.gossip.duration");
+        outboundGossip = registry.meter("ethereal.gossip.oubound.bytes");
+        gossipResponse = registry.meter("ethereal.gossip.response.bytes");
+        inboundGossip = registry.meter("ethereal.gossip.inbound.bytes");
+        gossipReply = registry.meter("ethereal.gossip.reply.bytes");
+        gossipRoundDuration = registry.timer("ethereal.gossip.round.durration");
 
     }
 
@@ -66,6 +65,11 @@ public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyM
     }
 
     @Override
+    public Meter inboundBandwidth() {
+        return inboundBandwidth;
+    }
+
+    @Override
     public Meter inboundGossip() {
         return inboundGossip;
     }
@@ -73,11 +77,6 @@ public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyM
     @Override
     public Timer inboundGossipTimer() {
         return inboundGossipTimer;
-    }
-
-    @Override
-    public Meter inboundPingRate() {
-        return inboundPingRate;
     }
 
     @Override
@@ -91,6 +90,11 @@ public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyM
     }
 
     @Override
+    public Meter outboundBandwidth() {
+        return outboundBandwidth;
+    }
+
+    @Override
     public Meter outboundGossip() {
         return outboundGossip;
     }
@@ -98,11 +102,6 @@ public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyM
     @Override
     public Timer outboundGossipTimer() {
         return outboundGossipTimer;
-    }
-
-    @Override
-    public Timer outboundPingRate() {
-        return outboundPingRate;
     }
 
     @Override

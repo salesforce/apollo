@@ -331,8 +331,8 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             private Duration       batchInterval    = Duration.ofMillis(100);
             private Config.Builder ethereal         = Config.deterministic();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
-            private int            maxBatchByteSize = 256 * 1024;
-            private int            maxBatchCount    = 1_000;
+            private int            maxBatchByteSize = 2 *1024 * 1024;
+            private int            maxBatchCount    = 10_000;
             private Duration       maxGossipDelay   = Duration.ofSeconds(10);
 
             public ProducerParameters build() {

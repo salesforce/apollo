@@ -113,7 +113,9 @@ public class GenesisAssembly implements Genesis {
                                                   epoch -> transitions.nextEpoch(epoch));
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
-                                          params().exec(), params().metrics());
+                                          params().exec(),
+                                          params().metrics() == null ? null
+                                                                     : params().metrics().getReconfigureMetrics());
 
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   view.context().getId(), nextAssembly.keySet(), params().member());

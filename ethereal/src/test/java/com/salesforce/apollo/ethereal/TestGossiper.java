@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -25,14 +26,14 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class TestGossiper {
     private ScheduledFuture<?>             futureSailor;
-    private final List<Gossiper>           gossipers;
+    private final List<GossipService>      gossipers;
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean            started = new AtomicBoolean();
     private final AtomicInteger            round   = new AtomicInteger();
 
     public TestGossiper(List<Orderer> orderers) {
         scheduler = Executors.newScheduledThreadPool(50);
-        gossipers = orderers.stream().map(o -> new Gossiper(o)).collect(Collectors.toList());
+        gossipers = orderers.stream().map(o -> new GossipService(o)).collect(Collectors.toList());
         Collections.shuffle(gossipers);
     }
 
@@ -65,7 +66,7 @@ public class TestGossiper {
                 }
                 var candidate = gossipers.get(thisRound);
                 if (candidate != g) {
-                    g.update(candidate.gossip(g.gossip()));
+                    g.update(candidate.gossip(g.gossip(DigestAlgorithm.DEFAULT.getOrigin(), 0)));
                 }
             });
         } catch (Throwable t) {

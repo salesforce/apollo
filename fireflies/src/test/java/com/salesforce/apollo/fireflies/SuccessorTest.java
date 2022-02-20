@@ -31,6 +31,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -104,7 +105,9 @@ public class SuccessorTest {
 
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
 
-        Builder builder = ServerConnectionCache.newBuilder().setTarget(30).setMetrics(metrics);
+        Builder builder = ServerConnectionCache.newBuilder()
+                                               .setTarget(30)
+                                               .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
         ForkJoinPool executor = new ForkJoinPool();
         final var prefix = UUID.randomUUID().toString();
         Map<Participant, View> views = members.stream().map(node -> {

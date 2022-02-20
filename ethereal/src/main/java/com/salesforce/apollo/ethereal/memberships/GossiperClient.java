@@ -10,11 +10,11 @@ import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc;
 import com.salesfoce.apollo.ethereal.proto.GossiperGrpc.GossiperFutureStub;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.comm.RouterMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
@@ -23,9 +23,9 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  * @since 220
  */
-public class GossiperClient implements Scuttlebutte {
+public class GossiperClient implements Gossiper {
 
-    public static CreateClientCommunications<Scuttlebutte> getCreate(RouterMetrics metrics) {
+    public static CreateClientCommunications<Gossiper> getCreate(EtherealMetrics metrics) {
         return (t, f, c) -> {
             return new GossiperClient(c, t, metrics);
         };
@@ -35,9 +35,9 @@ public class GossiperClient implements Scuttlebutte {
     private final ManagedServerConnection channel;
     private final GossiperFutureStub      client;
     private final Member                  member;
-    private final RouterMetrics           metrics;
+    private final EtherealMetrics         metrics;
 
-    public GossiperClient(ManagedServerConnection channel, Member member, RouterMetrics metrics) {
+    public GossiperClient(ManagedServerConnection channel, Member member, EtherealMetrics metrics) {
         this.member = member;
         this.channel = channel;
         this.client = GossiperGrpc.newFutureStub(channel.channel).withCompression("gzip");
@@ -56,41 +56,55 @@ public class GossiperClient implements Scuttlebutte {
 
     @Override
     public ListenableFuture<Update> gossip(Gossip request) {
-        Context timer = null;
+        Context timer = metrics == null ? null : metrics.outboundGossipTimer().time();
         if (metrics != null) {
-            timer = metrics.outboundGossipTimer().time();
+            metrics.outboundGossip().mark(request.getSerializedSize());
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
         }
-        try {
-            ListenableFuture<Update> result = client.gossip(request);
-            result.addListener(() -> {
-                if (metrics != null) {
-                    Update messages;
-                    try {
-                        messages = result.get();
+        ListenableFuture<Update> result = client.gossip(request);
+        result.addListener(() -> {
+            Update messages = null;
+            try {
+                messages = result.get();
+            } catch (InterruptedException | ExecutionException e) {
+                // purposefully ignored
+            } finally {
+                if (timer != null) {
+                    if (messages != null) {
                         metrics.inboundBandwidth().mark(messages.getSerializedSize());
-                        metrics.gossipResponse().update(messages.getSerializedSize());
-                    } catch (InterruptedException | ExecutionException e) {
-                        // purposefully ignored
+                        metrics.gossipResponse().mark(messages.getSerializedSize());
                     }
-                    metrics.outboundGossip().update(request.getSerializedSize());
-                    metrics.outboundBandwidth().mark(request.getSerializedSize());
-                    metrics.outboundGossipRate().mark();
+                    timer.stop();
                 }
-            }, r -> r.run());
-            return result;
-        } finally {
-            if (timer != null) {
-                timer.stop();
             }
-        }
+        }, r -> r.run());
+        return result;
     }
 
     public void start() {
-
     }
 
     @Override
     public String toString() {
         return String.format("->[%s]", member);
+    }
+
+    @Override
+    public void update(ContextUpdate request) {
+        Context timer = null;
+        if (metrics != null) {
+            timer = metrics.outboundUpdateTimer().time();
+            metrics.outboundUpdate().mark(request.getSerializedSize());
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+        }
+        try {
+            client.update(request);
+        } finally {
+            if (metrics != null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+            }
+        }
     }
 }

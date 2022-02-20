@@ -9,6 +9,7 @@ package com.salesforce.apollo.ethereal.memberships;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.comm.Link;
@@ -18,10 +19,10 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public interface Scuttlebutte extends Link {
+public interface Gossiper extends Link {
 
-    static <S extends Member> Scuttlebutte getLocalLoopback(S member) {
-        return new Scuttlebutte() {
+    static <S extends Member> Gossiper getLocalLoopback(S member) {
+        return new Gossiper() {
 
             @Override
             public void close() throws IOException {
@@ -36,8 +37,14 @@ public interface Scuttlebutte extends Link {
             public ListenableFuture<Update> gossip(Gossip request) {
                 return null;
             }
+
+            @Override
+            public void update(ContextUpdate update) {
+            }
         };
     }
 
     ListenableFuture<Update> gossip(Gossip request);
+
+    void update(ContextUpdate update);
 }

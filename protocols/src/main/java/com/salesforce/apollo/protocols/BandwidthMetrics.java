@@ -14,8 +14,8 @@ import com.codahale.metrics.Meter;
  */
 public interface BandwidthMetrics {
 
-    String OUTBOUND_BANDWIDTH = "Outbound Bandwidth";
-    String INBOUND_BANDWIDTH  = "Inbound Bandwidth";
+    String OUTBOUND_BANDWIDTH = "bandwidth.outbound";
+    String INBOUND_BANDWIDTH  = "bandwidth.inbound";
 
     Meter inboundBandwidth();
 

@@ -41,6 +41,8 @@ public class FfServer extends FirefliesImplBase {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundGossipTimer().time();
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.inboundGossip().mark(request.getSerializedSize());
             }
             try {
                 Digest from = identity.getFrom();
@@ -53,11 +55,8 @@ public class FfServer extends FirefliesImplBase {
                 responseObserver.onNext(gossip);
                 responseObserver.onCompleted();
                 if (metrics != null) {
-                    metrics.inboundGossipRate().mark();
-                    metrics.inboundBandwidth().mark(request.getSerializedSize());
                     metrics.outboundBandwidth().mark(gossip.getSerializedSize());
-                    metrics.inboundGossip().update(request.getSerializedSize());
-                    metrics.gossipReply().update(gossip.getSerializedSize());
+                    metrics.gossipReply().mark(gossip.getSerializedSize());
                 }
             } finally {
                 if (timer != null) {
@@ -84,6 +83,8 @@ public class FfServer extends FirefliesImplBase {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundUpdateTimer().time();
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.inboundUpdate().mark(request.getSerializedSize());
             }
             try {
                 Digest from = identity.getFrom();
@@ -95,10 +96,7 @@ public class FfServer extends FirefliesImplBase {
                 responseObserver.onNext(Null.getDefaultInstance());
                 responseObserver.onCompleted();
                 if (metrics != null) {
-                    metrics.inboundBandwidth().mark(request.getSerializedSize());
                     metrics.outboundBandwidth().mark(Null.getDefaultInstance().getSerializedSize());
-                    metrics.inboundUpdate().update(request.getSerializedSize());
-                    metrics.inboundUpdateRate().mark();
                 }
             } finally {
                 if (timer != null) {
