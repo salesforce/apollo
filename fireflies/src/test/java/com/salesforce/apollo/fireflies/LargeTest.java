@@ -170,7 +170,9 @@ public class LargeTest {
         ForkJoinPool executor = new ForkJoinPool();
         final var prefix = UUID.randomUUID().toString();
         views = members.stream().map(node -> {
-            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
+                                                                           frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);
             LocalRouter comms = new LocalRouter(prefix, node,
                                                 ServerConnectionCache.newBuilder()
@@ -179,7 +181,6 @@ public class LargeTest {
                                                                                                                                              : registry)),
                                                 executor);
             communications.add(comms);
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             return new View(context, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }

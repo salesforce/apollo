@@ -34,6 +34,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
@@ -82,7 +83,7 @@ public class SuccessorTest {
     public void allSuccessors() throws Exception {
         Random entropy = new Random(0x666);
         MetricRegistry registry = new MetricRegistry();
-        FireflyMetrics metrics = new FireflyMetricsImpl(registry);
+        FireflyMetrics metrics = new FireflyMetricsImpl(DigestAlgorithm.DEFAULT.getOrigin(), registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
         List<Node> members = certs.values()

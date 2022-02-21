@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.fireflies;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
 
 /**
@@ -30,23 +33,23 @@ public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyM
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
-    public FireflyMetricsImpl(MetricRegistry registry) {
+    public FireflyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
-        outboundUpdateTimer = registry.timer("ff.update.outbound.duration");
-        inboundUpdateTimer = registry.timer("ff.update.inbound.duration");
-        outboundUpdate = registry.meter("ff.update.outbound.bytes");
-        inboundUpdate = registry.meter("ff.update.inbound.bytes");
+        outboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.outbound.duration"));
+        inboundUpdateTimer = registry.timer(name(context.shortString(), "ff.update.inbound.duration"));
+        outboundUpdate = registry.meter(name(context.shortString(), "ff.update.outbound.bytes"));
+        inboundUpdate = registry.meter(name(context.shortString(), "ff.update.inbound.bytes"));
 
-        outboundGossipTimer = registry.timer("ff.gossip.outbound.duration");
-        inboundGossipTimer = registry.timer("ff.gossip.inbound.duration");
-        outboundGossip = registry.meter("ff.gossip.outbound.bytes");
-        gossipResponse = registry.meter("ff.gossip.reply.inbound.bytes");
-        inboundGossip = registry.meter("ff.gossip.inbound.bytes");
-        gossipReply = registry.meter("ff.gossip.reply.outbound.bytes");
-        gossipRoundDuration = registry.timer("ff.gossip.round.duration");
+        outboundGossipTimer = registry.timer(name(context.shortString(), "ff.gossip.outbound.duration"));
+        inboundGossipTimer = registry.timer(name(context.shortString(), "ff.gossip.inbound.duration"));
+        outboundGossip = registry.meter(name(context.shortString(), "ff.gossip.outbound.bytes"));
+        gossipResponse = registry.meter(name(context.shortString(), "ff.gossip.reply.inbound.bytes"));
+        inboundGossip = registry.meter(name(context.shortString(), "ff.gossip.inbound.bytes"));
+        gossipReply = registry.meter(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
+        gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
 
-        outboundPingRate = registry.timer("ff.ping.outbound.duration");
-        inboundPingRate = registry.meter("ff.ping.inbound");
+        outboundPingRate = registry.timer(name(context.shortString(), "ff.ping.outbound.duration"));
+        inboundPingRate = registry.meter(name(context.shortString(), "ff.ping.inbound"));
 
     }
 
