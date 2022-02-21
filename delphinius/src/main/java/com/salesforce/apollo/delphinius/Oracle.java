@@ -20,6 +20,9 @@ public interface Oracle {
     /** A Namespace **/
     public record Namespace(String name) {
 
+        /** Grounding for all the domains */
+        public static final Namespace NO_NAMESPACE = new Namespace("");
+
         public Object object(String name, Relation relation) {
             return new Object(this, name, relation);
         }
@@ -29,7 +32,7 @@ public interface Oracle {
         }
 
         public Subject subject(String name) {
-            return new Subject(this, name, NO_RELATION);
+            return new Subject(this, name, Relation.NO_RELATION);
         }
 
         public Subject subject(String name, Relation relation) {
@@ -41,30 +44,38 @@ public interface Oracle {
 
     /** A Subject **/
     public record Subject(Namespace namespace, String name, Relation relation) {
+
+        public static final Subject NO_SUBJECT = new Subject(Namespace.NO_NAMESPACE, "", Relation.NO_RELATION);
+
         public Assertion assertion(Object object) {
             return new Assertion(this, object);
         }
 
         @Override
         public String toString() {
-            return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
+            return namespace.name + ":" + name + (relation.equals(Relation.NO_RELATION) ? "" : "#" + relation);
         }
     }
 
     /** An Object **/
     public record Object(Namespace namespace, String name, Relation relation) {
+
+        public static final Object NO_OBJECT = new Object(Namespace.NO_NAMESPACE, "", Relation.NO_RELATION);
+
         public Assertion assertion(Subject subject) {
             return new Assertion(subject, this);
         }
 
         @Override
         public String toString() {
-            return namespace.name + ":" + name + (relation.equals(NO_RELATION) ? "" : "#" + relation);
+            return namespace.name + ":" + name + (relation.equals(Relation.NO_RELATION) ? "" : "#" + relation);
         }
     }
 
     /** A Relation **/
     public record Relation(Namespace namespace, String name) {
+        public static final Relation NO_RELATION = new Relation(Namespace.NO_NAMESPACE, "");
+
         @Override
         public String toString() {
             return namespace.name + ":" + name;
@@ -73,18 +84,13 @@ public interface Oracle {
 
     /** An Assertion **/
     public record Assertion(Subject subject, Object object) {
+        public static final Assertion NO_ASSERTION = new Assertion(Subject.NO_SUBJECT, Object.NO_OBJECT);
+
         @Override
         public String toString() {
             return subject + "@" + object;
         }
     }
-
-    /** Grounding for all the domains */
-    Namespace NO_NAMESPACE = new Namespace("");
-    Relation  NO_RELATION  = new Relation(NO_NAMESPACE, "");
-    Object    NO_OBJECT    = new Object(NO_NAMESPACE, "", NO_RELATION);
-    Subject   NO_SUBJECT   = new Subject(NO_NAMESPACE, "", NO_RELATION);
-    Assertion NO_ASSERTION = new Assertion(NO_SUBJECT, NO_OBJECT);
 
     // Types for DAG
     String OBJECT_TYPE   = "o";

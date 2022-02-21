@@ -95,10 +95,6 @@ public class RingCommunications<Comm extends Link> {
 
     public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
         final var next = nextRing(null);
-        if (next == null) {
-            log.info("No member available for communication");
-            return;
-        }
         try (Comm link = next.link) {
             execute(round, handler, link, next.ring);
         } catch (IOException e) {
@@ -165,7 +161,7 @@ public class RingCommunications<Comm extends Link> {
             current = (current + 1) % rings;
         }
         lastRingIndex = current;
-        return link;
+        return link == null ? new linkAndRing<>(null, current) : link;
     }
 
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler, Comm link,

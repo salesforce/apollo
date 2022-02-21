@@ -209,20 +209,3 @@ message Slice {
     int32 index = 1;
     bytes block = 2;
 }
-
-
-service Gossip {
-    rpc gossip (Have) returns (Update) {}
-}
-
-message Have {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    utils.Biff validations = 3;
-    utils.Biff joins = 4;
-}
-
-message Update {
-    repeated Validate validations = 1;
-    repeated ViewMember joins = 2;
-}

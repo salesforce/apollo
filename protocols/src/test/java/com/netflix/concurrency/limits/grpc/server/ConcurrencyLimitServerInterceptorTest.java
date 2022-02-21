@@ -105,7 +105,7 @@ public class ConcurrencyLimitServerInterceptorTest {
 
         try {
             ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
-            fail("Should have failed with UNKNOWN error");
+            fail("Should have failed with INVALID_ARGUMENT error");
         } catch (StatusRuntimeException e) {
             assertEquals(Status.Code.INVALID_ARGUMENT, e.getStatus().getCode());
         }
@@ -122,6 +122,7 @@ public class ConcurrencyLimitServerInterceptorTest {
             throw new RuntimeException("failure");
         });
 
+        System.out.println("*** Expecting two exception stack traces ***");
         try {
             ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
             fail("Should have failed with UNKNOWN error");

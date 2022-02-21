@@ -187,8 +187,8 @@ public interface Context<T extends Member> {
                 }
             }
         }
-        throw new IllegalArgumentException("Cannot compute number of rings from pByz=" + pByz + " cardinality: "
-        + cardinality + " epsilon: " + epsilon);
+        throw new IllegalArgumentException("Cannot compute number of rings from bias=" + bias + " pByz=" + pByz
+        + " cardinality: " + cardinality + " epsilon: " + epsilon);
     }
 
     /**

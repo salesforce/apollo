@@ -7,34 +7,36 @@
 package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.comm.RouterMetrics;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
+import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
+import com.salesforce.apollo.protocols.BandwidthMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ChoamMetrics extends RouterMetrics {
+public interface ChoamMetrics extends BandwidthMetrics {
 
-    void publishedBatch(int batchSize, int byteSize);
-
-    void invalidUnit();
-
-    void preBlockProduced(PreBlock preblock);
-
-    void broadcast(PreUnit preUnit);
-
-    void invalidSourcePid();
-
-    void coordDeserialError();
-
-    void incTotalMessages();
+    void publishedBatch(int batchSize, int byteSize, int validations);
 
     Timer transactionLatency();
 
     void transactionTimeout();
 
     void transactionComplete(Throwable t);
+
+    void dropped(int transactions, int validations);
+
+    void transactionSubmittedSuccess();
+
+    void transactionSubmittedFail();
+
+    void transactionSubmitRetry();
+
+    RbcMetrics getCombineMetrics();
+
+    EtherealMetrics getProducerMetrics();
+
+    EtherealMetrics getReconfigureMetrics();
 
 }

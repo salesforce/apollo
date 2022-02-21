@@ -26,15 +26,17 @@ public class Digest implements Comparable<Digest> {
     public static final Digest NONE = new Digest(DigestAlgorithm.NONE, new byte[0]) {
 
         @Override
-        public String toString() { 
+        public String toString() {
             return "[NONE]";
         }
-        
+
     };
 
     public static Digest combine(DigestAlgorithm algo, Digest[] digests) {
-        return algo.digest(Stream.of(digests).map(e -> e != null ? e : algo.getOrigin())
-                                 .map(e -> ByteBuffer.wrap(e.getBytes())).toList());
+        return algo.digest(Stream.of(digests)
+                                 .map(e -> e != null ? e : algo.getOrigin())
+                                 .map(e -> ByteBuffer.wrap(e.getBytes()))
+                                 .toList());
     }
 
     public static int compare(byte[] o1, byte[] o2) {
@@ -232,6 +234,11 @@ public class Digest implements Comparable<Digest> {
 
     public Digest prefix(String prefix) {
         return prefix(prefix.getBytes());
+    }
+
+    public String shortString() {
+        String hexString = Hex.toHexString(getBytes());
+        return hexString.substring(0, Math.min(hexString.length(), 16));
     }
 
     public ByteBuffer toByteBuffer() {

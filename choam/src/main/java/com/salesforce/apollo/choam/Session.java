@@ -52,8 +52,12 @@ public class Session {
         final var digeste = source.toDigeste();
         var sig = signer.sign(digeste.toByteString().asReadOnlyByteBuffer(), buff,
                               message.toByteString().asReadOnlyByteBuffer());
-        return Transaction.newBuilder().setSource(digeste).setNonce(nonce).setContent(message.toByteString())
-                          .setSignature(sig.toSig()).build();
+        return Transaction.newBuilder()
+                          .setSource(digeste)
+                          .setNonce(nonce)
+                          .setContent(message.toByteString())
+                          .setSignature(sig.toSig())
+                          .build();
     }
 
     public static boolean verify(Transaction transaction, Verifier verifier) {
@@ -81,8 +85,9 @@ public class Session {
      * Cancel all pending transactions
      */
     public void cancelAll() {
-        submitted.values().forEach(stx -> stx.onCompletion()
-                                             .completeExceptionally(new TransactionFailed("Transaction cancelled")));
+        submitted.values()
+                 .forEach(stx -> stx.onCompletion()
+                                    .completeExceptionally(new TransactionFailed("Transaction cancelled")));
     }
 
     /**
@@ -138,10 +143,8 @@ public class Session {
         submitted.remove(hash);
         if (timer != null) {
             timer.close();
-            if (t != null) {
-                log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
-                params.metrics().transactionComplete(t);
-            }
+            log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
+            params.metrics().transactionComplete(t);
         }
     }
 
@@ -159,8 +162,17 @@ public class Session {
             }
         });
         final var clientBackoff = params.clientBackoff().retryIf(s -> {
-            if (stx.onCompletion().isDone() || s.isOk()) {
+            if (stx.onCompletion().isDone()) {
                 return false;
+            }
+            if (s.isOk()) {
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedSuccess();
+                }
+                return false;
+            }
+            if (params.metrics() != null) {
+                params.metrics().transactionSubmitRetry();
             }
             log.trace("Retrying: {} status: {} on: {}", stx.hash(), s, params.member());
             return true;

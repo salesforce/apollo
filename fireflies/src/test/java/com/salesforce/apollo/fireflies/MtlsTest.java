@@ -34,6 +34,7 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.ProviderUtils;
@@ -119,12 +120,13 @@ public class MtlsTest {
         Builder builder = ServerConnectionCache.newBuilder().setTarget(2);
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
-            FireflyMetricsImpl metrics = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry : registry);
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
+                                                                frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = View.getStandardEpProvider(node);
-            builder.setMetrics(metrics);
+            builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             return new View(context, node, comms, metrics);
         }).collect(Collectors.toList());
 

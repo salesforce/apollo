@@ -243,7 +243,7 @@ public class Orderer {
         return null;
     }
 
-    public Update missing(BloomFilter<Digest> have) {
+    public Update.Builder missing(BloomFilter<Digest> have) {
         List<PreUnit_s> missing = new ArrayList<>();
         epoch p;
         epoch c;
@@ -261,7 +261,7 @@ public class Orderer {
         if (c != null) {
             c.missing(have, missing);
         }
-        return Update.newBuilder().addAllMissing(missing).build();
+        return Update.newBuilder().addAllMissing(missing);
     }
 
     public void start() {

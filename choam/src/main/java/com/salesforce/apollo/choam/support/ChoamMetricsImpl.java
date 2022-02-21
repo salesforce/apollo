@@ -6,80 +6,128 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
+import java.util.concurrent.TimeoutException;
+
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.comm.RouterMetricsImpl;
-import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
+import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
+import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
+import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
+import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class ChoamMetricsImpl extends RouterMetricsImpl implements ChoamMetrics {
+public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetrics {
 
-    public ChoamMetricsImpl(MetricRegistry registry) {
+    private final RbcMetrics      combineMetrics;
+    private final Counter         completedTransactions;
+    private final Counter         droppedTransactions;
+    private final Counter         droppedValidations;
+    private final Counter         failedTransactions;
+    private final EtherealMetrics producerMetrics;
+    private final Histogram       publishedBytes;
+    private final Meter           publishedTransactions;
+    private final Meter           publishedValidations;
+    private final EtherealMetrics reconfigureMetrics;
+    private final Timer           transactionLatency;
+    private final Counter         transactionSubmitFailed;
+    private final Counter         transactionSubmitRetry;
+    private final Counter         transactionSubmitSuccess;
+    private final Counter         transactionTimeout;
+
+    public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
+        combineMetrics = new RbcMetricsImpl(context, "combine", registry);
+        producerMetrics = new EtherealMetricsImpl(context, "producer", registry);
+        reconfigureMetrics = new EtherealMetricsImpl(context, "reconfigure", registry);
+
+        droppedTransactions = registry.counter(name(context.shortString(), "transactions.dropped"));
+        droppedValidations = registry.counter(name(context.shortString(), "validations.dropped"));
+        publishedTransactions = registry.meter(name(context.shortString(), "transactions.published"));
+        publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
+        publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
+        transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
+        transactionSubmitRetry = registry.counter(name(context.shortString(), "transaction.submit.retry"));
+        transactionSubmitFailed = registry.counter(name(context.shortString(), "transaction.submit.failed"));
+        transactionSubmitSuccess = registry.counter(name(context.shortString(), "transaction.submit.success"));
+        transactionTimeout = registry.counter(name(context.shortString(), "transaction.timeout"));
+        completedTransactions = registry.counter(name(context.shortString(), "transactions.completed"));
+        failedTransactions = registry.counter(name(context.shortString(), "transactions.failed"));
     }
 
     @Override
-    public void broadcast(PreUnit preUnit) {
-        // TODO Auto-generated method stub
-
+    public void dropped(int transactions, int validations) {
+        droppedTransactions.inc(transactions);
+        droppedValidations.inc(validations);
     }
 
     @Override
-    public void coordDeserialError() {
-        // TODO Auto-generated method stub
-
+    public RbcMetrics getCombineMetrics() {
+        return combineMetrics;
     }
 
     @Override
-    public void incTotalMessages() {
-        // TODO Auto-generated method stub
-
+    public EtherealMetrics getProducerMetrics() {
+        return producerMetrics;
     }
 
     @Override
-    public void invalidSourcePid() {
-        // TODO Auto-generated method stub
-
+    public EtherealMetrics getReconfigureMetrics() {
+        return reconfigureMetrics;
     }
 
     @Override
-    public void invalidUnit() {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void preBlockProduced(PreBlock preblock) {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void publishedBatch(int batchSize, int byteSize) {
-        // TODO Auto-generated method stub
-
+    public void publishedBatch(int transactions, int byteSize, int validations) {
+        publishedTransactions.mark(transactions);
+        publishedBytes.update(byteSize);
+        publishedValidations.mark(validations);
     }
 
     @Override
     public void transactionComplete(Throwable t) {
-        // TODO Auto-generated method stub
-
-    }
-
-    @Override
-    public void transactionTimeout() {
-        // TODO Auto-generated method stub
-
+        if (t != null) {
+            if (t instanceof TimeoutException) {
+                transactionTimeout.inc();
+            } else {
+                failedTransactions.inc();
+            }
+        } else {
+            completedTransactions.inc();
+        }
     }
 
     @Override
     public Timer transactionLatency() {
-        // TODO Auto-generated method stub
-        return null;
+        return transactionLatency;
+    }
+
+    @Override
+    public void transactionSubmitRetry() {
+        transactionSubmitRetry.inc();
+    }
+
+    @Override
+    public void transactionSubmittedFail() {
+        transactionSubmitFailed.inc();
+    }
+
+    @Override
+    public void transactionSubmittedSuccess() {
+        transactionSubmitSuccess.inc();
+    }
+
+    @Override
+    public void transactionTimeout() {
+        transactionTimeout.inc();
     }
 
 }

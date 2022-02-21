@@ -28,6 +28,7 @@ import org.jooq.Record2;
 import org.jooq.SQLDialect;
 import org.jooq.SelectJoinStep;
 import org.jooq.Table;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -328,7 +329,11 @@ abstract public class AbstractOracle implements Oracle {
                                                          .and(E.TRANSITIVE.isTrue())))
                    .execute();
         } finally {
-            context.dropTable(candidates).execute();
+            try {
+                context.dropTable(candidates).execute();
+            } catch (DataAccessException e) {
+                // ignored
+            }
         }
     }
 

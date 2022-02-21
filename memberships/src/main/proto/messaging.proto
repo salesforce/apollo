@@ -4,65 +4,15 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.messaging.proto";
 option java_outer_classname = "MessagingProto";
 option objc_class_prefix = "Mp";
-import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
 
-package messaging;
-
-service Messaging {
-    rpc gossip (MessageBff) returns (Messages) {}
-    rpc update (Push) returns (google.protobuf.Empty) {}
-}
-
-service CausalMessaging {
-    rpc gossip (MessageBff) returns (CausalMessages) {}
-    rpc update (CausalPush) returns (google.protobuf.Empty) {}
-}
+package messaging; 
 
 message MessageBff {
     utils.Digeste context = 1; 
     int32 ring = 3;
     utils.Biff digests = 4;
-}
-
-message Push {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated  Message updates = 3;
-}
-
-message Message {
-    utils.Digeste source = 1;
-    int32 sequenceNumber = 2;
-    int32 age = 3;
-    int32 channel = 4;
-    utils.Sig signature = 5;
-    utils.Digeste key = 6;
-    google.protobuf.Any content = 7;
-}
-
-message Messages {
-    utils.Biff  bff = 1;
-    repeated  Message updates = 2;
-}
-
-message CausalPush {
-    utils.Digeste context = 1;
-    int32 ring = 2;
-    repeated  CausalEnvelope updates = 3;
-}
-
-message CausalEnvelope {
-    utils.CausalMessage content = 1;
-    utils.Sig signature = 2;
-    int32 age = 3;
-    bool streamReset = 4;
-}
-
-message CausalMessages {
-    utils.Biff  bff = 1;
-    repeated  CausalEnvelope updates = 2;
 }
 
 message ByteMessage {
@@ -71,11 +21,20 @@ message ByteMessage {
 
 service RBC {
     rpc gossip (MessageBff) returns (Reconcile) {}
+    rpc update (ReconcileContext) returns (google.protobuf.Empty) {}
 }
 
 message Reconcile { 
     repeated  AgedMessage updates = 1;
+    utils.Biff digests = 2;
 }
+
+message ReconcileContext {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated  AgedMessage updates = 3;
+}
+
 message AgedMessage {
     int32 age = 1;
     int32 nonce = 2;

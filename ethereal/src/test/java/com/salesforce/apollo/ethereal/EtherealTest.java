@@ -26,6 +26,8 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
@@ -42,6 +44,7 @@ import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.creator.CreatorTest;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
+import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -82,6 +85,7 @@ public class EtherealTest {
 
     @Test
     public void context() throws Exception {
+        var registry = new MetricRegistry();
 
         short nProc = 31;
         CountDownLatch finished = new CountDownLatch(nProc);
@@ -98,10 +102,12 @@ public class EtherealTest {
                                                .toList();
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
+        var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         for (Member m : members) {
             context.activate(m);
         }
-        var builder = Config.deterministic().setnProc(nProc)
+        var builder = Config.deterministic()
+                            .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         var executor = Executors.newCachedThreadPool();
 
@@ -135,13 +141,14 @@ public class EtherealTest {
             controllers.add(controller);
             for (int d = 0; d < 5000; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
+                                            .build()
                                             .toByteString());
             }
             Router com = new LocalRouter(prefix, members.get(i), ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
             gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
-                                              null));
+                                              metrics));
         }
         try {
             controllers.forEach(e -> e.start());
@@ -193,6 +200,13 @@ public class EtherealTest {
             assertTrue(success > minQuorum,
                        "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
         }
+        System.out.println();
+
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     @Test
@@ -208,7 +222,8 @@ public class EtherealTest {
         final var verifiers = cpks.stream()
                                   .map(c -> (Verifier) new DefaultVerifier(c.getX509Certificate().getPublicKey()))
                                   .toList();
-        var builder = Config.deterministic().setnProc(nProc)
+        var builder = Config.deterministic()
+                            .setnProc(nProc)
                             .setVerifiers(verifiers.toArray(new Verifier[verifiers.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
@@ -224,8 +239,9 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(pid);
             builder.setSigner(new SignerImpl(cpks.get(i).getPrivateKey()));
             var controller = e.deterministic(builder.setSigner(new SignerImpl(SignatureAlgorithm.DEFAULT.generateKeyPair()
-                                        .getPrivate()))
-                                                    .setPid(pid).build(),
+                                                                                                        .getPrivate()))
+                                                    .setPid(pid)
+                                                    .build(),
                                              ds, (pb, last) -> {
                                                  if (pid == 0) {
                                                      System.out.println("Output: " + round.incrementAndGet());
@@ -244,7 +260,8 @@ public class EtherealTest {
             controllers.add(controller);
             for (int d = 0; d < 500; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
+                                            .build()
                                             .toByteString());
             }
         }
@@ -312,7 +329,8 @@ public class EtherealTest {
         final var verifiers = cpks.stream()
                                   .map(c -> (Verifier) new DefaultVerifier(c.getX509Certificate().getPublicKey()))
                                   .toList();
-        var builder = Config.deterministic().setnProc(nProc)
+        var builder = Config.deterministic()
+                            .setnProc(nProc)
                             .setVerifiers(verifiers.toArray(new Verifier[verifiers.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
@@ -328,7 +346,8 @@ public class EtherealTest {
             List<PreBlock> output = produced.get(pid);
             builder.setSigner(new SignerImpl(cpks.get(i).getPrivateKey()));
             var controller = e.deterministic(builder.setSigner(new SignerImpl(cpks.get(pid).getPrivateKey()))
-                                                    .setPid(pid).build(),
+                                                    .setPid(pid)
+                                                    .build(),
                                              ds, (pb, last) -> {
                                                  if (pid == 0) {
                                                      System.out.println("Preblock: " + level.incrementAndGet());
@@ -347,7 +366,8 @@ public class EtherealTest {
             controllers.add(controller);
             for (int d = 0; d < 500; d++) {
                 ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d)).build()
+                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
+                                            .build()
                                             .toByteString());
             }
         }

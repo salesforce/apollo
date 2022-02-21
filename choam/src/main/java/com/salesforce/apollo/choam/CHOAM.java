@@ -172,7 +172,13 @@ public class CHOAM {
                      params.member());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
                 futureSynchronization.set(null);
-                synchronizationFailed();
+                final var c = current.get();
+                if (c != null) {
+                    synchronizationFailed();
+                } else {
+                    testQuorum();
+                    awaitSynchronization();
+                }
             }, params.synchronizationCycles());
         }
 
@@ -188,6 +194,7 @@ public class CHOAM {
 
         @Override
         public void recover(HashedCertifiedBlock anchor) {
+            current.set(new Formation());
             CHOAM.this.recover(anchor);
         }
 
@@ -197,17 +204,33 @@ public class CHOAM {
         }
 
         private void synchronizationFailed() {
-            final var c = current.get();
-            if (c.isMember()) {
+            var c = current.get();
+
+            if (c == null) {
+                c = testQuorum();
+            }
+
+            if (c != null && c.isMember()) {
                 log.info("Synchronization failed and initial member, regenerating: {} on: {}",
                          c.getClass().getSimpleName(), params.member());
                 transitions.regenerate();
             } else {
-                log.info("Synchronization failed, no anchor to recover from: {} on: {}", c.getClass().getSimpleName(),
-                         params.member());
+                log.info("Synchronization failed, no anchor to recover from: {} on: {}",
+                         c == null ? "no formation" : c.getClass().getSimpleName(), params.member());
                 transitions.synchronizationFailed();
             }
         }
+    }
+
+    private Committee testQuorum() {
+        var activeCount = params.context().activeCount();
+        log.info("Active count: {} on: {}", activeCount, params.member());
+        if (activeCount >= params.context().getRingCount()) {
+            var c = new Formation();
+            current.set(c);
+            return c;
+        }
+        return null;
     }
 
     public class Trampoline implements Concierge {
@@ -660,7 +683,6 @@ public class CHOAM {
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
                                             params.context().timeToLive());
         combine.register(i -> roundScheduler.tick(i));
-        current.set(new Formation());
         session = new Session(params, service());
     }
 

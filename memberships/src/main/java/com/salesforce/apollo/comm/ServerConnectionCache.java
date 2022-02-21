@@ -188,8 +188,6 @@ public class ServerConnectionCache {
 
         Counter createConnection();
 
-        Meter createConnectionRate();
-
         Meter failedConnectionRate();
 
         Counter failedOpenConnection();
@@ -268,7 +266,6 @@ public class ServerConnectionCache {
                 if (metrics != null) {
                     metrics.createConnection().inc();
                     metrics.openConnections().inc();
-                    metrics.createConnectionRate().mark();
                 }
                 return conn;
             });

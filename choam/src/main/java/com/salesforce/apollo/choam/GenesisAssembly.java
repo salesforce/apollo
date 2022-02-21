@@ -113,7 +113,9 @@ public class GenesisAssembly implements Genesis {
                                                   epoch -> transitions.nextEpoch(epoch));
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
-                                          params().exec(), params().metrics());
+                                          params().exec(),
+                                          params().metrics() == null ? null
+                                                                     : params().metrics().getReconfigureMetrics());
 
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   view.context().getId(), nextAssembly.keySet(), params().member());
@@ -244,10 +246,13 @@ public class GenesisAssembly implements Genesis {
                      params().member());
             return;
         }
-        witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);
-        if (witnesses.size() > params().toleranceLevel()) {
-            if (published.compareAndSet(false, true)) {
-                publish();
+        var member = view.context().getMember(Digest.from(v.getWitness().getId()));
+        if (member != null) {
+            witnesses.put(member, v);
+            if (witnesses.size() > params().toleranceLevel()) {
+                if (published.compareAndSet(false, true)) {
+                    publish();
+                }
             }
         }
     }

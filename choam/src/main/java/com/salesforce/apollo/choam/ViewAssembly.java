@@ -135,7 +135,9 @@ public class ViewAssembly implements Reconfiguration {
                                                   epoch -> transitions.nextEpoch(epoch));
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
-                                          params().exec(), params().metrics());
+                                          params().exec(),
+                                          params().metrics() == null ? null
+                                                                     : params().metrics().getReconfigureMetrics());
 
         log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());

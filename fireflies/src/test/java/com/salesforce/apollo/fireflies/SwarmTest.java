@@ -33,6 +33,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
@@ -244,16 +245,18 @@ public class SwarmTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.stream().map(node -> {
-            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(frist.getAndSet(false) ? node0Registry
+            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
+                                                                           frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);
             Router comms = new LocalRouter(prefix, node,
                                            ServerConnectionCache.newBuilder()
                                                                 .setTarget(2)
-                                                                .setMetrics(fireflyMetricsImpl),
+                                                                .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
+                                                                                                                                        : registry)),
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             return new View(context, node, comms, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
