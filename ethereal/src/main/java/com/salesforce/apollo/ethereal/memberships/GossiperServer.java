@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
+import org.slf4j.LoggerFactory;
+
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
@@ -43,16 +45,14 @@ public class GossiperServer extends GossiperImplBase {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundGossipTimer().time();
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.inboundGossip().mark(request.getSerializedSize());
             }
             try {
                 Digest from = identity.getFrom();
                 if (from == null) {
                     responseObserver.onError(new IllegalStateException("Member has been removed"));
                     return;
-                }
-                if (metrics != null) {
-                    metrics.inboundBandwidth().mark(request.getSerializedSize());
-                    metrics.inboundGossip().mark(request.getSerializedSize());
                 }
                 Update response = s.gossip(request, from);
                 responseObserver.onNext(response);
@@ -75,6 +75,8 @@ public class GossiperServer extends GossiperImplBase {
             Context timer = null;
             if (metrics != null) {
                 timer = metrics.inboundUpdateTimer().time();
+                metrics.inboundBandwidth().mark(request.getSerializedSize());
+                metrics.inboundUpdate().mark(request.getSerializedSize());
             }
             try {
                 Digest from = identity.getFrom();
@@ -82,13 +84,11 @@ public class GossiperServer extends GossiperImplBase {
                     responseObserver.onError(new IllegalStateException("Member has been removed"));
                     return;
                 }
-                if (metrics != null) {
-                    metrics.inboundBandwidth().mark(request.getSerializedSize());
-                    metrics.inboundUpdate().mark(request.getSerializedSize());
-                }
                 s.update(request, from);
                 responseObserver.onNext(Empty.getDefaultInstance());
                 responseObserver.onCompleted();
+            } catch (Throwable e) {
+                LoggerFactory.getLogger(GossiperServer.class).error("Unexpected exception", e);
             } finally {
                 if (timer != null) {
                     timer.stop();

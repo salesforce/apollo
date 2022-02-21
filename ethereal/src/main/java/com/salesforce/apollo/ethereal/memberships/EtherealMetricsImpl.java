@@ -6,9 +6,12 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.BandwidthMetrics;
 
 /**
@@ -30,22 +33,22 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
-    public EtherealMetricsImpl(MetricRegistry registry) {
+    public EtherealMetricsImpl(Digest context, String system, MetricRegistry registry) {
         inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
         outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
 
-        outboundUpdateTimer = registry.timer("ethereal.update.outbound.duration");
-        inboundUpdateTimer = registry.timer("ethereal.update.inbound.duration");
-        outboundUpdate = registry.meter("ethereal.update.outbound.bytes");
-        inboundUpdate = registry.meter("ethereal.update.inbound.bytes");
+        outboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.outbound.duration"));
+        inboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.inbound.duration"));
+        outboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.outbound.bytes"));
+        inboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.inbound.bytes"));
 
-        outboundGossipTimer = registry.timer("ethereal.outbound.gossip.duration");
-        inboundGossipTimer = registry.timer("ethereal.inbound.gossip.duration");
-        outboundGossip = registry.meter("ethereal.gossip.oubound.bytes");
-        gossipResponse = registry.meter("ethereal.gossip.response.bytes");
-        inboundGossip = registry.meter("ethereal.gossip.inbound.bytes");
-        gossipReply = registry.meter("ethereal.gossip.reply.bytes");
-        gossipRoundDuration = registry.timer("ethereal.gossip.round.durration");
+        outboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.outbound.duration"));
+        inboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.inbound.duration"));
+        outboundGossip = registry.meter(name(context.shortString(), system, "ethereal.gossip.oubound.bytes"));
+        gossipResponse = registry.meter(name(context.shortString(), system, "ethereal.gossip.response.bytes"));
+        inboundGossip = registry.meter(name(context.shortString(), system, "ethereal.gossip.inbound.bytes"));
+        gossipReply = registry.meter(name(context.shortString(), system, "ethereal.gossip.reply.bytes"));
+        gossipRoundDuration = registry.timer(name(context.shortString(), system, "ethereal.gossip.round.durration"));
 
     }
 

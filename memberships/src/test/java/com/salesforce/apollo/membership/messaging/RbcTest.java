@@ -131,7 +131,6 @@ public class RbcTest {
     @Test
     public void broadcast() throws Exception {
         MetricRegistry registry = new MetricRegistry();
-        RbcMetrics metrics = new RbcMetricsImpl(registry);
 
         List<SigningMember> members = certs.values()
                                            .stream()
@@ -143,6 +142,7 @@ public class RbcTest {
                                            .collect(Collectors.toList());
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
+        RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
         parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 

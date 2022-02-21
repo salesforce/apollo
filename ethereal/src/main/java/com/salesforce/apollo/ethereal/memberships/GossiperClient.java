@@ -100,10 +100,8 @@ public class GossiperClient implements Gossiper {
         try {
             client.update(request);
         } finally {
-            if (metrics != null) {
-                if (timer != null) {
-                    timer.stop();
-                }
+            if (timer != null) {
+                timer.stop();
             }
         }
     }

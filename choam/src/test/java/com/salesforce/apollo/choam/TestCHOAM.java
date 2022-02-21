@@ -170,12 +170,12 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         registry = new MetricRegistry();
-        var metrics = new ChoamMetricsImpl(registry);
+        var metrics = new ChoamMetricsImpl(context.getId(), registry);
         transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var exec = Router.createFjPool();

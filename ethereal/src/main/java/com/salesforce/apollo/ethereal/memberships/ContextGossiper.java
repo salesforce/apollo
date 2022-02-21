@@ -50,8 +50,8 @@ public class ContextGossiper {
         public Update gossip(Gossip request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.info("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                         member, from, request.getRing(), predecessor);
+                log.error("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
+                          member, from, request.getRing(), predecessor);
                 return Update.getDefaultInstance();
             }
             final var update = gossiper.gossip(request);
@@ -63,8 +63,8 @@ public class ContextGossiper {
         public void update(ContextUpdate request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.info("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
-                         member, from, request.getRing(), predecessor);
+                log.error("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
+                          member, from, request.getRing(), predecessor);
                 return;
             }
             log.debug("gossip update with {} on: {}", from, member);
@@ -172,7 +172,7 @@ public class ContextGossiper {
             try {
                 update = futureSailor.get().get();
             } catch (InterruptedException e) {
-                log.debug("error gossiping with {} on: {}", link.getMember(), member, e);
+                log.error("error gossiping with {} on: {}", link.getMember(), member, e);
                 return;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof StatusRuntimeException sre) {

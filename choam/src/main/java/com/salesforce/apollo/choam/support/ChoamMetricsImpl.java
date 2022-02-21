@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.choam.support;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 import java.util.concurrent.TimeoutException;
 
 import com.codahale.metrics.Counter;
@@ -13,6 +15,7 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
@@ -41,24 +44,24 @@ public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetri
     private final Counter         transactionSubmitSuccess;
     private final Counter         transactionTimeout;
 
-    public ChoamMetricsImpl(MetricRegistry registry) {
+    public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
-        combineMetrics = new RbcMetricsImpl(registry);
-        producerMetrics = new EtherealMetricsImpl(registry);
-        reconfigureMetrics = new EtherealMetricsImpl(registry);
+        combineMetrics = new RbcMetricsImpl(context, "combine", registry);
+        producerMetrics = new EtherealMetricsImpl(context, "producer", registry);
+        reconfigureMetrics = new EtherealMetricsImpl(context, "reconfigure", registry);
 
-        droppedTransactions = registry.counter("transactions.dropped");
-        droppedValidations = registry.counter("validations.dropped");
-        publishedTransactions = registry.meter("transactions.published");
-        publishedBytes = registry.histogram("unit.bytes");
-        publishedValidations = registry.meter("validations.published");
-        transactionLatency = registry.timer("transaction.latency");
-        transactionSubmitRetry = registry.counter("transaction.submit.retry");
-        transactionSubmitFailed = registry.counter("transaction.submit.failed");
-        transactionSubmitSuccess = registry.counter("transaction.submit.success");
-        transactionTimeout = registry.counter("transaction.timeout");
-        completedTransactions = registry.counter("transactions.completed");
-        failedTransactions = registry.counter("transactions.failed");
+        droppedTransactions = registry.counter(name(context.shortString(), "transactions.dropped"));
+        droppedValidations = registry.counter(name(context.shortString(), "validations.dropped"));
+        publishedTransactions = registry.meter(name(context.shortString(), "transactions.published"));
+        publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
+        publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
+        transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
+        transactionSubmitRetry = registry.counter(name(context.shortString(), "transaction.submit.retry"));
+        transactionSubmitFailed = registry.counter(name(context.shortString(), "transaction.submit.failed"));
+        transactionSubmitSuccess = registry.counter(name(context.shortString(), "transaction.submit.success"));
+        transactionTimeout = registry.counter(name(context.shortString(), "transaction.timeout"));
+        completedTransactions = registry.counter(name(context.shortString(), "transactions.completed"));
+        failedTransactions = registry.counter(name(context.shortString(), "transactions.failed"));
     }
 
     @Override

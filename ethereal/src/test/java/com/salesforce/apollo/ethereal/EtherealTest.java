@@ -86,7 +86,6 @@ public class EtherealTest {
     @Test
     public void context() throws Exception {
         var registry = new MetricRegistry();
-        var metrics = new EtherealMetricsImpl(registry);
 
         short nProc = 31;
         CountDownLatch finished = new CountDownLatch(nProc);
@@ -103,6 +102,7 @@ public class EtherealTest {
                                                .toList();
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
+        var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         for (Member m : members) {
             context.activate(m);
         }
