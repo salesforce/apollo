@@ -50,7 +50,7 @@ public class ContextGossiper {
         public Update gossip(Gossip request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.error("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
+                log.debug("Invalid inbound gossip on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
                           member, from, request.getRing(), predecessor);
                 return Update.getDefaultInstance();
             }
@@ -63,7 +63,7 @@ public class ContextGossiper {
         public void update(ContextUpdate request, Digest from) {
             Member predecessor = context.ring(request.getRing()).predecessor(member);
             if (predecessor == null || !from.equals(predecessor.getId())) {
-                log.error("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
+                log.debug("Invalid inbound update on {}:{} from: {} on ring: {} - not predecessor: {}", context.getId(),
                           member, from, request.getRing(), predecessor);
                 return;
             }

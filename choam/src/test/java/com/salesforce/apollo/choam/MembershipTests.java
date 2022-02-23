@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.choam;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -64,9 +65,9 @@ public class MembershipTests {
     private class Transactioneer {
         private final static Random entropy = new Random();
 
-        private final AtomicInteger            completed = new AtomicInteger();
+        private final AtomicInteger            completed = new AtomicInteger(0);
         private final CountDownLatch           countdown;
-        private final AtomicInteger            failed    = new AtomicInteger();
+        private final AtomicInteger            failed    = new AtomicInteger(0);
         private final int                      max;
         private final AtomicBoolean            proceed;
         private final ScheduledExecutorService scheduler;
@@ -93,6 +94,7 @@ public class MembershipTests {
                 }
 
                 if (t != null) {
+                    System.out.println("Failed: " + t.getMessage());
                     failed.incrementAndGet();
                     scheduler.schedule(() -> {
                         try {
@@ -102,7 +104,7 @@ public class MembershipTests {
                         }
                     }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                 } else {
-                    if (completed.incrementAndGet() == max) {
+                    if (completed.incrementAndGet() >= max) {
                         countdown.countDown();
                     } else {
                         try {
@@ -122,7 +124,7 @@ public class MembershipTests {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+            }, 2, TimeUnit.SECONDS);
         }
     }
 
@@ -152,15 +154,16 @@ public class MembershipTests {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
+        Thread.sleep(2_000); // need to create a mechanism to ensure genesis creation before starting txns ;)
 
-        final Duration timeout = Duration.ofSeconds(2);
+        final Duration timeout = Duration.ofSeconds(20);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
-        final var countdown = new CountDownLatch(clientCount);
+        final var countdown = new CountDownLatch(clientCount * (members.size() - 1));
         for (int i = 0; i < clientCount; i++) {
             choams.entrySet()
                   .stream()
@@ -171,21 +174,18 @@ public class MembershipTests {
         }
 
         transactioneers.forEach(e -> e.start());
-        boolean success;
         try {
-            success = countdown.await(30, TimeUnit.SECONDS);
+            System.out.println("completed: " + countdown.await(30, TimeUnit.SECONDS));
         } finally {
             proceed.set(false);
         }
-        assertTrue(success,
-                   "Only completed: " + transactioneers.stream().filter(e -> e.completed.get() >= max).count());
-        var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt() + 1;
+        assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
+        var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(60_000, () -> blocks.get(testSubject.getId()).get() >= target);
-        assertTrue(success, "Test subject completed: " + blocks.get(testSubject.getId()).get() + " expected >= "
-        + blocks.get(members.get(0).getId()).get());
+        var success = Utils.waitForCondition(10_000, () -> blocks.get(testSubject.getId()).get() >= target);
+        assertTrue(success, "Expecting: " + target + "completed: " + blocks);
 
     }
 

@@ -97,16 +97,19 @@ public class JohnHancock {
     }
 
     public Sig toSig() {
-        return Sig.newBuilder().setCode(algorithm.signatureCode())
-                  .addAllSignatures(Arrays.asList(bytes).stream().map(b -> ByteString.copyFrom(b)).toList()).build();
+        return Sig.newBuilder()
+                  .setCode(algorithm.signatureCode())
+                  .addAllSignatures(Arrays.asList(bytes).stream().map(b -> ByteString.copyFrom(b)).toList())
+                  .build();
     }
 
     @Override
     public String toString() {
         return "Sig[" + (bytes.length == 0 ? "<null>"
-                                           : (bytes.length == 1 ? Hex.hex(bytes[0]).substring(0, 12)
-                                                                : Arrays.asList(bytes).stream()
-                                                                        .map(e -> "|" + Hex.hex(e).substring(0, 12))
+                                           : (bytes.length == 1 ? Hex.hexSubString(bytes[0], 12)
+                                                                : Arrays.asList(bytes)
+                                                                        .stream()
+                                                                        .map(e -> "|" + Hex.hexSubString(e, 12))
                                                                 + ":" + algorithm.signatureCode()))
         + "]";
     }

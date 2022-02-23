@@ -125,7 +125,7 @@ public class TestCHOAM {
                                 e.printStackTrace();
                             }
                         }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                    } else if (complete == max) {
+                    } else if (complete >= max) {
                         countdown.countDown();
                     }
                 }
@@ -139,7 +139,7 @@ public class TestCHOAM {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+            }, 2, TimeUnit.SECONDS);
         }
     }
 
@@ -269,7 +269,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final Duration timeout = Duration.ofSeconds(2);
+        final Duration timeout = Duration.ofSeconds(3);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
@@ -287,7 +287,7 @@ public class TestCHOAM {
                   .forEach(e -> transactioneers.add(e));
         }
 
-        Thread.sleep(1_000);
+        Thread.sleep(2_000);
 
         transactioneers.stream().forEach(e -> e.start());
         try {
@@ -312,7 +312,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         var session = choams.get(members.get(0).getId()).getSession();
-        Thread.sleep(1_000);
+        Thread.sleep(2_000);
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
