@@ -148,7 +148,7 @@ abstract public class AbstractLifecycleTest {
                                 e.printStackTrace();
                             }
                         }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                    } else if (complete == max) {
+                    } else if (complete >= max) {
                         countdown.countDown();
                     }
                 }
@@ -165,7 +165,7 @@ abstract public class AbstractLifecycleTest {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(500), TimeUnit.MILLISECONDS);
+            }, 2, TimeUnit.SECONDS);
         }
     }
 

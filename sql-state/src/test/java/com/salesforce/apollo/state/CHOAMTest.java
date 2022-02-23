@@ -150,7 +150,7 @@ public class CHOAMTest {
                                 e.printStackTrace();
                             }
                         }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
-                    } else if (complete == max) {
+                    } else if (complete >= max) {
                         countdown.countDown();
                     }
                 }
@@ -167,7 +167,7 @@ public class CHOAMTest {
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, entropy.nextInt(2000), TimeUnit.MILLISECONDS);
+            }, 2, TimeUnit.SECONDS);
         }
     }
 
