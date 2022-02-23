@@ -351,7 +351,7 @@ public class CHOAM {
                 f.set(e.getStatus());
                 return f;
             } catch (Throwable e) {
-                log.error("Failed submitting txn: {} to: {} in: {} on: {}",
+                log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(), e);
                 SettableFuture<Status> f = SettableFuture.create();
                 f.set(Status.INTERNAL.withCause(e).withDescription("Failed submitting txn"));
@@ -400,8 +400,8 @@ public class CHOAM {
 
         @Override
         public SubmitResult submit(SubmitTransaction request) {
-//            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
-//                      params().member());
+            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
+                      params().member());
             return producer.submit(request.getTransaction());
         }
     }
@@ -1174,7 +1174,7 @@ public class CHOAM {
      */
     private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
-            log.warn("Invalid transaction submission from non member: {} on: {}", from, params.member());
+            log.debug("Invalid transaction submission from non member: {} on: {}", from, params.member());
             return SubmitResult.newBuilder()
                                .setSuccess(false)
                                .setStatus("Invalid transaction submission from non member")
@@ -1182,11 +1182,11 @@ public class CHOAM {
         }
         final var c = current.get();
         if (c == null) {
-//            log.trace("No committee to submit txn from: {} on: {}", from, params.member());
+            log.debug("No committee to submit txn from: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setSuccess(false).setStatus("No committee to submit txn").build();
         }
-//        log.trace("Submiting received txn: {} from: {} on: {}",
-//                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
+        log.trace("Submiting received txn: {} from: {} on: {}",
+                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
         return c.submit(request);
     }
 

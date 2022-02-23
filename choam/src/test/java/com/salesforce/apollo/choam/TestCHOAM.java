@@ -194,8 +194,8 @@ public class TestCHOAM {
                                .setCheckpointBlockSize(1);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
         params.getClientBackoff()
-              .setBase(100)
-              .setCap(2_000)
+              .setBase(10)
+              .setCap(100)
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
@@ -269,7 +269,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(2);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
