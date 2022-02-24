@@ -60,12 +60,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    static {
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-            LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
-        });
-    }
-
     private class Transactioneer {
         private final static Random entropy = new Random();
 
@@ -145,14 +139,19 @@ public class TestCHOAM {
 
     private static final int CARDINALITY = 5;
 
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
+
     protected CompletableFuture<Boolean>   checkpointOccurred;
     private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
+    private MetricRegistry                 registry;
     private Map<Digest, Router>            routers;
     private Map<Digest, List<Transaction>> transactions;
-
-    private MetricRegistry registry;
 
     @AfterEach
     public void after() throws Exception {
@@ -194,8 +193,8 @@ public class TestCHOAM {
                                .setCheckpointBlockSize(1);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
         params.getClientBackoff()
-              .setBase(100)
-              .setCap(2_000)
+              .setBase(10)
+              .setCap(100)
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
@@ -269,7 +268,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(2);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();

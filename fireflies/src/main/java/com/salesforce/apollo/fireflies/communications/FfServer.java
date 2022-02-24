@@ -37,32 +37,26 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundGossipTimer().time();
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundGossip().mark(request.getSerializedSize());
+        }
         router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundGossipTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundGossip().mark(request.getSerializedSize());
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
             }
-            try {
-                Digest from = identity.getFrom();
-                if (from == null) {
-                    responseObserver.onError(new IllegalStateException("Member has been removed"));
-                    return;
-                }
-                Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, identity.getCert(),
-                                         request.getNote());
-                responseObserver.onNext(gossip);
-                responseObserver.onCompleted();
-                if (metrics != null) {
-                    metrics.outboundBandwidth().mark(gossip.getSerializedSize());
-                    metrics.gossipReply().mark(gossip.getSerializedSize());
-                }
-            } finally {
-                if (timer != null) {
-                    timer.stop();
-                }
+            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, identity.getCert(),
+                                     request.getNote());
+            if (timer != null) {
+                timer.stop();
+                metrics.outboundBandwidth().mark(gossip.getSerializedSize());
+                metrics.gossipReply().mark(gossip.getSerializedSize());
             }
+            responseObserver.onNext(gossip);
+            responseObserver.onCompleted();
         });
     }
 
@@ -79,30 +73,24 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void update(State request, StreamObserver<Null> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundUpdate().mark(request.getSerializedSize());
+        }
         router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundUpdateTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundUpdate().mark(request.getSerializedSize());
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
             }
-            try {
-                Digest from = identity.getFrom();
-                if (from == null) {
-                    responseObserver.onError(new IllegalStateException("Member has been removed"));
-                    return;
-                }
-                s.update(request.getRing(), request.getUpdate(), from);
-                responseObserver.onNext(Null.getDefaultInstance());
-                responseObserver.onCompleted();
-                if (metrics != null) {
-                    metrics.outboundBandwidth().mark(Null.getDefaultInstance().getSerializedSize());
-                }
-            } finally {
-                if (timer != null) {
-                    timer.stop();
-                }
+            s.update(request.getRing(), request.getUpdate(), from);
+            if (timer != null) {
+                timer.stop();
+                metrics.outboundBandwidth().mark(Null.getDefaultInstance().getSerializedSize());
             }
+            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 

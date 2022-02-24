@@ -125,11 +125,9 @@ public class NodeTest {
     @Test
     public void smoke() throws Exception {
         nodes.forEach(n -> n.start());
-        Thread.sleep(5_000);
         var oracle = nodes.get(0).getDelphi();
-        System.out.println("**** testing");
         oracle.add(new Oracle.Namespace("test")).get(10, TimeUnit.SECONDS);
-//        smoke(oracle);
+        smoke(oracle);
     }
 
     private Builder params() {
@@ -147,8 +145,8 @@ public class NodeTest {
                                .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
         params.getClientBackoff()
-              .setBase(10)
-              .setCap(250)
+              .setBase(100)
+              .setCap(2000)
               .setInfiniteAttempts()
               .setJitter()
               .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
@@ -157,7 +155,6 @@ public class NodeTest {
         return params;
     }
 
-    @SuppressWarnings("unused")
     private void smoke(Oracle oracle) throws Exception {
         // Namespace
         var ns = Oracle.namespace("my-org");

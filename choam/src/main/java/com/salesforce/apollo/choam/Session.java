@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -71,14 +70,12 @@ public class Session {
 
     private AtomicInteger                                                  nonce     = new AtomicInteger();
     private final Parameters                                               params;
-    private final RateLimiter                                              submitRateLimiter;
     private final Function<SubmittedTransaction, ListenableFuture<Status>> service;
     private final Map<Digest, SubmittedTransaction>                        submitted = new ConcurrentHashMap<>();
 
     public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<Status>> service) {
         this.params = params;
         this.service = service;
-        submitRateLimiter = RateLimiter.create(params.txnPermits(), Duration.ofMillis(0));
     }
 
     /**
@@ -152,20 +149,26 @@ public class Session {
         submitted.put(stx.hash(), stx);
         CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
             if (!stx.onCompletion().isDone()) {
+                log.trace("Transaction submission: {} completed: {} on: {}", stx.hash(), r, params.member());
                 return;
             }
             if (t != null) {
+                log.trace("Transaction submission: {} completed: {} exceptionally on: {}", stx.hash(), r,
+                          params.member(), t);
                 stx.onCompletion().completeExceptionally(t);
             }
             if (r == null || !r.isOk()) {
+                log.trace("Transaction submission: {} completed: {} timeout on: {}", stx.hash(), r, params.member());
                 stx.onCompletion().completeExceptionally(new TimeoutException("Cannot submit txn"));
             }
         });
         final var clientBackoff = params.clientBackoff().retryIf(s -> {
             if (stx.onCompletion().isDone()) {
+                log.trace("Transaction submission: {} already complete: {} on: {}", stx.hash(), s, params.member());
                 return false;
             }
             if (s.isOk()) {
+                log.trace("Transaction submission: {} complete: {} on: {}", stx.hash(), s, params.member());
                 if (params.metrics() != null) {
                     params.metrics().transactionSubmittedSuccess();
                 }
@@ -179,13 +182,9 @@ public class Session {
         }).build();
         clientBackoff.executeAsync(exec, () -> {
             if (stx.onCompletion().isDone()) {
+                log.trace("Submission completed of: {} on: {}", stx.hash(), params.member());
                 SettableFuture<Status> f = SettableFuture.create();
                 f.set(Status.OK);
-                return f;
-            }
-            if (!submitRateLimiter.tryAcquire()) {
-                SettableFuture<Status> f = SettableFuture.create();
-                f.set(Status.CANCELLED.withDescription("Client side rate limiting"));
                 return f;
             }
             log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());

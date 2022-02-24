@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
@@ -41,59 +39,48 @@ public class GossiperServer extends GossiperImplBase {
 
     @Override
     public void gossip(Gossip request, StreamObserver<Update> responseObserver) {
+        Context timer = metrics != null ? metrics.inboundGossipTimer().time() : null;
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundGossip().mark(request.getSerializedSize());
+        }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundGossipTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundGossip().mark(request.getSerializedSize());
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
             }
-            try {
-                Digest from = identity.getFrom();
-                if (from == null) {
-                    responseObserver.onError(new IllegalStateException("Member has been removed"));
-                    return;
-                }
-                Update response = s.gossip(request, from);
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
-                if (metrics != null) {
-                    metrics.outboundBandwidth().mark(response.getSerializedSize());
-                    metrics.gossipReply().mark(response.getSerializedSize());
-                }
-            } finally {
-                if (timer != null) {
-                    timer.stop();
-                }
+            Update response = s.gossip(request, from);
+            if (timer != null) {
+                timer.stop();
+                metrics.outboundBandwidth().mark(response.getSerializedSize());
+                metrics.gossipReply().mark(response.getSerializedSize());
             }
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
         });
     }
 
     @Override
     public void update(ContextUpdate request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
+        if (metrics != null) {
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundUpdate().mark(serializedSize);
+        }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundUpdateTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundUpdate().mark(request.getSerializedSize());
+            Digest from = identity.getFrom();
+            if (from == null) {
+                responseObserver.onError(new IllegalStateException("Member has been removed"));
+                return;
             }
-            try {
-                Digest from = identity.getFrom();
-                if (from == null) {
-                    responseObserver.onError(new IllegalStateException("Member has been removed"));
-                    return;
-                }
-                s.update(request, from);
-                responseObserver.onNext(Empty.getDefaultInstance());
-                responseObserver.onCompleted();
-            } catch (Throwable e) {
-                LoggerFactory.getLogger(GossiperServer.class).error("Unexpected exception", e);
-            } finally {
-                if (timer != null) {
-                    timer.stop();
-                }
+            s.update(request, from);
+            if (timer != null) {
+                timer.stop();
             }
+            responseObserver.onNext(Empty.getDefaultInstance());
+            responseObserver.onCompleted();
         });
     }
 

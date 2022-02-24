@@ -202,9 +202,10 @@ public class Producer {
 
         controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                                   epoch -> newEpoch(epoch));
+        var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
                                           params().exec(),
-                                          params().metrics() == null ? null : params().metrics().getProducerMetrics());
+                                          producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
@@ -247,8 +248,12 @@ public class Producer {
 
     public SubmitResult submit(Transaction transaction) {
         if (ds.offer(transaction)) {
+            log.trace("Successful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                      params().member());
             return SubmitResult.newBuilder().setSuccess(true).setStatus("OK").build();
         } else {
+            log.trace("Unsuccessful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
+                      params().member());
             return SubmitResult.newBuilder()
                                .setSuccess(false)
                                .setStatus("Transaction buffer full on: " + params().member().getId())

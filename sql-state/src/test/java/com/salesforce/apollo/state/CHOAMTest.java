@@ -42,9 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
@@ -53,6 +51,8 @@ import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
+import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -71,50 +71,37 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    static {
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-            LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
-        });
-    }
-
     private class Transactioneer {
         private final static Random entropy = new Random();
 
         private final AtomicInteger            completed = new AtomicInteger();
         private final CountDownLatch           countdown;
         private final AtomicInteger            failed    = new AtomicInteger();
-        private final Timer                    latency;
         private final AtomicInteger            lineTotal;
         private final int                      max;
         private final Mutator                  mutator;
         private final AtomicBoolean            proceed;
         private final ScheduledExecutorService scheduler;
         private final Duration                 timeout;
-        private final Counter                  timeouts;
 
-        public Transactioneer(Mutator mutator, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
-                              AtomicInteger lineTotal, int max, CountDownLatch countdown,
-                              ScheduledExecutorService txScheduler) {
-            this.latency = latency;
+        public Transactioneer(Mutator mutator, Duration timeout, AtomicBoolean proceed, AtomicInteger lineTotal,
+                              int max, CountDownLatch countdown, ScheduledExecutorService txScheduler) {
             this.proceed = proceed;
-            this.timeout = timeout;
             this.lineTotal = lineTotal;
-            this.timeouts = timeouts;
             this.max = max;
             this.countdown = countdown;
             this.scheduler = txScheduler;
             this.mutator = mutator;
+            this.timeout = timeout;
         }
 
-        void decorate(CompletableFuture<?> fs, Timer.Context time) {
+        void decorate(CompletableFuture<?> fs) {
             fs.whenCompleteAsync((o, t) -> {
                 if (!proceed.get()) {
                     return;
                 }
 
                 if (t != null) {
-                    timeouts.inc();
-                    var tc = latency.time();
                     failed.incrementAndGet();
 
                     if (completed.get() < max) {
@@ -122,30 +109,26 @@ public class CHOAMTest {
                             try {
                                 decorate(mutator.getSession()
                                                 .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
+                                                        scheduler));
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
                         }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
                     }
                 } else {
-                    time.close();
                     final int tot = lineTotal.incrementAndGet();
                     if (tot % 100 == 0 && tot % (100 * 100) == 0) {
                         System.out.println(".");
                     } else if (tot % 100 == 0) {
                         System.out.print(".");
                     }
-                    var tc = latency.time();
                     final var complete = completed.incrementAndGet();
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
                                 decorate(mutator.getSession()
                                                 .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
+                                                        scheduler));
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -159,27 +142,31 @@ public class CHOAMTest {
 
         void start() {
             scheduler.schedule(() -> {
-                Timer.Context time = latency.time();
                 try {
                     decorate(mutator.getSession()
-                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler),
-                             time);
+                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler));
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
-            }, 2, TimeUnit.SECONDS);
+            }, 1, TimeUnit.SECONDS);
         }
     }
 
     private static final int               CARDINALITY     = 5;
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    static {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
+        });
+    }
 
     private File                               baseDir;
     private Map<Digest, List<Digest>>          blocks;
     private File                               checkpointDirBase;
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
+    private MetricRegistry                     registry;
     private Map<Digest, Router>                routers;
     private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
@@ -206,10 +193,19 @@ public class CHOAMTest {
             txScheduler.shutdownNow();
             txScheduler = null;
         }
+        System.out.println();
+
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
+        registry = null;
     }
 
     @BeforeEach
     public void before() {
+        registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
@@ -218,6 +214,7 @@ public class CHOAMTest {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var metrics = new ChoamMetricsImpl(context.getId(), registry);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
@@ -263,7 +260,7 @@ public class CHOAMTest {
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context);
+            return createCHOAM(entropy, params, m, context, metrics);
         }));
     }
 
@@ -271,9 +268,6 @@ public class CHOAMTest {
     public void submitMultiplTxn() throws Exception {
         final Duration timeout = Duration.ofSeconds(3);
         AtomicBoolean proceed = new AtomicBoolean(true);
-        MetricRegistry reg = new MetricRegistry();
-        Timer latency = reg.timer("Transaction latency");
-        Counter timeouts = reg.counter("Transaction timeouts");
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1000;
@@ -295,8 +289,7 @@ public class CHOAMTest {
             updaters.entrySet()
                     .stream()
                     .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
-                                                 timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                                 txScheduler))
+                                                 timeout, proceed, lineTotal, max, countdown, txScheduler))
                     .forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
@@ -358,21 +351,11 @@ public class CHOAMTest {
                      .filter(cb -> cb != null)
                      .map(cb -> cb.height())
                      .toList());
-
-            System.out.println();
-            System.out.println();
-            System.out.println();
-
-            System.out.println("# of clients: " + choams.size() * clientCount);
-            ConsoleReporter.forRegistry(reg)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
         }
     }
 
-    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context) {
+    private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
+                              ChoamMetrics metrics) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -389,6 +372,7 @@ public class CHOAMTest {
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setExec(Router.createFjPool())
                                                        .setCheckpointer(up.getCheckpointer())
+                                                       .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {
 
                                                            @Override

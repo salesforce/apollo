@@ -68,8 +68,12 @@ public interface Terminal extends Link {
             @Override
             public ListenableFuture<Status> submit(SubmitTransaction request) {
                 SettableFuture<Status> f = SettableFuture.create();
-                service.submit(request, member.getId());
-                f.set(Status.OK);
+                var result = service.submit(request, member.getId()); 
+                if (result.getSuccess()) {
+                    f.set(Status.OK);
+                } else {
+                    f.set(Status.UNAVAILABLE.withDescription(result.getStatus()));
+                }
                 return f;
             }
 

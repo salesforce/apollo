@@ -89,16 +89,16 @@ public class ContextGossiper {
     }
 
     public ContextGossiper(GossipService gossiper, Context<Member> context, SigningMember member, Router communications,
-                           Executor exec, EtherealMetrics metrics) {
+                           Executor exec, EtherealMetrics m) {
         this.context = context;
         this.gossiper = gossiper;
         this.member = member;
+        this.metrics = m;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         final var cast = (Context<Member>) context;
         ring = new RingCommunications<Gossiper>(cast, member, this.comm, exec);
-        this.metrics = metrics;
     }
 
     public Context<Member> getContext() {
