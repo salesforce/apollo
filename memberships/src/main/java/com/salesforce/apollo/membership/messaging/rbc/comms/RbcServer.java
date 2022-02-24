@@ -26,7 +26,7 @@ import io.grpc.stub.StreamObserver;
  */
 public class RbcServer extends RBCImplBase {
     private ClientIdentity                 identity;
-    private final RbcMetrics            metrics;
+    private final RbcMetrics               metrics;
     private final RoutableService<Service> routing;
 
     public RbcServer(ClientIdentity identity, RbcMetrics metrics, RoutableService<Service> r) {
@@ -41,13 +41,12 @@ public class RbcServer extends RBCImplBase {
 
     @Override
     public void update(ReconcileContext request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundUpdate().mark(request.getSerializedSize());
+        }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundUpdateTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundUpdate().mark(request.getSerializedSize());
-            }
             try {
                 Digest from = identity.getFrom();
                 if (from == null) {
@@ -67,13 +66,12 @@ public class RbcServer extends RBCImplBase {
 
     @Override
     public void gossip(MessageBff request, StreamObserver<Reconcile> responseObserver) {
+        Context timer = metrics == null ? null : metrics.inboundGossipTimer().time();
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundGossip().mark(request.getSerializedSize());
+        }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Context timer = null;
-            if (metrics != null) {
-                timer = metrics.inboundGossipTimer().time();
-                metrics.inboundBandwidth().mark(request.getSerializedSize());
-                metrics.inboundGossip().mark(request.getSerializedSize());
-            }
             try {
                 Digest from = identity.getFrom();
                 if (from == null) {

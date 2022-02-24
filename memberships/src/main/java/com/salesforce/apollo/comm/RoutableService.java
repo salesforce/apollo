@@ -41,25 +41,16 @@ public class RoutableService<Service> {
     public void evaluate(StreamObserver<?> responseObserver, Digest context, Consumer<Service> c) {
         if (context == null) {
             responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
-            try {
-                log.trace("Null context");
-                responseObserver.onCompleted();
-            } catch (Throwable e) {
-                log.trace("Error returning error", e);
-            }
+            log.error("Null context");
             return;
-        }
-        Service service = services.get(context);
-        if (service == null) {
-            log.trace("No service for context {}", context);
-            responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
-            try {
-                responseObserver.onCompleted();
-            } catch (Throwable e) {
-                log.trace("Error returning error", e);
-            }
         } else {
-            c.accept(service);
+            Service service = services.get(context);
+            if (service == null) {
+                log.trace("No service for context {}", context);
+                responseObserver.onError(new StatusRuntimeException(Status.NOT_FOUND));
+            } else {
+                c.accept(service);
+            }
         }
     }
 

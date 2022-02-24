@@ -155,7 +155,6 @@ public class NodeTest {
         return params;
     }
 
-    @SuppressWarnings("unused")
     private void smoke(Oracle oracle) throws Exception {
         // Namespace
         var ns = Oracle.namespace("my-org");

@@ -38,17 +38,20 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
         outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
 
         outboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.outbound.duration"));
-        inboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.inbound.duration"));
         outboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.outbound.bytes"));
+        
+        inboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.inbound.duration"));
         inboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.inbound.bytes"));
 
         outboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.outbound.duration"));
-        inboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.inbound.duration"));
         outboundGossip = registry.meter(name(context.shortString(), system, "ethereal.gossip.oubound.bytes"));
         gossipResponse = registry.meter(name(context.shortString(), system, "ethereal.gossip.response.bytes"));
+
+        inboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.inbound.duration"));
         inboundGossip = registry.meter(name(context.shortString(), system, "ethereal.gossip.inbound.bytes"));
         gossipReply = registry.meter(name(context.shortString(), system, "ethereal.gossip.reply.bytes"));
-        gossipRoundDuration = registry.timer(name(context.shortString(), system, "ethereal.gossip.round.durration"));
+        
+        gossipRoundDuration = registry.timer(name(context.shortString(), system, "ethereal.gossip.round.duration"));
 
     }
 
