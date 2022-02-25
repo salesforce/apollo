@@ -174,8 +174,11 @@ public class Utils {
     public static int allocatePort(InetAddress host) {
         InetSocketAddress address = host == null ? new InetSocketAddress(0) : new InetSocketAddress(host, 0);
         try (ServerSocket socket = new ServerSocket();) {
+            socket.setReuseAddress(true);
             socket.bind(address);
-            return socket.getLocalPort();
+            var localPort = socket.getLocalPort();
+            socket.close();
+            return localPort;
         } catch (IOException e) {
         }
         return -1;
