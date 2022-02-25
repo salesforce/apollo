@@ -9,6 +9,7 @@ package com.salesforce.apollo.comm.grpc;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.Provider;
@@ -46,7 +47,7 @@ public class TestMtls {
 
     @Test
     public void smoke() throws Exception {
-        InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
+        InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getLocalHost(), Utils.allocatePort());
 
         MtlsServer server = server(serverAddress);
         try {

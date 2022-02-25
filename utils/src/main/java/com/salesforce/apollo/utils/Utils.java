@@ -42,6 +42,7 @@ import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.URI;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
@@ -171,7 +172,14 @@ public class Utils {
      * @return the port number or -1 if none available
      */
     public static int allocatePort(InetAddress host) {
-        try (ServerSocket socket = new ServerSocket(0);) {
+        InetAddress address = null;
+        try {
+            address = host == null ? InetAddress.getLocalHost() : host;
+        } catch (UnknownHostException e1) {
+            return -1;
+        }
+
+        try (ServerSocket socket = new ServerSocket(0, 0, address);) {
             socket.setReuseAddress(true);
             var localPort = socket.getLocalPort();
             socket.close();
@@ -640,8 +648,14 @@ public class Utils {
         KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
         var notBefore = Instant.now();
         var notAfter = Instant.now().plusSeconds(10_000);
+        String localhost;
+        try {
+            localhost = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("Cannot resolve local host name", e);
+        }
         X509Certificate generated = Certificates.selfSign(false,
-                                                          encode(id, "localhost", allocatePort(), keyPair.getPublic()),
+                                                          encode(id, localhost, allocatePort(), keyPair.getPublic()),
                                                           secureEntropy(), keyPair, notBefore, notAfter,
                                                           Collections.emptyList());
         return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
