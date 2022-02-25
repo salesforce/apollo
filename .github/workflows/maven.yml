@@ -15,6 +15,6 @@ jobs:
         java-version: '17'
         distribution: 'adopt'
     - name: Build with Maven
-      run: mvn -batch-mode clean package --file pom.xml
+      run: mvn -fn -batch-mode clean package --file pom.xml
 
       
