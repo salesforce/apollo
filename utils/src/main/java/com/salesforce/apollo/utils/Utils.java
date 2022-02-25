@@ -35,7 +35,6 @@ import java.io.Writer;
 import java.lang.Thread.UncaughtExceptionHandler;
 import java.lang.reflect.Field;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.InterfaceAddress;
 import java.net.MalformedURLException;
 import java.net.NetworkInterface;
@@ -172,10 +171,8 @@ public class Utils {
      * @return the port number or -1 if none available
      */
     public static int allocatePort(InetAddress host) {
-        InetSocketAddress address = host == null ? new InetSocketAddress(0) : new InetSocketAddress(host, 0);
-        try (ServerSocket socket = new ServerSocket();) {
+        try (ServerSocket socket = new ServerSocket(0);) {
             socket.setReuseAddress(true);
-            socket.bind(address);
             var localPort = socket.getLocalPort();
             socket.close();
             return localPort;
