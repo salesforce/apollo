@@ -414,7 +414,7 @@ public class CHOAMTest {
         List<List<Object>> batch = new ArrayList<>();
         for (int rep = 0; rep < 10; rep++) {
             for (int id = 1; id < 6; id++) {
-                batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
+                batch.add(Arrays.asList(entropy.nextInt(10), 1000 + id));
             }
         }
         return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();
