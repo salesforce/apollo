@@ -196,7 +196,7 @@ public class CreatorTest {
         }
 
         for (int level = 0; level < 4; level++) {
-            var createdUnit = unitRec.poll(2, TimeUnit.SECONDS);
+            var createdUnit = unitRec.poll(10, TimeUnit.SECONDS);
 
             assertNotNull(createdUnit);
             assertEquals(level, createdUnit.level());
