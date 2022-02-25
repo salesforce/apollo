@@ -52,7 +52,7 @@ public class TestMtls {
         MtlsServer server = server(serverAddress);
         try {
             server.start();
-            server.bind(avaServer());
+            server.bind(server());
             Thread.sleep(1_000);
             MtlsClient client = client(serverAddress);
 
@@ -66,7 +66,7 @@ public class TestMtls {
         }
     }
 
-    private TestItImplBase avaServer() {
+    private TestItImplBase server() {
         return new TestItImplBase() {
 
             @Override
