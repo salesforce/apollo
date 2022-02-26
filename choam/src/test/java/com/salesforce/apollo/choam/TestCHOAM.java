@@ -22,7 +22,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -193,17 +192,16 @@ public class TestCHOAM {
 
         final Duration timeout = Duration.ofSeconds(2);
 
-        AtomicBoolean proceed = new AtomicBoolean(true);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 10_000 : 50;
-        final int max = 1000;
+        final int clientCount = LARGE_TESTS ? 5_000 : 50;
+        final int max = LARGE_TESTS ? 100 : 10;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         for (int i = 0; i < clientCount; i++) {
             choams.values()
                   .stream()
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, txScheduler, countdown))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown))
                   .forEach(e -> transactioneers.add(e));
         }
 
@@ -213,7 +211,6 @@ public class TestCHOAM {
         try {
             countdown.await(60, TimeUnit.SECONDS);
         } finally {
-            proceed.set(false);
             routers.values().forEach(e -> e.close());
             choams.values().forEach(e -> e.stop());
             System.out.println();

@@ -13,7 +13,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.protobuf.ByteString;
@@ -23,11 +22,10 @@ import com.salesforce.apollo.choam.support.InvalidTransaction;
 class Transactioneer {
     private final static Random entropy = new Random();
 
-    private final AtomicInteger            completed = new AtomicInteger(0);
+    private final AtomicInteger            completed = new AtomicInteger();
     private final CountDownLatch           countdown;
-    private final AtomicInteger            failed    = new AtomicInteger(0);
+    private final AtomicInteger            inFlight  = new AtomicInteger();
     private final int                      max;
-    private final AtomicBoolean            proceed;
     private final ScheduledExecutorService scheduler;
     private final Session                  session;
     private final Duration                 timeout;
@@ -35,9 +33,8 @@ class Transactioneer {
                                                                   .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                                   .build();
 
-    Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max,
-                   ScheduledExecutorService scheduler, CountDownLatch countdown) {
-        this.proceed = proceed;
+    Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
+                   CountDownLatch countdown) {
         this.session = session;
         this.timeout = timeout;
         this.max = max;
@@ -46,24 +43,26 @@ class Transactioneer {
     }
 
     void decorate(CompletableFuture<?> fs) {
+        inFlight.incrementAndGet();
+
         fs.whenCompleteAsync((o, t) -> {
-            if (!proceed.get()) {
-                return;
-            }
+            inFlight.decrementAndGet();
 
             if (t != null) {
-                System.out.println("Failed: " + t.getMessage());
-                failed.incrementAndGet();
-                scheduler.schedule(() -> {
-                    try {
-                        decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                    } catch (InvalidTransaction e) {
-                        e.printStackTrace();
-                    }
-                }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                if (completed.get() < max) {
+                    scheduler.schedule(() -> {
+                        try {
+                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
+                        } catch (InvalidTransaction e) {
+                            e.printStackTrace();
+                        }
+                    }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                }
             } else {
                 if (completed.incrementAndGet() >= max) {
-                    countdown.countDown();
+                    if (inFlight.get() == 0) {
+                        countdown.countDown();
+                    }
                 } else {
                     try {
                         decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));

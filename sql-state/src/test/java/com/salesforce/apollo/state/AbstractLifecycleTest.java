@@ -58,6 +58,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 abstract public class AbstractLifecycleTest {
     protected static final int             CARDINALITY     = 5;
+    protected static final Random          entropy         = new Random();
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 

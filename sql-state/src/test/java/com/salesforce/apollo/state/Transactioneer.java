@@ -16,31 +16,26 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
+import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 
 class Transactioneer {
-    /**
-     * 
-     */
-    private final AbstractLifecycleTest abstractLifecycleTest;
-
-    private final static Random entropy = new Random();
-
+    private final static Random            entropy   = new Random();
+    private final Supplier<Txn>            update;
     private final AtomicInteger            completed = new AtomicInteger();
     private final CountDownLatch           countdown;
-    private final AtomicInteger            failed    = new AtomicInteger();
-    private final AtomicInteger            lineTotal;
+    private final AtomicInteger            inFlight  = new AtomicInteger();
     private final int                      max;
     private final Mutator                  mutator;
     private final ScheduledExecutorService scheduler;
     private final Duration                 timeout;
 
-    public Transactioneer(AbstractLifecycleTest abstractLifecycleTest, Mutator mutator, Duration timeout, AtomicInteger lineTotal, int max,
-                          CountDownLatch countdown, ScheduledExecutorService txScheduler) {
-        this.abstractLifecycleTest = abstractLifecycleTest;
+    public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, CountDownLatch countdown,
+                          ScheduledExecutorService txScheduler) {
+        this.update = update;
         this.timeout = timeout;
-        this.lineTotal = lineTotal;
         this.max = max;
         this.countdown = countdown;
         this.scheduler = txScheduler;
@@ -52,9 +47,10 @@ class Transactioneer {
     }
 
     void decorate(CompletableFuture<?> fs) {
+        inFlight.incrementAndGet();
         fs.whenCompleteAsync((o, t) -> {
+            inFlight.decrementAndGet();
             if (t != null) {
-                failed.incrementAndGet();
                 if (t instanceof CompletionException e) {
                     if (!(e.getCause() instanceof TimeoutException)) {
                         e.getCause().printStackTrace();
@@ -65,33 +61,27 @@ class Transactioneer {
                     scheduler.schedule(() -> {
                         try {
                             decorate(mutator.getSession()
-                                            .submit(ForkJoinPool.commonPool(), this.abstractLifecycleTest.update(entropy, mutator), timeout,
-                                                    scheduler));
+                                            .submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
-                final int tot = lineTotal.incrementAndGet();
-                if (tot % 100 == 0) {
-                    System.out.println(".");
-                } else {
-                    System.out.print(".");
-                }
                 final var complete = completed.incrementAndGet();
                 if (complete < max) {
                     scheduler.schedule(() -> {
                         try {
                             decorate(mutator.getSession()
-                                            .submit(ForkJoinPool.commonPool(), this.abstractLifecycleTest.update(entropy, mutator), timeout,
-                                                    scheduler));
+                                            .submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 } else if (complete >= max) {
-                    countdown.countDown();
+                    if (inFlight.get() == 0) {
+                        countdown.countDown();
+                    }
                 }
             }
         });
@@ -100,8 +90,7 @@ class Transactioneer {
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(mutator.getSession()
-                                .submit(ForkJoinPool.commonPool(), this.abstractLifecycleTest.update(entropy, mutator), timeout, scheduler));
+                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

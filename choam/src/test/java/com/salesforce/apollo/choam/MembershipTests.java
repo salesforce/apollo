@@ -21,7 +21,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -88,7 +87,6 @@ public class MembershipTests {
         final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
-        AtomicBoolean proceed = new AtomicBoolean(true);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
@@ -98,16 +96,12 @@ public class MembershipTests {
                   .stream()
                   .filter(e -> !e.getKey().equals(testSubject.getId()))
                   .map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler, countdown))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, max, scheduler, countdown))
                   .forEach(e -> transactioneers.add(e));
         }
 
         transactioneers.forEach(e -> e.start());
-        try {
-            System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
-        } finally {
-            proceed.set(false);
-        }
+        System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 

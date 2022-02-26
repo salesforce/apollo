@@ -30,7 +30,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -53,7 +52,6 @@ import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
-import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -71,87 +69,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private class Transactioneer {
-        private final static Random entropy = new Random();
-
-        private final AtomicInteger            completed = new AtomicInteger();
-        private final CountDownLatch           countdown;
-        private final AtomicInteger            failed    = new AtomicInteger();
-        private final AtomicInteger            lineTotal;
-        private final int                      max;
-        private final Mutator                  mutator;
-        private final AtomicBoolean            proceed;
-        private final ScheduledExecutorService scheduler;
-        private final Duration                 timeout;
-
-        public Transactioneer(Mutator mutator, Duration timeout, AtomicBoolean proceed, AtomicInteger lineTotal,
-                              int max, CountDownLatch countdown, ScheduledExecutorService txScheduler) {
-            this.proceed = proceed;
-            this.lineTotal = lineTotal;
-            this.max = max;
-            this.countdown = countdown;
-            this.scheduler = txScheduler;
-            this.mutator = mutator;
-            this.timeout = timeout;
-        }
-
-        void decorate(CompletableFuture<?> fs) {
-            fs.whenCompleteAsync((o, t) -> {
-                if (!proceed.get()) {
-                    return;
-                }
-
-                if (t != null) {
-                    failed.incrementAndGet();
-
-                    if (completed.get() < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(mutator.getSession()
-                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
-                    }
-                } else {
-                    final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0 && (!LARGE_TESTS || tot % (100 * 100) == 0)) {
-                        System.out.println(".");
-                    } else if (!LARGE_TESTS || tot % 100 == 0) {
-                        System.out.print(".");
-                    }
-                    final var complete = completed.incrementAndGet();
-                    if (complete < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(mutator.getSession()
-                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
-                    } else if (complete >= max) {
-                        countdown.countDown();
-                    }
-                }
-            });
-        }
-
-        void start() {
-            scheduler.schedule(() -> {
-                try {
-                    decorate(mutator.getSession()
-                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler));
-                } catch (InvalidTransaction e) {
-                    throw new IllegalStateException(e);
-                }
-            }, 1, TimeUnit.SECONDS);
-        }
-    }
-
     private static final int CARDINALITY = 5;
 
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
@@ -268,9 +185,8 @@ public class CHOAMTest {
 
     @Test
     public void submitMultiplTxn() throws Exception {
+        final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(3);
-        AtomicBoolean proceed = new AtomicBoolean(true);
-        AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 1_000 : 1;
         final int max = 10;
@@ -288,19 +204,15 @@ public class CHOAMTest {
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet()
-                    .stream()
-                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
-                                                 timeout, proceed, lineTotal, max, countdown, txScheduler))
-                    .forEach(e -> transactioneers.add(e));
+            updaters.entrySet().stream().map(e -> {
+                var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
+                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown,
+                                          txScheduler);
+            }).forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        try {
-            assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions");
-        } finally {
-            proceed.set(false);
-        }
+        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions");
 
         final ULong target = updaters.values()
                                      .stream()
