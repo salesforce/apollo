@@ -105,9 +105,9 @@ public class TestCHOAM {
                     }
                 } else {
                     final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                    if (tot % 100 == 0 && (!LARGE_TESTS || tot % (100 * 100) == 0)) {
                         System.out.println(".");
-                    } else if (tot % 100 == 0) {
+                    } else if (tot % 100 == 0 || !LARGE_TESTS) {
                         System.out.print(".");
                     }
                     final var complete = completed.incrementAndGet();
@@ -137,7 +137,8 @@ public class TestCHOAM {
         }
     }
 
-    private static final int CARDINALITY = 5;
+    private static final int     CARDINALITY = 5;
+    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
 
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
@@ -273,7 +274,7 @@ public class TestCHOAM {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 5_000;
+        final int clientCount = LARGE_TESTS ? 5_000 : 50;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);

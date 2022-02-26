@@ -950,7 +950,7 @@ public class SqlStateMachine {
         try {
             JdbcUtils.set(exec, i, value, connection());
         } catch (SQLException e) {
-            throw new IllegalArgumentException("Illegal argument value: " + value);
+            throw new IllegalArgumentException("Illegal argument value: " + value, e);
         }
     }
 

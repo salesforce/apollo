@@ -117,9 +117,9 @@ public class CHOAMTest {
                     }
                 } else {
                     final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0 && tot % (100 * 100) == 0) {
+                    if (tot % 100 == 0 && (!LARGE_TESTS || tot % (100 * 100) == 0)) {
                         System.out.println(".");
-                    } else if (tot % 100 == 0) {
+                    } else if (!LARGE_TESTS || tot % 100 == 0) {
                         System.out.print(".");
                     }
                     final var complete = completed.incrementAndGet();
@@ -152,9 +152,11 @@ public class CHOAMTest {
         }
     }
 
-    private static final int               CARDINALITY     = 5;
+    private static final int CARDINALITY = 5;
+
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final boolean           LARGE_TESTS     = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
@@ -270,7 +272,7 @@ public class CHOAMTest {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1000;
+        final int clientCount = LARGE_TESTS ? 1_000 : 1;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -414,7 +416,7 @@ public class CHOAMTest {
         List<List<Object>> batch = new ArrayList<>();
         for (int rep = 0; rep < 10; rep++) {
             for (int id = 1; id < 6; id++) {
-                batch.add(Arrays.asList(entropy.nextInt(), 1000 + id));
+                batch.add(Arrays.asList(entropy.nextInt(10), 1000 + id));
             }
         }
         return Txn.newBuilder().setBatchUpdate(mutator.batchOf("update books set qty = ? where id = ?", batch)).build();

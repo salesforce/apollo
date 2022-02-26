@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -142,13 +143,17 @@ public class AgeBatchingQueue<T> {
             return;
         }
         var millis = period.toMillis();
-        fs = scheduler.scheduleWithFixedDelay(() -> {
-            try {
-                reapCurrentBatch("Reaper");
-            } catch (Throwable th) {
-                LOGGER.error("Reaper thread for: {} threw an error while reaping. Eating exception.", label, th);
-            }
-        }, millis, millis, TimeUnit.MILLISECONDS);
+        try {
+            fs = scheduler.scheduleWithFixedDelay(() -> {
+                try {
+                    reapCurrentBatch("Reaper");
+                } catch (Throwable th) {
+                    LOGGER.error("Reaper thread for: {} threw an error while reaping. Eating exception.", label, th);
+                }
+            }, millis, millis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            LOGGER.debug("Reaper thread for: {} threw an error while scheduling. Eating exception.", label, e);
+        }
 
     }
 

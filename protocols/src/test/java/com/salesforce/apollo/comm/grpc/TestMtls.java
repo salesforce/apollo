@@ -9,6 +9,7 @@ package com.salesforce.apollo.comm.grpc;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.Provider;
@@ -46,12 +47,12 @@ public class TestMtls {
 
     @Test
     public void smoke() throws Exception {
-        InetSocketAddress serverAddress = new InetSocketAddress("localhost", Utils.allocatePort());
+        InetSocketAddress serverAddress = new InetSocketAddress(InetAddress.getLocalHost(), Utils.allocatePort());
 
         MtlsServer server = server(serverAddress);
         try {
             server.start();
-            server.bind(avaServer());
+            server.bind(server());
             Thread.sleep(1_000);
             MtlsClient client = client(serverAddress);
 
@@ -65,7 +66,7 @@ public class TestMtls {
         }
     }
 
-    private TestItImplBase avaServer() {
+    private TestItImplBase server() {
         return new TestItImplBase() {
 
             @Override

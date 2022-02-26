@@ -51,18 +51,13 @@ import com.salesforce.apollo.utils.Utils;
  * @since 220
  */
 public class MtlsTest {
-    static {
-        ProviderUtils.getProviderBCJSSE();
-    }
-
+    private static final int                              CARDINALITY;
     private static Map<Digest, CertificateWithPrivateKey> certs;
+    private static final boolean                          LARGE_TESTS = Boolean.getBoolean("large_tests");
     private static final FirefliesParameters              parameters;
-    private static final int                              CARDINALITY    = 100;
-    private List<Router>                                  communications = new ArrayList<>();
-    private List<View>                                    views;
-
     static {
         ProviderUtils.getProviderBC();
+        CARDINALITY = LARGE_TESTS ? 100 : 10;
         parameters = FirefliesParameters.newBuilder()
                                         .setCardinality(CARDINALITY)
                                         .setCertificateValidator(CertificateValidator.NONE)
@@ -77,6 +72,10 @@ public class MtlsTest {
                          .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
                                                    cert -> cert));
     }
+
+    private List<Router> communications = new ArrayList<>();
+
+    private List<View> views;
 
     @AfterEach
     public void after() {

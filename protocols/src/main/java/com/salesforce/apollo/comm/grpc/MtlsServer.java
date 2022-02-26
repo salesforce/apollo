@@ -48,7 +48,7 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslProvider;
-import io.grpc.util.MutableHandlerRegistry; 
+import io.grpc.util.MutableHandlerRegistry;
 
 /**
  * @author hal.hildebrand
@@ -83,8 +83,10 @@ public class MtlsServer implements ClientIdentity {
                                                                                            privateKey,
                                                                                            PROVIDER_BCJSSE));
 //        GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_3).sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE)).clientAuth(clientAuth)
+        builder.protocols(TL_SV1_3)
+               .sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                                                                         // NO_ADVERTISE is currently the only mode
                                                                         // supported by both OpenSsl and JDK
@@ -109,8 +111,10 @@ public class MtlsServer implements ClientIdentity {
         SslContextBuilder builder = SslContextBuilder.forServer(new NodeKeyManagerFactory(alias, certificate,
                                                                                           privateKey, PROVIDER_BCJSSE));
 //        GrpcSslContexts.configure(builder);
-        builder.protocols(TL_SV1_3).sslProvider(SslProvider.JDK)
-               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE)).clientAuth(clientAuth)
+        builder.protocols(TL_SV1_3)
+               .sslProvider(SslProvider.JDK)
+               .trustManager(new NodeTrustManagerFactory(validator, PROVIDER_BCJSSE))
+               .clientAuth(clientAuth)
                .applicationProtocolConfig(new ApplicationProtocolConfig(Protocol.ALPN,
                                                                         // NO_ADVERTISE is currently the only mode
                                                                         // supported by both OpenSsl and JDK
@@ -147,6 +151,7 @@ public class MtlsServer implements ClientIdentity {
             }
         });
         NettyServerBuilder builder = NettyServerBuilder.forAddress(address)
+                                                       .withOption(ChannelOption.SO_REUSEADDR, true)
                                                        .sslContext(supplier.forServer(clientAuth, alias, validator,
                                                                                       PROVIDER_BCJSSE, TL_SV1_3))
                                                        .fallbackHandlerRegistry(registry)
