@@ -272,7 +272,7 @@ public class CHOAMTest {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 1_000 : 10;
+        final int clientCount = LARGE_TESTS ? 1_000 : 1;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
