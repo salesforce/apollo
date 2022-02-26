@@ -21,15 +21,12 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
@@ -44,11 +41,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     public void checkpointBootstrap() throws Exception {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
         final Duration timeout = Duration.ofSeconds(6);
-        AtomicBoolean proceed = new AtomicBoolean(true);
-        MetricRegistry reg = new MetricRegistry();
-        Timer latency = reg.timer("Transaction latency");
-        Counter timeouts = reg.counter("Transaction timeouts");
-        AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
@@ -73,13 +65,11 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet()
-                    .stream()
-                    .filter(e -> !e.getKey().equals(testSubject))
-                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
-                                                 timeout, timeouts, latency, proceed, lineTotal, max, countdown,
-                                                 txScheduler))
-                    .forEach(e -> transactioneers.add(e));
+            updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
+                var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
+                Supplier<Txn> update = () -> update(entropy, mutator);
+                return new Transactioneer(update, mutator, timeout, max, countdown, txScheduler);
+            }).forEach(e -> transactioneers.add(e));
         }
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");
@@ -92,12 +82,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
             routers.get(testSubject.getId()).start();
         });
 
-        try {
-            assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
-            assertTrue(checkpointOccurred.get(60, TimeUnit.SECONDS), "Checkpoint did not occur");
-        } finally {
-            proceed.set(false);
-        }
+        assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
+        assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS), "Checkpoint did not occur");
 
         final ULong target = updaters.values()
                                      .stream()
@@ -107,14 +93,20 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                      .max((a, b) -> a.compareTo(b))
                                      .get();
 
-        Utils.waitForCondition(30_000, 1000,
-                               () -> members.stream()
-                                            .map(m -> updaters.get(m))
-                                            .map(ssm -> ssm.getCurrentBlock())
-                                            .filter(cb -> cb != null)
-                                            .map(cb -> cb.height())
-                                            .filter(l -> l.compareTo(target) >= 0)
-                                            .count() == members.size());
+        assertTrue(Utils.waitForCondition(120_000, 1000,
+                                          () -> members.stream()
+                                                       .map(m -> updaters.get(m))
+                                                       .map(ssm -> ssm.getCurrentBlock())
+                                                       .filter(cb -> cb != null)
+                                                       .map(cb -> cb.height())
+                                                       .filter(l -> l.compareTo(target) >= 0)
+                                                       .count() == members.size()),
+                   "state: " + members.stream()
+                                      .map(m -> updaters.get(m))
+                                      .map(ssm -> ssm.getCurrentBlock())
+                                      .filter(cb -> cb != null)
+                                      .map(cb -> cb.height())
+                                      .toList());
 
         System.out.println("target: " + target + " results: "
         + members.stream()
@@ -124,8 +116,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                  .map(cb -> cb.height())
                  .toList());
 
-        System.out.println();
-        System.out.println();
         System.out.println();
 
         record row(float price, int quantity) {}

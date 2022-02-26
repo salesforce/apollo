@@ -19,15 +19,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,8 +31,6 @@ import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
@@ -48,7 +40,6 @@ import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -66,110 +57,8 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 abstract public class AbstractLifecycleTest {
-    class Transactioneer {
-        private final static Random entropy = new Random();
-
-        private final AtomicInteger            completed = new AtomicInteger();
-        private final CountDownLatch           countdown;
-        private final AtomicInteger            failed    = new AtomicInteger();
-        private final Timer                    latency;
-        private final AtomicInteger            lineTotal;
-        private final int                      max;
-        private final Mutator                  mutator;
-        private final AtomicBoolean            proceed;
-        private final ScheduledExecutorService scheduler;
-        private final Duration                 timeout;
-        private final Counter                  timeouts;
-
-        public Transactioneer(Mutator mutator, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
-                              AtomicInteger lineTotal, int max, CountDownLatch countdown,
-                              ScheduledExecutorService txScheduler) {
-            this.latency = latency;
-            this.proceed = proceed;
-            this.timeout = timeout;
-            this.lineTotal = lineTotal;
-            this.timeouts = timeouts;
-            this.max = max;
-            this.countdown = countdown;
-            this.scheduler = txScheduler;
-            this.mutator = mutator;
-        }
-
-        public int completed() {
-            return completed.get();
-        }
-
-        void decorate(CompletableFuture<?> fs, Timer.Context time) {
-            fs.whenCompleteAsync((o, t) -> {
-                if (!proceed.get()) {
-                    return;
-                }
-
-                if (t != null) {
-                    timeouts.inc();
-                    var tc = latency.time();
-                    failed.incrementAndGet();
-                    if (t instanceof CompletionException e) {
-                        if (!(e.getCause() instanceof TimeoutException)) {
-                            e.getCause().printStackTrace();
-                        }
-                    }
-
-                    if (completed.get() < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(mutator.getSession()
-                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                    }
-                } else {
-                    time.close();
-                    final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0) {
-                        System.out.println(".");
-                    } else {
-                        System.out.print(".");
-                    }
-                    var tc = latency.time();
-                    final var complete = completed.incrementAndGet();
-                    if (complete < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(mutator.getSession()
-                                                .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                    } else if (complete >= max) {
-                        countdown.countDown();
-                    }
-                }
-            });
-        }
-
-        void start() {
-            scheduler.schedule(() -> {
-                Timer.Context time = latency.time();
-                try {
-                    decorate(mutator.getSession()
-                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler),
-                             time);
-                } catch (InvalidTransaction e) {
-                    throw new IllegalStateException(e);
-                }
-            }, 2, TimeUnit.SECONDS);
-        }
-    }
-
     protected static final int             CARDINALITY     = 5;
+    protected static final Random          entropy         = new Random();
     private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 

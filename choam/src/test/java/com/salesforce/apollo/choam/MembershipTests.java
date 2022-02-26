@@ -20,10 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -33,14 +30,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -60,72 +54,6 @@ public class MembershipTests {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
         });
-    }
-
-    private class Transactioneer {
-        private final static Random entropy = new Random();
-
-        private final AtomicInteger            completed = new AtomicInteger(0);
-        private final CountDownLatch           countdown;
-        private final AtomicInteger            failed    = new AtomicInteger(0);
-        private final int                      max;
-        private final AtomicBoolean            proceed;
-        private final ScheduledExecutorService scheduler;
-        private final Session                  session;
-        private final Duration                 timeout;
-        private final ByteMessage              tx        = ByteMessage.newBuilder()
-                                                                      .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                      .build();
-
-        Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, int max,
-                       ScheduledExecutorService scheduler, CountDownLatch countdown) {
-            this.proceed = proceed;
-            this.session = session;
-            this.timeout = timeout;
-            this.max = max;
-            this.scheduler = scheduler;
-            this.countdown = countdown;
-        }
-
-        void decorate(CompletableFuture<?> fs) {
-            fs.whenCompleteAsync((o, t) -> {
-                if (!proceed.get()) {
-                    return;
-                }
-
-                if (t != null) {
-                    System.out.println("Failed: " + t.getMessage());
-                    failed.incrementAndGet();
-                    scheduler.schedule(() -> {
-                        try {
-                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                        } catch (InvalidTransaction e) {
-                            e.printStackTrace();
-                        }
-                    }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
-                } else {
-                    if (completed.incrementAndGet() >= max) {
-                        countdown.countDown();
-                    } else {
-                        try {
-                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                        } catch (InvalidTransaction e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            });
-        }
-
-        void start() {
-            scheduler.schedule(() -> {
-                try {
-                    decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                } catch (InvalidTransaction e) {
-                    throw new IllegalStateException(e);
-                }
-            }, 2, TimeUnit.SECONDS);
-        }
     }
 
     private Map<Digest, AtomicInteger>     blocks;
@@ -156,10 +84,9 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         Thread.sleep(2_000); // need to create a mechanism to ensure genesis creation before starting txns ;)
 
-        final Duration timeout = Duration.ofSeconds(20);
+        final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
-        AtomicBoolean proceed = new AtomicBoolean(true);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
@@ -169,16 +96,12 @@ public class MembershipTests {
                   .stream()
                   .filter(e -> !e.getKey().equals(testSubject.getId()))
                   .map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, scheduler, countdown))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, max, scheduler, countdown))
                   .forEach(e -> transactioneers.add(e));
         }
 
         transactioneers.forEach(e -> e.start());
-        try {
-            System.out.println("completed: " + countdown.await(30, TimeUnit.SECONDS));
-        } finally {
-            proceed.set(false);
-        }
+        System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
