@@ -175,7 +175,7 @@ public class MembershipTests {
 
         transactioneers.forEach(e -> e.start());
         try {
-            System.out.println("completed: " + countdown.await(30, TimeUnit.SECONDS));
+            System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
         } finally {
             proceed.set(false);
         }
