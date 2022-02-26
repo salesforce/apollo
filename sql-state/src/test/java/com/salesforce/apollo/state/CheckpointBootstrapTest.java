@@ -70,7 +70,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
             updaters.entrySet()
                     .stream()
                     .filter(e -> !e.getKey().equals(testSubject))
-                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
+                    .map(e -> new Transactioneer(this, e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
                                                  timeout, lineTotal, max, countdown, txScheduler))
                     .forEach(e -> transactioneers.add(e));
         }

@@ -43,7 +43,6 @@ import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.ChoamMetricsImpl;
-import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -60,83 +59,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private class Transactioneer {
-        private final static Random entropy = new Random();
-
-        private final AtomicInteger            completed = new AtomicInteger();
-        private final CountDownLatch           countdown;
-        private final AtomicInteger            lineTotal;
-        private final int                      max;
-        private final AtomicBoolean            proceed;
-        private final ScheduledExecutorService scheduler;
-        private final Session                  session;
-        private final Duration                 timeout;
-        private final ByteMessage              tx        = ByteMessage.newBuilder()
-                                                                      .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                      .build();
-
-        Transactioneer(Session session, Duration timeout, AtomicBoolean proceed, AtomicInteger lineTotal, int max,
-                       CountDownLatch countdown, ScheduledExecutorService txScheduler) {
-            this.proceed = proceed;
-            this.session = session;
-            this.timeout = timeout;
-            this.lineTotal = lineTotal;
-            this.max = max;
-            this.countdown = countdown;
-            this.scheduler = txScheduler;
-        }
-
-        void decorate(CompletableFuture<?> fs) {
-            fs.whenCompleteAsync((o, t) -> {
-                if (!proceed.get()) {
-                    return;
-                }
-
-                if (t != null) {
-
-                    if (completed.get() < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(250), TimeUnit.MILLISECONDS);
-                    }
-                } else {
-                    final int tot = lineTotal.incrementAndGet();
-                    if (tot % 100 == 0 && (!LARGE_TESTS || tot % (100 * 100) == 0)) {
-                        System.out.println(".");
-                    } else if (tot % 100 == 0 || !LARGE_TESTS) {
-                        System.out.print(".");
-                    }
-                    final var complete = completed.incrementAndGet();
-                    if (complete < max) {
-                        scheduler.schedule(() -> {
-                            try {
-                                decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                            } catch (InvalidTransaction e) {
-                                e.printStackTrace();
-                            }
-                        }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
-                    } else if (complete >= max) {
-                        countdown.countDown();
-                    }
-                }
-            });
-        }
-
-        void start() {
-            scheduler.schedule(() -> {
-                try {
-                    decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
-                } catch (InvalidTransaction e) {
-                    throw new IllegalStateException(e);
-                }
-            }, 2, TimeUnit.SECONDS);
-        }
-    }
-
     private static final int     CARDINALITY = 5;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
 
@@ -272,7 +194,6 @@ public class TestCHOAM {
         final Duration timeout = Duration.ofSeconds(2);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
-        AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 10_000 : 50;
         final int max = 1000;
@@ -282,8 +203,7 @@ public class TestCHOAM {
         for (int i = 0; i < clientCount; i++) {
             choams.values()
                   .stream()
-                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, lineTotal, max, countdown,
-                                               txScheduler))
+                  .map(c -> new Transactioneer(c.getSession(), timeout, proceed, max, txScheduler, countdown))
                   .forEach(e -> transactioneers.add(e));
         }
 

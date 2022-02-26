@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.MetricRegistry;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
@@ -42,7 +41,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
         final Duration timeout = Duration.ofSeconds(6);
         AtomicBoolean proceed = new AtomicBoolean(true);
-        MetricRegistry reg = new MetricRegistry();
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
@@ -70,7 +68,8 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
             updaters.entrySet()
                     .stream()
                     .filter(e -> !e.getKey().equals(testSubject))
-                    .map(e -> new Transactioneer(e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
+                    .map(e -> new Transactioneer(this,
+                                                 e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()),
                                                  timeout, lineTotal, max, countdown, txScheduler))
                     .forEach(e -> transactioneers.add(e));
         }
