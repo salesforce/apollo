@@ -156,7 +156,7 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
         Thread.sleep(2_000); // need to create a mechanism to ensure genesis creation before starting txns ;)
 
-        final Duration timeout = Duration.ofSeconds(20);
+        final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
         AtomicBoolean proceed = new AtomicBoolean(true);
