@@ -274,8 +274,8 @@ public class TestCHOAM {
         AtomicBoolean proceed = new AtomicBoolean(true);
         AtomicInteger lineTotal = new AtomicInteger();
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 5_000 : 50;
-        final int max = 10;
+        final int clientCount = LARGE_TESTS ? 10_000 : 50;
+        final int max = 1000;
         final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
         final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 

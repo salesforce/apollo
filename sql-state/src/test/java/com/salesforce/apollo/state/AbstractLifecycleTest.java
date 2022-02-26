@@ -27,7 +27,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,8 +36,6 @@ import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Timer;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
@@ -72,23 +69,16 @@ abstract public class AbstractLifecycleTest {
         private final AtomicInteger            completed = new AtomicInteger();
         private final CountDownLatch           countdown;
         private final AtomicInteger            failed    = new AtomicInteger();
-        private final Timer                    latency;
         private final AtomicInteger            lineTotal;
         private final int                      max;
         private final Mutator                  mutator;
-        private final AtomicBoolean            proceed;
         private final ScheduledExecutorService scheduler;
         private final Duration                 timeout;
-        private final Counter                  timeouts;
 
-        public Transactioneer(Mutator mutator, Duration timeout, Counter timeouts, Timer latency, AtomicBoolean proceed,
-                              AtomicInteger lineTotal, int max, CountDownLatch countdown,
-                              ScheduledExecutorService txScheduler) {
-            this.latency = latency;
-            this.proceed = proceed;
+        public Transactioneer(Mutator mutator, Duration timeout, AtomicInteger lineTotal, int max,
+                              CountDownLatch countdown, ScheduledExecutorService txScheduler) {
             this.timeout = timeout;
             this.lineTotal = lineTotal;
-            this.timeouts = timeouts;
             this.max = max;
             this.countdown = countdown;
             this.scheduler = txScheduler;
@@ -99,15 +89,9 @@ abstract public class AbstractLifecycleTest {
             return completed.get();
         }
 
-        void decorate(CompletableFuture<?> fs, Timer.Context time) {
+        void decorate(CompletableFuture<?> fs) {
             fs.whenCompleteAsync((o, t) -> {
-                if (!proceed.get()) {
-                    return;
-                }
-
                 if (t != null) {
-                    timeouts.inc();
-                    var tc = latency.time();
                     failed.incrementAndGet();
                     if (t instanceof CompletionException e) {
                         if (!(e.getCause() instanceof TimeoutException)) {
@@ -120,30 +104,26 @@ abstract public class AbstractLifecycleTest {
                             try {
                                 decorate(mutator.getSession()
                                                 .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
+                                                        scheduler));
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
                         }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                     }
                 } else {
-                    time.close();
                     final int tot = lineTotal.incrementAndGet();
                     if (tot % 100 == 0) {
                         System.out.println(".");
                     } else {
                         System.out.print(".");
                     }
-                    var tc = latency.time();
                     final var complete = completed.incrementAndGet();
                     if (complete < max) {
                         scheduler.schedule(() -> {
                             try {
                                 decorate(mutator.getSession()
                                                 .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout,
-                                                        scheduler),
-                                         tc);
+                                                        scheduler));
                             } catch (InvalidTransaction e) {
                                 e.printStackTrace();
                             }
@@ -157,11 +137,9 @@ abstract public class AbstractLifecycleTest {
 
         void start() {
             scheduler.schedule(() -> {
-                Timer.Context time = latency.time();
                 try {
                     decorate(mutator.getSession()
-                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler),
-                             time);
+                                    .submit(ForkJoinPool.commonPool(), update(entropy, mutator), timeout, scheduler));
                 } catch (InvalidTransaction e) {
                     throw new IllegalStateException(e);
                 }
