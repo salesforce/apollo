@@ -3,6 +3,9 @@ The Apollo Delphinius project is a multi-tenant, distibuted system platform. Apo
 
 The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency service for managing identity, key management, access control and verifiable credentials such as JWT issuance and validation.
 
+## Build Status
+![Build Status](https://github.com/github/docs/actions/workflows/maven.yml/badge.svg)
+
 ## Requirements
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
