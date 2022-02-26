@@ -183,7 +183,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         Thread.sleep(2_000);
-        assertTrue(checkpointOccurred.get(30, TimeUnit.SECONDS));
+        assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS));
     }
 
     @Test
