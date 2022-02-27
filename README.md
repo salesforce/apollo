@@ -6,19 +6,21 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 ## Build Status
 ![Build Status](https://github.com/salesforce/apollo/actions/workflows/maven.yml/badge.svg)
 
+The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
+
 ## Requirements
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
 ## Some Features
 * Compact, self contained Crypto and Utility module - Self certifying, self describing Digests, Signatures and Identifiers as well as a generous sampling of solid Bloomfilters n cousins.
 * Stereotomy - Decentralized Identifier based foundation and key managment infrastructure, based on the [Key Event Receipt Infrastructure](https://github.com/decentralized-identity/keri) (KERI).
-* MTLS network communication - Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
+* MTLS network communication - Can use KERI for certificate authentication and generation.  Local communication simulation, also, for simplified multinode simulation for single process (IDE) testing
 * Multi instance GRPC service routing - Context keyed services and routing framework
 * [Fireflies](https://ymsir.com/papers/fireflies-tocs.pdf) - byzantine tolerant secure membership and communications overlay
 * Reliable Broadcast - garbage collected, context routed reliable broadcast
 * Ethereal: [Aleph BFT Consensus](https://arxiv.org/pdf/1908.05156.pdf) - Efficient atomic broacast in asynchronous networks with byzantine nodes
 * CHOAM - dynamic, committee based, transaction causal ordering service producing linear logs - Replicated State Machines, built on Ethereal.
-* SQL State - JDBC accessible SQL store backed materialized view evolved from CHOAM linear logs.  Supports DDL, DML, stored procedures, functions and triggers.
+* SQL State - JDBC accessible, SQL store backed, materialized view evolved from CHOAM linear logs.  Supports DDL, DML, stored procedures, functions and triggers.
 * Delphinius - Google Zanzibar clone. Provides Relation Based Access Control hosted on CHOAM SQL state machines.
 
 ## Protobuf and GRPC
@@ -69,9 +71,19 @@ Myself, I find that I have to first select the top level Apollo.app module, and 
 
 Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience.  I know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
 
-## Current Status
-Currently, the system is in heavy devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+## Metrics
+Apollo uses Dropwizard Metrics and these are available for Fireflies, Reliable Broadcast, Ethereal and CHOAM.
 
-Simple Model stand in for multitenant shards is in place and being worked upon currently.  This integrates Stereotomy and Delphinius using CHOAM.
+## Testing
+By default, the build uses a reduced number of simulated clients for testing.  To enable the larger test suite, use the system property "large_tests".  For example
+
+    mvn clean install -Dlarge_tests=true
+
+This requires a decent amount of resources, using two orders of magnitude more simulated clients in the tests, with longer serial transaction chains per transactioneer client.  This runs fine on my Apple M1max, but this is a beefy machine.  YMMV.
+
+## Current Status
+Currently, the system is in devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+
+Simple Model stand in for multitenant shards is in place and being worked upon currently.  This integrates Stereotomy and Delphinius using CHOAM.  An E2E test of the ReBAC Delphinius service is now being tested.  Full integration of Nodes using Fireflies discovery is also tested and working.
 
 

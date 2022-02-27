@@ -11,18 +11,17 @@ Apollo Fireflies is mostly functionally complete, but certainly quite a bit more
 
 __Current Functionality__
 * PKI integration
-    * Requires a central certificate authority
-    * Node ids managed through node certificates
+    * Uses pluggable authentication. KERI based authorization as well as standard PKI CA authentication.
+    * Node identity and key managment managed via Stereotomy
 * Gossip communications overlay
     * Reliable message flooding
     * Fireflies rings for consistent hashing
-
-__To Do__
-* Handling certificate rotation in nodes
+* Certificate key rotation
+    * provided by Stereotomy key rotation facilities
 * Full generalization of key algorithms, hash and signing algorthm, etc
-    * currently, the system is basically expecting RSA keys and such.  Hasn't been tested with ECC and other signinig algorithms.
+     * provided by Stereotomy and the crypto utils
 * Handling of the certificate authority certificate rotation
-    * this is a doozy, obviously. ;)
+    * again provided by Stereotomy key rotation facilities
 
 ## API
 
