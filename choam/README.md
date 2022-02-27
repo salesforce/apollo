@@ -4,11 +4,9 @@
 
 This module provides a CHOAM abstraction for the group management of a linear distributed log.  This work is loosely based off of ideas from two excellent papers: [From Byzantine Consensus to BFT State Machine Replication: A Latency-Optimal Transformation](https://www.researchgate.net/profile/Alysson_Bessani/publication/254037731_From_Byzantine_Consensus_to_BFT_State_Machine_Replication_A_Latency-Optimal_Transformation/links/562f872108ae4742240af924/From-Byzantine-Consensus-to-BFT-State-Machine-Replication-A-Latency-Optimal-Transformation.pdf) and [From Byzantine Replication to Blockchain: Consensus is only the Beginning](https://arxiv.org/abs/2004.14527).
 
-One of the primary goals in Apollo is distributed linear ledgers, composed of database change data capture events.  These are totally ordered transactions on a shared distributed ledger.  This is equivalent to a Kafka event partion,
-in that this provides an ordered sequence of events - blocks - that all participants process in the same order.  This is, unsuprisingly, the definition of _State Machine Replication_.
+One of the primary goals in Apollo is distributed linear ledgers, composed of database DDL/DML comman events.  These are totally ordered transactions on a shared distributed ledger.  This is equivalent to a Kafka event partion, in that this provides an ordered sequence of events - blocks - that all participants process in the same order.  This is, unsuprisingly, the definition of _State Machine Replication_.
 
-In Apollo, however, the model is more complex than simple UTXO transactions.  While some distributed ordering technique may yet emerge (I have hopes) the fact is today, we only really know how to provide total ordering via linear logs.
-This module provides a committe selection mechanism that is maintained by signed blocks of batches of batches of fundamental transactions.  See [From Byzantine Replication to Blockchain: Consensus is only the Beginning](https://arxiv.org/abs/2004.14527) for discussion of the different types of blocks processed by the _CHOAM_.
+In Apollo, however, the model is more complex than simple UTXO transactions.  While some distributed ordering technique may yet emerge (I have hopes) the fact is today, we only really know how to provide total ordering via linear logs. This module provides a committe selection mechanism that is maintained by signed blocks of batches of batches of fundamental transactions.  See [From Byzantine Replication to Blockchain: Consensus is only the Beginning](https://arxiv.org/abs/2004.14527) for discussion of the different types of blocks processed by the _CHOAM_.
 
 Where CHOAM differs from BFT-SMART is that CHOAM is asynchronous and leaderless.  Rather than loosely coupling to a larger consensus as in BFT-SMART, CHOAM is tightly coupled with Ethereal (Aleph-BFT) and uses that subsystem to drive consensus behavior using a more primitive unit than blocks.  View changes, checkpoints, and block generation is thus leaderless and asynchronous.
 
@@ -40,8 +38,8 @@ The CHOAM provides clients the ability to submit transactions that are then caus
 ## Finite State Machine Model
 
 CHOAM is driven from a _Finite State Machine_ model using Tron (another module in Apollo).  This manifests in the pattern of a leaf action driver in the form of the _CollaboratorContext_.  This class is used as the _Context_
-of the Tron state machines.  Currently the FSM model has 3 state maps, reprenting the normal operation of the node (Earner), block production (Driven) and the generation of a view (liveness, Genesis generation, and dynamic rotation of view/committee members).
+of the Tron state machines.  Currently the FSM model has 4 state maps, reprenting the normal operation of the node (Earner), block production (Driven) and the generation of a view (Reconfiguration) and Genesis bootstrapping.  The view reconfiguration logic provides dynamic rotation of view/committee members based on random cuts through the underlying context membership rings.
 
 ## Messaging
 
-CHOAM uses the ReliableBroadcast layer for distributing blocks produced to the entire group membership.  Client transactions are submitted to the current members of the group using Point to Point messaging.  Block production is accomplished with Gossip and is reused for view change consensus as well.
+CHOAM uses the ReliableBroadcast layer for distributing blocks produced to the entire group membership.  Client transactions are submitted to the current members of the group using Point to Point messaging.  Block production is accomplished with Ethereal Gossip and is reused for view change and genesis bootstrapping consensus as well.
