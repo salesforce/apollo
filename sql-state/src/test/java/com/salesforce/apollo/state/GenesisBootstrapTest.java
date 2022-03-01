@@ -105,7 +105,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                       .filter(cb -> cb != null)
                                       .map(cb -> cb.height())
                                       .toList());
-
         System.out.println("target: " + target + " results: "
         + members.stream()
                  .map(m -> updaters.get(m))
