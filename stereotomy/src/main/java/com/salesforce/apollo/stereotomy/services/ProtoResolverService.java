@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -33,9 +32,9 @@ public interface ProtoResolverService {
     interface BinderService {
         CompletableFuture<Boolean> bind(Binding binding) throws TimeoutException;
 
-        CompletableFuture<List<KeyState>> publish(KERL kerl);
+        CompletableFuture<Boolean> publish(KERL kerl);
 
-        CompletableFuture<KeyState> append(KeyEvent keyEvent);
+        CompletableFuture<Boolean> append(KeyEvent keyEvent);
 
         CompletableFuture<Boolean> unbind(Ident identifier) throws TimeoutException;
     }

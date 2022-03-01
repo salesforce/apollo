@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
@@ -23,12 +21,10 @@ import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -110,18 +106,7 @@ public class ResolverClient implements ResolverService, Link {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundLookupResponse().mark(serializedSize);
         }
-        var bound = result.getValue();
-        URI uri;
-        try {
-            uri = new URI(bound.getUri());
-        } catch (URISyntaxException e) {
-            return Optional.empty();
-        }
-        Binding binding = result.equals(com.salesfoce.apollo.stereotomy.event.proto.Binding.getDefaultInstance()) ? null
-                                                                                                                  : new Binding(new Bound(new InceptionEventImpl(bound.getIdentifier()),
-                                                                                                                                          uri),
-                                                                                                                                JohnHancock.from(result.getSignature()));
-        return Optional.of(binding);
+        return Optional.ofNullable(Binding.from(result));
     }
 
     @Override

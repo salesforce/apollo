@@ -16,9 +16,13 @@ import com.salesforce.apollo.protocols.BandwidthMetrics;
  */
 public interface StereotomyMetrics extends BandwidthMetrics {
 
-    Timer kerlClient();
+    Timer appendService();
 
-    Timer kerlService();
+    Timer bindService();
+
+    Meter inboundAppendRequest();
+
+    Meter inboundBindRequest();
 
     Meter inboundKerlRequest();
 
@@ -28,6 +32,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter inboundLookupResponse();
 
+    Meter inboundPublishRequest();
+
     Meter inboundResolveCoodsRequest();
 
     Meter inboundResolveCoordsResponse();
@@ -35,6 +41,12 @@ public interface StereotomyMetrics extends BandwidthMetrics {
     Meter inboundResolveRequest();
 
     Meter inboundResolveResponse();
+
+    Meter inboundUnbindRequest();
+
+    Timer kerlClient();
+
+    Timer kerlService();
 
     Timer lookupClient();
 
@@ -56,12 +68,28 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter outboundResolveResponse();
 
+    Timer publishService();
+
+    Timer resolveClient();
+
     Timer resolveCoordsClient();
 
     Timer resolveCoordsService();
 
-    Timer resolveClient();
-
     Timer resolveService();
+
+    Timer unbindService();
+
+    Timer appendClient();
+
+    Timer bindClient();
+
+    Meter outboundBindRequest();
+
+    Meter outboudAppendRequest();
+
+    Timer unbindClient();
+
+    Meter outboudUnbindRequest();
 
 }
