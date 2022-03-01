@@ -48,7 +48,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -108,7 +107,7 @@ public class Node {
     private class ProtoBinder implements BinderService {
 
         @Override
-        public CompletableFuture<KeyState> append(KeyEvent ke) {
+        public CompletableFuture<Boolean> append(KeyEvent ke) {
             var event = switch (ke.getEventCase()) {
             case EVENT_NOT_SET -> null;
             case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
@@ -116,12 +115,13 @@ public class Node {
             case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
             default -> null;
             };
+            var completed = new CompletableFuture<Boolean>();
             if (event == null) {
-                var completed = new CompletableFuture<KeyState>();
-                completed.complete(null);
-                return completed;
+                completed.complete(false);
+            } else {
+                completed.complete(true);
             }
-            return commonKERL.append(event).thenApply(ks -> ks.toKeyState());
+            return completed;
         }
 
         @Override
@@ -131,7 +131,7 @@ public class Node {
         }
 
         @Override
-        public CompletableFuture<List<KeyState>> publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) {
+        public CompletableFuture<Boolean> publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) {
             var events = new ArrayList<com.salesforce.apollo.stereotomy.event.KeyEvent>();
             var attachments = new ArrayList<com.salesforce.apollo.stereotomy.event.AttachmentEvent>();
             kerl.getEventsList().stream().forEach(ke -> {
@@ -151,13 +151,9 @@ public class Node {
                     attachments.add(new AttachmentEventImpl(builder.build()));
                 }
             });
-            if (events.isEmpty()) {
-                var completed = new CompletableFuture<List<KeyState>>();
-                completed.complete(Collections.emptyList());
-                return completed;
-            }
-            return commonKERL.append(events, attachments)
-                             .thenApply(ks -> ks.stream().map(e -> e.toKeyState()).toList());
+            var completed = new CompletableFuture<Boolean>();
+            completed.complete(!events.isEmpty());
+            return completed;
         }
 
         @Override

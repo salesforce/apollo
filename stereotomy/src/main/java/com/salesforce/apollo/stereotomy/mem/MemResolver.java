@@ -63,4 +63,16 @@ public class MemResolver implements ResolverService, BinderService {
         return kerl.getKeyState(prefix);
     }
 
+    @Override
+    public void append(EventWithAttachments event) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) throws TimeoutException {
+        // TODO Auto-generated method stub
+        
+    }
+
 }
