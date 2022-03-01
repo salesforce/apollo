@@ -20,6 +20,7 @@
         <module>delphinius</module>
         <module>schemas</module>
         <module>demo</module>
+        <module>stereotomy-services</module>
     </modules>
 
     <properties>

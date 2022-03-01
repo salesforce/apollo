@@ -28,6 +28,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Weights;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
@@ -45,6 +46,18 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  *
  */
 public class ProtobufEventFactory implements EventFactory {
+
+    public static EventWithAttachments from(com.salesfoce.apollo.stereotomy.event.proto.KeyEvent ke) {
+
+        var event = switch (ke.getEventCase()) {
+        case EVENT_NOT_SET -> null;
+        case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+        case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+        case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+        default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
+        };
+        return new EventWithAttachments(event, AttachmentEvent.Attachment.of(ke.getAttachment()));
+    }
 
     public static KeyEvent toKeyEvent(byte[] event, String ilk) {
         try {
