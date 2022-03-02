@@ -45,7 +45,6 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesforce.apollo.choam.CHOAM;
@@ -67,14 +66,13 @@ import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.KERLResolverService;
 import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
 import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderService;
 
@@ -162,35 +160,6 @@ public class Node {
             return null;
         }
 
-    }
-
-    private class ProtoResolver implements ProtoResolverService {
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KERL> kerl(Ident prefix) {
-            return commonKERL.kerl(Identifier.from(prefix)).map(kerl -> kerl(kerl));
-        }
-
-        @Override
-        public Optional<Binding> lookup(Ident prefix) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KeyState> resolve(EventCoords coordinates) {
-            return commonKERL.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState());
-        }
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KeyState> resolve(Ident prefix) {
-            return commonKERL.getKeyState(Identifier.from(prefix)).map(ks -> ks.toKeyState());
-        }
-
-        private com.salesfoce.apollo.stereotomy.event.proto.KERL kerl(List<EventWithAttachments> kerl) {
-            var builder = com.salesfoce.apollo.stereotomy.event.proto.KERL.newBuilder();
-            kerl.forEach(ewa -> builder.addEvents(ewa.toKeyEvente()));
-            return builder.build();
-        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(Node.class);
@@ -319,7 +288,7 @@ public class Node {
      *         underlying KERI resolution
      */
     public ProtoResolverService getProtoResolver() {
-        return new ProtoResolver();
+        return new KERLResolverService(commonKERL);
     }
 
     public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,

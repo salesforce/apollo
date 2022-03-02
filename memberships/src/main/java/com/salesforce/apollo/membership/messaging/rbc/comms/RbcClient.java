@@ -19,7 +19,6 @@ import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunicatio
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
-import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcast;
 
 /**
  * @author hal.hildebrand

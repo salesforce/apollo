@@ -17,7 +17,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverImplBase;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
 
 import io.grpc.stub.StreamObserver;
@@ -27,14 +26,11 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class ResolverServer extends ResolverImplBase {
-    private ClientIdentity                              identity;
     private final StereotomyMetrics                     metrics;
     private final RoutableService<ProtoResolverService> routing;
 
-    public ResolverServer(ClientIdentity identity, StereotomyMetrics metrics,
-                          RoutableService<ProtoResolverService> router) {
+    public ResolverServer(StereotomyMetrics metrics, RoutableService<ProtoResolverService> router) {
         this.metrics = metrics;
-        this.identity = identity;
         this.routing = router;
     }
 
@@ -46,11 +42,6 @@ public class ResolverServer extends ResolverImplBase {
             metrics.inboundKerlRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
             Optional<KERL> response = s.kerl(request.getIdentifier());
             if (response.isEmpty()) {
                 if (timer != null) {
@@ -78,11 +69,6 @@ public class ResolverServer extends ResolverImplBase {
             metrics.inboundLookupRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
             Optional<Binding> response = s.lookup(request.getIdentifier());
             if (response.isEmpty()) {
                 if (timer != null) {
@@ -90,6 +76,7 @@ public class ResolverServer extends ResolverImplBase {
                 }
                 responseObserver.onNext(Binding.getDefaultInstance());
                 responseObserver.onCompleted();
+                return;
             }
 
             if (timer != null) {
@@ -110,11 +97,6 @@ public class ResolverServer extends ResolverImplBase {
             metrics.inboundResolveRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
             Optional<KeyState> response = s.resolve(request.getIdentifier());
             if (response.isEmpty()) {
                 if (timer != null) {
@@ -143,11 +125,6 @@ public class ResolverServer extends ResolverImplBase {
             metrics.inboundResolveCoodsRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
             Optional<KeyState> response = s.resolve(request.getCoordinates());
             if (response.isEmpty()) {
                 if (timer != null) {
