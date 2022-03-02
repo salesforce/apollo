@@ -17,9 +17,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
@@ -39,9 +41,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1;
-        final int max = 1;
-        final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
+        final CountDownLatch countdown = new CountDownLatch(1);
 
         routers.entrySet()
                .stream()
@@ -59,15 +59,14 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                   .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        AtomicReference<Entry<Member, SqlStateMachine>> txneer = new AtomicReference<>();
 
-        for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
-                var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown,
-                                          txScheduler);
-            }).forEach(e -> transactioneers.add(e));
-        }
-        System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
+        txneer.set(updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get());
+
+        var mutator = txneer.get().getValue().getMutator(choams.get(txneer.get().getKey().getId()).getSession());
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown,
+                                               txScheduler));
+        System.out.println("Transaction member: " + txneer.get().getKey().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
 
@@ -83,13 +82,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         assertTrue(success,
                    "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
 
-        final ULong target = updaters.values()
-                                     .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
-                                     .get();
+        final ULong target = txneer.get().getValue().getCurrentBlock().height();
 
         assertTrue(Utils.waitForCondition(120_000, 100,
                                           () -> members.stream()
