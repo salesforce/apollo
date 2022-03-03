@@ -87,20 +87,12 @@ public class MembershipTests {
         final Duration timeout = Duration.ofSeconds(2);
         final var scheduler = Executors.newScheduledThreadPool(20);
 
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1;
-        final int max = 1;
-        final var countdown = new CountDownLatch(clientCount * (members.size() - 1));
-        for (int i = 0; i < clientCount; i++) {
-            choams.entrySet()
-                  .stream()
-                  .filter(e -> !e.getKey().equals(testSubject.getId()))
-                  .map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, max, scheduler, countdown))
-                  .forEach(e -> transactioneers.add(e));
-        }
+        var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
 
-        transactioneers.forEach(e -> e.start());
+        final var countdown = new CountDownLatch(1);
+        var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown);
+
+        transactioneer.start();
         System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();

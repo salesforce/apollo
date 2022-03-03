@@ -64,7 +64,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
         initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        for (int i = 0; i < clientCount; i++) {
+        for (int i = 0; i < 1; i++) {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
                 Supplier<Txn> update = () -> update(entropy, mutator);
