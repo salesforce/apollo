@@ -13,12 +13,10 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BindContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.BinderGrpc.BinderImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderService;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
 
 import io.grpc.stub.StreamObserver;
 
@@ -29,35 +27,12 @@ import io.grpc.stub.StreamObserver;
 public class BinderServer extends BinderImplBase {
     private ClientIdentity                       identity;
     private final StereotomyMetrics              metrics;
-    private final RoutableService<BinderService> routing;
+    private final RoutableService<ProtoBinder> routing;
 
-    public BinderServer(ClientIdentity identity, StereotomyMetrics metrics, RoutableService<BinderService> router) {
+    public BinderServer(ClientIdentity identity, StereotomyMetrics metrics, RoutableService<ProtoBinder> router) {
         this.metrics = metrics;
         this.identity = identity;
         this.routing = router;
-    }
-
-    @Override
-    public void append(KeyEventContext request, StreamObserver<Empty> responseObserver) {
-        Context timer = metrics != null ? metrics.appendService().time() : null;
-        if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundAppendRequest().mark(request.getSerializedSize());
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
-            s.append(request.getKeyEvent());
-
-            if (timer != null) {
-                timer.stop();
-            }
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-        });
     }
 
     @Override
@@ -79,29 +54,6 @@ public class BinderServer extends BinderImplBase {
                 responseObserver.onError(e);
                 return;
             }
-
-            if (timer != null) {
-                timer.stop();
-            }
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-        });
-    }
-
-    @Override
-    public void publish(KERLContext request, StreamObserver<Empty> responseObserver) {
-        Context timer = metrics != null ? metrics.publishService().time() : null;
-        if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundPublishRequest().mark(request.getSerializedSize());
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
-            s.publish(request.getKerl());
 
             if (timer != null) {
                 timer.stop();

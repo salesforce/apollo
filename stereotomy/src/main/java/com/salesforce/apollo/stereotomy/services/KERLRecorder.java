@@ -6,13 +6,17 @@
  */
 package com.salesforce.apollo.stereotomy.services;
 
-import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import java.util.List;
+import java.util.concurrent.TimeoutException;
+
+import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface VerificationService {
-    Verifier verifierFor(Identifier identifier);
+public interface KERLRecorder {
+    void append(EventWithAttachments event);
+
+    void publish(List<EventWithAttachments> kerl) throws TimeoutException;
 }

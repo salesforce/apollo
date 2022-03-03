@@ -9,6 +9,7 @@ package com.salesforce.apollo.demo;
 import java.time.Duration;
 
 import com.salesforce.apollo.model.Node;
+import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
 
 import io.dropwizard.Application;
 import io.dropwizard.setup.Environment;
@@ -24,7 +25,7 @@ public class DemoApplication extends Application<DemoConfiguration> {
 
     @Override
     public void run(DemoConfiguration configuration, Environment environment) throws Exception {
-        environment.jersey().register(new ResolverResource(null, null, null));
+        environment.jersey().register(new ProtoKERLService(null));
         environment.jersey().register(new DelphiResource(null, Duration.ofSeconds(2)));
         environment.healthChecks().register("demo", new DemoHealthCheck());
     }

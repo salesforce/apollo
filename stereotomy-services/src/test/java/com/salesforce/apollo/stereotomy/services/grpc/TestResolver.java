@@ -19,8 +19,7 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
-import com.salesforce.apollo.stereotomy.services.KERLResolverService;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
+import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -55,22 +54,22 @@ public class TestResolver {
         var builder = ServerConnectionCache.newBuilder();
         serverRouter = new LocalRouter(prefix, serverMember, builder, ForkJoinPool.commonPool());
         clientRouter = new LocalRouter(prefix, clientMember, builder, ForkJoinPool.commonPool());
-        
+
         serverRouter.start();
         clientRouter.start();
 
         KERL kerl = new MemKERL(DigestAlgorithm.DEFAULT);
-        ProtoResolverService protoService = new KERLResolverService(kerl);
+        ProtoKERLService protoService = new ProtoKERLService(kerl);
 
         @SuppressWarnings("unused")
-        var serverComms = serverRouter.create(serverMember, context, protoService, r -> new ResolverServer(null, r),
-                                              null, null);
+        var serverComms = serverRouter.create(serverMember, context, protoService, r -> new KERLServer(null, r), null,
+                                              null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new ResolverServer(null, r),
-                                              ResolverClient.getCreate(context, null), null);
+        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new KERLServer(null, r),
+                                              KERLClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);
-        
-        client.lookup(new SelfAddressingIdentifier(context));
+
+        client.resolve(new SelfAddressingIdentifier(context));
     }
 }

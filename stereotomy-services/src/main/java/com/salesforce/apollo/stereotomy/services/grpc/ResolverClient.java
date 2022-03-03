@@ -6,13 +6,10 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 import com.codahale.metrics.Timer.Context;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ResolverGrpc.ResolverBlockingStub;
@@ -22,19 +19,15 @@ import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunicatio
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
-import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.KeyState;
-import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
-import com.salesforce.apollo.stereotomy.services.ResolverService;
+import com.salesforce.apollo.stereotomy.services.Binder.Binding;
+import com.salesforce.apollo.stereotomy.services.Resolver;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class ResolverClient implements ResolverService, Link {
+public class ResolverClient implements Resolver, Link {
 
     public static CreateClientCommunications<ResolverClient> getCreate(Digest context, StereotomyMetrics metrics) {
         return (t, f, c) -> {
@@ -68,27 +61,6 @@ public class ResolverClient implements ResolverService, Link {
     }
 
     @Override
-    public Optional<List<EventWithAttachments>> kerl(Identifier prefix) throws TimeoutException {
-        Context timer = metrics == null ? null : metrics.kerlClient().time();
-        IdentifierContext request = IdentifierContext.newBuilder()
-                                                     .setContext(context)
-                                                     .setIdentifier(prefix.toIdent())
-                                                     .build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundKerlRequest().mark(request.getSerializedSize());
-        }
-        KERL result = client.kerl(request);
-        var serializedSize = result.getSerializedSize();
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundKerlResponse().mark(serializedSize);
-        }
-        return Optional.of(result.getEventsList().stream().map(ke -> ProtobufEventFactory.from(ke)).toList());
-    }
-
-    @Override
     public Optional<Binding> lookup(Identifier prefix) throws TimeoutException {
         Context timer = metrics == null ? null : metrics.lookupClient().time();
         IdentifierContext request = IdentifierContext.newBuilder()
@@ -108,41 +80,4 @@ public class ResolverClient implements ResolverService, Link {
         }
         return Optional.ofNullable(Binding.from(result));
     }
-
-    @Override
-    public Optional<KeyState> resolve(EventCoordinates coordinates) throws TimeoutException {
-        Context timer = metrics == null ? null : metrics.resolveCoordsClient().time();
-        var request = EventContext.newBuilder().setContext(context).setCoordinates(coordinates.toEventCoords()).build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundResolveCoordsRequest().mark(request.getSerializedSize());
-        }
-        var result = client.resolveCoords(request);
-        var serializedSize = result.getSerializedSize();
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundResolveCoodsRequest().mark(serializedSize);
-        }
-        return Optional.of(new KeyStateImpl(result));
-    }
-
-    @Override
-    public Optional<KeyState> resolve(Identifier prefix) throws TimeoutException {
-        Context timer = metrics == null ? null : metrics.resolveClient().time();
-        var request = IdentifierContext.newBuilder().setContext(context).setIdentifier(prefix.toIdent()).build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundResolveRequest().mark(request.getSerializedSize());
-        }
-        var result = client.resolve(request);
-        var serializedSize = result.getSerializedSize();
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundResolveRequest().mark(serializedSize);
-        }
-        return Optional.of(new KeyStateImpl(result));
-    }
-
 }

@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.CompletableFuture;
 
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -44,8 +43,6 @@ import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
@@ -67,14 +64,11 @@ import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.KERLResolverService;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderService;
+import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
 
 /**
  * @author hal.hildebrand
@@ -100,66 +94,6 @@ public class Node {
         public void offline(T member) {
             memberOffline(member);
         }
-    }
-
-    private class ProtoBinder implements BinderService {
-
-        @Override
-        public CompletableFuture<Boolean> append(KeyEvent ke) {
-            var event = switch (ke.getEventCase()) {
-            case EVENT_NOT_SET -> null;
-            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-            default -> null;
-            };
-            var completed = new CompletableFuture<Boolean>();
-            if (event == null) {
-                completed.complete(false);
-            } else {
-                completed.complete(true);
-            }
-            return completed;
-        }
-
-        @Override
-        public CompletableFuture<Boolean> bind(Binding binding) {
-            // TODO Auto-generated method stub
-            return null;
-        }
-
-        @Override
-        public CompletableFuture<Boolean> publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) {
-            var events = new ArrayList<com.salesforce.apollo.stereotomy.event.KeyEvent>();
-            var attachments = new ArrayList<com.salesforce.apollo.stereotomy.event.AttachmentEvent>();
-            kerl.getEventsList().stream().forEach(ke -> {
-                var event = switch (ke.getEventCase()) {
-                case EVENT_NOT_SET -> null;
-                case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-                case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-                case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-                default -> null;
-                };
-                if (event != null) {
-                    events.add(event);
-                }
-                if (ke.hasAttachment()) {
-                    var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
-                    builder.setAttachment(ke.getAttachment()).setCoordinates(event.getCoordinates().toEventCoords());
-                    attachments.add(new AttachmentEventImpl(builder.build()));
-                }
-            });
-            var completed = new CompletableFuture<Boolean>();
-            completed.complete(!events.isEmpty());
-            return completed;
-        }
-
-        @Override
-        public CompletableFuture<Boolean> unbind(Ident identifier) {
-            // TODO Auto-generated method stub
-            return null;
-        }
-
     }
 
     private static final Logger log = LoggerFactory.getLogger(Node.class);
@@ -277,18 +211,11 @@ public class Node {
     }
 
     /**
-     * @return the BinderService that provides raw Protobuf bindings
-     */
-    public ProtoResolverService.BinderService getProtoBinder() {
-        return new ProtoBinder();
-    }
-
-    /**
      * @return the ResolverService that provides raw Protobuf access to the
      *         underlying KERI resolution
      */
-    public ProtoResolverService getProtoResolver() {
-        return new KERLResolverService(commonKERL);
+    public ProtoKERLService getProtoResolver() {
+        return new ProtoKERLService(commonKERL);
     }
 
     public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,

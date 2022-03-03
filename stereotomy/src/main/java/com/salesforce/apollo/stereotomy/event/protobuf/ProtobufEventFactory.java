@@ -47,6 +47,8 @@ import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
  */
 public class ProtobufEventFactory implements EventFactory {
 
+    public static final EventFactory INSTANCE = new ProtobufEventFactory();
+
     public static EventWithAttachments from(com.salesfoce.apollo.stereotomy.event.proto.KeyEvent ke) {
 
         var event = switch (ke.getEventCase()) {
