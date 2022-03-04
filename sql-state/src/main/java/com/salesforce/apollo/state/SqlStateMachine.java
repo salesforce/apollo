@@ -109,8 +109,6 @@ import liquibase.util.StringUtil;
  */
 public class SqlStateMachine {
 
-    private static final String SQL_STATE_INTERNAL = "/sql-state/internal.xml";
-
     public static class CallResult {
         public final List<Object>    outValues;
         public final List<ResultSet> results;
@@ -127,7 +125,7 @@ public class SqlStateMachine {
         }
     }
 
-    public record Current(ULong height, Digest blkHash, int txn, Digest txnHash) {}
+    public record Current(ULong height, Digest blkHash) {}
 
     public static class Event {
         public final JsonNode body;
@@ -191,7 +189,12 @@ public class SqlStateMachine {
         }
 
         @Override
-        public void execute(int index, Digest hash, Transaction tx,
+        public void endBlock(ULong height, Digest hash) {
+            SqlStateMachine.this.endBlock(height, hash);
+        }
+
+        @Override
+        public void execute(int index, Digest txnHash, Transaction tx,
                             @SuppressWarnings("rawtypes") CompletableFuture onComplete) {
             boolean closed;
             try {
@@ -211,7 +214,7 @@ public class SqlStateMachine {
                 return;
             }
             withContext(() -> {
-                SqlStateMachine.this.execute(index, hash, txn, onComplete);
+                SqlStateMachine.this.execute(index, txnHash, txn, onComplete);
             });
 
         }
@@ -229,6 +232,11 @@ public class SqlStateMachine {
             }
             log.debug("Genesis executed on: {}", url);
         }
+    }
+
+    @FunctionalInterface
+    private interface CheckedFunction<A, B> {
+        B apply(A a) throws SQLException;
     }
 
     private static class EventTrampoline {
@@ -282,7 +290,9 @@ public class SqlStateMachine {
     private static final String                    PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
     private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
     private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
-    private static final String                    UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+    private static final String                    SQL_STATE_INTERNAL                     = "/sql-state/internal.xml";
+
+    private static final String UPDATE_CURRENT = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -312,15 +322,17 @@ public class SqlStateMachine {
     }
 
     private final File                          checkpointDirectory;
-    private final BlockClock                    clock        = new BlockClock();
-    private final ScriptCompiler                compiler     = new ScriptCompiler();
+    private final BlockClock                    clock          = new BlockClock();
+    private final ScriptCompiler                compiler       = new ScriptCompiler();
     private volatile JdbcConnection             connection;
-    private final AtomicReference<Current>      currentBlock = new AtomicReference<>();
-    private final AtomicReference<SecureRandom> entropy      = new AtomicReference<>();
-    private final TxnExec                       executor     = new TxnExec();
+    private final AtomicReference<Current>      currentBlock   = new AtomicReference<>();
+    private final AtomicReference<Current>      executingBlock = new AtomicReference<>();
+    private final AtomicReference<SecureRandom> entropy        = new AtomicReference<>();
+    private final TxnExec                       executor       = new TxnExec();
     private final Properties                    info;
-    private final EventTrampoline               trampoline   = new EventTrampoline();
-    private final String                        url;
+    private final EventTrampoline               trampoline     = new EventTrampoline();
+
+    private final String url;
 
     public SqlStateMachine(String url, Properties info, File cpDir) {
         this.url = url;
@@ -717,6 +729,7 @@ public class SqlStateMachine {
         if (session == null) {
             return;
         }
+        executingBlock.set(new Current(height, blkHash));
         session.getRandom().setSeed(new DigestHasher(blkHash, height.longValue()).identityHash());
         try {
             SecureRandom secureEntropy = SecureRandom.getInstance("SHA1PRNG");
@@ -725,7 +738,6 @@ public class SqlStateMachine {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("No SHA1PRNG available", e);
         }
-        currentBlock.set(new Current(height, blkHash, 0, Digest.NONE));
         clock.incrementHeight();
     }
 
@@ -792,6 +804,10 @@ public class SqlStateMachine {
         }
     }
 
+    private void endBlock(ULong height, Digest blkHash) {
+        currentBlock.set(new Current(height, blkHash));
+    }
+
     private void exception(@SuppressWarnings("rawtypes") CompletableFuture onCompletion, Throwable e) {
         if (onCompletion != null) {
             var completed = onCompletion.completeExceptionally(e);
@@ -799,9 +815,40 @@ public class SqlStateMachine {
         }
     }
 
-    @FunctionalInterface
-    private interface CheckedFunction<A, B> {
-        B apply(A a) throws SQLException;
+    private void execute(int index, Digest txnHash, Txn tx,
+                         @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
+        log.debug("executing: {}", tx.getExecutionCase());
+        var executing = executingBlock.get();
+        updateCurrent(executing.height, executing.blkHash, index, txnHash);
+
+        clock.incrementTxn();
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
+
+        try {
+            Object results = switch (tx.getExecutionCase()) {
+            case BATCH -> SqlStateMachine.this.acceptBatch(tx.getBatch());
+            case CALL -> acceptCall(tx.getCall());
+            case BATCHUPDATE -> SqlStateMachine.this.acceptBatchUpdate(tx.getBatchUpdate());
+            case STATEMENT -> SqlStateMachine.this.acceptPreparedStatement(tx.getStatement());
+            case SCRIPT -> SqlStateMachine.this.acceptScript(tx.getScript());
+            case BATCHED -> acceptBatchTransaction(tx.getBatched());
+            case MIGRATION -> acceptMigration(tx.getMigration());
+            default -> null;
+            };
+            this.complete(onCompletion, results);
+        } catch (JdbcSQLNonTransientConnectionException e) {
+            // ignore
+        } catch (Exception e) {
+            rollback();
+            exception(onCompletion, e);
+            if (e instanceof BatchedTransactionException bte) {
+                log.error("error executing: {}: {}", tx.getExecutionCase(), bte.getCause().getMessage());
+            } else {
+                log.error("error executing: {}", tx.getExecutionCase(), e);
+            }
+        } finally {
+            commit();
+        }
     }
 
     private <T> T execute(String sql, CheckedFunction<PreparedStatement, T> execution) throws SQLException {
@@ -832,41 +879,6 @@ public class SqlStateMachine {
         case MIGRATION -> acceptMigration(txn.getMigration());
         default -> null;
         };
-    }
-
-    private void execute(int index, Digest hash, Txn tx, @SuppressWarnings("rawtypes") CompletableFuture onCompletion) {
-        log.debug("executing: {}", tx.getExecutionCase());
-        var c = currentBlock.get();
-        updateCurrent(c.height, c.blkHash, index, hash);
-
-        clock.incrementTxn();
-        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
-
-        try {
-            Object results = switch (tx.getExecutionCase()) {
-            case BATCH -> SqlStateMachine.this.acceptBatch(tx.getBatch());
-            case CALL -> acceptCall(tx.getCall());
-            case BATCHUPDATE -> SqlStateMachine.this.acceptBatchUpdate(tx.getBatchUpdate());
-            case STATEMENT -> SqlStateMachine.this.acceptPreparedStatement(tx.getStatement());
-            case SCRIPT -> SqlStateMachine.this.acceptScript(tx.getScript());
-            case BATCHED -> acceptBatchTransaction(tx.getBatched());
-            case MIGRATION -> acceptMigration(tx.getMigration());
-            default -> null;
-            };
-            this.complete(onCompletion, results);
-        } catch (JdbcSQLNonTransientConnectionException e) {
-            // ignore
-        } catch (Exception e) {
-            rollback();
-            exception(onCompletion, e);
-            if (e instanceof BatchedTransactionException bte) {
-                log.error("error executing: {}: {}", tx.getExecutionCase(), bte.getCause().getMessage());
-            } else {
-                log.error("error executing: {}", tx.getExecutionCase(), e);
-            }
-        } finally {
-            commit();
-        }
     }
 
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {

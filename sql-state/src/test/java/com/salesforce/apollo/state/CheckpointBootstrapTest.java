@@ -55,9 +55,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
-              .forEach(ch -> ch.start());
-
-        Thread.sleep(2_000);
+              .forEach(ch -> ch.start()); 
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
@@ -85,6 +83,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
         assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS), "Checkpoint did not occur");
 
+        System.out.println("State: " + updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).toList());
         final ULong target = updaters.values()
                                      .stream()
                                      .map(ssm -> ssm.getCurrentBlock())
@@ -93,7 +92,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                      .max((a, b) -> a.compareTo(b))
                                      .get();
 
-        assertTrue(Utils.waitForCondition(120_000, 1000,
+        assertTrue(Utils.waitForCondition(10_000, 1000,
                                           () -> members.stream()
                                                        .map(m -> updaters.get(m))
                                                        .map(ssm -> ssm.getCurrentBlock())

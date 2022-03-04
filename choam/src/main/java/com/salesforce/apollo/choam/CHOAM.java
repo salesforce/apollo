@@ -222,17 +222,6 @@ public class CHOAM {
         }
     }
 
-    private Committee testQuorum() {
-        var activeCount = params.context().activeCount();
-        log.info("Active count: {} on: {}", activeCount, params.member());
-        if (activeCount >= params.context().getRingCount()) {
-            var c = new Formation();
-            current.set(c);
-            return c;
-        }
-        return null;
-    }
-
     public class Trampoline implements Concierge {
 
         @Override
@@ -269,6 +258,9 @@ public class CHOAM {
     @FunctionalInterface
     public interface TransactionExecutor {
         default void beginBlock(ULong height, Digest hash) {
+        }
+
+        default void endBlock(ULong height, Digest hash) {
         }
 
         @SuppressWarnings("rawtypes")
@@ -618,7 +610,8 @@ public class CHOAM {
                                  .toList();
     }
 
-    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
+    private final Map<ULong, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
+
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
@@ -928,7 +921,6 @@ public class CHOAM {
         final var h = head.get();
         log.info("Executing transactions for block: {} height: {} txns: {} on: {}", h.hash, h.height(), execs.size(),
                  params.member());
-        params.processor().beginBlock(h.height(), h.hash);
         for (int i = 0; i < execs.size(); i++) {
             var exec = execs.get(i);
             Digest hash = hashOf(exec, params.digestAlgorithm());
@@ -1039,6 +1031,7 @@ public class CHOAM {
         final HashedBlock h = head.get();
         switch (h.block.getBodyCase()) {
         case ASSEMBLE:
+            params.processor().beginBlock(h.height(), h.hash);
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
             log.info("Next view id: {} on: {}", nextViewId.get(), params.member());
             final var c = current.get();
@@ -1047,6 +1040,7 @@ public class CHOAM {
             }
             break;
         case RECONFIGURE:
+            params.processor().beginBlock(h.height(), h.hash);
             reconfigure(h.block.getReconfigure());
             break;
         case GENESIS:
@@ -1056,12 +1050,16 @@ public class CHOAM {
             reconfigure(h.block.getGenesis().getInitialView());
             break;
         case EXECUTIONS:
+            params.processor().beginBlock(h.height(), h.hash);
             execute(h.block.getExecutions().getExecutionsList());
             break;
         case CHECKPOINT:
+            params.processor().beginBlock(h.height(), h.hash);
         default:
             break;
         }
+        params.processor().endBlock(h.height(), h.hash);
+        log.info("End block: {} height: {} on: {}", h.hash, h.height(), params.member());
     }
 
     private void reconfigure(Reconfigure reconfigure) {
@@ -1322,5 +1320,16 @@ public class CHOAM {
         if (combine) {
             combine();
         }
+    }
+
+    private Committee testQuorum() {
+        var activeCount = params.context().activeCount();
+        log.info("Active count: {} on: {}", activeCount, params.member());
+        if (activeCount >= params.context().getRingCount()) {
+            var c = new Formation();
+            current.set(c);
+            return c;
+        }
+        return null;
     }
 }
