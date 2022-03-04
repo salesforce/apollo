@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.limit.SettableLimit;
 
-public class LifoBlockingLimiterTest { 
+public class LifoBlockingLimiterTest {
 
     final Executor executor = Executors.newCachedThreadPool();
 
@@ -28,8 +28,10 @@ public class LifoBlockingLimiterTest {
 
     final SimpleLimiter<Void> simpleLimiter = SimpleLimiter.newBuilder().limit(limit).build();
 
-    final LifoBlockingLimiter<Void> blockingLimiter = LifoBlockingLimiter.newBuilder(simpleLimiter).backlogSize(10)
-                                                                         .backlogTimeout(1, TimeUnit.SECONDS).build();
+    final LifoBlockingLimiter<Void> blockingLimiter = LifoBlockingLimiter.newBuilder(simpleLimiter)
+                                                                         .backlogSize(10)
+                                                                         .backlogTimeout(1, TimeUnit.SECONDS)
+                                                                         .build();
 
     @Test
     public void blockWhenFullAndTimeout() {
@@ -53,14 +55,14 @@ public class LifoBlockingLimiterTest {
         List<Optional<Limiter.Listener>> listeners = acquireN(blockingLimiter, 4);
 
         // Schedule one to release in 250 msec
-        Executors.newSingleThreadScheduledExecutor().schedule(() -> listeners.get(0).get().onSuccess(), 250,
-                                                              TimeUnit.MILLISECONDS);
+        Executors.newSingleThreadScheduledExecutor()
+                 .schedule(() -> listeners.get(0).get().onSuccess(), 250, TimeUnit.MILLISECONDS);
 
         // Next acquire will block for 1 second
         long start = System.nanoTime();
         Optional<Limiter.Listener> listener = blockingLimiter.acquire(null);
         long duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-        assertTrue(duration >= 250);
+        assertTrue(duration >= 250, "Duration: " + duration + " ms");
         assertTrue(listener.isPresent());
     }
 
@@ -132,7 +134,9 @@ public class LifoBlockingLimiterTest {
             } finally {
                 listener.get().onSuccess();
             }
-        }, executor)).peek(future -> future.whenComplete((value, error) -> values.add(value)))
+        }, executor))
+                                                            .peek(future -> future.whenComplete((value,
+                                                                                                 error) -> values.add(value)))
                                                             .collect(Collectors.toList());
 
         // Release the first batch of tokens
@@ -157,12 +161,15 @@ public class LifoBlockingLimiterTest {
     }
 
     private List<Optional<Limiter.Listener>> acquireN(Limiter<Void> limiter, int N) {
-        return IntStream.range(0, N).mapToObj(i -> limiter.acquire(null))
-                        .peek(listener -> assertTrue(listener.isPresent())).collect(Collectors.toList());
+        return IntStream.range(0, N)
+                        .mapToObj(i -> limiter.acquire(null))
+                        .peek(listener -> assertTrue(listener.isPresent()))
+                        .collect(Collectors.toList());
     }
 
     private List<CompletableFuture<Optional<Limiter.Listener>>> acquireNAsync(Limiter<Void> limiter, int N) {
-        return IntStream.range(0, N).mapToObj(i -> CompletableFuture.supplyAsync(() -> limiter.acquire(null), executor))
+        return IntStream.range(0, N)
+                        .mapToObj(i -> CompletableFuture.supplyAsync(() -> limiter.acquire(null), executor))
                         .collect(Collectors.toList());
     }
 }
