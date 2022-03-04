@@ -82,10 +82,9 @@ public class MembershipTests {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
-        Thread.sleep(2_000); // need to create a mechanism to ensure genesis creation before starting txns ;)
 
-        final Duration timeout = Duration.ofSeconds(2);
-        final var scheduler = Executors.newScheduledThreadPool(20);
+        final Duration timeout = Duration.ofSeconds(5);
+        final var scheduler = Executors.newScheduledThreadPool(2);
 
         var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
 
@@ -93,7 +92,7 @@ public class MembershipTests {
         var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown);
 
         transactioneer.start();
-        System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
+        System.out.println("completed: " + countdown.await(60, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
