@@ -13,7 +13,7 @@ jobs:
       uses: actions/setup-java@v2
       with:
         java-version: '17.0.2+8'
-        distribution: 'azul'
+        distribution: 'zulu'
         cache: maven
     - name: Build with Maven
       run: mvn -batch-mode clean package --file pom.xml
