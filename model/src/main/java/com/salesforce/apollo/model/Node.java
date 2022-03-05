@@ -43,7 +43,8 @@ import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -270,12 +271,12 @@ public class Node {
     }
 
     // Answer the KERL of this node
-    private com.salesfoce.apollo.stereotomy.event.proto.KERL kerl() {
+    private KERL_ kerl() {
         var kerl = identifier.getKerl();
         if (kerl.isEmpty()) {
-            return com.salesfoce.apollo.stereotomy.event.proto.KERL.getDefaultInstance();
+            return KERL_.getDefaultInstance();
         }
-        var b = com.salesfoce.apollo.stereotomy.event.proto.KERL.newBuilder();
+        var b = KERL_.newBuilder();
         kerl.get().stream().map(ewa -> ewa.toKeyEvente()).forEach(ke -> b.addEvents(ke));
         return b.build();
     }
@@ -296,7 +297,7 @@ public class Node {
         params.context().offline(member);
     }
 
-    private Transaction transactionOf(KeyEvent ke) {
+    private Transaction transactionOf(KeyEventWithAttachments ke) {
         var event = switch (ke.getEventCase()) {
         case EVENT_NOT_SET -> null;
         case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());

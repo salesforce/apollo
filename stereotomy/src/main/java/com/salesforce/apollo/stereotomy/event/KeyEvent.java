@@ -8,7 +8,7 @@ package com.salesforce.apollo.stereotomy.event;
 
 import org.joou.ULong;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.Builder;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;

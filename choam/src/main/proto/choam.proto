@@ -91,7 +91,7 @@ message Assemble {
 
 message Foundation {
     repeated utils.Digeste membership = 1;
-    stereotomy.KeyEvent authority = 2;
+    stereotomy.KeyEvent_ authority = 2;
 }
 
 message FoundationSeal {
@@ -115,7 +115,7 @@ message Join {
     utils.Digeste view = 1;
     ViewMember member = 2;
     repeated Certification endorsements = 3;
-    stereotomy.KERL kerl = 4;
+    stereotomy.KERL_ kerl = 4;
 }
 
 message ViewMember {

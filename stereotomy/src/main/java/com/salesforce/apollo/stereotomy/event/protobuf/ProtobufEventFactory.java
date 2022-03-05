@@ -22,6 +22,8 @@ import com.salesfoce.apollo.stereotomy.event.proto.Header;
 import com.salesfoce.apollo.stereotomy.event.proto.IdentifierSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.InteractionSpec;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationSpec;
 import com.salesfoce.apollo.stereotomy.event.proto.Version;
 import com.salesfoce.apollo.stereotomy.event.proto.Weights;
@@ -49,7 +51,23 @@ public class ProtobufEventFactory implements EventFactory {
 
     public static final EventFactory INSTANCE = new ProtobufEventFactory();
 
-    public static EventWithAttachments from(com.salesfoce.apollo.stereotomy.event.proto.KeyEvent ke) {
+    public static KeyEvent_ toKeyEvent(KeyEvent ke) {
+        var builder = KeyEvent_.newBuilder();
+
+        return builder.build();
+    }
+
+    public static KeyEvent from(KeyEvent_ ke) {
+        return switch (ke.getEventCase()) {
+        case EVENT_NOT_SET -> null;
+        case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
+        case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
+        case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
+        default -> throw new IllegalArgumentException("Unexpected value: " + ke.getEventCase());
+        };
+    }
+
+    public static EventWithAttachments from(KeyEventWithAttachments ke) {
 
         var event = switch (ke.getEventCase()) {
         case EVENT_NOT_SET -> null;

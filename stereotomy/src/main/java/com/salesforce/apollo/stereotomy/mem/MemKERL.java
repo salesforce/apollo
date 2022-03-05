@@ -27,8 +27,10 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 
@@ -107,6 +109,13 @@ public class MemKERL implements KERL {
     }
 
     @Override
+    public CompletableFuture<KeyState> append(EventWithAttachments ewa) {
+        return append(Collections.singletonList(ewa.event()),
+                      Collections.singletonList(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
+                                                                                         ewa.attachments()))).thenApply(l -> l.get(0));
+    }
+
+    @Override
     public CompletableFuture<KeyState> append(KeyEvent event) {
         final var newState = processor.process(event);
         append(event, newState);
@@ -133,6 +142,11 @@ public class MemKERL implements KERL {
         var fs = new CompletableFuture<List<KeyState>>();
         fs.complete(states);
         return fs;
+    }
+
+    @Override
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
     }
 
     @Override
@@ -177,18 +191,6 @@ public class MemKERL implements KERL {
         return Optional.of(kerl(keyEvent.get()));
     }
 
-    private List<EventWithAttachments> kerl(KeyEvent event) {
-        var current = event;
-        var result = new ArrayList<EventWithAttachments>();
-        while (current != null) {
-            var coordinates = current.getCoordinates();
-            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
-            current = getKeyEvent(current.getPrevious()).orElse(null);
-        }
-        Collections.reverse(result);
-        return result;
-    }
-
     private void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
@@ -227,8 +229,15 @@ public class MemKERL implements KERL {
         };
     }
 
-    @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
+    private List<EventWithAttachments> kerl(KeyEvent event) {
+        var current = event;
+        var result = new ArrayList<EventWithAttachments>();
+        while (current != null) {
+            var coordinates = current.getCoordinates();
+            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            current = getKeyEvent(current.getPrevious()).orElse(null);
+        }
+        Collections.reverse(result);
+        return result;
     }
 }

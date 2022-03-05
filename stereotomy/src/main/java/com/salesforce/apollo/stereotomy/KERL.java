@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
@@ -28,8 +29,8 @@ public interface KERL extends KEL {
 
     record EventWithAttachments(KeyEvent event, Attachment attachments) {
 
-        public com.salesfoce.apollo.stereotomy.event.proto.KeyEvent toKeyEvente() {
-            var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.newBuilder();
+        public KeyEventWithAttachments toKeyEvente() {
+            var builder = KeyEventWithAttachments.newBuilder();
             event.setEventOf(builder);
             if (attachments != null) {
                 builder.setAttachment(attachments.toAttachemente());
@@ -66,6 +67,8 @@ public interface KERL extends KEL {
     }
 
     CompletableFuture<Void> append(AttachmentEvent event);
+
+    CompletableFuture<KeyState> append(EventWithAttachments ewa);
 
     Optional<List<EventWithAttachments>> kerl(Identifier identifier);
 

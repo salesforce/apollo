@@ -7,9 +7,11 @@
 package com.salesforce.apollo.stereotomy.services;
 
 import java.util.List;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
+import com.salesforce.apollo.stereotomy.KeyState;
+import com.salesforce.apollo.stereotomy.event.KeyEvent;
 
 /**
  * @author hal.hildebrand
@@ -18,5 +20,9 @@ import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
 public interface KERLRecorder {
     void append(EventWithAttachments event);
 
-    void publish(List<EventWithAttachments> kerl) throws TimeoutException;
+    void publish(List<EventWithAttachments> kerl);
+
+    CompletableFuture<KeyState> appendWithReturn(KeyEvent event);
+
+    CompletableFuture<List<KeyState>> publishWithReturn(List<EventWithAttachments> kerl);
 }

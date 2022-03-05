@@ -6,10 +6,13 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import com.salesfoce.apollo.stereotomy.event.proto.KERL;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 
 /**
  * @author hal.hildebrand
@@ -17,7 +20,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
  */
 public interface ProtoKERLRecorder {
 
-    CompletableFuture<Boolean> publish(KERL kerl);
+    CompletableFuture<Boolean> append(KeyEventWithAttachments keyEvent);
 
-    CompletableFuture<Boolean> append(KeyEvent keyEvent);
+    CompletableFuture<KeyState_> appendWithReturn(KeyEvent_ keyEvent);
+
+    CompletableFuture<Boolean> publish(KERL_ kerl);
+
+    CompletableFuture<List<KeyState_>> publishWithReturn(KERL_ kerl);
 }

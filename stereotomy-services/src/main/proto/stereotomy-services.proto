@@ -28,15 +28,22 @@ message KeyContext {
     stereotomy.KeyCoords coordinates = 2;
 }
 
+message KeyStates {
+    repeated KeyState_ keyStates = 1;
+}
+
 // KERL Observer/Provider API
 service KERLService { 
-    rpc kerl (IdentifierContext) returns (stereotomy.KERL) {}
+    rpc kerl (IdentifierContext) returns (stereotomy.KERL_) {}
     
-    rpc resolve (IdentifierContext) returns (stereotomy.KeyState) {}
-    rpc resolveCoords (EventContext) returns (stereotomy.KeyState) {}
+    rpc resolve (IdentifierContext) returns (stereotomy.KeyState_) {}
+    rpc resolveCoords (EventContext) returns (stereotomy.KeyState_) {}
     
     rpc publish(KERLContext) returns(google.protobuf.Empty) {}
-    rpc append(KeyEventContext) returns(google.protobuf.Empty) {}
+    rpc append(KeyEventWitAttachmentsContext) returns(google.protobuf.Empty) {}
+    
+    rpc publishWithReturn(KERLContext) returns(KeyStates) {}
+    rpc appendWithReturn(KeyEventContext) returns(stereotomy.KeyState_) {}
 }
 
 message BindContext {
@@ -46,12 +53,17 @@ message BindContext {
 
 message KERLContext {
     utils.Digeste context = 1;
-    KERL kerl = 2;
+    KERL_ kerl = 2;
 }
 
 message KeyEventContext {
     utils.Digeste context = 1;
-    KeyEvent keyEvent = 2;
+    KeyEvent_ keyEvent = 2;
+}
+
+message KeyEventWitAttachmentsContext {
+    utils.Digeste context = 1;
+    KeyEventWithAttachments keyEvent = 2;
 }
 
 

@@ -21,9 +21,10 @@ import javax.ws.rs.core.Response;
 
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
 
 /**
@@ -45,9 +46,10 @@ public class KERLResource {
 
     @PUT
     @Path("append")
-    public void append(KeyEvent event) {
-        try {
-            resolver.append(event).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    public void append(KeyEvent_ event) {
+        try { // TODO fix args
+            resolver.append(KeyEventWithAttachments.newBuilder().build())
+                    .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.INTERNAL_SERVER_ERROR);
         } catch (InterruptedException e) {
@@ -59,13 +61,13 @@ public class KERLResource {
 
     @POST
     @Path("kerl")
-    public KERL kerl(Ident identifier) {
+    public KERL_ kerl(Ident identifier) {
         return resolver.kerl(identifier).get();
     }
 
     @PUT
     @Path("publish")
-    public void publish(KERL kerl) {
+    public void publish(KERL_ kerl) {
         try {
             resolver.publish(kerl).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
@@ -79,13 +81,13 @@ public class KERLResource {
 
     @POST
     @Path("resolve/coords")
-    public KeyState resolve(EventCoords coordinates) {
+    public KeyState_ resolve(EventCoords coordinates) {
         return resolver.resolve(coordinates).get();
     }
 
     @POST
     @Path("resolve")
-    public KeyState resolve(Ident identifier) {
+    public KeyState_ resolve(Ident identifier) {
         return resolver.resolve(identifier).get();
     }
 }

@@ -28,6 +28,7 @@ import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
@@ -207,8 +208,8 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState() {
-            return state.toKeyState();
+        public KeyState_ toKeyState_() {
+            return state.toKeyState_();
         }
 
         @Override

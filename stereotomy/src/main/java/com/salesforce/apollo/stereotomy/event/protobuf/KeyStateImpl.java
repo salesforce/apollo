@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
@@ -56,7 +57,7 @@ public class KeyStateImpl implements KeyState {
                                        List<BasicIdentifier> witnesses, Set<ConfigurationTrait> configurationTraits,
                                        KeyEvent event, EstablishmentEvent lastEstablishmentEvent,
                                        Identifier delegatingPrefix, Digest digest) {
-        final var builder = com.salesfoce.apollo.stereotomy.event.proto.KeyState.newBuilder();
+        final var builder = KeyState_.newBuilder();
         return new KeyStateImpl(builder.addAllKeys(keys.stream().map(pk -> bs(pk)).collect(Collectors.toList()))
                                        .setNextKeyConfigurationDigest(nextKeyConfiguration == null ? Digest.NONE.toDigeste()
                                                                                                    : nextKeyConfiguration.toDigeste())
@@ -80,13 +81,13 @@ public class KeyStateImpl implements KeyState {
                                        .build());
     }
 
-    private final com.salesfoce.apollo.stereotomy.event.proto.KeyState state;
+    private final KeyState_ state;
 
     public KeyStateImpl(byte[] content) throws InvalidProtocolBufferException {
-        this.state = com.salesfoce.apollo.stereotomy.event.proto.KeyState.parseFrom(content);
+        this.state = KeyState_.parseFrom(content);
     }
 
-    public KeyStateImpl(com.salesfoce.apollo.stereotomy.event.proto.KeyState state) {
+    public KeyStateImpl(KeyState_ state) {
         this.state = state;
     }
 
@@ -188,7 +189,7 @@ public class KeyStateImpl implements KeyState {
     }
 
     @Override
-    public com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState() {
+    public KeyState_ toKeyState_() {
         return state;
     }
 

@@ -13,6 +13,7 @@ import java.util.Set;
 
 import org.joou.ULong;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.stereotomy.event.Format;
@@ -72,5 +73,5 @@ public interface KeyState {
                this.getNextKeyConfigurationDigest().isPresent();
     }
 
-    com.salesfoce.apollo.stereotomy.event.proto.KeyState toKeyState();
+    KeyState_ toKeyState_();
 }

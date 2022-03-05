@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -49,7 +50,7 @@ public class MemKERLService implements KERLProvider, KERLRecorder {
     }
 
     @Override
-    public void publish(List<EventWithAttachments> k) throws TimeoutException {
+    public void publish(List<EventWithAttachments> k) {
         List<KeyEvent> events = new ArrayList<KeyEvent>();
         List<AttachmentEvent> attachments = new ArrayList<AttachmentEvent>();
         k.forEach(e -> {
@@ -67,6 +68,20 @@ public class MemKERLService implements KERLProvider, KERLRecorder {
     @Override
     public Optional<KeyState> resolve(Identifier prefix) throws TimeoutException {
         return kerl.getKeyState(prefix);
+    }
+
+    @Override
+    public CompletableFuture<KeyState> appendWithReturn(KeyEvent event) {
+        return kerl.append(event);
+    }
+
+    @Override
+    public CompletableFuture<List<KeyState>> publishWithReturn(List<EventWithAttachments> k) {
+        return kerl.append(k.stream().map(ewa -> ewa.event()).toList(),
+                           k.stream()
+                            .map(ewa -> ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
+                                                                                 ewa.attachments()))
+                            .toList());
     }
 
 }

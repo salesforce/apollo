@@ -16,11 +16,19 @@ import com.salesforce.apollo.protocols.BandwidthMetrics;
  */
 public interface StereotomyMetrics extends BandwidthMetrics {
 
+    Timer appendClient();
+
     Timer appendService();
+
+    Timer appendWithReturnService();
+
+    Timer bindClient();
 
     Timer bindService();
 
     Meter inboundAppendRequest();
+
+    Meter inboundAppendWithReturnRequest();
 
     Meter inboundBindRequest();
 
@@ -33,6 +41,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
     Meter inboundLookupResponse();
 
     Meter inboundPublishRequest();
+
+    Meter inboundPublishWithReturnRequest();
 
     Meter inboundResolveCoodsRequest();
 
@@ -52,6 +62,14 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Timer lookupService();
 
+    Meter outboundAppendRequest();
+
+    Meter outboundUnbindRequest();
+
+    Meter outboundAppendWithReturnResponse();
+
+    Meter outboundBindRequest();
+
     Meter outboundKerlRequest();
 
     Meter outboundKerlResponse();
@@ -59,6 +77,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
     Meter outboundLookupRequest();
 
     Meter outboundLookupResponse();
+
+    Meter outboundPublishWithReturnResponse();
 
     Meter outboundResolveCoordsRequest();
 
@@ -70,6 +90,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Timer publishService();
 
+    Timer publishWithReturnService();
+
     Timer resolveClient();
 
     Timer resolveCoordsClient();
@@ -78,18 +100,24 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Timer resolveService();
 
-    Timer unbindService();
-
-    Timer appendClient();
-
-    Timer bindClient();
-
-    Meter outboundBindRequest();
-
-    Meter outboudAppendRequest();
-
     Timer unbindClient();
 
-    Meter outboudUnbindRequest();
+    Timer unbindService();
+
+    Meter outboundPublishRequest();
+
+    Timer appendWithReturnClient();
+
+    Meter outboundAppendWithReturnRequest();
+
+    Meter inboundAppendWithReturnResponse();
+
+    Timer publishClient();
+
+    Timer publishWithReturnClient();
+
+    Meter outboundPublishWithReturnRequest();
+
+    Meter inboundPublishWithReturnResponse();
 
 }

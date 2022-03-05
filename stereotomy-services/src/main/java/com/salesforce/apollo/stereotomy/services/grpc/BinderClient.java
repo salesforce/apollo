@@ -97,7 +97,7 @@ public class BinderClient implements ProtoBinder, Link {
         var request = IdentifierContext.newBuilder().setIdentifier(identifier).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboudUnbindRequest().mark(request.getSerializedSize());
+            metrics.outboundUnbindRequest().mark(request.getSerializedSize());
         }
         CompletableFuture<Boolean> f = new CompletableFuture<>();
         ListenableFuture<Empty> result = client.unbind(request);
