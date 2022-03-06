@@ -82,26 +82,17 @@ public class MembershipTests {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
-        Thread.sleep(2_000); // need to create a mechanism to ensure genesis creation before starting txns ;)
 
-        final Duration timeout = Duration.ofSeconds(2);
-        final var scheduler = Executors.newScheduledThreadPool(20);
+        final Duration timeout = Duration.ofSeconds(5);
+        final var scheduler = Executors.newScheduledThreadPool(2);
 
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = 1;
-        final int max = 1;
-        final var countdown = new CountDownLatch(clientCount * (members.size() - 1));
-        for (int i = 0; i < clientCount; i++) {
-            choams.entrySet()
-                  .stream()
-                  .filter(e -> !e.getKey().equals(testSubject.getId()))
-                  .map(e -> e.getValue())
-                  .map(c -> new Transactioneer(c.getSession(), timeout, max, scheduler, countdown))
-                  .forEach(e -> transactioneers.add(e));
-        }
+        var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
 
-        transactioneers.forEach(e -> e.start());
-        System.out.println("completed: " + countdown.await(120, TimeUnit.SECONDS));
+        final var countdown = new CountDownLatch(1);
+        var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown);
+
+        transactioneer.start();
+        System.out.println("completed: " + countdown.await(60, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
@@ -162,9 +153,8 @@ public class MembershipTests {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
-
                 @Override
-                public void beginBlock(ULong height, Digest hash) {
+                public void endBlock(ULong height, Digest hash) {
                     recording.incrementAndGet();
                 }
 

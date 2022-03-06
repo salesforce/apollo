@@ -139,11 +139,12 @@ public class LocalRouter extends Router {
 
     public static final Metadata.Key<String> AUTHORIZATION_METADATA_KEY = Metadata.Key.of("Authorization",
                                                                                           Metadata.ASCII_STRING_MARSHALLER);
-    private static final Context.Key<Member> CLIENT_ID_CONTEXT_KEY      = Context.key("from.id");
-    private static final ThreadIdentity      LOCAL_IDENTITY             = new ThreadIdentity();
-    private static final Logger              log                        = LoggerFactory.getLogger(LocalRouter.class);
-    private static final String              NAME_TEMPLATE              = "%s-%s";
-    private static final Map<Digest, Member> serverMembers              = new ConcurrentHashMap<>();
+    public static final String               NAME_TEMPLATE              = "%s-%s";
+
+    private static final Context.Key<Member> CLIENT_ID_CONTEXT_KEY = Context.key("from.id");
+    private static final ThreadIdentity      LOCAL_IDENTITY        = new ThreadIdentity();
+    private static final Logger              log                   = LoggerFactory.getLogger(LocalRouter.class);
+    private static final Map<Digest, Member> serverMembers         = new ConcurrentHashMap<>();
 
     public static Limit defaultClientLimit() {
         return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
@@ -156,9 +157,9 @@ public class LocalRouter extends Router {
     private final Member member;
     private final Server server;
 
-    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
-                       Supplier<Limit> serverLimit, Executor executor) {
-        this(prefix, member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
+    public LocalRouter(String prefix, Member member, ServerConnectionCache.Builder builder, Executor executor) {
+        this(prefix, member, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(),
+             () -> defaultServerLimit(), executor);
     }
 
     public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
@@ -181,9 +182,9 @@ public class LocalRouter extends Router {
         log.info("Created server: {} on: {}", name, member);
     }
 
-    public LocalRouter(String prefix, Member member, ServerConnectionCache.Builder builder, Executor executor) {
-        this(prefix, member, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(),
-             () -> defaultServerLimit(), executor);
+    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+                       Supplier<Limit> serverLimit, Executor executor) {
+        this(prefix, member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
     }
 
     @Override

@@ -16,6 +16,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.state.Mutator;
@@ -114,7 +115,7 @@ public class ShardedKERL extends UniKERL {
 
     }
 
-    private com.salesfoce.apollo.stereotomy.event.proto.KeyState keyStateOf(byte[] b) throws InvalidProtocolBufferException {
-        return com.salesfoce.apollo.stereotomy.event.proto.KeyState.parseFrom(b);
+    private KeyState_ keyStateOf(byte[] b) throws InvalidProtocolBufferException {
+        return KeyState_.parseFrom(b);
     }
 }

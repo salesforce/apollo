@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.stereotomy.services.grpc.proto";
+option java_outer_classname = "StereotomyServicesProto";
+option objc_class_prefix = "Stereo";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "util.proto";
+import "stereotomy.proto";
+
+package stereotomy.services;
+
+// Context routing for Resolver
+
+message IdentifierContext {
+    utils.Digeste context = 1;
+    stereotomy.Ident identifier = 2;
+}
+
+message EventContext {
+    utils.Digeste context = 1;
+    stereotomy.EventCoords coordinates = 2;
+}
+
+message KeyContext {
+    utils.Digeste context = 1;
+    stereotomy.KeyCoords coordinates = 2;
+}
+
+message EventDigestContext {
+    utils.Digeste context = 1;
+    utils.Digeste digest = 2;
+}
+
+message KeyStates {
+    repeated KeyState_ keyStates = 1;
+}
+
+message AttachmentsContext {
+    utils.Digeste context = 1;
+    repeated AttachmentEvent attachments = 2;
+}
+
+message KERLContext {
+    utils.Digeste context = 1;
+    stereotomy.KERL_ kerl = 2;
+}
+
+message BindContext {
+    utils.Digeste context = 1;
+    stereotomy.Binding binding = 2;
+}
+
+message KeyEventContext {
+    utils.Digeste context = 1;
+    KeyEvent_ keyEvent = 2;
+}
+
+message KeyEventsContext {
+    utils.Digeste context = 1;
+    repeated KeyEvent_ keyEvent = 2;
+}
+
+message KeyEventWitAttachmentsContext {
+    utils.Digeste context = 1;
+    repeated KeyEvent_ events = 2;
+    repeated AttachmentEvent attachments = 3;
+}
+
+service KERLService {
+    rpc append (KeyEventsContext) returns(KeyStates) {}
+    rpc appendKERL (KERLContext) returns(KeyStates) {}
+    rpc appendWithAttachments (KeyEventWitAttachmentsContext) returns(KeyStates) {}
+    
+    rpc getAttachment (EventContext) returns(Attachment) {}
+    rpc getKeyEvent (EventDigestContext) returns(KeyEvent_) {}
+    rpc getKeyEventCoords (EventContext) returns(KeyEvent_) {}
+    rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
+    rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
+    
+    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
+    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
+    rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+}
+
+// Binding API for Resolver
+service Binder {
+    rpc bind(BindContext) returns(google.protobuf.Empty) {}
+    rpc unbind(IdentifierContext) returns(google.protobuf.Empty) {}
+}
+
+// Resolver API
+service Resolver {
+    rpc lookup (IdentifierContext) returns (stereotomy.Binding) {}
+}

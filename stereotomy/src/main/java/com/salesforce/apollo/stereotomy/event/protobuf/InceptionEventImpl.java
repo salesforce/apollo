@@ -14,7 +14,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent.Builder;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
@@ -83,6 +84,11 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
     @Override
     public void setEventOf(Builder builder) {
         builder.setInception(event);
+    }
+
+    @Override
+    public KeyEvent_ toKeyEvent_() {
+        return KeyEvent_.newBuilder().setInception(event).build();
     }
 
     @Override

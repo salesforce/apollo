@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.CompletableFuture;
 
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -44,11 +43,8 @@ import com.salesfoce.apollo.state.proto.Migration;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.Binding;
-import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
-import com.salesfoce.apollo.stereotomy.event.proto.Ident;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -68,16 +64,12 @@ import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
 import com.salesforce.apollo.state.SqlStateMachine;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
-import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService;
-import com.salesforce.apollo.stereotomy.services.ProtoResolverService.BinderService;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 /**
  * @author hal.hildebrand
@@ -102,98 +94,6 @@ public class Node {
         @Override
         public void offline(T member) {
             memberOffline(member);
-        }
-    }
-
-    private class ProtoBinder implements BinderService {
-
-        @Override
-        public CompletableFuture<KeyState> append(KeyEvent ke) {
-            var event = switch (ke.getEventCase()) {
-            case EVENT_NOT_SET -> null;
-            case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-            case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-            case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-            default -> null;
-            };
-            if (event == null) {
-                var completed = new CompletableFuture<KeyState>();
-                completed.complete(null);
-                return completed;
-            }
-            return commonKERL.append(event).thenApply(ks -> ks.toKeyState());
-        }
-
-        @Override
-        public CompletableFuture<Boolean> bind(Binding binding) {
-            // TODO Auto-generated method stub
-            return null;
-        }
-
-        @Override
-        public CompletableFuture<List<KeyState>> publish(com.salesfoce.apollo.stereotomy.event.proto.KERL kerl) {
-            var events = new ArrayList<com.salesforce.apollo.stereotomy.event.KeyEvent>();
-            var attachments = new ArrayList<com.salesforce.apollo.stereotomy.event.AttachmentEvent>();
-            kerl.getEventsList().stream().forEach(ke -> {
-                var event = switch (ke.getEventCase()) {
-                case EVENT_NOT_SET -> null;
-                case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());
-                case INTERACTION -> new InteractionEventImpl(ke.getInteraction());
-                case ROTATION -> ProtobufEventFactory.toKeyEvent(ke.getRotation());
-                default -> null;
-                };
-                if (event != null) {
-                    events.add(event);
-                }
-                if (ke.hasAttachment()) {
-                    var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
-                    builder.setAttachment(ke.getAttachment()).setCoordinates(event.getCoordinates().toEventCoords());
-                    attachments.add(new AttachmentEventImpl(builder.build()));
-                }
-            });
-            if (events.isEmpty()) {
-                var completed = new CompletableFuture<List<KeyState>>();
-                completed.complete(Collections.emptyList());
-                return completed;
-            }
-            return commonKERL.append(events, attachments)
-                             .thenApply(ks -> ks.stream().map(e -> e.toKeyState()).toList());
-        }
-
-        @Override
-        public CompletableFuture<Boolean> unbind(Ident identifier) {
-            // TODO Auto-generated method stub
-            return null;
-        }
-
-    }
-
-    private class ProtoResolver implements ProtoResolverService {
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KERL> kerl(Ident prefix) {
-            return commonKERL.kerl(Identifier.from(prefix)).map(kerl -> kerl(kerl));
-        }
-
-        @Override
-        public Optional<Binding> lookup(Ident prefix) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KeyState> resolve(EventCoords coordinates) {
-            return commonKERL.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState());
-        }
-
-        @Override
-        public Optional<com.salesfoce.apollo.stereotomy.event.proto.KeyState> resolve(Ident prefix) {
-            return commonKERL.getKeyState(Identifier.from(prefix)).map(ks -> ks.toKeyState());
-        }
-
-        private com.salesfoce.apollo.stereotomy.event.proto.KERL kerl(List<EventWithAttachments> kerl) {
-            var builder = com.salesfoce.apollo.stereotomy.event.proto.KERL.newBuilder();
-            kerl.forEach(ewa -> builder.addEvents(ewa.toKeyEvente()));
-            return builder.build();
         }
     }
 
@@ -307,23 +207,16 @@ public class Node {
         return identifier.getIdentifier();
     }
 
+    /**
+     * @return the adapter that provides raw Protobuf access to the underlying KERI
+     *         resolution
+     */
+    public ProtoKERLAdapter getKERLService() {
+        return new ProtoKERLAdapter(commonKERL);
+    }
+
     public SigningMember getMember() {
         return params.member();
-    }
-
-    /**
-     * @return the BinderService that provides raw Protobuf bindings
-     */
-    public ProtoResolverService.BinderService getProtoBinder() {
-        return new ProtoBinder();
-    }
-
-    /**
-     * @return the ResolverService that provides raw Protobuf access to the
-     *         underlying KERI resolution
-     */
-    public ProtoResolverService getProtoResolver() {
-        return new ProtoResolver();
     }
 
     public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,
@@ -378,12 +271,12 @@ public class Node {
     }
 
     // Answer the KERL of this node
-    private com.salesfoce.apollo.stereotomy.event.proto.KERL kerl() {
+    private KERL_ kerl() {
         var kerl = identifier.getKerl();
         if (kerl.isEmpty()) {
-            return com.salesfoce.apollo.stereotomy.event.proto.KERL.getDefaultInstance();
+            return KERL_.getDefaultInstance();
         }
-        var b = com.salesfoce.apollo.stereotomy.event.proto.KERL.newBuilder();
+        var b = KERL_.newBuilder();
         kerl.get().stream().map(ewa -> ewa.toKeyEvente()).forEach(ke -> b.addEvents(ke));
         return b.build();
     }
@@ -404,7 +297,7 @@ public class Node {
         params.context().offline(member);
     }
 
-    private Transaction transactionOf(KeyEvent ke) {
+    private Transaction transactionOf(KeyEventWithAttachments ke) {
         var event = switch (ke.getEventCase()) {
         case EVENT_NOT_SET -> null;
         case INCEPTION -> ProtobufEventFactory.toKeyEvent(ke.getInception());

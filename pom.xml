@@ -20,6 +20,7 @@
         <module>delphinius</module>
         <module>schemas</module>
         <module>demo</module>
+        <module>stereotomy-services</module>
     </modules>
 
     <properties>
@@ -398,7 +399,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>1</forkCount>
-                    <reuseForks>false</reuseForks>
+                    <reuseForks>true</reuseForks>
                 </configuration>
             </plugin>
             <plugin>

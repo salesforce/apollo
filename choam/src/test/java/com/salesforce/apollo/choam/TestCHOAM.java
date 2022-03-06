@@ -233,8 +233,8 @@ public class TestCHOAM {
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(30), scheduler);
-        result.get(30, TimeUnit.SECONDS);
+        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(3), scheduler);
+        result.get(60, TimeUnit.SECONDS);
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {

@@ -33,10 +33,6 @@ public class GossiperServer extends GossiperImplBase {
         this.routing = r;
     }
 
-    public ClientIdentity getClientIdentity() {
-        return identity;
-    }
-
     @Override
     public void gossip(Gossip request, StreamObserver<Update> responseObserver) {
         Context timer = metrics != null ? metrics.inboundGossipTimer().time() : null;

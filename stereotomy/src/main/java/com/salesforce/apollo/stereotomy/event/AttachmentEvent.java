@@ -105,5 +105,7 @@ public interface AttachmentEvent {
 
     byte[] getBytes();
 
+    com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_();
+
     Version version();
 }

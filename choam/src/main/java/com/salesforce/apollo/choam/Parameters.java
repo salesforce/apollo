@@ -26,7 +26,7 @@ import org.joou.ULong;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.stereotomy.event.proto.KERL;
+import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
@@ -125,7 +125,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
                                     TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
-                                    Supplier<KERL> kerl, FoundationSeal foundation) {
+                                    Supplier<KERL_> kerl, FoundationSeal foundation) {
         public static class Builder {
             private final static Function<ULong, File>             NULL_CHECKPOINTER = h -> {
                                                                                          File cp;
@@ -148,7 +148,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             private Executor                                       exec              = ForkJoinPool.commonPool();
             private FoundationSeal                                 foundation        = FoundationSeal.getDefaultInstance();
             private Function<Map<Member, Join>, List<Transaction>> genesisData       = view -> new ArrayList<>();
-            private Supplier<KERL>                                 kerl              = () -> KERL.getDefaultInstance();
+            private Supplier<KERL_>                                kerl              = () -> KERL_.getDefaultInstance();
             private SigningMember                                  member;
             private ChoamMetrics                                   metrics;
             private TransactionExecutor                            processor         = (i, h, t, f) -> {
@@ -186,7 +186,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                 return genesisData;
             }
 
-            public Supplier<KERL> getKerl() {
+            public Supplier<KERL_> getKerl() {
                 return kerl;
             }
 
@@ -241,7 +241,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                 return this;
             }
 
-            public Builder setKerl(Supplier<KERL> kerl) {
+            public Builder setKerl(Supplier<KERL_> kerl) {
                 this.kerl = kerl;
                 return this;
             }
@@ -331,7 +331,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             private Duration       batchInterval    = Duration.ofMillis(100);
             private Config.Builder ethereal         = Config.deterministic();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
-            private int            maxBatchByteSize = 2 *1024 * 1024;
+            private int            maxBatchByteSize = 2 * 1024 * 1024;
             private int            maxBatchCount    = 10_000;
             private Duration       maxGossipDelay   = Duration.ofSeconds(10);
 
@@ -639,7 +639,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         return runtime.exec;
     }
 
-    public Supplier<KERL> kerl() {
+    public Supplier<KERL_> kerl() {
         return runtime.kerl;
     }
 

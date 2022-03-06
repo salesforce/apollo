@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services;
+package com.salesforce.apollo.stereotomy.services.grpc;
 
-import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.comm.Link;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface VerificationService {
-    Verifier verifierFor(Identifier identifier);
+public interface KERLService extends ProtoKERLService, Link {
+
 }

@@ -136,6 +136,11 @@ public class MemKERL implements KERL {
     }
 
     @Override
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
+    }
+
+    @Override
     public DigestAlgorithm getDigestAlgorithm() {
         return digestAlgorithm;
     }
@@ -177,18 +182,6 @@ public class MemKERL implements KERL {
         return Optional.of(kerl(keyEvent.get()));
     }
 
-    private List<EventWithAttachments> kerl(KeyEvent event) {
-        var current = event;
-        var result = new ArrayList<EventWithAttachments>();
-        while (current != null) {
-            var coordinates = current.getCoordinates();
-            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
-            current = getKeyEvent(current.getPrevious()).orElse(null);
-        }
-        Collections.reverse(result);
-        return result;
-    }
-
     private void append(KeyEvent event, KeyState newState) {
         String coordinates = coordinateOrdering(event.getCoordinates());
         events.put(coordinates, event);
@@ -227,8 +220,15 @@ public class MemKERL implements KERL {
         };
     }
 
-    @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
+    private List<EventWithAttachments> kerl(KeyEvent event) {
+        var current = event;
+        var result = new ArrayList<EventWithAttachments>();
+        while (current != null) {
+            var coordinates = current.getCoordinates();
+            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            current = getKeyEvent(current.getPrevious()).orElse(null);
+        }
+        Collections.reverse(result);
+        return result;
     }
 }
