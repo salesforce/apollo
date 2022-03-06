@@ -69,7 +69,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 /**
  * @author hal.hildebrand
@@ -207,16 +207,16 @@ public class Node {
         return identifier.getIdentifier();
     }
 
-    public SigningMember getMember() {
-        return params.member();
+    /**
+     * @return the adapter that provides raw Protobuf access to the underlying KERI
+     *         resolution
+     */
+    public ProtoKERLAdapter getKERLService() {
+        return new ProtoKERLAdapter(commonKERL);
     }
 
-    /**
-     * @return the ResolverService that provides raw Protobuf access to the
-     *         underlying KERI resolution
-     */
-    public ProtoKERLService getProtoResolver() {
-        return new ProtoKERLService(commonKERL);
+    public SigningMember getMember() {
+        return params.member();
     }
 
     public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,

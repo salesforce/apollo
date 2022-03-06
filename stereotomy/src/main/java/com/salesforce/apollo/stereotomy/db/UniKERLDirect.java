@@ -65,9 +65,4 @@ public class UniKERLDirect extends UniKERL {
         fs.complete(states);
         return fs;
     }
-
-    @Override
-    public CompletableFuture<KeyState> append(EventWithAttachments ewa) { 
-        return null;
-    }
 }

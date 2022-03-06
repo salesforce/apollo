@@ -7,6 +7,7 @@
 package com.salesforce.apollo.demo;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -22,10 +23,9 @@ import javax.ws.rs.core.Response;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**
  * @author hal.hildebrand
@@ -45,11 +45,10 @@ public class KERLResource {
     }
 
     @PUT
-    @Path("append")
+    @Path("append/eventvent")
     public void append(KeyEvent_ event) {
         try { // TODO fix args
-            resolver.append(KeyEventWithAttachments.newBuilder().build())
-                    .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            resolver.append(Collections.singletonList(event)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new WebApplicationException(e.getCause(), Response.Status.INTERNAL_SERVER_ERROR);
         } catch (InterruptedException e) {
@@ -60,13 +59,13 @@ public class KERLResource {
     }
 
     @POST
-    @Path("kerl")
-    public KERL_ kerl(Ident identifier) {
-        return resolver.kerl(identifier).get();
+    @Path("get/KERL")
+    public KERL_ getKERL(Ident identifier) {
+        return resolver.getKERL(identifier).get();
     }
 
     @PUT
-    @Path("publish")
+    @Path("publish/KERL")
     public void publish(KERL_ kerl) {
         try {
             resolver.publish(kerl).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -80,14 +79,14 @@ public class KERLResource {
     }
 
     @POST
-    @Path("resolve/coords")
+    @Path("get/key/state/coords")
     public KeyState_ resolve(EventCoords coordinates) {
-        return resolver.resolve(coordinates).get();
+        return resolver.getKeyState(coordinates).get();
     }
 
     @POST
-    @Path("resolve")
+    @Path("get/key/state")
     public KeyState_ resolve(Ident identifier) {
-        return resolver.resolve(identifier).get();
+        return resolver.getKeyState(identifier).get();
     }
 }

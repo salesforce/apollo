@@ -16,108 +16,164 @@ import com.salesforce.apollo.protocols.BandwidthMetrics;
  */
 public interface StereotomyMetrics extends BandwidthMetrics {
 
-    Timer appendClient();
+    Timer appendEventsClient();
 
-    Timer appendService();
+    Timer appendEventsService();
 
-    Timer appendWithReturnService();
+    Timer appendKERLClient();
+
+    Timer appendKERLService();
+
+    Timer appendWithAttachmentsClient();
+
+    Timer appendWithAttachmentsService();
 
     Timer bindClient();
 
     Timer bindService();
 
-    Meter inboundAppendRequest();
+    Timer getAttachmentClient();
 
-    Meter inboundAppendWithReturnRequest();
+    Timer getAttachmentService();
+
+    Timer getKERLClient();
+
+    Timer getKERLService();
+
+    Timer getKeyEventClient();
+
+    Timer getKeyEventCoordsClient();
+
+    Timer getKeyEventCoordsService();
+
+    Timer getKeyEventService();
+
+    Timer getKeyStateClient();
+
+    Timer getKeyStateCoordsClient();
+
+    Timer getKeyStateCoordsService();
+
+    Timer getKeyStateService();
+
+    Meter inboundAppendEventsRequest();
+
+    Meter inboundAppendEventsResponse();
+
+    Meter inboundAppendKERLRequest();
+
+    Meter inboundAppendKERLResponse();
+
+    Meter inboundAppendWithAttachmentsRequest();
+
+    Meter inboundAppendWithAttachmentsResponse();
 
     Meter inboundBindRequest();
 
-    Meter inboundKerlRequest();
+    Meter inboundGetAttachmentRequest();
 
-    Meter inboundKerlResponse();
+    Meter inboundGetAttachmentResponse();
+
+    Meter inboundGetKERLRequest();
+
+    Meter inboundGetKERLResponse();
+
+    Meter inboundGetKeyEventCoordsRequest();
+
+    Meter inboundGetKeyEventRequest();
+
+    Meter inboundGetKeyEventResponse();
+
+    Meter inboundGetKeyStateCoordsRequest();
+
+    Meter inboundGetKeyStateCoordsResponse();
+
+    Meter inboundGetKeyStateRequest();
+
+    Meter inboundGetKeyStateResponse();
+
+    Meter inboundGetKeyEventCoordsResponse();
 
     Meter inboundLookupRequest();
 
     Meter inboundLookupResponse();
 
-    Meter inboundPublishRequest();
+    Meter inboundPublishAttachmentsRequest();
 
-    Meter inboundPublishWithReturnRequest();
+    Meter inboundPublishEventsRequest();
 
-    Meter inboundResolveCoodsRequest();
-
-    Meter inboundResolveCoordsResponse();
-
-    Meter inboundResolveRequest();
-
-    Meter inboundResolveResponse();
+    Meter inboundPublishKERLRequest();
 
     Meter inboundUnbindRequest();
-
-    Timer kerlClient();
-
-    Timer kerlService();
 
     Timer lookupClient();
 
     Timer lookupService();
 
-    Meter outboundAppendRequest();
+    Meter outboundAppendEventsRequest();
 
-    Meter outboundUnbindRequest();
+    Meter outboundAppendEventsResponse();
 
-    Meter outboundAppendWithReturnResponse();
+    Meter outboundAppendKERLRequest();
+
+    Meter outboundAppendKERLResponse();
+
+    Meter outboundAppendWithAttachmentsRequest();
+
+    Meter outboundAppendWithAttachmentsResponse();
 
     Meter outboundBindRequest();
 
-    Meter outboundKerlRequest();
+    Meter outboundGetAttachmentRequest();
 
-    Meter outboundKerlResponse();
+    Meter outboundGetAttachmentResponse();
+
+    Meter outboundGetKERLRequest();
+
+    Meter outboundGetKERLResponse();
+
+    Meter outboundGetKeyEventCoordsResponse();
+
+    Meter outboundGetKeyEventRequest();
+
+    Meter outboundGetKeyEventResponse();
+
+    Meter outboundGetKeyStateCoordsRequest();
+
+    Meter outboundGetKeyStateCoordsResponse();
+
+    Meter outboundGetKeyStateRequest();
+
+    Meter outboundGetKeyStateResponse();
+
+    Meter outboundGetKeyEventCoordsRequest();
 
     Meter outboundLookupRequest();
 
     Meter outboundLookupResponse();
 
-    Meter outboundPublishWithReturnResponse();
+    Meter outboundPublishAttachmentsRequest();
 
-    Meter outboundResolveCoordsRequest();
+    Meter outboundPublishEventsRequest();
 
-    Meter outboundResolveCoordsResponse();
+    Meter outboundPublishKERLRequest();
 
-    Meter outboundResolveRequest();
+    Meter outboundUnbindRequest();
 
-    Meter outboundResolveResponse();
+    Timer publishAttachmentsClient();
 
-    Timer publishService();
+    Timer publishAttachmentsService();
 
-    Timer publishWithReturnService();
+    Timer publishEventsClient();
 
-    Timer resolveClient();
+    Timer publishEventsService();
 
-    Timer resolveCoordsClient();
+    Timer publishKERLClient();
 
-    Timer resolveCoordsService();
-
-    Timer resolveService();
+    Timer publishKERLService();
 
     Timer unbindClient();
 
     Timer unbindService();
-
-    Meter outboundPublishRequest();
-
-    Timer appendWithReturnClient();
-
-    Meter outboundAppendWithReturnRequest();
-
-    Meter inboundAppendWithReturnResponse();
-
-    Timer publishClient();
-
-    Timer publishWithReturnClient();
-
-    Meter outboundPublishWithReturnRequest();
-
-    Meter inboundPublishWithReturnResponse();
 
 }

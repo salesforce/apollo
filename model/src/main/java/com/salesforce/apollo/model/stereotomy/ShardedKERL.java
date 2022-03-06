@@ -24,10 +24,8 @@ import com.salesforce.apollo.state.SqlStateMachine.CallResult;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.db.UniKERL;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 
 /**
  * @author hal.hildebrand
@@ -62,13 +60,6 @@ public class ShardedKERL extends UniKERL {
             return f;
         }
         return submitted.thenApply(r -> null);
-    }
-
-    @Override
-    public CompletableFuture<KeyState> append(EventWithAttachments ewa) {
-        return append(Collections.singletonList(ewa.event()),
-                      Collections.singletonList(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
-                                                                                         ewa.attachments()))).thenApply(l -> l.get(0));
     }
 
     @Override

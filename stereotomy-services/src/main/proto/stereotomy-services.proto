@@ -28,22 +28,23 @@ message KeyContext {
     stereotomy.KeyCoords coordinates = 2;
 }
 
+message EventDigestContext {
+    utils.Digeste context = 1;
+    utils.Digeste digest = 2;
+}
+
 message KeyStates {
     repeated KeyState_ keyStates = 1;
 }
 
-// KERL Observer/Provider API
-service KERLService { 
-    rpc kerl (IdentifierContext) returns (stereotomy.KERL_) {}
-    
-    rpc resolve (IdentifierContext) returns (stereotomy.KeyState_) {}
-    rpc resolveCoords (EventContext) returns (stereotomy.KeyState_) {}
-    
-    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
-    rpc append(KeyEventWitAttachmentsContext) returns(google.protobuf.Empty) {}
-    
-    rpc publishWithReturn(KERLContext) returns(KeyStates) {}
-    rpc appendWithReturn(KeyEventContext) returns(stereotomy.KeyState_) {}
+message AttachmentsContext {
+    utils.Digeste context = 1;
+    repeated AttachmentEvent attachments = 2;
+}
+
+message KERLContext {
+    utils.Digeste context = 1;
+    stereotomy.KERL_ kerl = 2;
 }
 
 message BindContext {
@@ -51,21 +52,38 @@ message BindContext {
     stereotomy.Binding binding = 2;
 }
 
-message KERLContext {
-    utils.Digeste context = 1;
-    KERL_ kerl = 2;
-}
-
 message KeyEventContext {
     utils.Digeste context = 1;
     KeyEvent_ keyEvent = 2;
 }
 
-message KeyEventWitAttachmentsContext {
+message KeyEventsContext {
     utils.Digeste context = 1;
-    KeyEventWithAttachments keyEvent = 2;
+    repeated KeyEvent_ keyEvent = 2;
 }
 
+message KeyEventWitAttachmentsContext {
+    utils.Digeste context = 1;
+    repeated KeyEvent_ events = 2;
+    repeated AttachmentEvent attachments = 3;
+}
+
+service KERLService {
+    rpc append (KeyEventsContext) returns(KeyStates) {}
+    rpc appendKERL (KERLContext) returns(KeyStates) {}
+    rpc appendWithAttachments (KeyEventWitAttachmentsContext) returns(KeyStates) {}
+    
+    rpc getAttachment (EventContext) returns(Attachment) {}
+    rpc getKeyEvent (EventDigestContext) returns(KeyEvent_) {}
+    rpc getKeyEventCoords (EventContext) returns(KeyEvent_) {}
+    rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
+    rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
+    
+    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
+    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
+    rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+}
 
 // Binding API for Resolver
 service Binder {

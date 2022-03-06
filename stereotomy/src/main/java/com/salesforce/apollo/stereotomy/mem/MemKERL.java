@@ -27,10 +27,8 @@ import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
-import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.processing.KeyEventProcessor;
 
@@ -106,13 +104,6 @@ public class MemKERL implements KERL {
         var returned = new CompletableFuture<Void>();
         returned.complete(null);
         return returned;
-    }
-
-    @Override
-    public CompletableFuture<KeyState> append(EventWithAttachments ewa) {
-        return append(Collections.singletonList(ewa.event()),
-                      Collections.singletonList(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
-                                                                                         ewa.attachments()))).thenApply(l -> l.get(0));
     }
 
     @Override

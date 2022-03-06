@@ -78,6 +78,11 @@ public class AttachmentEventImpl implements AttachmentEvent {
     }
 
     @Override
+    public com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent toEvent_() {
+        return event;
+    }
+
+    @Override
     public Version version() {
         return new Version() {
 

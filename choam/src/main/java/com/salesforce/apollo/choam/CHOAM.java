@@ -610,8 +610,7 @@ public class CHOAM {
                                  .toList();
     }
 
-    private final Map<ULong, CheckpointState> cachedCheckpoints = new ConcurrentHashMap<>();
-
+    private final Map<ULong, CheckpointState>                           cachedCheckpoints     = new ConcurrentHashMap<>();
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;

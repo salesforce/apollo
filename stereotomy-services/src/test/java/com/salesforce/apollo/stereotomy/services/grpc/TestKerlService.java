@@ -34,19 +34,19 @@ import com.salesforce.apollo.stereotomy.StereotomyKeyStore;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
 import com.salesforce.apollo.stereotomy.event.Seal.DigestSeal;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.impl.ProtoKERLService;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class TestResolver {
+public class TestKerlService {
     KERL                     kel;
     final StereotomyKeyStore ks = new MemKeyStore();
     SecureRandom             secureRandom;
@@ -75,12 +75,12 @@ public class TestResolver {
     }
 
     @Test
-    public void provider() throws Exception {
+    public void kerl() throws Exception {
         var context = DigestAlgorithm.DEFAULT.getLast().prefix("foo");
         var client = setup(context);
-        client.resolve(new SelfAddressingIdentifier(context));
 
-        Stereotomy controller = new StereotomyImpl(ks, kel, secureRandom);
+        var service = new DelegatedKERL(client, DigestAlgorithm.DEFAULT);
+        Stereotomy controller = new StereotomyImpl(ks, service, secureRandom);
 
         var i = controller.newIdentifier().get();
 
@@ -96,7 +96,7 @@ public class TestResolver {
         i.rotate();
         i.rotate();
 
-        var opti = client.kerl(i.getIdentifier());
+        var opti = service.kerl(i.getIdentifier());
         assertNotNull(opti);
         assertFalse(opti.isEmpty());
         var iKerl = opti.get();
@@ -109,18 +109,18 @@ public class TestResolver {
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(5).event().getIlk());
         assertEquals(KeyEvent.ROTATION_TYPE, iKerl.get(6).event().getIlk());
 
-        Optional<KeyState> keyState = client.resolve(i.getIdentifier());
+        Optional<KeyState> keyState = service.getKeyState(i.getIdentifier());
         assertNotNull(keyState);
         assertFalse(keyState.isEmpty());
         assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState.get());
 
-        keyState = client.resolve(i.getCoordinates());
+        keyState = service.getKeyState(i.getCoordinates());
         assertNotNull(keyState);
         assertFalse(keyState.isEmpty());
         assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState.get());
     }
 
-    private KERLClient setup(Digest context) {
+    private KERLService setup(Digest context) {
         var prefix = UUID.randomUUID().toString();
 
         var serverMember = new SigningMemberImpl(Utils.getMember(0));
@@ -133,7 +133,7 @@ public class TestResolver {
         serverRouter.start();
         clientRouter.start();
 
-        ProtoKERLService protoService = new ProtoKERLService(kel);
+        ProtoKERLService protoService = new ProtoKERLAdapter(kel);
 
         serverRouter.create(serverMember, context, protoService, r -> new KERLServer(null, r), null, null);
 

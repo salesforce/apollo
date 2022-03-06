@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments.Builder;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesforce.apollo.stereotomy.event.RotationEvent;
 import com.salesforce.apollo.stereotomy.event.Seal;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
@@ -76,6 +77,11 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
     @Override
     public void setEventOf(Builder builder) {
         builder.setRotation(event);
+    }
+
+    @Override
+    public KeyEvent_ toKeyEvent_() {
+        return KeyEvent_.newBuilder().setRotation(event).build();
     }
 
     @Override

@@ -51,12 +51,6 @@ public class ProtobufEventFactory implements EventFactory {
 
     public static final EventFactory INSTANCE = new ProtobufEventFactory();
 
-    public static KeyEvent_ toKeyEvent(KeyEvent ke) {
-        var builder = KeyEvent_.newBuilder();
-
-        return builder.build();
-    }
-
     public static KeyEvent from(KeyEvent_ ke) {
         return switch (ke.getEventCase()) {
         case EVENT_NOT_SET -> null;

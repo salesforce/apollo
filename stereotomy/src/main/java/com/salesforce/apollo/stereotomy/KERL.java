@@ -68,8 +68,6 @@ public interface KERL extends KEL {
 
     CompletableFuture<Void> append(AttachmentEvent event);
 
-    CompletableFuture<KeyState> append(EventWithAttachments ewa);
-
     Optional<List<EventWithAttachments>> kerl(Identifier identifier);
 
 }
