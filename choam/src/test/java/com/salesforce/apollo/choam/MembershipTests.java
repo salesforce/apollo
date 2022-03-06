@@ -153,9 +153,8 @@ public class MembershipTests {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
-
                 @Override
-                public void beginBlock(ULong height, Digest hash) {
+                public void endBlock(ULong height, Digest hash) {
                     recording.incrementAndGet();
                 }
 
