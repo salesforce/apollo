@@ -111,7 +111,6 @@ public class TestCHOAM {
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
-                               .setTxnPermits(100)
                                .setCheckpointBlockSize(1);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
         params.getClientBackoff()

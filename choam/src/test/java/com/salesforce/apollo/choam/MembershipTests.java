@@ -126,7 +126,6 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10000)
                                                               .build())
-                               .setTxnPermits(10_000)
                                .setCheckpointBlockSize(checkpointBlockSize);
 
         members = IntStream.range(0, cardinality)

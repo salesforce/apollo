@@ -97,7 +97,6 @@ public class SessionTest {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
         Parameters params = Parameters.newBuilder()
-                                      .setTxnPermits(100_000_000)
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
                                                               .setMember(new SigningMemberImpl(Utils.getMember(0)))

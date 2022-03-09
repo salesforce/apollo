@@ -142,7 +142,6 @@ public class NodeTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
         params.getClientBackoff()
               .setBase(100)

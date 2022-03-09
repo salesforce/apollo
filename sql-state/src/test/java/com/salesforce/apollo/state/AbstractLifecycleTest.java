@@ -209,7 +209,6 @@ abstract public class AbstractLifecycleTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setTxnPermits(1000)
                                .setCheckpointBlockSize(2);
         params.getClientBackoff()
               .setBase(20)

@@ -100,7 +100,7 @@ public class FireFliesTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         var foundations = new HashMap<Member, Context<Participant>>();
-        
+
         members.forEach((member, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), 0.2, CARDINALITY, 3);
             AtomicInteger execC = new AtomicInteger();
@@ -113,7 +113,7 @@ public class FireFliesTest {
                                                   return thread;
                                               }));
             params.getProducer().ethereal().setSigner(member);
-            var exec = Router.createFjPool(); 
+            var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             var node = new Node(foundation, id, params,
                                 RuntimeParameters.newBuilder()
@@ -179,7 +179,6 @@ public class FireFliesTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
         params.getClientBackoff()
               .setBase(10)
