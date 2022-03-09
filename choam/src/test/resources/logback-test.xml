@@ -19,7 +19,11 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger> 
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger> 
