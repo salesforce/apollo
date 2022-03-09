@@ -1,36 +1,26 @@
 package liquibase.sqlgenerator;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-
 import liquibase.Scope;
 import liquibase.change.Change;
 import liquibase.database.Database;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.exception.ValidationErrors;
 import liquibase.exception.Warnings;
+import liquibase.servicelocator.ServiceLocator;
 import liquibase.sql.Sql;
 import liquibase.statement.SqlStatement;
 import liquibase.structure.DatabaseObject;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.util.*;
+
 /**
- * SqlGeneratorFactory is a singleton registry of SqlGenerators. Use the
- * register(SqlGenerator) method to add custom SqlGenerators, and the
- * getBestGenerator() method to retrieve the SqlGenerator that should be used
- * for a given SqlStatement.
+ * SqlGeneratorFactory is a singleton registry of SqlGenerators.
+ * Use the register(SqlGenerator) method to add custom SqlGenerators,
+ * and the getBestGenerator() method to retrieve the SqlGenerator that should be used for a given SqlStatement.
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
 public class SqlGeneratorFactory {
 
     private static ThreadLocal<SqlGeneratorFactory> instance = new ThreadLocal<>() {
@@ -39,17 +29,15 @@ public class SqlGeneratorFactory {
             return new SqlGeneratorFactory();
         }
     };
-    // caches for expensive reflection based calls that slow down Liquibase
-    // initialization: CORE-1207
-    private final Map<Class<?>, Type[]>          genericInterfacesCache = new ConcurrentHashMap<>();
-    private final Map<Class<?>, Type>            genericSuperClassCache = new ConcurrentHashMap<>();
-    private List<SqlGenerator>                   generators             = new ArrayList<>();
-    private Map<String, SortedSet<SqlGenerator>> generatorsByKey        = new ConcurrentHashMap<>();
+    //caches for expensive reflection based calls that slow down Liquibase initialization: CORE-1207
+    private final Map<Class<?>, Type[]> genericInterfacesCache = new HashMap<>();
+    private final Map<Class<?>, Type> genericSuperClassCache = new HashMap<>();
+    private List<SqlGenerator> generators = new ArrayList<>();
+    private Map<String, SortedSet<SqlGenerator>> generatorsByKey = new HashMap<>();
 
     private SqlGeneratorFactory() {
         try {
-            for (SqlGenerator generator : Scope.getCurrentScope().getServiceLocator()
-                                               .findInstances(SqlGenerator.class)) {
+            for (SqlGenerator generator : Scope.getCurrentScope().getServiceLocator().findInstances(SqlGenerator.class)) {
                 register(generator);
             }
         } catch (Exception e) {
@@ -71,9 +59,10 @@ public class SqlGeneratorFactory {
         instance.set(new SqlGeneratorFactory());
     }
 
+
     public void register(SqlGenerator generator) {
         if (this.generators.size() == 0) {
-            // handle case in tests wher we clear out the generators
+            //handle case in tests wher we clear out the generators
             this.generatorsByKey.clear();
         }
         generators.add(generator);
@@ -92,6 +81,7 @@ public class SqlGeneratorFactory {
         }
         unregister(toRemove);
     }
+
 
     protected Collection<SqlGenerator> getGenerators() {
         return generators;
@@ -116,7 +106,7 @@ public class SqlGeneratorFactory {
             }
         }
 
-        String key = statement.getClass().getName() + ":" + databaseName + ":" + version;
+        String key = statement.getClass().getName()+":"+ databaseName+":"+ version;
 
         if (generatorsByKey.containsKey(key) && !generatorsByKey.get(key).isEmpty()) {
             SortedSet<SqlGenerator> result = new TreeSet<>(new SqlGeneratorComparator());
@@ -139,7 +129,7 @@ public class SqlGeneratorFactory {
                     if (type instanceof ParameterizedType) {
                         checkType(type, statement, generator, database, validGenerators);
                     } else if (isTypeEqual(type, SqlGenerator.class)) {
-                        // noinspection unchecked
+                        //noinspection unchecked
                         if (generator.supports(statement, database)) {
                             validGenerators.add(generator);
                         }
@@ -154,7 +144,7 @@ public class SqlGeneratorFactory {
     }
 
     private Type[] getGenericInterfaces(Class<?> clazz) {
-        if (genericInterfacesCache.containsKey(clazz)) {
+        if(genericInterfacesCache.containsKey(clazz)) {
             return genericInterfacesCache.get(clazz);
         }
         Type[] genericInterfaces = clazz.getGenericInterfaces();
@@ -163,13 +153,11 @@ public class SqlGeneratorFactory {
     }
 
     private Type getGenericSuperclass(Class<?> clazz) {
-        if (genericSuperClassCache.containsKey(clazz)) {
+        if(genericSuperClassCache.containsKey(clazz)) {
             return genericSuperClassCache.get(clazz);
         }
         Type genericSuperclass = clazz.getGenericSuperclass();
-        if (genericSuperclass != null) { 
-            genericSuperClassCache.put(clazz, genericSuperclass);
-        }
+        genericSuperClassCache.put(clazz, genericSuperclass);
         return genericSuperclass;
     }
 
@@ -180,8 +168,7 @@ public class SqlGeneratorFactory {
         return aType.equals(aClass);
     }
 
-    private void checkType(Type type, SqlStatement statement, SqlGenerator generator, Database database,
-                           SortedSet<SqlGenerator> validGenerators) {
+    private void checkType(Type type, SqlStatement statement, SqlGenerator generator, Database database, SortedSet<SqlGenerator> validGenerators) {
         for (Type typeClass : ((ParameterizedType) type).getActualTypeArguments()) {
             if (typeClass instanceof TypeVariable) {
                 typeClass = ((TypeVariable) typeClass).getBounds()[0];
@@ -204,7 +191,7 @@ public class SqlGeneratorFactory {
         if ((sqlGenerators == null) || sqlGenerators.isEmpty()) {
             return null;
         }
-        // noinspection unchecked
+        //noinspection unchecked
         return new SqlGeneratorChain(sqlGenerators);
     }
 
@@ -223,8 +210,8 @@ public class SqlGeneratorFactory {
         for (SqlStatement statement : statements) {
             Sql[] sqlArray = factory.generateSql(statement, database);
             if ((sqlArray != null) && (sqlArray.length > 0)) {
-                List<Sql> sqlList = Arrays.asList(sqlArray);
-                returnList.addAll(sqlList);
+              List<Sql> sqlList = Arrays.asList(sqlArray);
+              returnList.addAll(sqlList);
             }
         }
         return returnList.toArray(new Sql[returnList.size()]);
@@ -233,16 +220,14 @@ public class SqlGeneratorFactory {
     public Sql[] generateSql(SqlStatement statement, Database database) {
         SqlGeneratorChain generatorChain = createGeneratorChain(statement, database);
         if (generatorChain == null) {
-            throw new IllegalStateException("Cannot find generators for database " + database.getClass()
-            + ", statement: " + statement);
+            throw new IllegalStateException("Cannot find generators for database " + database.getClass() + ", statement: " + statement);
         }
         return generatorChain.generateSql(statement, database);
     }
 
     /**
-     * Return true if the SqlStatement class queries the database in any way to
-     * determine Statements to execute. If the statement queries the database, it
-     * cannot be used in updateSql type operations
+     * Return true if the SqlStatement class queries the database in any way to determine Statements to execute.
+     * If the statement queries the database, it cannot be used in updateSql type operations
      */
     public boolean generateStatementsVolatile(SqlStatement statement, Database database) {
         for (SqlGenerator generator : getGenerators(statement, database)) {
@@ -267,23 +252,22 @@ public class SqlGeneratorFactory {
     }
 
     public ValidationErrors validate(SqlStatement statement, Database database) {
-        // noinspection unchecked
+        //noinspection unchecked
         SqlGeneratorChain generatorChain = createGeneratorChain(statement, database);
         if (generatorChain == null) {
-            throw new UnexpectedLiquibaseException("Unable to create generator chain for "
-            + statement.getClass().getName() + " on " + database.getShortName());
+            throw new UnexpectedLiquibaseException("Unable to create generator chain for "+statement.getClass().getName()+" on "+database.getShortName());
         }
         return generatorChain.validate(statement, database);
     }
 
     public Warnings warn(SqlStatement statement, Database database) {
-        // noinspection unchecked
+        //noinspection unchecked
         final SqlGeneratorChain generatorChain = createGeneratorChain(statement, database);
         if (generatorChain != null) {
             return generatorChain.warn(statement, database);
         }
-        return new Warnings().addWarning("No generator chain created for SQL Statement associated with database "
-        + database.getShortName());
+        return
+           new Warnings().addWarning("No generator chain created for SQL Statement associated with database " + database.getShortName());
     }
 
     public Set<DatabaseObject> getAffectedDatabaseObjects(SqlStatement statement, Database database) {
@@ -291,7 +275,7 @@ public class SqlGeneratorFactory {
 
         SqlGeneratorChain sqlGeneratorChain = createGeneratorChain(statement, database);
         if (sqlGeneratorChain != null) {
-            // noinspection unchecked
+            //noinspection unchecked
             Sql[] sqls = sqlGeneratorChain.generateSql(statement, database);
             if (sqls != null) {
                 for (Sql sql : sqls) {

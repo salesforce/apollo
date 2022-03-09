@@ -22,6 +22,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
 
     private final Timer appendEventsClient;
     private final Timer appendEventsService;
+    private final Timer appendKERLClient;
     private final Timer appendKERLService;
     private final Timer appendWithAttachmentsClient;
     private final Timer appendWithAttachmentsService;
@@ -51,13 +52,13 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Meter inboundGetKERLRequest;
     private final Meter inboundGetKERLResponse;
     private final Meter inboundGetKeyEventCoordsRequest;
+    private final Meter inboundGetKeyEventCoordsResponse;
     private final Meter inboundGetKeyEventRequest;
     private final Meter inboundGetKeyEventResponse;
     private final Meter inboundGetKeyStateCoordsRequest;
     private final Meter inboundGetKeyStateCoordsResponse;
     private final Meter inboundGetKeyStateRequest;
     private final Meter inboundGetKeyStateResponse;
-    private final Meter inboundGetKeyEventCoordsResponse;
     private final Meter inboundLookupRequest;
     private final Meter inboundLookupResponse;
     private final Meter inboundPublishAttachmentsRequest;
@@ -78,6 +79,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Meter outboundGetAttachmentResponse;
     private final Meter outboundGetKERLRequest;
     private final Meter outboundGetKERLResponse;
+    private final Meter outboundGetKeyEventCoordsRequest;
     private final Meter outboundGetKeyEventCoordsResponse;
     private final Meter outboundGetKeyEventRequest;
     private final Meter outboundGetKeyEventResponse;
@@ -85,21 +87,19 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Meter outboundGetKeyStateCoordsResponse;
     private final Meter outboundGetKeyStateRequest;
     private final Meter outboundGetKeyStateResponse;
-    private final Meter outboundGetKeyEventCoordsRequest;
     private final Meter outboundLookupRequest;
     private final Meter outboundLookupResponse;
     private final Meter outboundPublishAttachmentsRequest;
+    private final Meter outboundPublishEventsRequest;
     private final Meter outboundPublishKERLRequest;
     private final Timer publishAttachmentsClient;
     private final Timer publishAttachmentsService;
+    private final Timer publishEventsClient;
     private final Timer publishEventsService;
     private final Timer publishKERLClient;
     private final Timer publishKERLService;
     private final Timer unbindClient;
     private final Timer unbindService;
-    private final Timer appendKERLClient;
-    private final Meter outboundPublishEventsRequest;
-    private final Timer publishEventsClient;
 
     public StereotomyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -225,6 +225,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Timer appendEventsService() {
         return appendEventsService;
+    }
+
+    @Override
+    public Timer appendKERLClient() {
+        return appendKERLClient;
     }
 
     @Override
@@ -373,6 +378,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     }
 
     @Override
+    public Meter inboundGetKeyEventCoordsResponse() {
+        return inboundGetKeyEventCoordsResponse;
+    }
+
+    @Override
     public Meter inboundGetKeyEventRequest() {
         return inboundGetKeyEventRequest;
     }
@@ -400,11 +410,6 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Meter inboundGetKeyStateResponse() {
         return inboundGetKeyStateResponse;
-    }
-
-    @Override
-    public Meter inboundGetKeyEventCoordsResponse() {
-        return inboundGetKeyEventCoordsResponse;
     }
 
     @Override
@@ -503,6 +508,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     }
 
     @Override
+    public Meter outboundGetKeyEventCoordsRequest() {
+        return outboundGetKeyEventCoordsRequest;
+    }
+
+    @Override
     public Meter outboundGetKeyEventCoordsResponse() {
         return outboundGetKeyEventCoordsResponse;
     }
@@ -538,11 +548,6 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     }
 
     @Override
-    public Meter outboundGetKeyEventCoordsRequest() {
-        return outboundGetKeyEventCoordsRequest;
-    }
-
-    @Override
     public Meter outboundLookupRequest() {
         return outboundLookupRequest;
     }
@@ -555,6 +560,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Meter outboundPublishAttachmentsRequest() {
         return outboundPublishAttachmentsRequest;
+    }
+
+    @Override
+    public Meter outboundPublishEventsRequest() {
+        return outboundPublishEventsRequest;
     }
 
     @Override
@@ -575,6 +585,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Timer publishAttachmentsService() {
         return publishAttachmentsService;
+    }
+
+    @Override
+    public Timer publishEventsClient() {
+        return publishEventsClient;
     }
 
     @Override
@@ -600,20 +615,5 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Timer unbindService() {
         return unbindService;
-    }
-
-    @Override
-    public Timer appendKERLClient() {
-        return appendKERLClient;
-    }
-
-    @Override
-    public Meter outboundPublishEventsRequest() {
-        return outboundPublishEventsRequest;
-    }
-
-    @Override
-    public Timer publishEventsClient() {
-        return publishEventsClient;
     }
 }

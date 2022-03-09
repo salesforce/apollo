@@ -52,9 +52,8 @@ public class SmartMap implements Map<String, Object> {
      * If the value is null, defaultValue is returned.
      * Conversion is done using {@link #get(String, Class)}
      */
-    @SuppressWarnings("unchecked")
     public <T> T get(String key, T defaultValue) {
-        Class<?> type;
+        Class type;
         if (defaultValue == null) {
             type = Object.class;
         } else {
