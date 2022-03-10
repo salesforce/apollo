@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeoutException;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Binding;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
@@ -17,7 +16,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
  *
  */
 public interface ProtoBinder {
-    CompletableFuture<Boolean> bind(Binding binding) throws TimeoutException;
+    CompletableFuture<Boolean> bind(Binding binding);
 
-    CompletableFuture<Boolean> unbind(Ident identifier) throws TimeoutException;
+    CompletableFuture<Boolean> unbind(Ident identifier);
 }

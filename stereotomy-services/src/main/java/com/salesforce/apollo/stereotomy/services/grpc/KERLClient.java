@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -25,9 +26,10 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceBlockingStub;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceFutureStub;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -52,7 +54,7 @@ public class KERLClient implements KERLService {
     }
 
     private final ManagedServerConnection channel;
-    private final KERLServiceBlockingStub client;
+    private final KERLServiceFutureStub   client;
     private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
@@ -61,7 +63,7 @@ public class KERLClient implements KERLService {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;
-        this.client = KERLServiceGrpc.newBlockingStub(channel.channel).withCompression("gzip");
+        this.client = KERLServiceGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
@@ -73,18 +75,32 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendKERLRequest().mark(request.getSerializedSize());
         }
-        var ks = client.appendKERL(request);
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(ks.getSerializedSize());
-            metrics.inboundAppendKERLResponse().mark(request.getSerializedSize());
-        }
+        var result = client.appendKERL(request);
         var f = new CompletableFuture<List<KeyState_>>();
-        if (ks.getKeyStatesCount() == 0) {
-            f.complete(Collections.emptyList());
-        } else {
-            f.complete(ks.getKeyStatesList());
-        }
+        result.addListener(() -> {
+            KeyStates ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+
+            if (timer != null) {
+                timer.stop();
+                metrics.inboundBandwidth().mark(ks.getSerializedSize());
+                metrics.inboundAppendKERLResponse().mark(request.getSerializedSize());
+            }
+
+            if (ks.getKeyStatesCount() == 0) {
+                f.complete(Collections.emptyList());
+            } else {
+                f.complete(ks.getKeyStatesList());
+            }
+        }, r -> r.run());
         return f;
     }
 
@@ -99,20 +115,30 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendEventsRequest().mark(request.getSerializedSize());
         }
-        var ks = client.append(request);
-        if (timer != null) {
-            timer.stop();
-        }
+        var result = client.append(request);
         var f = new CompletableFuture<List<KeyState_>>();
-        if (ks.getKeyStatesCount() == 0) {
-            f.complete(Collections.emptyList());
-        } else {
-            f.complete(ks.getKeyStatesList());
-        }
-        if (timer != null) {
-            metrics.inboundBandwidth().mark(ks.getSerializedSize());
-            metrics.inboundAppendEventsResponse().mark(request.getSerializedSize());
-        }
+        result.addListener(() -> {
+            KeyStates ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            if (ks.getKeyStatesCount() == 0) {
+                f.complete(Collections.emptyList());
+            } else {
+                f.complete(ks.getKeyStatesList());
+            }
+            if (timer != null) {
+                timer.stop();
+                metrics.inboundBandwidth().mark(ks.getSerializedSize());
+                metrics.inboundAppendEventsResponse().mark(request.getSerializedSize());
+            }
+        }, r -> r.run());
         return f;
     }
 
@@ -129,20 +155,32 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
-        var ks = client.appendWithAttachments(request);
-        if (timer != null) {
-            timer.stop();
-        }
+        var result = client.appendWithAttachments(request);
         var f = new CompletableFuture<List<KeyState_>>();
-        if (ks.getKeyStatesCount() == 0) {
-            f.complete(Collections.emptyList());
-        } else {
-            f.complete(ks.getKeyStatesList());
-        }
-        if (timer != null) {
-            metrics.inboundBandwidth().mark(ks.getSerializedSize());
-            metrics.inboundAppendWithAttachmentsResponse().mark(request.getSerializedSize());
-        }
+        result.addListener(() -> {
+            KeyStates ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            if (timer != null) {
+                timer.stop();
+            }
+            if (ks.getKeyStatesCount() == 0) {
+                f.complete(Collections.emptyList());
+            } else {
+                f.complete(ks.getKeyStatesList());
+            }
+            if (timer != null) {
+                metrics.inboundBandwidth().mark(ks.getSerializedSize());
+                metrics.inboundAppendWithAttachmentsResponse().mark(request.getSerializedSize());
+            }
+        }, r -> r.run());
         return f;
     }
 
@@ -159,7 +197,14 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
         }
-        Attachment attachment = client.getAttachment(request);
+        Attachment attachment;
+        try {
+            attachment = client.getAttachment(request).get();
+        } catch (InterruptedException e) {
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
             metrics.inboundBandwidth().mark(attachment.getSerializedSize());
@@ -179,7 +224,12 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetKERLRequest().mark(request.getSerializedSize());
         }
-        var event = client.getKERL(request);
+        KERL_ event;
+        try {
+            event = client.getKERL(request).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
             metrics.inboundBandwidth().mark(event.getSerializedSize());
@@ -196,7 +246,12 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetKeyEventRequest().mark(request.getSerializedSize());
         }
-        var event = client.getKeyEvent(request);
+        KeyEvent_ event;
+        try {
+            event = client.getKeyEvent(request).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
         }
@@ -213,7 +268,12 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetKeyEventCoordsRequest().mark(request.getSerializedSize());
         }
-        var event = client.getKeyEventCoords(request);
+        KeyEvent_ event;
+        try {
+            event = client.getKeyEventCoords(request).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
             metrics.inboundBandwidth().mark(event.getSerializedSize());
@@ -230,7 +290,12 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetKeyStateCoordsRequest().mark(request.getSerializedSize());
         }
-        var event = client.getKeyStateCoords(request);
+        KeyState_ event;
+        try {
+            event = client.getKeyStateCoords(request).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
             metrics.inboundBandwidth().mark(event.getSerializedSize());
@@ -250,7 +315,12 @@ public class KERLClient implements KERLService {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetKeyStateRequest().mark(request.getSerializedSize());
         }
-        var event = client.getKeyState(request);
+        KeyState_ event;
+        try {
+            event = client.getKeyState(request).get();
+        } catch (InterruptedException | ExecutionException e) {
+            return Optional.empty();
+        }
         if (timer != null) {
             timer.stop();
             metrics.inboundBandwidth().mark(event.getSerializedSize());
