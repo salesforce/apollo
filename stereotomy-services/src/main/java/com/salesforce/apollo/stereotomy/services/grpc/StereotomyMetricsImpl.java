@@ -65,6 +65,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Meter inboundPublishEventsRequest;
     private final Meter inboundPublishKERLRequest;
     private final Meter inboundUnbindRequest;
+    private final Meter inboundValidatorRequest;
     private final Timer lookupClient;
     private final Timer lookupService;
     private final Meter outboudUnbindRequest;
@@ -92,6 +93,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Meter outboundPublishAttachmentsRequest;
     private final Meter outboundPublishEventsRequest;
     private final Meter outboundPublishKERLRequest;
+    private final Meter outboundValidatorRequest;
     private final Timer publishAttachmentsClient;
     private final Timer publishAttachmentsService;
     private final Timer publishEventsClient;
@@ -100,6 +102,8 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     private final Timer publishKERLService;
     private final Timer unbindClient;
     private final Timer unbindService;
+    private final Timer validatorClient;
+    private final Timer validatorService;
 
     public StereotomyMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -164,6 +168,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
         this.inboundUnbindRequest = registry.meter(name(context.shortString(), "inbound.unbind.request"));
         this.inboundLookupRequest = registry.meter(name(context.shortString(), "inbound.lookup.request"));
         this.inboundLookupResponse = registry.meter(name(context.shortString(), "inbound.lookup.response"));
+        this.inboundValidatorRequest = registry.meter(name(context.shortString(), "inbound.validator.request"));
         this.lookupClient = registry.timer(name(context.shortString(), "lookup.client.duration"));
         this.lookupService = registry.timer(name(context.shortString(), "lookup.service.duration"));
         this.outboudUnbindRequest = registry.meter(name(context.shortString(), "outbound.unbind.request"));
@@ -205,6 +210,7 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
         this.outboundPublishEventsRequest = registry.meter(name(context.shortString(),
                                                                 "outbound.publish.events.request"));
         this.outboundPublishKERLRequest = registry.meter(name(context.shortString(), "outbound.publish.kerl.request"));
+        this.outboundValidatorRequest = registry.meter(name(context.shortString(), "outbound.lookup.request"));
         this.publishAttachmentsClient = registry.timer(name(context.shortString(),
                                                             "publish.attachments.client.duration"));
         this.publishAttachmentsService = registry.timer(name(context.shortString(),
@@ -215,6 +221,8 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
         this.publishKERLService = registry.timer(name(context.shortString(), "publish.kery.service.duration"));
         this.unbindClient = registry.timer(name(context.shortString(), "unbind.client.duration"));
         this.unbindService = registry.timer(name(context.shortString(), "unbind.service.duration"));
+        this.validatorClient = registry.timer(name(context.shortString(), "validator.client.duration"));
+        this.validatorService = registry.timer(name(context.shortString(), "validator.service.duration"));
     }
 
     @Override
@@ -443,6 +451,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     }
 
     @Override
+    public Meter inboundValidatorRequest() {
+        return inboundValidatorRequest;
+    }
+
+    @Override
     public Timer lookupClient() {
         return lookupClient;
     }
@@ -578,6 +591,11 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     }
 
     @Override
+    public Meter outboundValidatorRequest() {
+        return outboundValidatorRequest;
+    }
+
+    @Override
     public Timer publishAttachmentsClient() {
         return publishAttachmentsClient;
     }
@@ -615,5 +633,15 @@ public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements Stere
     @Override
     public Timer unbindService() {
         return unbindService;
+    }
+
+    @Override
+    public Timer validatorClient() {
+        return validatorClient;
+    }
+
+    @Override
+    public Timer validatorService() {
+        return validatorService;
     }
 }

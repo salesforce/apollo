@@ -4,7 +4,7 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.stereotomy.services.grpc.proto";
 option java_outer_classname = "StereotomyServicesProto";
 option objc_class_prefix = "Stereo";
-import "google/protobuf/any.proto";
+import "google/protobuf/wrappers.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
 import "stereotomy.proto";
@@ -94,4 +94,9 @@ service Binder {
 // Resolver API
 service Resolver {
     rpc lookup (IdentifierContext) returns (stereotomy.Binding) {}
+}
+
+// Validator API
+service Validator {
+    rpc validate(KeyEventContext) returns (google.protobuf.BoolValue) {}
 }

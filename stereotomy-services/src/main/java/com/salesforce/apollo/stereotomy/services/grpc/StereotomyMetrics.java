@@ -176,4 +176,12 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Timer unbindService();
 
+    Meter outboundValidatorRequest();
+
+    Timer validatorClient();
+
+    Meter inboundValidatorRequest();
+
+    Timer validatorService();
+
 }
