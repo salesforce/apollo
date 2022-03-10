@@ -17,23 +17,21 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
-import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class EventValidationClient implements ProtoEventValidation, Link {
+public class EventValidationClient implements EventValidationService {
 
-    public static CreateClientCommunications<ProtoBinder> getCreate(Digest context, StereotomyMetrics metrics) {
+    public static CreateClientCommunications<EventValidationService> getCreate(Digest context,
+                                                                               StereotomyMetrics metrics) {
         return (t, f, c) -> {
-            return new BinderClient(context, c, t, metrics);
+            return new EventValidationClient(context, c, t, metrics);
         };
 
     }
@@ -45,7 +43,7 @@ public class EventValidationClient implements ProtoEventValidation, Link {
     private final Digeste                 context;
 
     public EventValidationClient(Digest context, ManagedServerConnection channel, Member member,
-                                StereotomyMetrics metrics) {
+                                 StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;

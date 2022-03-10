@@ -14,7 +14,6 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.ValidatorGrpc.ValidatorImplBase;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.ClientIdentity;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 
 import io.grpc.stub.StreamObserver;
@@ -24,14 +23,11 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class EventValidationServer extends ValidatorImplBase {
-    private ClientIdentity                              identity;
     private final StereotomyMetrics                     metrics;
     private final RoutableService<ProtoEventValidation> routing;
 
-    public EventValidationServer(ClientIdentity identity, StereotomyMetrics metrics,
-                                 RoutableService<ProtoEventValidation> router) {
+    public EventValidationServer(StereotomyMetrics metrics, RoutableService<ProtoEventValidation> router) {
         this.metrics = metrics;
-        this.identity = identity;
         this.routing = router;
     }
 
@@ -43,11 +39,6 @@ public class EventValidationServer extends ValidatorImplBase {
             metrics.inboundValidatorRequest().mark(request.getSerializedSize());
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
             CompletableFuture<Boolean> result = s.validate(request.getKeyEvent());
             result.whenComplete((r, t) -> {
                 if (timer != null) {
