@@ -211,7 +211,8 @@ public class CHOAMTest {
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions");
+        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions: " + countdown.getCount()
+        + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
 
         final ULong target = updaters.values()
                                      .stream()

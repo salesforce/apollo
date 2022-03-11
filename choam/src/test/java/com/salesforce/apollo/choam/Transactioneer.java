@@ -45,7 +45,7 @@ class Transactioneer {
     void decorate(CompletableFuture<?> fs) {
         inFlight.incrementAndGet();
 
-        fs.whenCompleteAsync((o, t) -> {
+        fs.whenComplete((o, t) -> {
             inFlight.decrementAndGet();
 
             if (t != null) {

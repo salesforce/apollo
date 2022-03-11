@@ -48,12 +48,12 @@ class Transactioneer {
 
     void decorate(CompletableFuture<?> fs) {
         inFlight.incrementAndGet();
-        fs.whenCompleteAsync((o, t) -> {
+        fs.whenComplete((o, t) -> {
             inFlight.decrementAndGet();
             if (t != null) {
                 if (t instanceof CompletionException e) {
                     if (!(e.getCause() instanceof TimeoutException)) {
-                        e.getCause().printStackTrace();
+                        System.out.println(e.getCause().toString());
                     }
                 }
 
