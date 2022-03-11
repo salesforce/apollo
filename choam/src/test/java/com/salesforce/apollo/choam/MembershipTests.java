@@ -146,8 +146,7 @@ public class MembershipTests {
                                                   return thread;
                                               }));
             return localRouter;
-        }));
-        Executor clients = Executors.newCachedThreadPool();
+        })); 
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -162,7 +161,7 @@ public class MembershipTests {
                 public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
                     transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
-                        f.completeAsync(() -> new Object(), clients);
+                        f.complete(new Object());
                     }
                 }
             };
