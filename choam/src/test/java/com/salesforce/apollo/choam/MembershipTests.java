@@ -83,7 +83,7 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(5);
+        final Duration timeout = Duration.ofSeconds(3);
         final var scheduler = Executors.newScheduledThreadPool(2);
 
         var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
