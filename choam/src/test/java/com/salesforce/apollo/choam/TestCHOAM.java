@@ -99,7 +99,7 @@ public class TestCHOAM {
         Random entropy = new Random();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        var exec = Router.createFjPool();
+        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
@@ -130,17 +130,11 @@ public class TestCHOAM {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger execC = new AtomicInteger();
             var localRouter = new LocalRouter(prefix, m,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+                                              exec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {

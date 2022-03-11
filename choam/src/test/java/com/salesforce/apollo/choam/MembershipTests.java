@@ -107,9 +107,9 @@ public class MembershipTests {
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, cardinality, 3);
-        var scheduler = Executors.newScheduledThreadPool(cardinality * 5);
+        var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        var exec = Router.createFjPool();
+        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
@@ -136,16 +136,10 @@ public class MembershipTests {
         SigningMember testSubject = members.get(cardinality - 1);
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger execC = new AtomicInteger();
             var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+                                              exec);
             return localRouter;
-        })); 
+        }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);

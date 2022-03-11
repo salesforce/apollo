@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -131,20 +132,15 @@ abstract public class AbstractLifecycleTest {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
+        final var exec = Executors.newCachedThreadPool();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(3, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + exec.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
             return localRouter;
         }));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
-                                                                                   m.equals(testSubject), context)));
+                        .collect(Collectors.toMap(m -> m.getId(),
+                                                  m -> createChoam(entropy, params, m, m.equals(testSubject), context,
+                                                                   exec)));
     }
 
     protected Txn initialInsert() {
@@ -169,7 +165,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
-                              Context<Member> context) {
+                              Context<Member> context, Executor exec) {
         blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
@@ -181,7 +177,7 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(Router.createFjPool())
+                                                       .setExec(exec)
                                                        .setGenesisData(view -> GENESIS_DATA)
                                                        .setScheduler(scheduler)
                                                        .setMember(m)

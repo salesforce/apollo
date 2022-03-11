@@ -26,11 +26,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -166,19 +166,13 @@ public class CHOAMTest {
                            .peek(m -> context.activate(m))
                            .toList();
         final var prefix = UUID.randomUUID().toString();
+        var exec = Executors.newCachedThreadPool();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + exec.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context, metrics);
+            return createCHOAM(entropy, params, m, context, metrics, exec);
         }));
     }
 
@@ -269,7 +263,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics) {
+                              ChoamMetrics metrics, Executor exec) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -284,7 +278,7 @@ public class CHOAMTest {
                                                        .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(Router.createFjPool())
+                                                       .setExec(exec)
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {
