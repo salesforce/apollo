@@ -64,20 +64,6 @@ public class KERLResource {
         return resolver.getKERL(identifier).get();
     }
 
-    @PUT
-    @Path("publish/KERL")
-    public void publish(KERL_ kerl) {
-        try {
-            resolver.publish(kerl).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            throw new WebApplicationException(e.getCause(), Response.Status.INTERNAL_SERVER_ERROR);
-        } catch (InterruptedException e) {
-            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
-        } catch (TimeoutException e) {
-            throw new WebApplicationException(e, Response.Status.REQUEST_TIMEOUT);
-        }
-    }
-
     @POST
     @Path("get/key/state/coords")
     public KeyState_ resolve(EventCoords coordinates) {
