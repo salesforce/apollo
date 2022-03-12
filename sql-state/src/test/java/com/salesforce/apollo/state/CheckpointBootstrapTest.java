@@ -73,11 +73,13 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         checkpointOccurred.whenComplete((s, t) -> {
-            System.out.println("Starting late joining node");
-            var choam = choams.get(testSubject.getId());
-            choam.context().activate(Collections.singletonList(testSubject));
-            choam.start();
-            routers.get(testSubject.getId()).start();
+            ForkJoinPool.commonPool().execute(() -> {
+                System.out.println("Starting late joining node");
+                var choam = choams.get(testSubject.getId());
+                choam.context().activate(Collections.singletonList(testSubject));
+                choam.start();
+                routers.get(testSubject.getId()).start();
+            });
         });
 
         assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");

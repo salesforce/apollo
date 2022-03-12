@@ -69,18 +69,15 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         System.out.println("Transaction member: " + txneer.get().getKey().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
+        var success = countdown.await(60, TimeUnit.SECONDS);
+        assertTrue(success,
+                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
 
-        Thread.sleep(5_000);
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
         choam.context().activate(Collections.singletonList(testSubject));
         choam.start();
         routers.get(testSubject.getId()).start();
-        Thread.sleep(1000);
-
-        var success = countdown.await(60, TimeUnit.SECONDS);
-        assertTrue(success,
-                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
 
         final ULong target = txneer.get().getValue().getCurrentBlock().height();
 
