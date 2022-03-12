@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services.grpc;
+package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.Collections;
 import java.util.List;
@@ -20,7 +20,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -35,6 +34,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunicatio
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 
 /**
  * @author hal.hildebrand
@@ -332,56 +332,5 @@ public class KERLClient implements KERLService {
     @Override
     public Member getMember() {
         return member;
-    }
-
-    @Override
-    public CompletableFuture<Void> publish(KERL_ kerl) {
-        Context timer = metrics == null ? null : metrics.publishKERLClient().time();
-        var request = KERLContext.newBuilder().setContext(context).build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundPublishKERLRequest().mark(request.getSerializedSize());
-        }
-        client.appendKERL(request);
-        if (timer != null) {
-            timer.stop();
-        }
-        var f = new CompletableFuture<Void>();
-        f.complete(null);
-        return f;
-    }
-
-    @Override
-    public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
-        Context timer = metrics == null ? null : metrics.publishAttachmentsClient().time();
-        var request = AttachmentsContext.newBuilder().setContext(context).addAllAttachments(attachments).build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundPublishAttachmentsRequest().mark(request.getSerializedSize());
-        }
-        client.publishAttachments(request);
-        if (timer != null) {
-            timer.stop();
-        }
-        var f = new CompletableFuture<Void>();
-        f.complete(null);
-        return f;
-    }
-
-    @Override
-    public CompletableFuture<Void> publishEvents(List<KeyEvent_> events) {
-        Context timer = metrics == null ? null : metrics.publishEventsClient().time();
-        KeyEventsContext request = KeyEventsContext.newBuilder().addAllKeyEvent(events).setContext(context).build();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundPublishEventsRequest().mark(request.getSerializedSize());
-        }
-        client.append(request);
-        if (timer != null) {
-            timer.stop();
-        }
-        var f = new CompletableFuture<Void>();
-        f.complete(null);
-        return f;
     }
 }

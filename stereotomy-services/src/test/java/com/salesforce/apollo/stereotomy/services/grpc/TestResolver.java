@@ -21,6 +21,8 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverClient;
+import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
 import com.salesforce.apollo.utils.Utils;
 

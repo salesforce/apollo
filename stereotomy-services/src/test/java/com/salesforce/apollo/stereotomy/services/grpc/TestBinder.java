@@ -25,6 +25,8 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.stereotomy.services.grpc.binder.BinderClient;
+import com.salesforce.apollo.stereotomy.services.grpc.binder.BinderServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoBinder;
 import com.salesforce.apollo.utils.Utils;
 

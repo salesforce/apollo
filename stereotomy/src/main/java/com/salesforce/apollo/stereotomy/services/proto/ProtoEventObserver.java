@@ -12,18 +12,17 @@ import java.util.concurrent.CompletableFuture;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
-import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ProtoKERLService extends ProtoKERLProvider {
+public interface ProtoEventObserver {
 
-    CompletableFuture<List<KeyState_>> append(KERL_ kerl);
+    CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl);
 
-    CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events);
+    CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments);
 
-    CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
+    CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events);
 
 }

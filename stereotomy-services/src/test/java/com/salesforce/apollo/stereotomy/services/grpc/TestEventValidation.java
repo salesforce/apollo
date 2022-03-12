@@ -20,6 +20,8 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.stereotomy.services.grpc.validation.EventValidationClient;
+import com.salesforce.apollo.stereotomy.services.grpc.validation.EventValidationServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 import com.salesforce.apollo.utils.Utils;
 

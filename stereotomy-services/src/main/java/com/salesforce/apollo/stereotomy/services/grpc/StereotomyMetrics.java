@@ -80,6 +80,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter inboundGetKeyEventCoordsRequest();
 
+    Meter inboundGetKeyEventCoordsResponse();
+
     Meter inboundGetKeyEventRequest();
 
     Meter inboundGetKeyEventResponse();
@@ -92,8 +94,6 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter inboundGetKeyStateResponse();
 
-    Meter inboundGetKeyEventCoordsResponse();
-
     Meter inboundLookupRequest();
 
     Meter inboundLookupResponse();
@@ -102,9 +102,15 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter inboundPublishEventsRequest();
 
+    Meter inboundPublishEventsResponse();
+
     Meter inboundPublishKERLRequest();
 
+    Meter inboundPublishKERLResponse();
+
     Meter inboundUnbindRequest();
+
+    Meter inboundValidatorRequest();
 
     Timer lookupClient();
 
@@ -132,6 +138,8 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter outboundGetKERLResponse();
 
+    Meter outboundGetKeyEventCoordsRequest();
+
     Meter outboundGetKeyEventCoordsResponse();
 
     Meter outboundGetKeyEventRequest();
@@ -146,8 +154,6 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter outboundGetKeyStateResponse();
 
-    Meter outboundGetKeyEventCoordsRequest();
-
     Meter outboundLookupRequest();
 
     Meter outboundLookupResponse();
@@ -156,9 +162,15 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Meter outboundPublishEventsRequest();
 
+    Meter outboundPublishEventsResponse();
+
     Meter outboundPublishKERLRequest();
 
+    Meter outboundPublishKERLResponse();
+
     Meter outboundUnbindRequest();
+
+    Meter outboundValidatorRequest();
 
     Timer publishAttachmentsClient();
 
@@ -176,11 +188,7 @@ public interface StereotomyMetrics extends BandwidthMetrics {
 
     Timer unbindService();
 
-    Meter outboundValidatorRequest();
-
     Timer validatorClient();
-
-    Meter inboundValidatorRequest();
 
     Timer validatorService();
 

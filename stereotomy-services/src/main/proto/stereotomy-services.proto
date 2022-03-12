@@ -68,6 +68,10 @@ message KeyEventWitAttachmentsContext {
     repeated AttachmentEvent attachments = 3;
 }
 
+message AttachmentEvents { 
+    repeated AttachmentEvent attachments = 1;
+}
+
 service KERLService {
     rpc append (KeyEventsContext) returns(KeyStates) {}
     rpc appendKERL (KERLContext) returns(KeyStates) {}
@@ -79,9 +83,11 @@ service KERLService {
     rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
     rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
-    
-    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
-    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
+}
+
+service EventObserver { 
+    rpc publish(KERLContext) returns(AttachmentEvents) {}
+    rpc publishEvents (KeyEventsContext) returns(AttachmentEvents) {}
     rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
 }
 

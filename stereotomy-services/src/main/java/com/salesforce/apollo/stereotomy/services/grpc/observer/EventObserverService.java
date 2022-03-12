@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services.grpc;
+package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
 import com.salesforce.apollo.comm.Link;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ResolverService extends ProtoResolver, Link {
+public interface EventObserverService extends ProtoEventObserver, Link {
 
 }
