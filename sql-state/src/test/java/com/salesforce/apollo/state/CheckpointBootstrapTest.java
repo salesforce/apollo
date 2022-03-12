@@ -55,7 +55,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .stream()
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
-              .forEach(ch -> ch.start()); 
+              .forEach(ch -> ch.start());
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
@@ -148,5 +148,10 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                 assertEquals(entry.getValue(), candidate.get(entry.getKey()));
             }
         }
+    }
+
+    @Override
+    protected int checkpointBlockSize() {
+        return 1;
     }
 }

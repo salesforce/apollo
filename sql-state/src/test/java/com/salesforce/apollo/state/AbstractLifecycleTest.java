@@ -143,6 +143,8 @@ abstract public class AbstractLifecycleTest {
                                                                    exec)));
     }
 
+    protected abstract int checkpointBlockSize();
+
     protected Txn initialInsert() {
         return Txn.newBuilder()
                   .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
@@ -205,7 +207,7 @@ abstract public class AbstractLifecycleTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setCheckpointBlockSize(2);
+                               .setCheckpointBlockSize(checkpointBlockSize());
         params.getClientBackoff()
               .setBase(20)
               .setCap(150)

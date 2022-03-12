@@ -78,6 +78,9 @@ public class KERLClient implements KERLService {
         var result = client.appendKERL(request);
         var f = new CompletableFuture<List<KeyState_>>();
         result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
             KeyStates ks;
             try {
                 ks = result.get();
@@ -90,7 +93,6 @@ public class KERLClient implements KERLService {
             }
 
             if (timer != null) {
-                timer.stop();
                 metrics.inboundBandwidth().mark(ks.getSerializedSize());
                 metrics.inboundAppendKERLResponse().mark(request.getSerializedSize());
             }
@@ -118,6 +120,9 @@ public class KERLClient implements KERLService {
         var result = client.append(request);
         var f = new CompletableFuture<List<KeyState_>>();
         result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
             KeyStates ks;
             try {
                 ks = result.get();
@@ -134,7 +139,6 @@ public class KERLClient implements KERLService {
                 f.complete(ks.getKeyStatesList());
             }
             if (timer != null) {
-                timer.stop();
                 metrics.inboundBandwidth().mark(ks.getSerializedSize());
                 metrics.inboundAppendEventsResponse().mark(request.getSerializedSize());
             }
@@ -158,6 +162,9 @@ public class KERLClient implements KERLService {
         var result = client.appendWithAttachments(request);
         var f = new CompletableFuture<List<KeyState_>>();
         result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
             KeyStates ks;
             try {
                 ks = result.get();
@@ -168,14 +175,7 @@ public class KERLClient implements KERLService {
                 f.completeExceptionally(e.getCause());
                 return;
             }
-            if (timer != null) {
-                timer.stop();
-            }
-            if (ks.getKeyStatesCount() == 0) {
-                f.complete(Collections.emptyList());
-            } else {
-                f.complete(ks.getKeyStatesList());
-            }
+            f.complete(ks.getKeyStatesList());
             if (timer != null) {
                 metrics.inboundBandwidth().mark(ks.getSerializedSize());
                 metrics.inboundAppendWithAttachmentsResponse().mark(request.getSerializedSize());
