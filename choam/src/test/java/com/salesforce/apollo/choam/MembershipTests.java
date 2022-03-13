@@ -91,7 +91,7 @@ public class MembershipTests {
         var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown);
 
         transactioneer.start();
-        System.out.println("completed: " + countdown.await(60, TimeUnit.SECONDS));
+        System.out.println("completed: " + countdown.await(90, TimeUnit.SECONDS));
         assertEquals(0, countdown.getCount(), "Did not complete: " + countdown.getCount());
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
