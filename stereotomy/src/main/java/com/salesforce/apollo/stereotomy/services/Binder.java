@@ -8,12 +8,15 @@ package com.salesforce.apollo.stereotomy.services;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.stereotomy.event.InceptionEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.utils.Pair;
 
 /**
  * Bindings may be made between non transferable identifiers and any of the
@@ -30,22 +33,31 @@ public interface Binder {
         void unbind(Identifier identifier) throws TimeoutException;
     }
 
-    public record Bound(InceptionEvent identifier, URI uri) {}
+    public record Bound(InceptionEvent identifier, Map<String, URI> uris) {}
 
     public record Binding(Bound value, JohnHancock signature) {
         public static Binding from(com.salesfoce.apollo.stereotomy.event.proto.Binding binding) {
-            URI uri;
-            try {
-                uri = new URI(binding.getValue().getUri());
-            } catch (URISyntaxException e) {
-                return null;
-            }
+            Map<String, URI> uris = binding.getValue()
+                                           .getUriMap()
+                                           .entrySet()
+                                           .stream()
+                                           .map(e -> new Pair<String, URI>(e.getKey(), toUri(e.getValue())))
+                                           .filter(p -> p.b != null)
+                                           .collect(Collectors.toMap(p -> p.a, p -> p.b));
 
             return binding.equals(com.salesfoce.apollo.stereotomy.event.proto.Binding.getDefaultInstance()) ? null
                                                                                                             : new Binding(new Bound(new InceptionEventImpl(binding.getValue()
                                                                                                                                                                   .getIdentifier()),
-                                                                                                                                    uri),
+                                                                                                                                    uris),
                                                                                                                           JohnHancock.from(binding.getSignature()));
+        }
+
+        private static URI toUri(String uri) {
+            try {
+                return new URI(uri);
+            } catch (URISyntaxException e) {
+                return null;
+            }
         }
     }
 }

@@ -191,8 +191,8 @@ message KeyState_ {
 
 // A bound value
 message Bound {
-    InceptionEvent identifier = 1; 
-    string uri = 2;
+    InceptionEvent identifier = 1;
+    map<string, string> uri = 2;
 }
 
 // A signed bound value

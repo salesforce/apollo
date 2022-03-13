@@ -15,7 +15,11 @@ import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
- * Represents the top level domain that contains every sub domain
+ * This is the top level container model for the distributed system. It
+ * represents the top level domain that contains every sub domain. The
+ * membership of this domain is the entirety of all members in the system. The
+ * Context of this domain is also the foundational fireflies membership domain
+ * of the entire system.
  * 
  * @author hal.hildebrand
  *

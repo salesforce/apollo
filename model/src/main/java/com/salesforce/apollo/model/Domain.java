@@ -72,7 +72,8 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 /**
- * A sharded domain, top level, or sub domain
+ * An abstract sharded domain, top level, or sub domain. A domain minimally
+ * consists of a managed KERL, ReBAC Oracle and the defined membership
  * 
  * @author hal.hildebrand
  *

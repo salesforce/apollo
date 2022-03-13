@@ -7,8 +7,11 @@
 package com.salesforce.apollo.model;
 
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.salesforce.apollo.choam.Parameters.Builder;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -22,6 +25,12 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class ProcessDomain extends Domain {
+    @SuppressWarnings("unused")
+    private final Map<Digest, SubDomain> hostedDomains = new ConcurrentHashMap<>();
+    @SuppressWarnings("unused")
+    private final RootDomain             rootDomain;
+    @SuppressWarnings("unused")
+    private final ProcessDomain          thisDomain;
 
     public ProcessDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
                          Builder params, com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
@@ -38,5 +47,7 @@ public class ProcessDomain extends Domain {
                          Builder params, String dbURL, Path checkpointBaseDir,
                          com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
         super(overlay, id, params, dbURL, checkpointBaseDir, runtime);
+        this.rootDomain = null;
+        this.thisDomain = null;
     }
 }
