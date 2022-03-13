@@ -192,7 +192,8 @@ message KeyState_ {
 // A bound value
 message Bound {
     InceptionEvent identifier = 1;
-    map<string, string> uri = 2;
+    string host = 2;
+    int32 port = 3;
 }
 
 // A signed bound value
