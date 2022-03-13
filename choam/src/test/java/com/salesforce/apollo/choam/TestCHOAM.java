@@ -232,8 +232,9 @@ public class TestCHOAM {
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
         return ul -> {
+            var file = checkpointer.apply(ul);
             checkpointOccurred.complete(true);
-            return checkpointer.apply(ul);
+            return file;
         };
     }
 }
