@@ -61,14 +61,14 @@ public class FireFliesTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final List<Node>             nodes   = new ArrayList<>();
-    private final Map<Node, LocalRouter> routers = new HashMap<>();
-    private final Map<Node, View>        views   = new HashMap<>();
+    private final List<Domain>             domains   = new ArrayList<>();
+    private final Map<Domain, LocalRouter> routers = new HashMap<>();
+    private final Map<Domain, View>        views   = new HashMap<>();
 
     @AfterEach
     public void after() {
-        nodes.forEach(n -> n.stop());
-        nodes.clear();
+        domains.forEach(n -> n.stop());
+        domains.clear();
         routers.values().forEach(r -> r.close());
         routers.clear();
         views.values().forEach(v -> v.getService().stop());
@@ -115,14 +115,14 @@ public class FireFliesTest {
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new Node(foundation, id, params,
+            var node = new Domain(foundation, id, params,
                                 RuntimeParameters.newBuilder()
                                                  .setScheduler(scheduler)
                                                  .setMember(member)
                                                  .setContext(context)
                                                  .setExec(exec)
                                                  .setCommunications(localRouter));
-            nodes.add(node);
+            domains.add(node);
             foundations.put(member, foundation);
             routers.put(node, localRouter);
             localRouter.start();
@@ -147,7 +147,7 @@ public class FireFliesTest {
                 return ((SelfAddressingIdentifier) decoded.identifier()).getDigest();
             }
         };
-        nodes.forEach(m -> {
+        domains.forEach(m -> {
             var cert = m.provision(null, new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
                                    SignatureAlgorithm.DEFAULT)
                         .get();
@@ -159,11 +159,11 @@ public class FireFliesTest {
     @Test
     public void smokin() throws Exception {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
-        nodes.forEach(n -> n.start());
+        domains.forEach(n -> n.start());
         views.values()
              .forEach(v -> v.getService()
                             .start(Duration.ofMillis(10),
-                                   nodes.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
+                                   domains.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
         Thread.sleep(30_000);
     }
 

@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
-import com.salesforce.apollo.model.Node;
+import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
@@ -65,7 +65,7 @@ public class ShardedKERLTest {
         Duration timeout = Duration.ofSeconds(1);
         Executor exec = Executors.newSingleThreadExecutor();
         Emulator emmy = new Emulator();
-        emmy.start(Node.boostrapMigration());
+        emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
                                            DigestAlgorithm.DEFAULT, exec);
@@ -106,7 +106,7 @@ public class ShardedKERLTest {
         Duration timeout = Duration.ofSeconds(1000);
         Executor exec = Executors.newSingleThreadExecutor();
         Emulator emmy = new Emulator();
-        emmy.start(Node.boostrapMigration());
+        emmy.start(Domain.boostrapMigration());
 
         ShardedKERL kerl = new ShardedKERL(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
                                            DigestAlgorithm.DEFAULT, exec);

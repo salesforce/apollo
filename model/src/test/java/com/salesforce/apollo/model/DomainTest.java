@@ -57,17 +57,17 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class NodeTest {
+public class DomainTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final ArrayList<Node>        nodes   = new ArrayList<>();
+    private final ArrayList<Domain>      domains = new ArrayList<>();
     private final ArrayList<LocalRouter> routers = new ArrayList<>();
 
     @AfterEach
     public void after() {
-        nodes.forEach(n -> n.stop());
-        nodes.clear();
+        domains.forEach(n -> n.stop());
+        domains.clear();
         routers.forEach(r -> r.close());
         routers.clear();
     }
@@ -111,21 +111,21 @@ public class NodeTest {
             routers.add(localRouter);
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
-            nodes.add(new Node(context, id, params,
-                               RuntimeParameters.newBuilder()
-                                                .setScheduler(scheduler)
-                                                .setMember(member)
-                                                .setContext(context)
-                                                .setExec(exec)
-                                                .setCommunications(localRouter)));
+            domains.add(new Domain(context, id, params,
+                                   RuntimeParameters.newBuilder()
+                                                    .setScheduler(scheduler)
+                                                    .setMember(member)
+                                                    .setContext(context)
+                                                    .setExec(exec)
+                                                    .setCommunications(localRouter)));
             localRouter.start();
         });
     }
 
     @Test
     public void smoke() throws Exception {
-        nodes.forEach(n -> n.start());
-        var oracle = nodes.get(0).getDelphi();
+        domains.forEach(n -> n.start());
+        var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get(10, TimeUnit.SECONDS);
         smoke(oracle);
     }

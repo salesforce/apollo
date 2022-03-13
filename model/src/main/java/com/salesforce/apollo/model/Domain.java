@@ -75,7 +75,7 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
  * @author hal.hildebrand
  *
  */
-public class Node {
+public class Domain {
 
     public enum MemberState {
         ACTIVE, JOINING, LEAVING, OFFLINE;
@@ -97,7 +97,7 @@ public class Node {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(Node.class);
+    private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
     public static void addMembers(Connection connection, List<byte[]> members) {
         var context = DSL.using(connection, SQLDialect.H2);
@@ -127,7 +127,7 @@ public class Node {
     }
 
     private static URL res(String resource) {
-        return Node.class.getResource(resource);
+        return Domain.class.getResource(resource);
     }
 
     private static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
@@ -151,17 +151,17 @@ public class Node {
     private final Parameters                                     params;
     private final SqlStateMachine                                sqlStateMachine;
 
-    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
                 Parameters.Builder params, Builder runtime) {
         this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
     }
 
-    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
                 Parameters.Builder params, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
     }
 
-    public Node(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
+    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
                 Parameters.Builder params, String dbURL, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         this.overlay = overlay;
         params = params.clone();
@@ -235,7 +235,7 @@ public class Node {
 
     @Override
     public String toString() {
-        return "Node[" + getIdentifier() + "]";
+        return "Domain[" + getIdentifier() + "]";
     }
 
     // Provide the list of transactions establishing the unified KERL of the group

@@ -37,7 +37,7 @@ public class StoredProceduresTest {
         Duration timeout = Duration.ofSeconds(100);
         Executor exec = Executors.newSingleThreadExecutor();
         Emulator emmy = new Emulator();
-        emmy.start(Node.boostrapMigration());
+        emmy.start(Domain.boostrapMigration());
 
         var digests = new ArrayList<byte[]>();
         for (int i = 0; i < 100; i++) {
