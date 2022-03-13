@@ -72,10 +72,12 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 
 /**
+ * A sharded domain, top level, or sub domain
+ * 
  * @author hal.hildebrand
  *
  */
-public class Domain {
+abstract public class Domain {
 
     public enum MemberState {
         ACTIVE, JOINING, LEAVING, OFFLINE;
@@ -126,11 +128,7 @@ public class Domain {
                   .build();
     }
 
-    private static URL res(String resource) {
-        return Domain.class.getResource(resource);
-    }
-
-    private static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
+    public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
         Path dir;
         try {
             dir = Files.createTempDirectory(id.getDigest().toString());
@@ -139,6 +137,10 @@ public class Domain {
         }
         dir.toFile().deleteOnExit();
         return dir;
+    }
+
+    private static URL res(String resource) {
+        return Domain.class.getResource(resource);
     }
 
     private final CHOAM                                          choam;
@@ -152,17 +154,17 @@ public class Domain {
     private final SqlStateMachine                                sqlStateMachine;
 
     public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                Parameters.Builder params, Builder runtime) {
+                  Parameters.Builder params, Builder runtime) {
         this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
     }
 
     public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                Parameters.Builder params, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+                  Parameters.Builder params, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
     }
 
     public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                Parameters.Builder params, String dbURL, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+                  Parameters.Builder params, String dbURL, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         this.overlay = overlay;
         params = params.clone();
         var dir = checkpointBaseDir.toFile();

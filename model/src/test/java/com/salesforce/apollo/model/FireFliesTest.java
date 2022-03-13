@@ -61,7 +61,7 @@ public class FireFliesTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final List<Domain>             domains   = new ArrayList<>();
+    private final List<Domain>             domains = new ArrayList<>();
     private final Map<Domain, LocalRouter> routers = new HashMap<>();
     private final Map<Domain, View>        views   = new HashMap<>();
 
@@ -115,13 +115,13 @@ public class FireFliesTest {
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new Domain(foundation, id, params,
-                                RuntimeParameters.newBuilder()
-                                                 .setScheduler(scheduler)
-                                                 .setMember(member)
-                                                 .setContext(context)
-                                                 .setExec(exec)
-                                                 .setCommunications(localRouter));
+            var node = new SubDomain(foundation, id, params,
+                                     RuntimeParameters.newBuilder()
+                                                      .setScheduler(scheduler)
+                                                      .setMember(member)
+                                                      .setContext(context)
+                                                      .setExec(exec)
+                                                      .setCommunications(localRouter));
             domains.add(node);
             foundations.put(member, foundation);
             routers.put(node, localRouter);
@@ -164,7 +164,7 @@ public class FireFliesTest {
              .forEach(v -> v.getService()
                             .start(Duration.ofMillis(10),
                                    domains.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
-        Thread.sleep(30_000);
+        Thread.sleep(10_000);
     }
 
     private Builder params() {

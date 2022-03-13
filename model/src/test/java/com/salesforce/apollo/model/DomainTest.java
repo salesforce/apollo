@@ -111,13 +111,13 @@ public class DomainTest {
             routers.add(localRouter);
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
-            domains.add(new Domain(context, id, params,
-                                   RuntimeParameters.newBuilder()
-                                                    .setScheduler(scheduler)
-                                                    .setMember(member)
-                                                    .setContext(context)
-                                                    .setExec(exec)
-                                                    .setCommunications(localRouter)));
+            domains.add(new SubDomain(context, id, params,
+                                      RuntimeParameters.newBuilder()
+                                                       .setScheduler(scheduler)
+                                                       .setMember(member)
+                                                       .setContext(context)
+                                                       .setExec(exec)
+                                                       .setCommunications(localRouter)));
             localRouter.start();
         });
     }
