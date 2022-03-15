@@ -20,7 +20,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,25 +58,26 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 abstract public class AbstractLifecycleTest {
-    protected static final int             CARDINALITY     = 5;
-    protected static final Random          entropy         = new Random();
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    protected static final int                      CARDINALITY = 5;
+    protected static final Random                   entropy     = new Random();
+    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-    protected Map<Digest, AtomicInteger>         blocks;
-    protected CompletableFuture<Boolean>         checkpointOccurred;
-    protected Map<Digest, CHOAM>                 choams;
-    protected List<SigningMember>                members;
-    protected Map<Digest, Router>                routers;
-    protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
+    private static final ExecutorService          exec            = Executors.newCachedThreadPool();
+    private static final List<Transaction>        GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
+    private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+    private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);
 
-    ScheduledExecutorService scheduler;
-    int                      toleranceLevel;
-    ScheduledExecutorService txScheduler;
+    protected Map<Digest, AtomicInteger> blocks;
+    protected CompletableFuture<Boolean> checkpointOccurred;
+    protected Map<Digest, CHOAM>         choams;
+    protected List<SigningMember>        members;
+    protected Map<Digest, Router>        routers;
+    protected int                        toleranceLevel;
 
-    private File                          baseDir;
-    private File                          checkpointDirBase;
-    private final Map<Member, Parameters> parameters = new HashMap<>();
+    protected final Map<Member, SqlStateMachine> updaters   = new HashMap<>();
+    private File                                 baseDir;
+    private File                                 checkpointDirBase;
+    private final Map<Member, Parameters>        parameters = new HashMap<>();
 
     public AbstractLifecycleTest() {
         super();
@@ -96,14 +97,6 @@ abstract public class AbstractLifecycleTest {
         updaters.clear();
         parameters.clear();
         members = null;
-        if (txScheduler != null) {
-            txScheduler.shutdownNow();
-            txScheduler = null;
-        }
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            scheduler = null;
-        }
     }
 
     @BeforeEach
@@ -118,10 +111,8 @@ abstract public class AbstractLifecycleTest {
         Random entropy = new Random();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
         toleranceLevel = context.toleranceLevel();
-        scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        var params = parameters(context, scheduler);
+        var params = parameters(context);
 
         members = IntStream.range(0, CARDINALITY)
                            .mapToObj(i -> Utils.getMember(i))
@@ -132,15 +123,13 @@ abstract public class AbstractLifecycleTest {
         final SigningMember testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
-        final var exec = Executors.newCachedThreadPool();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
             return localRouter;
         }));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(),
-                                                  m -> createChoam(entropy, params, m, m.equals(testSubject), context,
-                                                                   exec)));
+                        .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
+                                                                                   m.equals(testSubject), context)));
     }
 
     protected abstract int checkpointBlockSize();
@@ -167,7 +156,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
-                              Context<Member> context, Executor exec) {
+                              Context<Member> context) {
         blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
@@ -190,7 +179,7 @@ abstract public class AbstractLifecycleTest {
                                                        .build()));
     }
 
-    private Builder parameters(Context<Member> context, ScheduledExecutorService scheduler) {
+    private Builder parameters(Context<Member> context) {
         var params = Parameters.newBuilder()
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))

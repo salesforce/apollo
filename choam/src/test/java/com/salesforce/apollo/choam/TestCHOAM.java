@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
@@ -58,22 +59,22 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 5;
-    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final int             CARDINALITY = 5;
+    private static final ExecutorService exec        = Executors.newCachedThreadPool();
+    private static final boolean         LARGE_TESTS = Boolean.getBoolean("large_tests");
 
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
     }
-
     protected CompletableFuture<Boolean>   checkpointOccurred;
     private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private MetricRegistry                 registry;
     private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;
+    private Map<Digest, List<Transaction>> transactions;;
 
     @AfterEach
     public void after() throws Exception {
@@ -99,7 +100,6 @@ public class TestCHOAM {
         Random entropy = new Random();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
