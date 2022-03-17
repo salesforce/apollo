@@ -10,10 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,17 +53,15 @@ public class MembershipTests {
         });
     }
 
-    private Map<Digest, AtomicInteger>     blocks;
-    private Map<Digest, CHOAM>             choams;
-    private List<SigningMember>            members;
-    private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;
+    private Map<Digest, AtomicInteger> blocks;
+    private Map<Digest, CHOAM>         choams;
+    private List<SigningMember>        members;
+    private Map<Digest, Router>        routers;
 
     @AfterEach
     public void after() throws Exception {
         shutdown();
         members = null;
-        transactions = null;
         blocks = null;
     }
 
@@ -103,9 +99,7 @@ public class MembershipTests {
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) {
-        transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
-        Random entropy = new Random();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality);
 
@@ -117,7 +111,7 @@ public class MembershipTests {
                                                                 .setMaxSyncBlocks(1000)
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
-                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
+                               .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
                                .setGossipDuration(Duration.ofMillis(5))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
@@ -135,11 +129,12 @@ public class MembershipTests {
                            .toList();
         SigningMember testSubject = members.get(cardinality - 1);
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                              exec);
-            return localRouter;
-        }));
+        routers = members.stream()
+                         .collect(Collectors.toMap(m -> m.getId(),
+                                                   m -> new LocalRouter(prefix, m,
+                                                                        ServerConnectionCache.newBuilder()
+                                                                                             .setTarget(cardinality),
+                                                                        exec)));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -152,7 +147,6 @@ public class MembershipTests {
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());
                     }
@@ -162,7 +156,7 @@ public class MembershipTests {
             if (m.equals(testSubject)) {
                 params.setSynchronizationCycles(100);
             } else {
-                params.setSynchronizationCycles(3);
+                params.setSynchronizationCycles(2);
             }
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                            .setMember(m)
