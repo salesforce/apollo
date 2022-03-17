@@ -16,21 +16,18 @@ import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.SigningThreshold;
 import com.salesforce.apollo.crypto.SigningThreshold.Unweighted;
-import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.Seal.CoordinatesSeal;
@@ -44,6 +41,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.KeyConfigurationDigester
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.Verifiers;
 import com.salesforce.apollo.utils.Hex;
 
 /**
@@ -256,14 +254,7 @@ public class StereotomyTests {
     private void provision(ControlledIdentifier<?> i, Stereotomy controller) throws Exception {
         var now = Instant.now();
         var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
-        var validator = SignatureAlgorithm.DEFAULT.generateKeyPair();
-        var sigs = new HashMap<Integer, JohnHancock>();
-        sigs.put(0,
-                 new Signer.SignerImpl(validator.getPrivate()).sign(kel.getKeyEvent(i.getLastEstablishmentEvent())
-                                                                       .get()
-                                                                       .getBytes()));
-        var validations = new AttachmentImpl(sigs);
-        var cwpk = i.provision(validations, endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
+        var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
         assertNotNull(cwpk);
         var cert = cwpk.getX509Certificate();
         assertNotNull(cert);
@@ -274,16 +265,20 @@ public class StereotomyTests {
 
         var decoded = Stereotomy.decode(cert);
         assertFalse(decoded.isEmpty());
-        final var event = decoded.get().keyEvent();
 
-        assertEquals(i.getIdentifier(), event.getIdentifier());
+        assertEquals(i.getIdentifier(), decoded.get().identifier());
         assertEquals(endpoint, decoded.get().endpoint());
         final var qb64Id = qb64(basicId);
 
-        assertTrue(decoded.get().verifier().verify(decoded.get().signature(), qb64Id));
-        Map<Integer, BasicIdentifier> validators = new HashMap<>();
-        validators.put(0, new BasicIdentifier(validator.getPublic()));
-        new StereotomyValidator(validators, SigningThreshold.unweighted(1)).validate(cert);
+        assertTrue(i.getVerifier().get().verify(decoded.get().signature(), qb64Id));
+
+        var verifiers = new Verifiers() {
+            @Override
+            public Optional<Verifier> verifierFor(Identifier identifier) {
+                return (i.getIdentifier().equals(identifier)) ? i.getVerifier() : Optional.empty();
+            }
+        };
+        new StereotomyValidator(verifiers).validate(cert);
 
         var privateKey = cwpk.getPrivateKey();
         assertNotNull(privateKey);
