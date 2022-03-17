@@ -19,8 +19,6 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
@@ -52,8 +50,11 @@ public class ProcessDomain extends Domain {
     public ProcessDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime) {
         super(id, builder, dbURL, checkpointBaseDir, runtime);
-        var base = Context.<Participant>newBuilder().build();
-        foundation = new View(base, new Node(params.member(), null, null), null, null, null);
+//        var base = Context.<Participant>newBuilder()
+//                          .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
+//                          .build();
+//        foundation = new View(base, new Node(params.member(), null, null), null, null, null);
+        foundation = null;
     }
 
     public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Duration duration,
