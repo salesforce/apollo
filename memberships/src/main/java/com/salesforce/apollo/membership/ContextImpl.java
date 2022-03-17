@@ -43,29 +43,19 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     private final int                              bias;
+    private volatile int                           cardinality;
     private final Digest                           id;
     private final Map<Digest, Tracked<T>>          members             = new ConcurrentHashMap<>();
     private final Map<UUID, MembershipListener<T>> membershipListeners = new ConcurrentHashMap<>();
     private final double                           pByz;
     private final List<Ring<T>>                    rings               = new ArrayList<>();
 
-    public ContextImpl(Digest id) {
-        this(id, 1);
-    }
-
-    public ContextImpl(Digest id, double pByz, int cardinality, int bias) {
-        this(pByz, bias, id, minMajority(pByz, cardinality, 0.99, bias) * bias + 1);
-    }
-
-    public ContextImpl(Digest id, int r) {
-        this(0.01, 2, id, r);
-    }
-
-    public ContextImpl(double pbyz, int bias, Digest id, int r) {
+    public ContextImpl(int cardinality, double pbyz, int bias, Digest id) {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;
-        for (int i = 0; i < r; i++) {
+        this.cardinality = cardinality;
+        for (int i = 0; i < minMajority(pByz, cardinality, 0.99, bias) * bias + 1; i++) {
             rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
         }
     }
@@ -138,6 +128,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public int cardinality() {
+        return cardinality;
+    }
+
+    @Override
     public void clear() {
         for (Ring<T> ring : rings) {
             ring.clear();
@@ -158,6 +153,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
                 offlineIfMember(member);
             }
         });
+    }
+
+    @Override
+    public void deregister(UUID id) {
+        membershipListeners.remove(id);
     }
 
     /**

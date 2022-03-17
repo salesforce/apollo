@@ -205,7 +205,7 @@ public interface Context<T extends Member> {
 
             @Override
             public Context<Z> build() {
-                return new ContextImpl<Z>(pByz, bias, id, minMajority(pByz, cardinality, epsilon, bias) * bias + 1);
+                return new ContextImpl<Z>(cardinality, pByz, bias, id);
             }
         };
     }
@@ -251,6 +251,11 @@ public interface Context<T extends Member> {
     Stream<T> allMembers();
 
     /**
+     * Maximum cardinality of this context
+     */
+    int cardinality();
+
+    /**
      * Clear all members from the receiver
      */
     void clear();
@@ -259,6 +264,11 @@ public interface Context<T extends Member> {
      * Link the lifecycle of member in receiver context with the foundation
      */
     UUID dependUpon(Context<T> foundation);
+
+    /**
+     * Deregister the membership listener identified by the supplied UUID
+     */
+    void deregister(UUID id);
 
     /**
      * Answer the aproximate diameter of the receiver, assuming the rings were built
