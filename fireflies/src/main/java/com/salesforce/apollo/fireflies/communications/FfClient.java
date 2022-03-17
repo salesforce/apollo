@@ -14,7 +14,7 @@ import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Null;
+import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -108,7 +108,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundPingRate().time();
         }
         try {
-            client.ping(Null.newBuilder().setContext(context.toDigeste()).build());
+            client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         } finally {

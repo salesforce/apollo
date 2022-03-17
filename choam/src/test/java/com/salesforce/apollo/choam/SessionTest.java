@@ -59,7 +59,7 @@ public class SessionTest {
     @Test
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
@@ -95,7 +95,7 @@ public class SessionTest {
     @Test
     public void scalingTest() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)

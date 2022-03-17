@@ -8,9 +8,9 @@ package com.salesforce.apollo.model;
 
 import java.nio.file.Path;
 
+import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
@@ -22,21 +22,19 @@ public class SubDomain extends Domain {
     @SuppressWarnings("unused")
     private final Domain parentDomain;
 
-    public SubDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                     Builder params, com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
+    public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params,
+                     RuntimeParameters.Builder runtime) {
+        this(id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
     }
 
-    public SubDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                     Builder params, Path checkpointBaseDir,
-                     com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
+    public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params, Path checkpointBaseDir,
+                     Parameters.RuntimeParameters.Builder runtime) {
+        this(id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
     }
 
-    public SubDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                     Builder params, String dbURL, Path checkpointBaseDir,
-                     com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        super(overlay, id, params, dbURL, checkpointBaseDir, runtime);
+    public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params, String dbURL,
+                     Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime) {
+        super(id, params, dbURL, checkpointBaseDir, runtime);
         this.parentDomain = null;
     }
 }

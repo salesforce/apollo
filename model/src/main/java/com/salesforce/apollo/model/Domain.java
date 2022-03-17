@@ -13,22 +13,18 @@ import static java.nio.file.Path.of;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.JDBCType;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 
 import org.jooq.SQLDialect;
@@ -48,15 +44,10 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
-import com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.delphinius.Oracle;
-import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Context.MembershipListener;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
@@ -85,18 +76,6 @@ abstract public class Domain {
 
         public String toColumn() {
             return name().toLowerCase();
-        }
-    }
-
-    private class Listener<T extends Member> implements MembershipListener<T> {
-        @Override
-        public void active(T member) {
-            memberActive(member);
-        }
-
-        @Override
-        public void offline(T member) {
-            memberOffline(member);
         }
     }
 
@@ -144,29 +123,16 @@ abstract public class Domain {
         return Domain.class.getResource(resource);
     }
 
-    private final CHOAM                                          choam;
-    private final KERL                                           commonKERL;
-    private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
-    private final Mutator                                        mutator;
-    private final Oracle                                         oracle;
-    @SuppressWarnings("unused")
-    private final Context<? extends Member>                      overlay;
-    private final Parameters                                     params;
-    private final SqlStateMachine                                sqlStateMachine;
+    protected final CHOAM                                          choam;
+    protected final KERL                                           commonKERL;
+    protected final ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    protected final Mutator                                        mutator;
+    protected final Oracle                                         oracle;
+    protected final Parameters                                     params;
+    protected final SqlStateMachine                                sqlStateMachine;
 
-    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                  Parameters.Builder params, Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
-    }
-
-    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                  Parameters.Builder params, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
-    }
-
-    public Domain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                  Parameters.Builder params, String dbURL, Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
-        this.overlay = overlay;
+    public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
+                  Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
         params = params.clone();
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
@@ -193,7 +159,6 @@ abstract public class Domain {
                                         params.getSubmitTimeout(), runtime.getExec());
         this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(), runtime.getExec());
-        overlay.register(new Listener<>());
     }
 
     /**
@@ -222,12 +187,6 @@ abstract public class Domain {
         return params.member();
     }
 
-    public Optional<CertificateWithPrivateKey> provision(com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment validators,
-                                                         InetSocketAddress endpoint, Duration duration,
-                                                         SignatureAlgorithm signatureAlgorithm) {
-        return identifier.provision(validators, endpoint, Instant.now(), duration, signatureAlgorithm);
-    }
-
     public void start() {
         choam.start();
     }
@@ -238,7 +197,7 @@ abstract public class Domain {
 
     @Override
     public String toString() {
-        return "Domain[" + getIdentifier() + "]";
+        return getClass().getSimpleName() + "[" + getIdentifier() + "]";
     }
 
     // Provide the list of transactions establishing the unified KERL of the group
@@ -288,16 +247,6 @@ abstract public class Domain {
     // is validated as a side effect and if invalid, NULL is returned.
     private List<Transaction> manifest(Join join) {
         return join.getKerl().getEventsList().stream().map(ke -> transactionOf(ke)).toList();
-    }
-
-    private void memberActive(Member member) {
-        log.trace("Member active: {} on: {}", member, params.member());
-        params.context().activate(member);
-    }
-
-    private void memberOffline(Member member) {
-        log.trace("Member offline: {} on: {}", member, params.member());
-        params.context().offline(member);
     }
 
     private Transaction transactionOf(KeyEventWithAttachments ke) {

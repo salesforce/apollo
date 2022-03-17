@@ -71,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context = new ContextImpl<Member>(members.size(), 0.2, 2, new Digest(DigestAlgorithm.DEFAULT, id));
+        context = new ContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 

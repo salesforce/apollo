@@ -61,9 +61,9 @@ public class FireFliesTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final List<Domain>             domains = new ArrayList<>();
-    private final Map<Domain, LocalRouter> routers = new HashMap<>();
-    private final Map<Domain, View>        views   = new HashMap<>();
+    private final List<ProcessDomain>             domains = new ArrayList<>();
+    private final Map<ProcessDomain, LocalRouter> routers = new HashMap<>();
+    private final Map<ProcessDomain, View>        views   = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -89,7 +89,7 @@ public class FireFliesTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
             var member = new SigningMemberImpl(id.getIdentifier().getDigest(), cert.get().getX509Certificate(),
                                                cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0));
@@ -102,7 +102,7 @@ public class FireFliesTest {
         var foundations = new HashMap<Member, Context<Participant>>();
 
         members.forEach((member, id) -> {
-            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), 0.2, CARDINALITY, 3);
+            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             AtomicInteger execC = new AtomicInteger();
 
             var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
@@ -115,13 +115,13 @@ public class FireFliesTest {
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new SubDomain(foundation, id, params,
-                                     RuntimeParameters.newBuilder()
-                                                      .setScheduler(scheduler)
-                                                      .setMember(member)
-                                                      .setContext(context)
-                                                      .setExec(exec)
-                                                      .setCommunications(localRouter));
+            var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                         RuntimeParameters.newBuilder()
+                                                          .setScheduler(scheduler)
+                                                          .setMember(member)
+                                                          .setContext(context)
+                                                          .setExec(exec)
+                                                          .setCommunications(localRouter));
             domains.add(node);
             foundations.put(member, foundation);
             routers.put(node, localRouter);
@@ -138,7 +138,7 @@ public class FireFliesTest {
             public Member from(X509Certificate cert) {
                 var decoded = Stereotomy.decode(cert).get();
                 return new MemberImpl(((SelfAddressingIdentifier) decoded.identifier()).getDigest(), cert,
-                                      decoded.keyEvent().getKeys().get(0));
+                                      cert.getPublicKey());
             }
 
             @Override
@@ -148,7 +148,7 @@ public class FireFliesTest {
             }
         };
         domains.forEach(m -> {
-            var cert = m.provision(null, new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
+            var cert = m.provision(new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
                                    SignatureAlgorithm.DEFAULT)
                         .get();
             var node = new com.salesforce.apollo.fireflies.Node(m.getMember(), cert, ffParams);

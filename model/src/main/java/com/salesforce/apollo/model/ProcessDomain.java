@@ -6,12 +6,22 @@
  */
 package com.salesforce.apollo.model;
 
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.Participant;
+import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -19,35 +29,35 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined,
- * 'natch
+ * 'natch.
+ * <p>
+ * The ProcessDomain represents a member node in the top level domain and
+ * represents the top level container model for the distributed system. This top
+ * level domain contains every sub domain as decendents. The membership of this
+ * domain is the entirety of all process members in the system. The Context of
+ * this domain is also the foundational fireflies membership domain of the
+ * entire system.
  * 
  * @author hal.hildebrand
  *
  */
 public class ProcessDomain extends Domain {
-    @SuppressWarnings("unused")
-    private final Map<Digest, SubDomain> hostedDomains = new ConcurrentHashMap<>();
-    @SuppressWarnings("unused")
-    private final RootDomain             rootDomain;
-    @SuppressWarnings("unused")
-    private final ProcessDomain          thisDomain;
+    private record Managed<T extends Member> (SubDomain domain, Context<T> embedded, ContextBridge<T> bridge) {}
 
-    public ProcessDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                         Builder params, com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
+    @SuppressWarnings("unused")
+    private final Map<Digest, Managed<?>> hostedDomains = new ConcurrentHashMap<>();
+    @SuppressWarnings("unused")
+    private final View                    foundation;
+
+    public ProcessDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
+                         Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime) {
+        super(id, builder, dbURL, checkpointBaseDir, runtime);
+        var base = Context.<Participant>newBuilder().build();
+        foundation = new View(base, new Node(params.member(), null, null), null, null, null);
     }
 
-    public ProcessDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                         Builder params, Path checkpointBaseDir,
-                         com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        this(overlay, id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
-    }
-
-    public ProcessDomain(Context<? extends Member> overlay, ControlledIdentifier<SelfAddressingIdentifier> id,
-                         Builder params, String dbURL, Path checkpointBaseDir,
-                         com.salesforce.apollo.choam.Parameters.RuntimeParameters.Builder runtime) {
-        super(overlay, id, params, dbURL, checkpointBaseDir, runtime);
-        this.rootDomain = null;
-        this.thisDomain = null;
+    public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Duration duration,
+                                                         SignatureAlgorithm signatureAlgorithm) {
+        return identifier.provision(endpoint, Instant.now(), duration, signatureAlgorithm);
     }
 }

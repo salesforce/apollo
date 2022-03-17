@@ -77,7 +77,7 @@ public class DomainTest {
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase.toFile());
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
@@ -87,7 +87,7 @@ public class DomainTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
 
             members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
@@ -111,13 +111,13 @@ public class DomainTest {
             routers.add(localRouter);
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
-            domains.add(new SubDomain(context, id, params,
-                                      RuntimeParameters.newBuilder()
-                                                       .setScheduler(scheduler)
-                                                       .setMember(member)
-                                                       .setContext(context)
-                                                       .setExec(exec)
-                                                       .setCommunications(localRouter)));
+            domains.add(new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                          RuntimeParameters.newBuilder()
+                                                           .setScheduler(scheduler)
+                                                           .setMember(member)
+                                                           .setContext(context)
+                                                           .setExec(exec)
+                                                           .setCommunications(localRouter)));
             localRouter.start();
         });
     }

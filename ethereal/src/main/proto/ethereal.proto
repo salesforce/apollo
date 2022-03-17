@@ -4,7 +4,6 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.ethereal.proto";
 option java_outer_classname = "EtherealProto";
 option objc_class_prefix = "Ep";
-import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
 

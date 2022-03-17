@@ -101,7 +101,7 @@ public class EtherealTest {
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
                                                .toList();
 
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.1, members.size(), 3);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);
         var metrics = new EtherealMetricsImpl(context.getId(), "test", registry);
         for (Member m : members) {
             context.activate(m);

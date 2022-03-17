@@ -3,9 +3,10 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.fireflies.proto";
 option java_outer_classname = "FirefliesProto";
-option objc_class_prefix = "Ap";
-import "google/protobuf/any.proto";
+option objc_class_prefix = "Ff";
+import "google/protobuf/empty.proto";
 import "util.proto";
+import "stereotomy.proto";
 
 package fireflies;
 
@@ -14,15 +15,15 @@ service Fireflies {
      * Fireflies 3 phase gossip
      */
     rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (Null) {}
+    rpc update (State) returns (google.protobuf.Empty) {}
 
     /**
      * Fireflies liveness ping
      */
-    rpc ping (Null) returns (Null) {}
+    rpc ping (Ping) returns (google.protobuf.Empty) {}
 }
 
-message Null {
+message Ping {
     utils.Digeste context = 1;
 }
 
@@ -56,6 +57,7 @@ message Note {
     int64 epoch = 1;
     utils.Digeste id = 2;
     bytes mask = 3;
+    stereotomy.KeyEventWithAttachments key = 4;
 }
 
 message SignedNote {

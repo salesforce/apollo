@@ -54,8 +54,8 @@ public interface Committee {
      * base context
      */
     static Context<Member> viewFor(Digest hash, Context<? super Member> baseContext) {
-        Context<Member> newView = new ContextImpl<>(hash, baseContext.getProbabilityByzantine(),
-                                                    baseContext.getRingCount(), baseContext.getBias());
+        Context<Member> newView = new ContextImpl<>(hash, baseContext.getRingCount(),
+                                                    baseContext.getProbabilityByzantine(), baseContext.getBias());
         Set<Member> successors = viewMembersOf(hash, baseContext);
         successors.forEach(e -> {
             if (baseContext.isActive(e)) {

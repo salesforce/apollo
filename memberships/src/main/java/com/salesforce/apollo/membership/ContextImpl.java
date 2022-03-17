@@ -50,7 +50,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     private final double                           pByz;
     private final List<Ring<T>>                    rings               = new ArrayList<>();
 
-    public ContextImpl(int cardinality, double pbyz, int bias, Digest id) {
+    public ContextImpl(Digest id, int cardinality, double pbyz, int bias) {
         this.pByz = pbyz;
         this.id = id;
         this.bias = bias;

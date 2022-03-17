@@ -205,7 +205,7 @@ public interface Context<T extends Member> {
 
             @Override
             public Context<Z> build() {
-                return new ContextImpl<Z>(cardinality, pByz, bias, id);
+                return new ContextImpl<Z>(id, cardinality, pByz, bias);
             }
         };
     }
