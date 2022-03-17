@@ -18,9 +18,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,9 +59,11 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int             CARDINALITY = 5;
-    private static final ExecutorService exec        = Executors.newCachedThreadPool();
-    private static final boolean         LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final int                      CARDINALITY = 5;
+    private static final ExecutorService          exec        = Executors.newCachedThreadPool();
+    private static final boolean                  LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
 
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
@@ -183,19 +185,16 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final Duration timeout = Duration.ofSeconds(2);
+        final var timeout = Duration.ofSeconds(2);
 
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 5_000 : 50;
-        final int max = LARGE_TESTS ? 100 : 10;
-        final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
+        final var transactioneers = new ArrayList<Transactioneer>();
+        final var clientCount = LARGE_TESTS ? 5_000 : 50;
+        final var max = LARGE_TESTS ? 100 : 10;
+        final var countdown = new CountDownLatch(clientCount * choams.size());
         for (int i = 0; i < clientCount; i++) {
-            choams.values()
-                  .stream()
-                  .map(c -> new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown))
-                  .forEach(e -> transactioneers.add(e));
+            choams.values().stream().map(c -> {
+                return new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown, txExecutor);
+            }).forEach(e -> transactioneers.add(e));
         }
 
         Thread.sleep(2_000);
@@ -218,7 +217,6 @@ public class TestCHOAM {
 
     @Test
     public void submitTxn() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         var session = choams.get(members.get(0).getId()).getSession();
@@ -226,7 +224,7 @@ public class TestCHOAM {
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(3), scheduler);
+        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(3), txScheduler);
         result.get(60, TimeUnit.SECONDS);
     }
 

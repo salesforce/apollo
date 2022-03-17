@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -60,6 +61,7 @@ import com.salesforce.apollo.utils.Utils;
 abstract public class AbstractLifecycleTest {
     protected static final int                      CARDINALITY = 5;
     protected static final Random                   entropy     = new Random();
+    protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
     private static final ExecutorService          exec            = Executors.newCachedThreadPool();

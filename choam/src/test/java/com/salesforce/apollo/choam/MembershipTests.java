@@ -84,7 +84,8 @@ public class MembershipTests {
         var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
 
         final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown);
+        var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown,
+                                                Executors.newSingleThreadExecutor());
 
         transactioneer.start();
         System.out.println("completed: " + countdown.await(90, TimeUnit.SECONDS));

@@ -66,7 +66,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
                 Supplier<Txn> update = () -> update(entropy, mutator);
-                return new Transactioneer(update, mutator, timeout, max, countdown, txScheduler);
+                return new Transactioneer(update, mutator, timeout, max, txExecutor, countdown, txScheduler);
             }).forEach(e -> transactioneers.add(e));
         }
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);

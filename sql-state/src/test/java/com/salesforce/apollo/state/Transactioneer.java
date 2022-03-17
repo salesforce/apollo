@@ -11,6 +11,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -31,15 +32,17 @@ class Transactioneer {
     private final Mutator                  mutator;
     private final ScheduledExecutorService scheduler;
     private final Duration                 timeout;
+    private final Executor                 executor;
 
-    public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, CountDownLatch countdown,
-                          ScheduledExecutorService txScheduler) {
+    public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, Executor executor,
+                          CountDownLatch countdown, ScheduledExecutorService txScheduler) {
         this.update = update;
         this.timeout = timeout;
         this.max = max;
         this.countdown = countdown;
         this.scheduler = txScheduler;
         this.mutator = mutator;
+        this.executor = executor;
     }
 
     public int completed() {
@@ -60,8 +63,7 @@ class Transactioneer {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(mutator.getSession()
-                                            .submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
+                            decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -72,8 +74,7 @@ class Transactioneer {
                 if (complete < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(mutator.getSession()
-                                            .submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
+                            decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }

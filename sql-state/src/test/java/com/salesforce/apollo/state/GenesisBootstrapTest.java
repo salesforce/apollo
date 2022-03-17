@@ -64,8 +64,8 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         txneer.set(updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get());
 
         var mutator = txneer.get().getValue().getMutator(choams.get(txneer.get().getKey().getId()).getSession());
-        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown,
-                                               txScheduler));
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
+                                               countdown, txScheduler));
         System.out.println("Transaction member: " + txneer.get().getKey().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());

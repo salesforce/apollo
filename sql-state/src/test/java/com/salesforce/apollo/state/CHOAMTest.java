@@ -90,6 +90,7 @@ public class CHOAMTest {
     private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private Executor                           exec     = Executors.newCachedThreadPool();
 
     @AfterEach
     public void after() throws Exception {
@@ -166,7 +167,6 @@ public class CHOAMTest {
                            .peek(m -> context.activate(m))
                            .toList();
         final var prefix = UUID.randomUUID().toString();
-        var exec = Executors.newCachedThreadPool();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
             return localRouter;
@@ -199,7 +199,7 @@ public class CHOAMTest {
         for (int i = 0; i < clientCount; i++) {
             updaters.entrySet().stream().map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown,
+                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec, countdown,
                                           txScheduler);
             }).forEach(e -> transactioneers.add(e));
         }
