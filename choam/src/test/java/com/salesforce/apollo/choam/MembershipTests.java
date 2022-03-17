@@ -156,7 +156,7 @@ public class MembershipTests {
             if (m.equals(testSubject)) {
                 params.setSynchronizationCycles(100);
             } else {
-                params.setSynchronizationCycles(2);
+                params.setSynchronizationCycles(1);
             }
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                            .setMember(m)
