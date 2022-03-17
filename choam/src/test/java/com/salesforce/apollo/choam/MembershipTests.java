@@ -122,6 +122,12 @@ public class MembershipTests {
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
 
+        params.getClientBackoff()
+              .setBase(10)
+              .setCap(100)
+              .setInfiniteAttempts()
+              .setJitter()
+              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
