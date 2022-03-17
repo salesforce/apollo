@@ -113,14 +113,15 @@ public class MembershipTests {
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
-                               .setGossipDuration(Duration.ofMillis(5))
+                               .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(150))
+                                                              .setBatchInterval(Duration.ofMillis(50))
                                                               .setMaxBatchByteSize(1024 * 1024)
-                                                              .setMaxBatchCount(10000)
+                                                              .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
