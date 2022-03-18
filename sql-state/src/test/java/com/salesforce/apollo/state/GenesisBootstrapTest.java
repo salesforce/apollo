@@ -17,11 +17,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
@@ -58,15 +56,13 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        AtomicReference<Entry<Member, SqlStateMachine>> txneer = new AtomicReference<>();
+        initial.get(10, TimeUnit.SECONDS);
+        var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
 
-        txneer.set(updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get());
-
-        var mutator = txneer.get().getValue().getMutator(choams.get(txneer.get().getKey().getId()).getSession());
+        var mutator = txneer.getValue().getMutator(choams.get(txneer.getKey().getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
                                                countdown, txScheduler));
-        System.out.println("Transaction member: " + txneer.get().getKey().getId());
+        System.out.println("Transaction member: " + txneer.getKey().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         var success = countdown.await(60, TimeUnit.SECONDS);
@@ -79,7 +75,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         choam.start();
         routers.get(testSubject.getId()).start();
 
-        final ULong target = txneer.get().getValue().getCurrentBlock().height();
+        final ULong target = txneer.getValue().getCurrentBlock().height();
 
         assertTrue(Utils.waitForCondition(120_000, 100,
                                           () -> members.stream()
