@@ -71,7 +71,7 @@ public class FireFliesTest {
         domains.clear();
         routers.values().forEach(r -> r.close());
         routers.clear();
-        views.values().forEach(v -> v.getService().stop());
+        views.values().forEach(v -> v.stop());
         views.clear();
     }
 
@@ -161,8 +161,7 @@ public class FireFliesTest {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         domains.forEach(n -> n.start());
         views.values()
-             .forEach(v -> v.getService()
-                            .start(Duration.ofMillis(10),
+             .forEach(v -> v.start(Duration.ofMillis(10),
                                    domains.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
         Thread.sleep(10_000);
     }
