@@ -81,7 +81,7 @@ public class ReliableBroadcaster {
             private Context<Member> context;
             private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private Executor        exec               = r -> r.run();
+            private Executor        exec               = ForkJoinPool.commonPool();
             private double          falsePositiveRate  = 0.125;
             private int             maxMessages        = 100;
             private SigningMember   member;
