@@ -269,7 +269,7 @@ public class View {
                 }
             }
 
-            add(new NoteWrapper(note, getDigestAlgorithm()));
+            add(new NoteWrapper(note, digestAlgo));
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
@@ -436,6 +436,8 @@ public class View {
      */
     private final ConcurrentMap<Digest, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
+    private final DigestAlgorithm digestAlgo;
+
     /**
      * Current gossip round
      */
@@ -452,11 +454,12 @@ public class View {
     private final Service service = new Service();
 
     public View(Context<Participant> context, Node node, CertToMember certToMember, Router communications, double fpr,
-                FireflyMetrics metrics) {
+                DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
         this.certToMember = certToMember;
         this.fpr = fpr;
+        this.digestAlgo = digestAlgo;
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -466,7 +469,8 @@ public class View {
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
-    public View(Context<Participant> context, Node node, Router communications, double fpr, FireflyMetrics metrics) {
+    public View(Context<Participant> context, Node node, Router communications, double fpr, DigestAlgorithm digestAlgo,
+                FireflyMetrics metrics) {
         this(context, node, new CertToMember() {
 
             @Override
@@ -478,7 +482,7 @@ public class View {
             public Digest idOf(X509Certificate cert) {
                 return Member.getMemberIdentifier(cert);
             }
-        }, communications, fpr, metrics);
+        }, communications, fpr, digestAlgo, metrics);
     }
 
     public Context<Participant> getContext() {
@@ -737,7 +741,7 @@ public class View {
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
-        seed.setNote(new NoteWrapper(seedNote, getDigestAlgorithm()));
+        seed.setNote(new NoteWrapper(seedNote, digestAlgo));
         context.activate(seed);
     }
 
@@ -826,10 +830,6 @@ public class View {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().map(m -> m.getCertificateHash()).filter(e -> e != null).forEach(n -> bff.add(n));
         return bff;
-    }
-
-    DigestAlgorithm getDigestAlgorithm() {
-        return getParameters().hashAlgorithm;
     }
 
     BloomFilter<Digest> getNotesBff(long seed, double p) {
@@ -1187,8 +1187,8 @@ public class View {
                          .map(cert -> certificateFrom(cert))
                          .filter(cert -> cert != null)
                          .forEach(cert -> add(cert));
-        list.stream().map(s -> new NoteWrapper(s, getDigestAlgorithm())).forEach(note -> add(note));
-        list2.stream().map(s -> new AccusationWrapper(s, getDigestAlgorithm())).forEach(accusation -> add(accusation));
+        list.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
+        list2.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
 
         if (node.isAccused()) {
             // Rebut the accusations by creating a new note and clearing the accusations
@@ -1347,7 +1347,7 @@ public class View {
             long max = gossip.getAccusations()
                              .getUpdatesList()
                              .stream()
-                             .map(signed -> new AccusationWrapper(signed, getDigestAlgorithm()))
+                             .map(signed -> new AccusationWrapper(signed, digestAlgo))
                              .mapToLong(a -> a.getEpoch())
                              .max()
                              .orElse(-1);
@@ -1357,9 +1357,9 @@ public class View {
         if (certificate != null) {
             add(certificate);
             SignedNote signed = gossip.getNotes().getUpdates(0);
-            NoteWrapper note = new NoteWrapper(signed, getDigestAlgorithm());
+            NoteWrapper note = new NoteWrapper(signed, digestAlgo);
             add(note);
-            gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, getDigestAlgorithm())));
+            gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
             log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring, node.getId());
         } else {
             log.warn("Redirect certificate from {} on ring {} is null on: {}", member.getId(), ring, node.getId());

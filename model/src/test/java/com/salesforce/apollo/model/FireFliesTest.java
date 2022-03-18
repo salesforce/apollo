@@ -152,8 +152,8 @@ public class FireFliesTest {
                                    SignatureAlgorithm.DEFAULT)
                         .get();
             var node = new Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m),
-                                  ffParams.falsePositiveRate, null));
+            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m), 0.0125,
+                                  DigestAlgorithm.DEFAULT, null));
         });
     }
 

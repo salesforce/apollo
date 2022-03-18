@@ -35,6 +35,7 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
@@ -258,7 +259,7 @@ public class SwarmTest {
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            return new View(context, node, comms, parameters.falsePositiveRate, fireflyMetricsImpl);
+            return new View(context, node, comms, 0.0125, DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }
