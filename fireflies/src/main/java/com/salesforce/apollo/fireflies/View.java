@@ -438,6 +438,8 @@ public class View {
 
     private final DigestAlgorithm digestAlgo;
 
+    private final CertificateValidator validator;
+
     /**
      * Current gossip round
      */
@@ -453,13 +455,14 @@ public class View {
      */
     private final Service service = new Service();
 
-    public View(Context<Participant> context, Node node, CertToMember certToMember, Router communications, double fpr,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
+    public View(Context<Participant> context, Node node, CertToMember certToMember, CertificateValidator validator,
+                Router communications, double fpr, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
         this.certToMember = certToMember;
         this.fpr = fpr;
         this.digestAlgo = digestAlgo;
+        this.validator = validator;
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -469,8 +472,8 @@ public class View {
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
-    public View(Context<Participant> context, Node node, Router communications, double fpr, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics) {
+    public View(Context<Participant> context, Node node, CertificateValidator validator, Router communications,
+                double fpr, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this(context, node, new CertToMember() {
 
             @Override
@@ -482,7 +485,7 @@ public class View {
             public Digest idOf(X509Certificate cert) {
                 return Member.getMemberIdentifier(cert);
             }
-        }, communications, fpr, digestAlgo, metrics);
+        }, validator, communications, fpr, digestAlgo, metrics);
     }
 
     public Context<Participant> getContext() {
@@ -763,7 +766,7 @@ public class View {
             return null;
         }
         try {
-            getParameters().certificateValidator.validateClient(new X509Certificate[] { certificate });
+            validator.validateClient(new X509Certificate[] { certificate });
         } catch (CertificateException e) {
             log.warn("Invalid cert: {} on: {}", certificate.getSubjectX500Principal(), node.getId(), e);
             return null;

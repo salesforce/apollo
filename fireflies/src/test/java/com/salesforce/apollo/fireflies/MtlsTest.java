@@ -59,10 +59,7 @@ public class MtlsTest {
     static {
         ProviderUtils.getProviderBC();
         CARDINALITY = LARGE_TESTS ? 100 : 10;
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
+        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
     }
 
     @BeforeAll
@@ -129,7 +126,7 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(context, node, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

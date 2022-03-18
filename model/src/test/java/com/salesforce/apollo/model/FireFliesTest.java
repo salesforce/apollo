@@ -128,10 +128,7 @@ public class FireFliesTest {
             localRouter.start();
         });
 
-        var ffParams = FirefliesParameters.newBuilder()
-                                          .setCertificateValidator(CertificateValidator.NONE)
-                                          .setCardinality(CARDINALITY)
-                                          .build();
+        var ffParams = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
         var certToMember = new View.CertToMember() {
 
             @Override
@@ -152,8 +149,8 @@ public class FireFliesTest {
                                    SignatureAlgorithm.DEFAULT)
                         .get();
             var node = new Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m), 0.0125,
-                                  DigestAlgorithm.DEFAULT, null));
+            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, CertificateValidator.NONE,
+                                  routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
         });
     }
 

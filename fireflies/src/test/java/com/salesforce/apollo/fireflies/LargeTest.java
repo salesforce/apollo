@@ -56,10 +56,7 @@ public class LargeTest {
     private static final int                              CARDINALITY = 100;
 
     static {
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
+        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
     }
 
     @BeforeAll
@@ -183,7 +180,8 @@ public class LargeTest {
                                                                                                                                              : registry)),
                                                 executor);
             communications.add(comms);
-            return new View(context, node, comms, 0.0125, DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
+            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT,
+                            fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

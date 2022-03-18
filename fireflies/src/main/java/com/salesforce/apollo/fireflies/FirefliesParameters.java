@@ -7,7 +7,6 @@
 package com.salesforce.apollo.fireflies;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Context;
 
 /**
@@ -18,21 +17,16 @@ import com.salesforce.apollo.membership.Context;
  */
 public class FirefliesParameters {
     public static class Builder {
-        public int                   cardinality;
-        public double                probabilityByzantine = 0.10;
-        private CertificateValidator certificateValidator;
-        private DigestAlgorithm      hashAlgorithm        = DigestAlgorithm.DEFAULT;
+        public int              cardinality;
+        public double           probabilityByzantine = 0.10;
+        private DigestAlgorithm hashAlgorithm        = DigestAlgorithm.DEFAULT;
 
         public FirefliesParameters build() {
-            return new FirefliesParameters(cardinality, hashAlgorithm, probabilityByzantine, certificateValidator);
+            return new FirefliesParameters(cardinality, hashAlgorithm, probabilityByzantine);
         }
 
         public int getCardinality() {
             return cardinality;
-        }
-
-        public CertificateValidator getCertificateValidator() {
-            return certificateValidator;
         }
 
         public DigestAlgorithm getHashAlgorithm() {
@@ -45,11 +39,6 @@ public class FirefliesParameters {
 
         public Builder setCardinality(int cardinality) {
             this.cardinality = cardinality;
-            return this;
-        }
-
-        public Builder setCertificateValidator(CertificateValidator certificateValidator) {
-            this.certificateValidator = certificateValidator;
             return this;
         }
 
@@ -71,22 +60,20 @@ public class FirefliesParameters {
     /**
      * The maximum cardinality of the fireflies group
      */
-    public final int cardinality;
-
-    public final CertificateValidator certificateValidator;
+    public final int             cardinality;
     /**
      * The algorithm used for secure hashes
      */
-    public final DigestAlgorithm      hashAlgorithm;
+    public final DigestAlgorithm hashAlgorithm;
     /**
      * The probability of a member being subversive
      */
-    public final double               probabilityByzantine;
+    public final double          probabilityByzantine;
     /**
      * The number of rings based on the parameters required to resist failure in
      * gossip and byzantine members.
      */
-    public final int                  rings;
+    public final int             rings;
 
     /**
      * The number of rings tolerated either by a failure or through byzantine
@@ -94,14 +81,12 @@ public class FirefliesParameters {
      */
     public final int toleranceLevel;
 
-    public FirefliesParameters(int cardinality, DigestAlgorithm hashAlgorithm, double probabilityByzantine,
-                               CertificateValidator certificateValidator) {
+    public FirefliesParameters(int cardinality, DigestAlgorithm hashAlgorithm, double probabilityByzantine) {
         this.cardinality = cardinality;
         this.hashAlgorithm = hashAlgorithm;
         this.probabilityByzantine = probabilityByzantine;
         toleranceLevel = Context.minMajority(probabilityByzantine, cardinality);
         rings = toleranceLevel * 2 + 1;
-        this.certificateValidator = certificateValidator;
     }
 
     @Override

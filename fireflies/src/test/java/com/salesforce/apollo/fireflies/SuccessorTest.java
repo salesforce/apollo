@@ -56,10 +56,7 @@ public class SuccessorTest {
     private static final int                              CARDINALITY = 10;
 
     static {
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
+        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
     }
 
     @BeforeAll
@@ -117,7 +114,7 @@ public class SuccessorTest {
             communications.add(comms);
             comms.start();
             Context<Participant> context = ctxBuilder.build();
-            return new View(context, node, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
