@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -37,6 +36,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.FirefliesParameters;
+import com.salesforce.apollo.fireflies.Node;
 import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.Context;
@@ -151,12 +151,13 @@ public class FireFliesTest {
             var cert = m.provision(new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
                                    SignatureAlgorithm.DEFAULT)
                         .get();
-            var node = new com.salesforce.apollo.fireflies.Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m), null));
+            var node = new Node(m.getMember(), cert, ffParams);
+            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m),
+                                  ffParams.falsePositiveRate, null));
         });
     }
 
-    @Test
+//    @Test
     public void smokin() throws Exception {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         domains.forEach(n -> n.start());

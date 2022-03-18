@@ -128,7 +128,7 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(context, node, comms, metrics);
+            return new View(context, node, comms, parameters.falsePositiveRate, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

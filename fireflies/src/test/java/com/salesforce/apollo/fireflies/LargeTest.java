@@ -182,7 +182,7 @@ public class LargeTest {
                                                                                                                                              : registry)),
                                                 executor);
             communications.add(comms);
-            return new View(context, node, comms, fireflyMetricsImpl);
+            return new View(context, node, comms, parameters.falsePositiveRate, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

@@ -282,11 +282,10 @@ public class View {
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
-                                                                    seed, getParameters().falsePositiveRate))
-                         .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed,
-                                                      getParameters().falsePositiveRate))
+                                                                    seed, fpr))
+                         .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusationDigests(BloomFilter.from(digests.getAccusationBff()), seed,
-                                                                  getParameters().falsePositiveRate))
+                                                                  fpr))
                          .build();
         }
 
@@ -419,6 +418,12 @@ public class View {
      */
     private final Context<Participant> context;
 
+    /**
+     * The false positive rate for the bloomfilters used for the antientropy
+     * protocol
+     */
+    private final double fpr;
+
     private final FireflyMetrics metrics;
 
     /**
@@ -446,11 +451,12 @@ public class View {
      */
     private final Service service = new Service();
 
-    public View(Context<Participant> context, Node node, CertToMember certToMember, Router communications,
+    public View(Context<Participant> context, Node node, CertToMember certToMember, Router communications, double fpr,
                 FireflyMetrics metrics) {
         this.metrics = metrics;
         this.node = node;
         this.certToMember = certToMember;
+        this.fpr = fpr;
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -460,7 +466,7 @@ public class View {
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
 
-    public View(Context<Participant> context, Node node, Router communications, FireflyMetrics metrics) {
+    public View(Context<Participant> context, Node node, Router communications, double fpr, FireflyMetrics metrics) {
         this(context, node, new CertToMember() {
 
             @Override
@@ -472,7 +478,7 @@ public class View {
             public Digest idOf(X509Certificate cert) {
                 return Member.getMemberIdentifier(cert);
             }
-        }, communications, metrics);
+        }, communications, fpr, metrics);
     }
 
     public Context<Participant> getContext() {
@@ -795,9 +801,9 @@ public class View {
     Digests commonDigests() {
         long seed = Utils.secureEntropy().nextLong();
         return Digests.newBuilder()
-                      .setAccusationBff(getAccusationsBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setNoteBff(getNotesBff(seed, getParameters().falsePositiveRate).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, getParameters().falsePositiveRate).toBff())
+                      .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
+                      .setNoteBff(getNotesBff(seed, fpr).toBff())
+                      .setCertificateBff(getCertificatesBff(seed, fpr).toBff())
                       .build();
     }
 
