@@ -418,6 +418,8 @@ public class View {
      */
     private final Context<Participant> context;
 
+    private final DigestAlgorithm digestAlgo;
+
     /**
      * The false positive rate for the bloomfilters used for the antientropy
      * protocol
@@ -436,10 +438,6 @@ public class View {
      */
     private final ConcurrentMap<Digest, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
-    private final DigestAlgorithm digestAlgo;
-
-    private final CertificateValidator validator;
-
     /**
      * Current gossip round
      */
@@ -454,6 +452,24 @@ public class View {
      * The gossip service
      */
     private final Service service = new Service();
+
+    private final CertificateValidator validator;
+
+    public View(Context<Participant> context, Node node, CertificateValidator validator, Router communications,
+                double fpr, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
+        this(context, node, new CertToMember() {
+
+            @Override
+            public Member from(X509Certificate cert) {
+                return new MemberImpl(cert);
+            }
+
+            @Override
+            public Digest idOf(X509Certificate cert) {
+                return Member.getMemberIdentifier(cert);
+            }
+        }, validator, communications, fpr, digestAlgo, metrics);
+    }
 
     public View(Context<Participant> context, Node node, CertToMember certToMember, CertificateValidator validator,
                 Router communications, double fpr, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
@@ -470,22 +486,6 @@ public class View {
         this.context = context;
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
-    }
-
-    public View(Context<Participant> context, Node node, CertificateValidator validator, Router communications,
-                double fpr, DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
-        this(context, node, new CertToMember() {
-
-            @Override
-            public Member from(X509Certificate cert) {
-                return new MemberImpl(cert);
-            }
-
-            @Override
-            public Digest idOf(X509Certificate cert) {
-                return Member.getMemberIdentifier(cert);
-            }
-        }, validator, communications, fpr, digestAlgo, metrics);
     }
 
     public Context<Participant> getContext() {
