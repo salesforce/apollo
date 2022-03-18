@@ -79,7 +79,7 @@ public class SwarmTest {
     @AfterEach
     public void after() {
         if (views != null) {
-            views.forEach(v -> v.getService().stop());
+            views.forEach(v -> v.stop());
             views.clear();
         }
 
@@ -100,7 +100,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -115,7 +115,7 @@ public class SwarmTest {
             + testViews.size() + " members");
         }
         System.out.println("Stopping views");
-        testViews.forEach(e -> e.getService().stop());
+        testViews.forEach(e -> e.stop());
         testViews.clear();
 //        communications.close();
         for (int i = 0; i < 4; i++) {
@@ -125,7 +125,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
@@ -171,7 +171,7 @@ public class SwarmTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
@@ -211,7 +211,7 @@ public class SwarmTest {
             }
         }
 
-        views.forEach(view -> view.getService().stop());
+        views.forEach(view -> view.stop());
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)

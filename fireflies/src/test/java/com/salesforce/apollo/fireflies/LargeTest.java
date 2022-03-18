@@ -80,7 +80,7 @@ public class LargeTest {
     @AfterEach
     public void after() {
         if (views != null) {
-            views.forEach(v -> v.getService().stop());
+            views.forEach(v -> v.stop());
             views.clear();
         }
 
@@ -94,7 +94,7 @@ public class LargeTest {
 
         long then = System.currentTimeMillis();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100);
-        views.forEach(view -> view.getService().start(Duration.ofMillis(10_000), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(10_000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(600_000, 10_000, () -> {
             return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
@@ -135,7 +135,7 @@ public class LargeTest {
             }
         }
 
-        views.forEach(view -> view.getService().stop());
+        views.forEach(view -> view.stop());
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)

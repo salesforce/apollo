@@ -34,8 +34,8 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
+import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
@@ -80,7 +80,7 @@ public class MtlsTest {
     @AfterEach
     public void after() {
         if (views != null) {
-            views.forEach(e -> e.getService().stop());
+            views.forEach(e -> e.stop());
             views.clear();
         }
         if (communications != null) {
@@ -131,7 +131,7 @@ public class MtlsTest {
 
         long then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.getService().start(Duration.ofMillis(200), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(200), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -160,10 +160,10 @@ public class MtlsTest {
         }).collect(Collectors.toList()).toString());
 
         System.out.println("Stoping views");
-        views.forEach(view -> view.getService().stop());
+        views.forEach(view -> view.stop());
 
         System.out.println("Restarting views");
-        views.forEach(view -> view.getService().start(Duration.ofMillis(1000), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(1000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
@@ -190,7 +190,7 @@ public class MtlsTest {
         assertEquals(0, invalid.size());
 
         System.out.println("Stoping views");
-        views.forEach(view -> view.getService().stop());
+        views.forEach(view -> view.stop());
 
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)

@@ -119,7 +119,7 @@ public class SuccessorTest {
             return new View(context, node, comms, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
-        views.values().forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
+        views.values().forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {
@@ -145,9 +145,12 @@ public class SuccessorTest {
 
             View test = views.get(members.get(0));
             System.out.println("Test member: " + test.getNode());
-            Field lastRing = Service.class.getDeclaredField("lastRing");
-            lastRing.setAccessible(true);
-            int ring = (lastRing.getInt(test.getService()) + 1) % test.getContext().getRingCount();
+            Field serviceF = View.class.getDeclaredField("service");
+            serviceF.setAccessible(true);
+            Service service = (Service) serviceF.get(test);
+            Field lastRingF = Service.class.getDeclaredField("lastRing");
+            lastRingF.setAccessible(true);
+            int ring = (lastRingF.getInt(service) + 1) % test.getContext().getRingCount();
             Participant successor = test.getContext()
                                         .ring(ring)
                                         .successor(test.getNode(), m -> test.getContext().isActive(m));
@@ -158,7 +161,7 @@ public class SuccessorTest {
                               .ring(ring)
                               .successor(test.getNode(), m -> test.getContext().isActive(m)));
             assertTrue(test.getContext().isActive(successor));
-            test.getService().gossip(() -> {
+            service.gossip(() -> {
             });
 
             ring = (ring + 1) % test.getContext().getRingCount();
@@ -170,9 +173,9 @@ public class SuccessorTest {
                               .ring(ring)
                               .successor(test.getNode(), m -> test.getContext().isActive(m)));
             assertTrue(test.getContext().isActive(successor));
-            test.getService().gossip(null);
+            service.gossip(null);
         } finally {
-            views.values().forEach(e -> e.getService().stop());
+            views.values().forEach(e -> e.stop());
         }
     }
 }

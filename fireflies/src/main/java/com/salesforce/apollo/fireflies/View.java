@@ -508,10 +508,17 @@ public class View {
     }
 
     /**
-     * @return the gossip service of the View
+     * Start the View
      */
-    public Service getService() {
-        return service;
+    public void start(Duration d, List<X509Certificate> seeds, ScheduledExecutorService scheduler) {
+        service.start(d, seeds, scheduler);
+    }
+
+    /**
+     * stop the view from performing gossip and monitoring rounds
+     */
+    public void stop() {
+        service.stop();
     }
 
     @Override
