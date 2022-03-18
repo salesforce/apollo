@@ -199,12 +199,6 @@ abstract public class AbstractLifecycleTest {
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockSize(checkpointBlockSize());
-        params.getClientBackoff()
-              .setBase(20)
-              .setCap(150)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;

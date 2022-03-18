@@ -115,12 +115,6 @@ public class TestCHOAM {
                                                               .build())
                                .setCheckpointBlockSize(1);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
-        params.getClientBackoff()
-              .setBase(10)
-              .setCap(100)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
         checkpointOccurred = new CompletableFuture<>();

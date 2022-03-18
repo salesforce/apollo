@@ -143,12 +143,6 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockSize(200);
-        params.getClientBackoff()
-              .setBase(100)
-              .setCap(2000)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;

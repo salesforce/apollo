@@ -151,12 +151,6 @@ public class CHOAMTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockSize(200);
-        params.getClientBackoff()
-              .setBase(10)
-              .setCap(250)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
