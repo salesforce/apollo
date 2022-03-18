@@ -107,7 +107,9 @@ public class MtlsTest {
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
+        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
+
+        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
             CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
@@ -119,7 +121,7 @@ public class MtlsTest {
         Builder builder = ServerConnectionCache.newBuilder().setTarget(2);
         AtomicBoolean frist = new AtomicBoolean(true);
         views = members.stream().map(node -> {
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
             EndpointProvider ep = View.getStandardEpProvider(node);

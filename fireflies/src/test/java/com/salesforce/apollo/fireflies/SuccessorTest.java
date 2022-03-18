@@ -96,8 +96,9 @@ public class SuccessorTest {
                                                         cert, parameters))
                                   .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
+        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
+        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
             CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
@@ -115,7 +116,7 @@ public class SuccessorTest {
             LocalRouter comms = new LocalRouter(prefix, node, builder, executor);
             communications.add(comms);
             comms.start();
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            Context<Participant> context = ctxBuilder.build();
             return new View(context, node, comms, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
@@ -134,7 +135,7 @@ public class SuccessorTest {
                 for (Participant m : view.getContext().allMembers().toList()) {
                     assertTrue(m.getEpoch() > 0, "Participant epoch <= 0: " + m);
                 }
-                for (int r = 0; r < parameters.rings; r++) {
+                for (int r = 0; r < view.getContext().getRingCount(); r++) {
                     Ring<Participant> ring = view.getContext().ring(r);
                     Participant successor = ring.successor(view.getNode());
                     View successorView = views.get(successor);

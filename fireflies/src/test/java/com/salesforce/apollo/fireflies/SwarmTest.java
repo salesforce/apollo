@@ -144,7 +144,7 @@ public class SwarmTest {
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
+            for (int i = 0; i < v.getContext().getRingCount(); i++) {
                 testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
@@ -182,7 +182,7 @@ public class SwarmTest {
 
         Thread.sleep(5_000);
 
-        for (int i = 0; i < parameters.rings; i++) {
+        for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
             for (View view : views) {
                 assertEquals(views.get(0).getContext().ring(i).getRing(), view.getContext().ring(i).getRing());
             }
@@ -196,7 +196,7 @@ public class SwarmTest {
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
+            for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
                 testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
@@ -234,8 +234,9 @@ public class SwarmTest {
                                              cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
+        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
+        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
             CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
@@ -245,7 +246,7 @@ public class SwarmTest {
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
         views = members.stream().map(node -> {
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
                                                                            frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);

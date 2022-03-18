@@ -105,7 +105,7 @@ public class LargeTest {
 
         Thread.sleep(5_000);
 
-        for (int i = 0; i < parameters.rings; i++) {
+        for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
             for (View view : views) {
                 Set<Digest> difference = views.get(0).getContext().ring(i).difference(view.getContext().ring(i));
                 assertEquals(0, difference.size(), "difference in ring sets: " + difference);
@@ -120,7 +120,7 @@ public class LargeTest {
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
+            for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
                 testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
@@ -158,8 +158,9 @@ public class LargeTest {
                                              cert, parameters))
                        .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
+        var builder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
+        while (seeds.size() < builder.build().getRingCount() + 1) {
             CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
@@ -170,7 +171,7 @@ public class LargeTest {
         ForkJoinPool executor = new ForkJoinPool();
         final var prefix = UUID.randomUUID().toString();
         views = members.stream().map(node -> {
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+            Context<Participant> context = builder.build();
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
                                                                            frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);

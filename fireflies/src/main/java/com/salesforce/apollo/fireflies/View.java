@@ -355,13 +355,13 @@ public class View {
         Fireflies nextRing() {
             Fireflies link = null;
             int last = lastRing;
-            int current = (last + 1) % getParameters().rings;
-            for (int i = 0; i < getParameters().rings; i++) {
+            int current = (last + 1) % context.getRingCount();
+            for (int i = 0; i < context.getRingCount(); i++) {
                 link = linkFor(current);
                 if (link != null) {
                     break;
                 }
-                current = (current + 1) % getParameters().rings;
+                current = (current + 1) % context.getRingCount();
             }
             lastRing = current;
             return link;
@@ -558,7 +558,7 @@ public class View {
             return;
         }
 
-        if (accusation.getRingNumber() > getParameters().rings) {
+        if (accusation.getRingNumber() > context.getRingCount()) {
             log.debug("Invalid ring in accusation: {} on: {}", accusation.getRingNumber(), node);
             return;
         }
@@ -726,7 +726,7 @@ public class View {
                                         .setNote(Note.newBuilder()
                                                      .setId(seed.getId().toDigeste())
                                                      .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(getParameters().toleranceLevel,
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel(),
                                                                                                          Utils.secureEntropy())
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
@@ -807,8 +807,7 @@ public class View {
 
     BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
-                                                                    getParameters().cardinality * getParameters().rings,
-                                                                    p);
+                                                                    context.cardinality() * context.getRingCount(), p);
         context.getActive()
                .stream()
                .flatMap(m -> m.getAccusations())
@@ -818,7 +817,7 @@ public class View {
     }
 
     BloomFilter<Digest> getCertificatesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().map(m -> m.getCertificateHash()).filter(e -> e != null).forEach(n -> bff.add(n));
         return bff;
     }
@@ -828,7 +827,7 @@ public class View {
     }
 
     BloomFilter<Digest> getNotesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, getParameters().cardinality, p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
     }
@@ -1236,7 +1235,7 @@ public class View {
                      .setCertificates(CertificateGossip.newBuilder().addUpdates(encodedCertificate).build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
                      .setAccusations(AccusationGossip.newBuilder()
-                                                     .addAllUpdates(member.getEncodedAccusations(getParameters().rings)))
+                                                     .addAllUpdates(member.getEncodedAccusations(context.getRingCount())))
                      .build();
     }
 
