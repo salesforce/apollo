@@ -107,7 +107,7 @@ public class LargeTest {
 
         for (int i = 0; i < parameters.rings; i++) {
             for (View view : views) {
-                Set<Digest> difference = views.get(0).getRing(i).difference(view.getRing(i));
+                Set<Digest> difference = views.get(0).getContext().ring(i).difference(view.getContext().ring(i));
                 assertEquals(0, difference.size(), "difference in ring sets: " + difference);
             }
         }
@@ -121,14 +121,14 @@ public class LargeTest {
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
             for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
         assertTrue(testGraph.isSC());
 
         for (View view : views) {
-            for (int ring = 0; ring < view.getRings().size(); ring++) {
-                final Collection<Participant> membership = view.getRing(ring).members();
+            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
+                final Collection<Participant> membership = view.getContext().ring(ring).members();
                 for (Node node : members) {
                     assertTrue(membership.contains(node));
                 }

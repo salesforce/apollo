@@ -145,14 +145,14 @@ public class SwarmTest {
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
             for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
         assertTrue(testGraph.isSC());
 
         for (View view : views) {
-            for (int ring = 0; ring < view.getRings().size(); ring++) {
-                final Collection<Participant> membership = view.getRing(ring).members();
+            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
+                final Collection<Participant> membership = view.getContext().ring(ring).members();
                 for (Node node : members) {
                     assertTrue(membership.contains(node));
                 }
@@ -184,7 +184,7 @@ public class SwarmTest {
 
         for (int i = 0; i < parameters.rings; i++) {
             for (View view : views) {
-                assertEquals(views.get(0).getRing(i).getRing(), view.getRing(i).getRing());
+                assertEquals(views.get(0).getContext().ring(i).getRing(), view.getContext().ring(i).getRing());
             }
         }
 
@@ -197,14 +197,14 @@ public class SwarmTest {
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
             for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
         assertTrue(testGraph.isSC());
 
         for (View view : views) {
-            for (int ring = 0; ring < view.getRings().size(); ring++) {
-                final Collection<Participant> membership = view.getRing(ring).members();
+            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
+                final Collection<Participant> membership = view.getContext().ring(ring).members();
                 for (Node node : members) {
                     assertTrue(membership.contains(node));
                 }

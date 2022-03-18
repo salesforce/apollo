@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -272,7 +271,7 @@ public class View {
 
             add(new NoteWrapper(note, getDigestAlgorithm()));
 
-            Participant successor = getRing(ring).successor(member, m -> context.isActive(m.getId()));
+            Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
                 return emptyGossip();
             }
@@ -420,11 +419,6 @@ public class View {
      */
     private final Context<Participant> context;
 
-    /**
-     * The analytical diameter of the graph of members
-     */
-    private final int diameter;
-
     private final FireflyMetrics metrics;
 
     /**
@@ -441,11 +435,6 @@ public class View {
      * Current gossip round
      */
     private final AtomicLong round = new AtomicLong(0);
-
-    /**
-     * Core round listeners
-     */
-    private final List<Runnable> roundListeners = new CopyOnWriteArrayList<>();
 
     /**
      * Rebutals sorted by target round
@@ -467,8 +456,6 @@ public class View {
                                                             metrics, r),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         this.context = context;
-        diameter = context.diameter(getParameters().cardinality);
-        assert diameter > 0 : "Diameter must be greater than zero: " + diameter;
         add(node);
         log.info("View [{}]\n  Parameters: {}", node.getId(), getParameters());
     }
@@ -493,13 +480,6 @@ public class View {
     }
 
     /**
-     * @return the analytical diameter of the graph of members
-     */
-    public int getDiameter() {
-        return diameter;
-    }
-
-    /**
      * @return the collection of all failed members
      */
     public Collection<Participant> getFailed() {
@@ -511,13 +491,6 @@ public class View {
      */
     public Collection<Participant> getLive() {
         return context.getActive();
-    }
-
-    /**
-     * @return the maximum number of members allowed for the view
-     */
-    public int getMaximumCardinality() {
-        return getParameters().cardinality;
     }
 
     /**
@@ -535,43 +508,10 @@ public class View {
     }
 
     /**
-     * @param ring
-     * @return the Ring corresponding to the index
-     */
-    public Ring<Participant> getRing(int ring) {
-        return context.ring(ring);
-    }
-
-    /**
-     * @return the List of Rings that this view maintains
-     */
-    public List<Ring<Participant>> getRings() {
-        return context.rings().collect(Collectors.toList());
-    }
-
-    /**
-     * current round of gossip for this view
-     */
-    public long getRound() {
-        return round.get();
-    }
-
-    /**
-     * @return the scheduledRebutals
-     */
-    public ConcurrentSkipListSet<FutureRebutal> getScheduledRebutals() {
-        return scheduledRebutals;
-    }
-
-    /**
      * @return the gossip service of the View
      */
     public Service getService() {
         return service;
-    }
-
-    public void registerRoundListener(Runnable callback) {
-        roundListeners.add(callback);
     }
 
     @Override
@@ -1125,14 +1065,6 @@ public class View {
                         timer.stop();
                     }
                 }
-
-                roundListeners.forEach(l -> {
-                    try {
-                        l.run();
-                    } catch (Throwable e) {
-                        log.error("error sending round() to listener: {} on: {}", l, node.getId(), e);
-                    }
-                });
                 scheduler.schedule(() -> {
                     try {
                         oneRound(d, scheduler);
@@ -1320,7 +1252,7 @@ public class View {
      */
     void startRebutalTimer(Participant m) {
         pendingRebutals.computeIfAbsent(m.getId(), id -> {
-            FutureRebutal future = new FutureRebutal(round.get() + 2 * (diameter * getParameters().toleranceLevel), m);
+            FutureRebutal future = new FutureRebutal(round.get() + context.timeToLive(), m);
             scheduledRebutals.add(future);
             return future;
         });
