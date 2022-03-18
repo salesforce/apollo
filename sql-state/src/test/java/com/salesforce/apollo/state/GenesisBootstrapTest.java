@@ -77,20 +77,29 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
         final ULong target = txneer.getValue().getCurrentBlock().height();
 
-        assertTrue(Utils.waitForCondition(120_000, 100,
-                                          () -> members.stream()
-                                                       .map(m -> updaters.get(m))
-                                                       .map(ssm -> ssm.getCurrentBlock())
-                                                       .filter(cb -> cb != null)
-                                                       .map(cb -> cb.height())
-                                                       .filter(l -> l.compareTo(target) >= 0)
-                                                       .count() == members.size()),
-                   "state: " + members.stream()
-                                      .map(m -> updaters.get(m))
-                                      .map(ssm -> ssm.getCurrentBlock())
-                                      .filter(cb -> cb != null)
-                                      .map(cb -> cb.height())
-                                      .toList());
+        assertTrue(Utils.waitForCondition(120_000, 100, () -> {
+
+            var max = members.stream()
+                             .map(m -> updaters.get(m))
+                             .map(ssm -> ssm.getCurrentBlock())
+                             .filter(cb -> cb != null)
+                             .map(cb -> cb.height())
+                             .max((a, b) -> a.compareTo(b))
+                             .get();
+            return members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(target) >= 0)
+                          .filter(l -> l.compareTo(max) == 0)
+                          .count() == members.size();
+        }), "state: " + members.stream()
+                               .map(m -> updaters.get(m))
+                               .map(ssm -> ssm.getCurrentBlock())
+                               .filter(cb -> cb != null)
+                               .map(cb -> cb.height())
+                               .toList());
         System.out.println("target: " + target + " results: "
         + members.stream()
                  .map(m -> updaters.get(m))

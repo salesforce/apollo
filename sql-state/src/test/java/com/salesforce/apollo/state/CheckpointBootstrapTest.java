@@ -94,20 +94,28 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                      .max((a, b) -> a.compareTo(b))
                                      .get();
 
-        assertTrue(Utils.waitForCondition(10_000, 1000,
-                                          () -> members.stream()
-                                                       .map(m -> updaters.get(m))
-                                                       .map(ssm -> ssm.getCurrentBlock())
-                                                       .filter(cb -> cb != null)
-                                                       .map(cb -> cb.height())
-                                                       .filter(l -> l.compareTo(target) >= 0)
-                                                       .count() == members.size()),
-                   "state: " + members.stream()
-                                      .map(m -> updaters.get(m))
-                                      .map(ssm -> ssm.getCurrentBlock())
-                                      .filter(cb -> cb != null)
-                                      .map(cb -> cb.height())
-                                      .toList());
+        assertTrue(Utils.waitForCondition(10_000, 1000, () -> {
+            var mT = members.stream()
+                            .map(m -> updaters.get(m))
+                            .map(ssm -> ssm.getCurrentBlock())
+                            .filter(cb -> cb != null)
+                            .map(cb -> cb.height())
+                            .max((a, b) -> a.compareTo(b))
+                            .get();
+            return members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(target) >= 0)
+                          .filter(l -> l.compareTo(mT) == 0)
+                          .count() == members.size();
+        }), "state: " + members.stream()
+                               .map(m -> updaters.get(m))
+                               .map(ssm -> ssm.getCurrentBlock())
+                               .filter(cb -> cb != null)
+                               .map(cb -> cb.height())
+                               .toList());
 
         System.out.println("target: " + target + " results: "
         + members.stream()
