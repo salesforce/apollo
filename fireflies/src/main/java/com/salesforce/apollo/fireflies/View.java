@@ -345,7 +345,6 @@ public class View {
          */
         public void update(int ring, Update update, Digest from) {
             processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList());
-
         }
 
         /**
