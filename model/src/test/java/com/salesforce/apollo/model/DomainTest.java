@@ -180,33 +180,17 @@ public class DomainTest {
         var burcu = ns.subject("Burcu");
 
         // Map direct edges. Transitive edges added as a side effect
-        var completions = new ArrayList<CompletableFuture<?>>();
-
-        completions.add(oracle.map(helpDeskMembers, adminMembers));
-        completions.add(oracle.map(ali, adminMembers));
-        completions.add(oracle.map(ali, userMembers));
-        completions.add(oracle.map(burcu, userMembers));
-        completions.add(oracle.map(can, userMembers));
-        completions.add(oracle.map(managerMembers, userMembers));
-        completions.add(oracle.map(technicianMembers, userMembers));
-        completions.add(oracle.map(demet, helpDeskMembers));
-        completions.add(oracle.map(egin, helpDeskMembers));
-        completions.add(oracle.map(egin, userMembers));
-        completions.add(oracle.map(fuat, managerMembers));
-        completions.add(oracle.map(gl, managerMembers));
-        completions.add(oracle.map(hakan, technicianMembers));
-        completions.add(oracle.map(irmak, technicianMembers));
-        completions.add(oracle.map(abcTechMembers, technicianMembers));
-        completions.add(oracle.map(flaggedTechnicianMembers, technicianMembers));
-        completions.add(oracle.map(jale, abcTechMembers));
-
-        completions.forEach(cf -> {
-            try {
-                cf.get();
-            } catch (InterruptedException | ExecutionException e) {
-                fail("Failed completion");
-            }
-        });
+        CompletableFuture.allOf(oracle.map(helpDeskMembers, adminMembers), oracle.map(ali, adminMembers),
+                                oracle.map(ali, userMembers), oracle.map(burcu, userMembers),
+                                oracle.map(can, userMembers), oracle.map(managerMembers, userMembers),
+                                oracle.map(technicianMembers, userMembers), oracle.map(demet, helpDeskMembers),
+                                oracle.map(egin, helpDeskMembers), oracle.map(egin, userMembers),
+                                oracle.map(fuat, managerMembers), oracle.map(gl, managerMembers),
+                                oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
+                                oracle.map(abcTechMembers, technicianMembers),
+                                oracle.map(flaggedTechnicianMembers, technicianMembers),
+                                oracle.map(jale, abcTechMembers))
+                         .get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");
