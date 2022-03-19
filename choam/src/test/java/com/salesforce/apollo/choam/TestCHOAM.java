@@ -170,7 +170,6 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Thread.sleep(2_000);
         assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS));
     }
 
@@ -190,8 +189,6 @@ public class TestCHOAM {
                 return new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown, txExecutor);
             }).forEach(e -> transactioneers.add(e));
         }
-
-        Thread.sleep(2_000);
 
         transactioneers.stream().forEach(e -> e.start());
         try {
@@ -214,12 +211,11 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         var session = choams.get(members.get(0).getId()).getSession();
-        Thread.sleep(2_000);
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(3), txScheduler);
-        result.get(60, TimeUnit.SECONDS);
+        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(6), txScheduler);
+        result.get(90, TimeUnit.SECONDS);
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
