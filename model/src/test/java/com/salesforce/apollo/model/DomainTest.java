@@ -126,7 +126,7 @@ public class DomainTest {
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
         var oracle = domains.get(0).getDelphi();
-        oracle.add(new Oracle.Namespace("test")).get(10, TimeUnit.SECONDS);
+        oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
     }
 
