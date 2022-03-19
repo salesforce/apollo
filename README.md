@@ -48,6 +48,8 @@ To build Apollo, cd to the root directory of the repository and then do:
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
 
+You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
+
 ## Code Generation In Apollo
 Apollo requires code generation as part of the build.  This is done in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.
 
