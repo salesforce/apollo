@@ -49,7 +49,7 @@ public class FfServer extends FirefliesImplBase {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
-            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, identity.getCert(),
+            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getFrom(),
                                      request.getNote());
             if (timer != null) {
                 timer.stop();

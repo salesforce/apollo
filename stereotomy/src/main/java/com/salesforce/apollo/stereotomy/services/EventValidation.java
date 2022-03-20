@@ -17,6 +17,13 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
  */
 public interface EventValidation extends Predicate<EstablishmentEvent> {
 
+    EventValidation NONE = new EventValidation() {
+        @Override
+        public boolean apply(EstablishmentEvent event) {
+            return true;
+        }
+    };
+
     /**
      * Answer true if the identifier prefix is validated. This means that thresholds
      * have been met from indicated witnesses and trusted validators.

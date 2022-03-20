@@ -88,7 +88,7 @@ public class ProtobufEventFactory implements EventFactory {
         }
     }
 
-    public static KeyEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inception) {
+    public static InceptionEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent inception) {
         return switch (inception.getSpecification().getHeader().getIlk()) {
         case INCEPTION_TYPE -> new InceptionEventImpl(inception);
         case DELEGATED_INCEPTION_TYPE -> new DelegatedInceptionEventImpl(inception);
@@ -97,7 +97,7 @@ public class ProtobufEventFactory implements EventFactory {
         };
     }
 
-    public static KeyEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent rotation) {
+    public static RotationEvent toKeyEvent(com.salesfoce.apollo.stereotomy.event.proto.RotationEvent rotation) {
         return switch (rotation.getSpecification().getHeader().getIlk()) {
         case ROTATION_TYPE -> new RotationEventImpl(rotation);
         case DELEGATED_ROTATION_TYPE -> new DelegatedRotationEventImpl(rotation);

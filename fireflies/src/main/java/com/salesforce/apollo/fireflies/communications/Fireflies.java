@@ -37,7 +37,8 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
+            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests,
+                                                   Node from) {
                 return null;
             }
 
@@ -52,7 +53,7 @@ public interface Fireflies extends Link {
         };
     }
 
-    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests);
+    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests, Node from);
 
     int ping(Digest context, int ping);
 

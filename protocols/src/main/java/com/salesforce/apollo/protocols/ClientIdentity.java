@@ -6,9 +6,6 @@
  */
 package com.salesforce.apollo.protocols;
 
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-
 import com.salesforce.apollo.crypto.Digest;
 
 /**
@@ -16,10 +13,6 @@ import com.salesforce.apollo.crypto.Digest;
  *
  */
 public interface ClientIdentity {
-
-    X509Certificate getCert();
-
-    Certificate[] getCerts();
 
     Digest getFrom();
 

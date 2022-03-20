@@ -61,7 +61,7 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
+    public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests, Node from) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
@@ -69,6 +69,7 @@ public class FfClient implements Fireflies {
         try {
             SayWhat sw = SayWhat.newBuilder()
                                 .setContext(context.toDigeste())
+                                .setFrom(from.getIdentity().identity())
                                 .setNote(note)
                                 .setRing(ring)
                                 .setGossip(digests)

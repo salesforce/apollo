@@ -9,7 +9,7 @@ package com.salesforce.apollo.fireflies;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.X509Certificate;
+import java.net.SocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -36,26 +37,31 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
+import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.fireflies.View.IdentityWrapper;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
+
+import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 
 /**
  * @author hal.hildebrand
  * @since 220
  */
 public class MtlsTest {
-    private static final int                              CARDINALITY;
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final boolean                          LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final int                    CARDINALITY;
+    private static Map<Digest, IdentityWrapper> certs;
+    private static final boolean                LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
 //        ProviderUtils.getProviderBC();
         CARDINALITY = LARGE_TESTS ? 100 : 10;
@@ -92,7 +98,7 @@ public class MtlsTest {
         MetricRegistry registry = new MetricRegistry();
         MetricRegistry node0Registry = new MetricRegistry();
 
-        List<X509Certificate> seeds = new ArrayList<>();
+        List<IdentityWrapper> seeds = new ArrayList<>();
         List<SigningMember> members = certs.values()
                                            .stream()
                                            .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
@@ -106,9 +112,9 @@ public class MtlsTest {
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(members.size())).getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
+            IdentityWrapper identity = certs.get(members.get(entropy.nextInt(members.size())).getId());
+            if (!seeds.contains(identity)) {
+                seeds.add(identity);
             }
         }
 
@@ -120,12 +126,12 @@ public class MtlsTest {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
                                                                 frist.getAndSet(false) ? node0Registry : registry);
-            EndpointProvider ep = View.getStandardEpProvider(node);
+            Function<Member, SocketAddress> resolver = null;
+            EndpointProvider ep = new StandardEpProvider(null, ClientAuth.REQUIRE, CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(context, node, certs.get(node.getId()), CertificateValidator.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, EventValidation.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

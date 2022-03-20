@@ -193,6 +193,11 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
+        public Optional<EstablishmentEvent> getLastEstablishingEvent() {
+            return StereotomyImpl.this.getLastEstablishingEvent(state);
+        }
+
+        @Override
         public Optional<Verifier> getVerifier() {
             return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
         }
@@ -433,19 +438,25 @@ public class StereotomyImpl implements Stereotomy {
         return keyStore.getKey(keyCoords);
     }
 
-    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex, Optional<KeyEvent> lastEstablishmentEvent) {
+    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex,
+                                         Optional<EstablishmentEvent> lastEstablishmentEvent) {
         if (lastEstablishmentEvent.isEmpty()) {
             return Optional.empty();
         }
-        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), keyIndex);
+        KeyCoordinates keyCoords = KeyCoordinates.of(lastEstablishmentEvent.get(), keyIndex);
         return getKeyPair(keyCoords);
+    }
+
+    private Optional<EstablishmentEvent> getLastEstablishingEvent(KeyState state) {
+        return kerl.getKeyEvent(state.getLastEstablishmentEvent()).map(ke -> (EstablishmentEvent) ke);
     }
 
     private Optional<Signer> getSigner(KeyState state) {
         var identifier = state.getIdentifier();
-        PrivateKey[] signers = new PrivateKey[state.getKeys().size()];
+        var signers = new PrivateKey[state.getKeys().size()];
+        var lastEstablishingEvent = getLastEstablishingEvent(state);
         for (int i = 0; i < signers.length; i++) {
-            Optional<KeyPair> keyPair = getKeyPair(state, i, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
+            Optional<KeyPair> keyPair = getKeyPair(state, i, lastEstablishingEvent);
             if (keyPair.isEmpty()) {
                 log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
                          state.getCoordinates(), state.getLastEstablishmentEvent());
@@ -480,13 +491,13 @@ public class StereotomyImpl implements Stereotomy {
     private KeyEvent interaction(KeyState state, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
-        Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        Optional<EstablishmentEvent> lastEstablishmentEvent = getLastEstablishingEvent(state);
         if (lastEstablishmentEvent.isEmpty()) {
             log.warn("missing establishment event: {} can't find: {}", kerl.getKeyEvent(state.getCoordinates()).get(),
                      state.getLastEstablishmentEvent());
             return null;
         }
-        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
+        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of(lastEstablishmentEvent.get(), 0);
 
         Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
@@ -578,7 +589,7 @@ public class StereotomyImpl implements Stereotomy {
             return null;
         }
 
-        var lastEstablishing = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        var lastEstablishing = getLastEstablishingEvent(state);
         if (lastEstablishing.isEmpty()) {
             log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
             return null;

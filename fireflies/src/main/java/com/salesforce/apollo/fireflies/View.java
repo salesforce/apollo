@@ -6,18 +6,13 @@
  */
 package com.salesforce.apollo.fireflies;
 
-import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.PrivateKey;
+import java.net.InetSocketAddress;
 import java.security.Provider;
 import java.security.SecureRandom;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -37,7 +32,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -50,25 +44,24 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
-import com.salesfoce.apollo.fireflies.proto.CertificateGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
-import com.salesfoce.apollo.fireflies.proto.EncodedCertificate;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
+import com.salesfoce.apollo.fireflies.proto.Identity;
+import com.salesfoce.apollo.fireflies.proto.IdentityGossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
-import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
-import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.communications.FfServer;
@@ -77,7 +70,13 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.MemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
+import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
+import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
+import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -128,6 +127,53 @@ public class View {
         }
     }
 
+    public record IdentityWrapper(Digest hash, Identity identity) implements Verifier {
+        public InetSocketAddress endpoint() {
+            return new InetSocketAddress(identity.getHost(), identity.getPort());
+        }
+
+        public long epoch() {
+            return identity.getEpoch();
+        }
+
+        public Digest identifier() {
+            return ((SelfAddressingIdentifier) event().getIdentifier()).getDigest();
+        }
+
+        @Override
+        public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return getVerifier().filtered(threshold, signature, message);
+        }
+
+        @Override
+        public boolean verify(JohnHancock signature, InputStream message) {
+            return getVerifier().verify(signature, message);
+        }
+
+        @Override
+        public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
+            return getVerifier().verify(threshold, signature, message);
+        }
+
+        private Verifier getVerifier() {
+            return new DefaultVerifier(event().getKeys());
+        }
+
+        public EstablishmentEvent event() {
+            return switch (identity.getEventCase()) {
+            case EVENT_NOT_SET -> null;
+            case INCEPTION -> ProtobufEventFactory.toKeyEvent(identity.getInception());
+            case ROTATION -> ProtobufEventFactory.toKeyEvent(identity.getRotation());
+            default -> throw new IllegalArgumentException("Unexpected value: " + identity.getEventCase());
+            };
+        }
+
+        public IdentityWrapper inEpoch(long epoch, DigestAlgorithm digestAlgo) {
+            var next = Identity.newBuilder(identity).setEpoch(epoch).build();
+            return new IdentityWrapper(digestAlgo.digest(next.toByteString()), next);
+        }
+    }
+
     public class Node extends Participant implements SigningMember {
 
         /**
@@ -155,30 +201,16 @@ public class View {
             return mask;
         }
 
-        private volatile PrivateKey privateKey;
         private final SigningMember wrapped;
 
-        public Node(SigningMember wrapped, CertificateWithPrivateKey cert) {
-            super(wrapped, cert.getX509Certificate());
+        public Node(SigningMember wrapped, IdentityWrapper identity) {
+            super(identity);
             this.wrapped = wrapped;
-            this.privateKey = cert.getPrivateKey();
         }
 
         @Override
         public SignatureAlgorithm algorithm() {
             return wrapped.algorithm();
-        }
-
-        @Override
-        public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                    Provider provider, String tlsVersion) {
-            return MtlsServer.forClient(clientAuth, alias, certificate, privateKey, validator);
-        }
-
-        @Override
-        public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                    Provider provider, String tlsVersion) {
-            return MtlsServer.forServer(clientAuth, alias, certificate, privateKey, validator);
         }
 
         public JohnHancock sign(byte[] message) {
@@ -207,6 +239,20 @@ public class View {
                                                          .setSignature(wrapped.sign(accusation.toByteString()).toSig())
                                                          .build(),
                                          digestAlgo);
+        }
+
+        SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
+                             String tlsVersion) {
+            var certWithKey = getCertificateWithPrivateKey();
+            return MtlsServer.forClient(clientAuth, alias, certWithKey.getX509Certificate(),
+                                        certWithKey.getPrivateKey(), validator);
+        }
+
+        SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
+                             String tlsVersion) {
+            var certWithKey = getCertificateWithPrivateKey();
+            return MtlsServer.forServer(clientAuth, alias, certWithKey.getX509Certificate(),
+                                        certWithKey.getPrivateKey(), validator);
         }
 
         /**
@@ -283,31 +329,23 @@ public class View {
                                        .build();
             note = new NoteWrapper(signedNote, digestAlgo);
 
-            encoded.set(EncodedCertificate.newBuilder()
-                                          .setId(getId().toDigeste())
-                                          .setEpoch(note.getEpoch())
-                                          .setHash(certificateHash.toDigeste())
-                                          .setContent(ByteString.copyFrom(derEncodedCertificate))
-                                          .build());
+            identity = identity.inEpoch(newEpoch, digestAlgo);
+        }
+
+        private CertificateWithPrivateKey getCertificateWithPrivateKey() {
+            // TODO Auto-generated method stub
+            return null;
         }
     }
 
     public class Participant implements Member {
 
-        private static final Logger                         log     = LoggerFactory.getLogger(Participant.class);
+        private static final Logger log = LoggerFactory.getLogger(Participant.class);
+
         /**
-         * Certificate
+         * Identity
          */
-        protected volatile X509Certificate                  certificate;
-        /**
-         * The hash of the member's certificate
-         */
-        protected final Digest                              certificateHash;
-        /**
-         * The DER serialized certificate
-         */
-        protected final byte[]                              derEncodedCertificate;
-        protected final AtomicReference<EncodedCertificate> encoded = new AtomicReference<>();
+        protected volatile IdentityWrapper identity;
 
         /**
          * The member's latest note
@@ -318,52 +356,41 @@ public class View {
          */
         protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
 
-        private final Member wrapped;
-
-        public Participant(Member wrapped) {
-            this(wrapped, wrapped.getCertificate());
-        }
-
-        public Participant(Member wrapped, X509Certificate certificate) {
-            assert wrapped != null;
-            this.wrapped = wrapped;
-            this.certificate = certificate;
-            try {
-                this.derEncodedCertificate = getCertificate().getEncoded();
-            } catch (CertificateEncodingException e) {
-                throw new IllegalArgumentException("Cannot encode certifiate for member: " + getId(), e);
-            }
-            this.certificateHash = digestAlgo.digest(derEncodedCertificate);
+        public Participant(IdentityWrapper id) {
+            assert id != null;
+            this.identity = id;
         }
 
         @Override
         public int compareTo(Member o) {
-            return wrapped.compareTo(o);
+            return identity.identifier().compareTo(o.getId());
         }
 
         @Override
         public boolean equals(Object obj) {
-            return wrapped.equals(obj);
+            if (obj instanceof Member m) {
+                return compareTo(m) == 0;
+            }
+            return false;
         }
 
         @Override
         public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return wrapped.filtered(threshold, signature, message);
-        }
-
-        @Override
-        public X509Certificate getCertificate() {
-            return certificate;
+            return identity.filtered(threshold, signature, message);
         }
 
         @Override
         public Digest getId() {
-            return wrapped.getId();
+            return identity.identifier();
+        }
+
+        public IdentityWrapper getIdentity() {
+            return identity;
         }
 
         @Override
         public int hashCode() {
-            return wrapped.hashCode();
+            return identity.identifier().hashCode();
         }
 
         @Override
@@ -373,12 +400,12 @@ public class View {
 
         @Override
         public boolean verify(JohnHancock signature, InputStream message) {
-            return wrapped.verify(signature, message);
+            return identity.verify(signature, message);
         }
 
         @Override
         public boolean verify(SigningThreshold threshold, JohnHancock signature, InputStream message) {
-            return wrapped.verify(threshold, signature, message);
+            return identity.verify(threshold, signature, message);
         }
 
         /**
@@ -427,10 +454,6 @@ public class View {
                                    .collect(Collectors.toList());
         }
 
-        Digest getCertificateHash() {
-            return certificateHash;
-        }
-
         AccusationWrapper getEncodedAccusation(Integer ring) {
             return validAccusations.get(ring);
         }
@@ -441,10 +464,6 @@ public class View {
                             .filter(e -> e != null)
                             .map(e -> e.getWrapped())
                             .collect(Collectors.toList());
-        }
-
-        EncodedCertificate getEncodedCertificate() {
-            return encoded.get();
         }
 
         long getEpoch() {
@@ -474,7 +493,6 @@ public class View {
 
         void reset() {
             note = null;
-            encoded.set(null);
             validAccusations.clear();
             log.trace("Reset {}", getId());
         }
@@ -491,12 +509,7 @@ public class View {
                 }
             }
             note = next;
-            encoded.set(EncodedCertificate.newBuilder()
-                                          .setId(getId().toDigeste())
-                                          .setEpoch(note.getEpoch())
-                                          .setHash(certificateHash.toDigeste())
-                                          .setContent(ByteString.copyFrom(derEncodedCertificate))
-                                          .build());
+            identity = identity.inEpoch(note.getEpoch(), digestAlgo);
             clearAccusations();
         }
     }
@@ -522,7 +535,7 @@ public class View {
          * Perform ye one ring round of gossip. Gossip is performed per ring, requiring
          * 2 * tolerance + 1 gossip rounds across all rings.
          *
-         * @param completion TODO
+         * @param completion
          */
         public void gossip(Runnable completion) {
             if (!started.get()) {
@@ -577,29 +590,33 @@ public class View {
          * newer or not known in this view, as well as updates from this node based on
          * out of date information in the supplied digests.
          *
-         * @param ring        - the index of the gossip ring the inbound member is
-         *                    gossiping from
-         * @param digests     - the inbound gossip
-         * @param from        - verified id of the sending member
-         * @param certificate - the certificate for the sending member
-         * @param note        - the signed note for the sending member
+         * @param ring     - the index of the gossip ring the inbound member is
+         *                 gossiping from
+         * @param digests  - the inbound gossip
+         * @param from     - verified identity of the sending member
+         * @param identity - the identity of the sending member
+         * @param note     - the signed note for the sending member
          * @return Teh response for Moar gossip - updates this node has which the sender
          *         is out of touch with, and digests from the sender that this node
          *         would like updated.
          */
-        public Gossip rumors(int ring, Digests digests, Digest from, X509Certificate certificate, SignedNote note) {
+        public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
-                log.info("invalid ring {} from {}", ring, from);
+                log.warn("invalid ring {} from {}", ring, from);
+                return emptyGossip();
+            }
+            var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
+            if (!from.equals(wrapper.identifier())) {
+                log.warn("invalid identity on ring {} from {}", ring, from);
                 return emptyGossip();
             }
 
             Participant member = context.getMember(from);
             if (member == null) {
-                add(certificate);
+                add(wrapper);
                 member = context.getMember(from);
                 if (member == null) {
-                    log.info("invalid credentials on ring {} from {}", ring, from);
-                    // invalid creds
+                    log.warn("No member on ring {} from {}", ring, from);
                     return emptyGossip();
                 }
             }
@@ -616,15 +633,15 @@ public class View {
             long seed = Utils.secureEntropy().nextLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
-                         .setCertificates(processCertificateDigests(from, BloomFilter.from(digests.getCertificateBff()),
-                                                                    seed, fpr))
+                         .setIdentities(processIdentityDigests(from, BloomFilter.from(digests.getIdentityBff()), seed,
+                                                               fpr))
                          .setNotes(processNoteDigests(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusationDigests(BloomFilter.from(digests.getAccusationBff()), seed,
                                                                   fpr))
                          .build();
         }
 
-        public void start(Duration d, List<X509Certificate> seeds, ScheduledExecutorService scheduler) {
+        public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -634,7 +651,8 @@ public class View {
             recover(node);
             List<Digest> seedList = new ArrayList<>();
             seeds.stream()
-                 .map(cert -> new Participant(certToMember.from(cert)))
+                 .map(identity -> new Participant(new IdentityWrapper(digestAlgo.digest(identity.toByteString()),
+                                                                      identity)))
                  .peek(m -> seedList.add(m.getId()))
                  .forEach(m -> addSeed(m));
 
@@ -679,7 +697,7 @@ public class View {
          * @param from
          */
         public void update(int ring, Update update, Digest from) {
-            processUpdates(update.getCertificatesList(), update.getNotesList(), update.getAccusationsList());
+            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
         }
 
         /**
@@ -701,24 +719,24 @@ public class View {
         }
     }
 
-    private static final CertificateFactory cf;
-
     private static Logger log = LoggerFactory.getLogger(View.class);
-    static {
-        try {
-            cf = CertificateFactory.getInstance("X.509");
-        } catch (CertificateException e) {
-            throw new IllegalStateException("Cannot get X.509 factory", e);
-        }
-    }
 
     public static Gossip emptyGossip() {
         return Gossip.getDefaultInstance();
     }
 
-    public static EndpointProvider getStandardEpProvider(Member node) {
-        return new StandardEpProvider(Member.portsFrom(node.getCertificate()), ClientAuth.REQUIRE,
-                                      CertificateValidator.NONE);
+    public static Identity identityFor(int epoch, InetSocketAddress endpoint, EstablishmentEvent event) {
+        assert endpoint != null;
+        assert event != null;
+        var builder = Identity.newBuilder().setEpoch(epoch).setHost(endpoint.getHostName()).setPort(endpoint.getPort());
+        if (event instanceof InceptionEventImpl incept) {
+            builder.setInception(incept.toInceptionEvent_());
+        } else if (event instanceof RotationEventImpl rot) {
+            builder.setRotation(rot.toRotationEvent_());
+        } else {
+            throw new IllegalStateException("Event is not a valid type: " + event.getClass());
+        }
+        return builder.build();
     }
 
     /**
@@ -736,11 +754,6 @@ public class View {
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
         return mask.cardinality() == toleranceLevel + 1;
     }
-
-    /**
-     * Constructor for Member implementations
-     */
-    private final CertToMember certToMember;
 
     /**
      * Communications with other members
@@ -768,7 +781,7 @@ public class View {
     private final Node node;
 
     /**
-     * Pending rebutal timers by member id
+     * Pending rebutal timers by member identity
      */
     private final ConcurrentMap<Digest, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
 
@@ -787,35 +800,18 @@ public class View {
      */
     private final Service service = new Service();
 
-    private final CertificateValidator validator;
+    private final EventValidation validation;
 
-    public View(Context<Participant> context, SigningMember member, CertificateWithPrivateKey cert,
-                CertificateValidator validator, Router communications, double fpr, DigestAlgorithm digestAlgo,
+    public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
+                EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
                 FireflyMetrics metrics) {
-        this(context, member, cert, new CertToMember() {
-
-            @Override
-            public Member from(X509Certificate cert) {
-                return new MemberImpl(cert);
-            }
-
-            @Override
-            public Digest idOf(X509Certificate cert) {
-                return Member.getMemberIdentifier(cert);
-            }
-        }, validator, communications, fpr, digestAlgo, metrics);
-    }
-
-    public View(Context<Participant> context, SigningMember member, CertificateWithPrivateKey cert,
-                CertToMember certToMember, CertificateValidator validator, Router communications, double fpr,
-                DigestAlgorithm digestAlgo, FireflyMetrics metrics) {
         this.metrics = metrics;
-        this.certToMember = certToMember;
+        this.validation = validation;
         this.fpr = fpr;
         this.digestAlgo = digestAlgo;
-        this.validator = validator;
         this.context = context;
-        this.node = new Node(member, cert);
+        var identity = identityFor(0, endpoint, member.getEvent());
+        this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
                                                             metrics, r),
@@ -838,7 +834,7 @@ public class View {
     /**
      * Start the View
      */
-    public void start(Duration d, List<X509Certificate> seeds, ScheduledExecutorService scheduler) {
+    public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
         service.start(d, seeds, scheduler);
     }
 
@@ -952,20 +948,19 @@ public class View {
     }
 
     /**
-     * Add a new inbound certificate
+     * Add a new inbound identity
      *
-     * @param cert
-     * @return the added member or the real member associated with this certificate
+     * @param identity
+     * @return the added member or the real member associated with this identity
      */
-    Participant add(CertWithHash cert) {
-        Digest id = certToMember.idOf(cert.certificate);
-        Participant member = context.getMember(id);
+    Participant add(IdentityWrapper identity) {
+        Participant member = context.getMember(identity.identifier());
         if (member != null) {
-            update(member, cert);
+            update(member, identity);
             return member;
         }
-        member = new Participant(certToMember.from(cert.certificate), cert.certificate);
-        log.trace("Adding member via cert: {} on: {}", member.getId(), node.getId());
+        member = new Participant(identity);
+        log.trace("Adding member via identity: {} on: {}", member.getId(), node.getId());
         return add(member);
     }
 
@@ -1032,15 +1027,6 @@ public class View {
     }
 
     /**
-     * add an inbound member certificate to the view
-     *
-     * @param cert
-     */
-    void add(X509Certificate cert) {
-        add(new CertWithHash(cert, null, null));
-    }
-
-    /**
      * For bootstrap, add the seed as a fake, non crashed member. The note is signed
      * by this node, and so will be rejected by any other node as invalid. The
      * gossip protocol of Fireflies provides redirects to what actual members
@@ -1061,33 +1047,6 @@ public class View {
                                         .build();
         seed.setNote(new NoteWrapper(seedNote, digestAlgo));
         context.activate(seed);
-    }
-
-    /**
-     * deserialize the DER encoded certificate. Validate it is signed by the pinned
-     * CA certificate trusted.
-     *
-     * @param encoded
-     * @return the deserialized certificate, or null if invalid or not correctly
-     *         signed.
-     */
-    CertWithHash certificateFrom(EncodedCertificate encoded) {
-        X509Certificate certificate;
-        try {
-            certificate = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(encoded.getContent()
-                                                                                                   .toByteArray()));
-        } catch (CertificateException e) {
-            log.warn("Invalid DER encoded certificate on: {}", node.getId(), e);
-            return null;
-        }
-        try {
-            validator.validateClient(new X509Certificate[] { certificate });
-        } catch (CertificateException e) {
-            log.warn("Invalid cert: {} on: {}", certificate.getSubjectX500Principal(), node.getId(), e);
-            return null;
-        }
-
-        return new CertWithHash(certificate, digest(encoded.getHash()), encoded.getContent().toByteArray());
     }
 
     /**
@@ -1125,7 +1084,7 @@ public class View {
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
                       .setNoteBff(getNotesBff(seed, fpr).toBff())
-                      .setCertificateBff(getCertificatesBff(seed, fpr).toBff())
+                      .setIdentityBff(getIdentityBff(seed, fpr).toBff())
                       .build();
     }
 
@@ -1144,9 +1103,9 @@ public class View {
         return bff;
     }
 
-    BloomFilter<Digest> getCertificatesBff(long seed, double p) {
+    BloomFilter<Digest> getIdentityBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
-        context.allMembers().map(m -> m.getCertificateHash()).filter(e -> e != null).forEach(n -> bff.add(n));
+        context.allMembers().map(m -> m.getIdentity()).filter(e -> e != null).forEach(n -> bff.add(n.hash));
         return bff;
     }
 
@@ -1187,7 +1146,7 @@ public class View {
         }
         SignedNote signedNote = n.getWrapped();
         Digests outbound = commonDigests();
-        ListenableFuture<Gossip> futureSailor = link.gossip(context.getId(), signedNote, ring, outbound);
+        ListenableFuture<Gossip> futureSailor = link.gossip(context.getId(), signedNote, ring, outbound, node);
         futureSailor.addListener(() -> {
             Gossip gossip;
             try {
@@ -1241,8 +1200,8 @@ public class View {
             }
 
             if (log.isTraceEnabled()) {
-                log.trace("inbound: redirect: {} updates: certs: {}, notes: {}, accusations: {} on: {}",
-                          gossip.getRedirect(), gossip.getCertificates().getUpdatesCount(),
+                log.trace("inbound: redirect: {} updates: identities: {}, notes: {}, accusations: {} on: {}",
+                          gossip.getRedirect(), gossip.getIdentities().getUpdatesCount(),
                           gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(), node.getId());
             }
             if (gossip.getRedirect()) {
@@ -1304,7 +1263,7 @@ public class View {
     }
 
     boolean isEmpty(Update update) {
-        return update.getAccusationsCount() == 0 && update.getCertificatesCount() == 0 && update.getNotesCount() == 0;
+        return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
     }
 
     /**
@@ -1435,20 +1394,20 @@ public class View {
         return gossip;
     }
 
-    CertificateGossip processCertificateDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
-        log.trace("process cert digests on:{}", node.getId());
-        CertificateGossip.Builder builder = CertificateGossip.newBuilder();
+    IdentityGossip processIdentityDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
+        log.trace("process identity digests on:{}", node.getId());
+        IdentityGossip.Builder builder = IdentityGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
         context.allMembers()
                .filter(m -> m.getId().equals(from))
-               .filter(m -> !bff.contains(m.getCertificateHash()))
-               .map(m -> m.getEncodedCertificate())
-               .filter(cert -> cert != null)
-               .forEach(cert -> builder.addUpdates(cert));
-        builder.setBff(getCertificatesBff(seed, p).toBff());
-        CertificateGossip gossip = builder.build();
-        log.trace("process certificates produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+               .filter(m -> !bff.contains(m.getIdentity().hash))
+               .map(m -> m.getIdentity())
+               .filter(id -> id != null)
+               .forEach(id -> builder.addUpdates(id.identity));
+        builder.setBff(getIdentityBff(seed, p).toBff());
+        IdentityGossip gossip = builder.build();
+        log.trace("process identity produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
         return gossip;
     }
 
@@ -1486,25 +1445,24 @@ public class View {
      * @param gossip
      */
     void processUpdates(Gossip gossip) {
-        processUpdates(gossip.getCertificates().getUpdatesList(), gossip.getNotes().getUpdatesList(),
+        processUpdates(gossip.getIdentities().getUpdatesList(), gossip.getNotes().getUpdatesList(),
                        gossip.getAccusations().getUpdatesList());
     }
 
     /**
      * Process the updates of the supplied juicy gossip.
      *
-     * @param certificatUpdates
-     * @param list
-     * @param list2
+     * @param identities
+     * @param notes
+     * @param accusations
      */
-    void processUpdates(List<EncodedCertificate> certificatUpdates, List<SignedNote> list,
-                        List<SignedAccusation> list2) {
-        certificatUpdates.stream()
-                         .map(cert -> certificateFrom(cert))
-                         .filter(cert -> cert != null)
-                         .forEach(cert -> add(cert));
-        list.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
-        list2.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
+    void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
+        identities.stream()
+                  .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
+                  .filter(id -> validation.apply(id.event()))
+                  .forEach(identity -> add(identity));
+        notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
+        accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
 
         if (node.isAccused()) {
             // Rebut the accusations by creating a new note and clearing the accusations
@@ -1532,7 +1490,7 @@ public class View {
      * @param member
      * @param ring
      * @param successor
-     * @return the Gossip containing the successor's Certificate and Note from this
+     * @return the Gossip containing the successor's Identity and Note from this
      *         view
      */
     Gossip redirectTo(Participant member, int ring, Participant successor) {
@@ -1544,9 +1502,9 @@ public class View {
             return Gossip.getDefaultInstance();
         }
 
-        var encodedCertificate = successor.getEncodedCertificate();
-        if (encodedCertificate == null) {
-            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring,
+        var identity = successor.getIdentity();
+        if (identity == null) {
+            log.debug("Cannot redirect from {} to {} on ring: {} as identity is null on: {}", node, successor, ring,
                       node.getId());
             return Gossip.getDefaultInstance();
         }
@@ -1554,7 +1512,7 @@ public class View {
         log.debug("Redirecting from {} to {} on ring {} on: {}", member, successor, ring, node.getId());
         return Gossip.newBuilder()
                      .setRedirect(true)
-                     .setCertificates(CertificateGossip.newBuilder().addUpdates(encodedCertificate).build())
+                     .setIdentities(IdentityGossip.newBuilder().addUpdates(identity.identity).build())
                      .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
                      .setAccusations(AccusationGossip.newBuilder()
                                                      .addAllUpdates(member.getEncodedAccusations(context.getRingCount())))
@@ -1596,14 +1554,13 @@ public class View {
     }
 
     /**
-     * Update the member with a new certificate
+     * Update the member with a new identity
      *
      * @param member
-     * @param cert
+     * @param identity
      */
-    void update(Participant member, CertWithHash cert) {
+    void update(Participant member, IdentityWrapper identity) {
         // TODO Auto-generated method stub
-
     }
 
     /**
@@ -1617,12 +1574,12 @@ public class View {
         Update.Builder builder = Update.newBuilder();
 
         // certificates
-        BloomFilter<Digest> certBff = BloomFilter.from(gossip.getCertificates().getBff());
+        BloomFilter<Digest> identityBff = BloomFilter.from(gossip.getIdentities().getBff());
         context.allMembers()
-               .filter(m -> !certBff.contains((m.getCertificateHash())))
-               .map(m -> m.getEncodedCertificate())
+               .filter(m -> !identityBff.contains((m.getIdentity().hash)))
+               .map(m -> m.getIdentity())
                .filter(ec -> ec != null)
-               .forEach(cert -> builder.addCertificates(cert));
+               .forEach(id -> builder.addIdentities(id.identity));
 
         // notes
         BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
@@ -1653,7 +1610,7 @@ public class View {
     }
 
     private void redirect(Participant member, Gossip gossip, int ring) {
-        if (gossip.getCertificates().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
+        if (gossip.getIdentities().getUpdatesCount() != 1 && gossip.getNotes().getUpdatesCount() != 1) {
             log.warn("Redirect response from {} on ring {} did not contain redirect member certificate and note on: {}",
                      member.getId(), ring, node.getId());
             return;
@@ -1669,16 +1626,22 @@ public class View {
                              .orElse(-1);
             node.nextNote(max + 1);
         }
-        CertWithHash certificate = certificateFrom(gossip.getCertificates().getUpdates(0));
-        if (certificate != null) {
-            add(certificate);
-            SignedNote signed = gossip.getNotes().getUpdates(0);
-            NoteWrapper note = new NoteWrapper(signed, digestAlgo);
-            add(note);
-            gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
-            log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring, node.getId());
+        if (gossip.getIdentities().getUpdatesCount() == 1) {
+            var id = gossip.getIdentities().getUpdates(0);
+            IdentityWrapper identity = new IdentityWrapper(digestAlgo.digest(id.toByteString()), id);
+            if (validation.apply(identity.event())) {
+                add(identity);
+                SignedNote signed = gossip.getNotes().getUpdates(0);
+                NoteWrapper note = new NoteWrapper(signed, digestAlgo);
+                add(note);
+                gossip.getAccusations().getUpdatesList().forEach(s -> add(new AccusationWrapper(s, digestAlgo)));
+                log.debug("Redirected from {} to {} on ring {} on: {}", member.getId(), note.getId(), ring,
+                          node.getId());
+            } else {
+                log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
+            }
         } else {
-            log.warn("Redirect certificate from {} on ring {} is null on: {}", member.getId(), ring, node.getId());
+            log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
         }
     }
 }

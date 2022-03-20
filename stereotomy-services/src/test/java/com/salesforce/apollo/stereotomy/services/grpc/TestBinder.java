@@ -8,8 +8,6 @@ package com.salesforce.apollo.stereotomy.services.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ForkJoinPool;
@@ -84,20 +82,9 @@ public class TestBinder {
         };
 
         var ci = new ClientIdentity() {
-
             @Override
             public Digest getFrom() {
                 return DigestAlgorithm.DEFAULT.getOrigin();
-            }
-
-            @Override
-            public Certificate[] getCerts() {
-                return null;
-            }
-
-            @Override
-            public X509Certificate getCert() {
-                return null;
             }
         };
         serverRouter.create(serverMember, context, protoService, r -> new BinderServer(ci, null, r), null, null);
