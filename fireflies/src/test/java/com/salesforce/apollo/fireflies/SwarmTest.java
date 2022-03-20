@@ -9,7 +9,8 @@ package com.salesforce.apollo.fireflies;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.X509Certificate;
+import java.net.InetSocketAddress;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,20 +30,23 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.salesfoce.apollo.fireflies.proto.Identity;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -51,24 +55,31 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final int                              CARDINALITY = 100;
+    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static final int                                                   CARDINALITY = 100;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert -> cert));
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
+                                            new SecureRandom());
+        identities = IntStream.range(0, CARDINALITY)
+                              .parallel()
+                              .mapToObj(i -> stereotomy.newIdentifier().get())
+                              .map(ci -> {
+                                  @SuppressWarnings("unchecked")
+                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                  return casted;
+                              })
+                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                        controlled -> controlled));
     }
 
-    private Map<Digest, SigningMember> members;
-    private List<View>                 views;
-    private List<Router>               communications = new ArrayList<>();
-    private List<X509Certificate>      seeds;
-    private MetricRegistry             registry;
-    private MetricRegistry             node0Registry;
+    private Map<Digest, ControlledIdentifierMember> members;
+    private List<View>                              views;
+    private List<Router>                            communications = new ArrayList<>();
+    private List<Identity>                          seeds;
+    private MetricRegistry                          registry;
+    private MetricRegistry                          node0Registry;
 
     @AfterEach
     public void after() {
@@ -233,21 +244,17 @@ public class SwarmTest {
         node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
-        members = certs.values()
-                       .stream()
-                       .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                          cert.getX509Certificate(), cert.getPrivateKey(),
-                                                          new SignerImpl(cert.getPrivateKey()),
-                                                          cert.getX509Certificate().getPublicKey()))
-                       .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        assertEquals(certs.size(), members.size());
+        members = identities.values()
+                            .stream()
+                            .map(identity -> new ControlledIdentifierMember(identity))
+                            .collect(Collectors.toMap(m -> m.getId(), m -> m));
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         var randomized = members.values().stream().collect(Collectors.toList());
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            CertificateWithPrivateKey cert = certs.get(randomized.get(entropy.nextInt(24)).getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
+            var id = View.identityFor(0, new InetSocketAddress(0), randomized.get(entropy.nextInt(24)).getEvent());
+            if (!seeds.contains(id)) {
+                seeds.add(id);
             }
         }
 
@@ -266,7 +273,7 @@ public class SwarmTest {
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            return new View(context, node, certs.get(node.getId()), CertificateValidator.NONE, comms, 0.0125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
                             DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
