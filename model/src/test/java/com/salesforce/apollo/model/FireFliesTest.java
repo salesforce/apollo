@@ -35,10 +35,8 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -128,7 +126,6 @@ public class FireFliesTest {
             localRouter.start();
         });
 
-        var ffParams = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
         var certToMember = new View.CertToMember() {
 
             @Override
@@ -148,9 +145,8 @@ public class FireFliesTest {
             var cert = m.provision(new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
                                    SignatureAlgorithm.DEFAULT)
                         .get();
-            var node = new Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, CertificateValidator.NONE,
-                                  routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
+            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), cert, certToMember,
+                                  CertificateValidator.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
         });
     }
 

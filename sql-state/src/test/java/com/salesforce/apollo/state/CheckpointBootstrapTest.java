@@ -60,7 +60,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        initial.get(30, TimeUnit.SECONDS);
 
         for (int i = 0; i < 1; i++) {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {

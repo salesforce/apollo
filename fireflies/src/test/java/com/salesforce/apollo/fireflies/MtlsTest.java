@@ -38,12 +38,13 @@ import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.ProviderUtils;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
@@ -55,11 +56,9 @@ public class MtlsTest {
     private static final int                              CARDINALITY;
     private static Map<Digest, CertificateWithPrivateKey> certs;
     private static final boolean                          LARGE_TESTS = Boolean.getBoolean("large_tests");
-    private static final FirefliesParameters              parameters;
     static {
-        ProviderUtils.getProviderBC();
+//        ProviderUtils.getProviderBC();
         CARDINALITY = LARGE_TESTS ? 100 : 10;
-        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
     }
 
     @BeforeAll
@@ -94,15 +93,14 @@ public class MtlsTest {
         MetricRegistry node0Registry = new MetricRegistry();
 
         List<X509Certificate> seeds = new ArrayList<>();
-        List<Node> members = certs.values()
-                                  .stream()
-                                  .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
                                                                               cert.getPrivateKey(),
                                                                               new SignerImpl(cert.getPrivateKey()),
-                                                                              cert.getX509Certificate().getPublicKey()),
-                                                        cert, parameters))
-                                  .collect(Collectors.toList());
+                                                                              cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
 
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
@@ -126,7 +124,8 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             MtlsRouter comms = new MtlsRouter(builder, ep, node, Executors.newFixedThreadPool(3));
             communications.add(comms);
-            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, certs.get(node.getId()), CertificateValidator.NONE, comms, 0.0125,
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
         long then = System.currentTimeMillis();

@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -39,8 +38,10 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
@@ -51,12 +52,7 @@ import com.salesforce.apollo.utils.Utils;
 public class SwarmTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters              parameters;
     private static final int                              CARDINALITY = 100;
-
-    static {
-        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
-    }
 
     @BeforeAll
     public static void beforeClass() {
@@ -67,12 +63,12 @@ public class SwarmTest {
                                                    cert -> cert));
     }
 
-    private List<Node>            members;
-    private List<View>            views;
-    private List<Router>          communications = new ArrayList<>();
-    private List<X509Certificate> seeds;
-    private MetricRegistry        registry;
-    private MetricRegistry        node0Registry;
+    private Map<Digest, SigningMember> members;
+    private List<View>                 views;
+    private List<Router>               communications = new ArrayList<>();
+    private List<X509Certificate>      seeds;
+    private MetricRegistry             registry;
+    private MetricRegistry             node0Registry;
 
     @AfterEach
     public void after() {
@@ -150,8 +146,13 @@ public class SwarmTest {
 
         for (View view : views) {
             for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final Collection<Participant> membership = view.getContext().ring(ring).members();
-                for (Node node : members) {
+                final var membership = view.getContext()
+                                           .ring(ring)
+                                           .members()
+                                           .stream()
+                                           .map(p -> members.get(p.getId()))
+                                           .toList();
+                for (Member node : members.values()) {
                     assertTrue(membership.contains(node));
                 }
             }
@@ -202,8 +203,13 @@ public class SwarmTest {
 
         for (View view : views) {
             for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
-                final Collection<Participant> membership = view.getContext().ring(ring).members();
-                for (Node node : members) {
+                final var membership = view.getContext()
+                                           .ring(ring)
+                                           .members()
+                                           .stream()
+                                           .map(p -> members.get(p.getId()))
+                                           .toList();
+                for (Member node : members.values()) {
                     assertTrue(membership.contains(node));
                 }
             }
@@ -225,17 +231,17 @@ public class SwarmTest {
         seeds = new ArrayList<>();
         members = certs.values()
                        .stream()
-                       .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                                   new SignerImpl(cert.getPrivateKey()),
-                                                                   cert.getX509Certificate().getPublicKey()),
-                                             cert, parameters))
-                       .collect(Collectors.toList());
+                       .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+                                                          cert.getX509Certificate(), cert.getPrivateKey(),
+                                                          new SignerImpl(cert.getPrivateKey()),
+                                                          cert.getX509Certificate().getPublicKey()))
+                       .collect(Collectors.toMap(m -> m.getId(), m -> m));
         assertEquals(certs.size(), members.size());
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
+        var randomized = members.values().stream().collect(Collectors.toList());
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
+            CertificateWithPrivateKey cert = certs.get(randomized.get(entropy.nextInt(24)).getId());
             if (!seeds.contains(cert.getX509Certificate())) {
                 seeds.add(cert.getX509Certificate());
             }
@@ -243,7 +249,7 @@ public class SwarmTest {
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
-        views = members.stream().map(node -> {
+        views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
                                                                            frist.getAndSet(false) ? node0Registry
@@ -256,8 +262,8 @@ public class SwarmTest {
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT,
-                            fireflyMetricsImpl);
+            return new View(context, node, certs.get(node.getId()), CertificateValidator.NONE, comms, 0.0125,
+                            DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

@@ -29,7 +29,7 @@ public class ProviderUtils {
         PROVIDER_JSSE = Security.getProvider(PROVIDER_NAME_BCJSSE);
     }
 
-    public static Provider getProviderBC() {
+    public static Provider getProviderBC() { 
         if (!initialized.get()) {
             throw new IllegalStateException("Provider has not been initialized");
         }

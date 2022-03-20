@@ -23,8 +23,8 @@ import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunicatio
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
+import com.salesforce.apollo.fireflies.View.Node;
+import com.salesforce.apollo.fireflies.View.Participant;
 
 /**
  * @author hal.hildebrand

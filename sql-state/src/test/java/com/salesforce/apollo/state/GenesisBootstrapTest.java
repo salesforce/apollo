@@ -51,12 +51,11 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
-        Thread.sleep(2_000);
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
-        initial.get(10, TimeUnit.SECONDS);
+        initial.get(30, TimeUnit.SECONDS);
         var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
 
         var mutator = txneer.getValue().getMutator(choams.get(txneer.getKey().getId()).getSession());

@@ -15,7 +15,7 @@ import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**

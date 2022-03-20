@@ -25,6 +25,9 @@ public class NodeKeyManagerFactorySpi extends KeyManagerFactorySpi {
     private final PrivateKey      privateKey;
 
     public NodeKeyManagerFactorySpi(String alias, X509Certificate certificate, PrivateKey privateKey) {
+        assert alias != null;
+        assert certificate != null;
+        assert privateKey != null;
         this.alias = alias;
         this.certificate = certificate;
         this.privateKey = privateKey;

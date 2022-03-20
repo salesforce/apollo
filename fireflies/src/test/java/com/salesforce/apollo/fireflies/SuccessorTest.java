@@ -38,10 +38,12 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
@@ -52,12 +54,7 @@ import com.salesforce.apollo.utils.Utils;
 public class SuccessorTest {
 
     private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters              parameters;
     private static final int                              CARDINALITY = 10;
-
-    static {
-        parameters = FirefliesParameters.newBuilder().setCardinality(CARDINALITY).build();
-    }
 
     @BeforeAll
     public static void beforeClass() {
@@ -83,15 +80,14 @@ public class SuccessorTest {
         FireflyMetrics metrics = new FireflyMetricsImpl(DigestAlgorithm.DEFAULT.getOrigin(), registry);
 
         List<X509Certificate> seeds = new ArrayList<>();
-        List<Node> members = certs.values()
-                                  .stream()
-                                  .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
+        List<SigningMember> members = certs.values()
+                                           .stream()
+                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
                                                                               cert.getX509Certificate(),
                                                                               cert.getPrivateKey(),
                                                                               new SignerImpl(cert.getPrivateKey()),
-                                                                              cert.getX509Certificate().getPublicKey()),
-                                                        cert, parameters))
-                                  .collect(Collectors.toList());
+                                                                              cert.getX509Certificate().getPublicKey()))
+                                           .collect(Collectors.toList());
         assertEquals(certs.size(), members.size());
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
@@ -109,12 +105,13 @@ public class SuccessorTest {
                                                .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
         ForkJoinPool executor = new ForkJoinPool();
         final var prefix = UUID.randomUUID().toString();
-        Map<Participant, View> views = members.stream().map(node -> {
+        Map<Member, View> views = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(prefix, node, builder, executor);
             communications.add(comms);
             comms.start();
             Context<Participant> context = ctxBuilder.build();
-            return new View(context, node, CertificateValidator.NONE, comms, 0.0125, DigestAlgorithm.DEFAULT, metrics);
+            return new View(context, node, certs.get(node.getId()), CertificateValidator.NONE, comms, 0.0125,
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toMap(v -> v.getNode(), v -> v));
 
         views.values().forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));

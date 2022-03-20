@@ -20,6 +20,9 @@ public class Keys extends X509ExtendedKeyManager {
     private final PrivateKey      privateKey;
 
     public Keys(String alias, X509Certificate certificate, PrivateKey privateKey) {
+        assert privateKey != null;
+        assert certificate != null;
+        assert alias != null;
         this.alias = alias;
         this.certificate = certificate;
         this.privateKey = privateKey;

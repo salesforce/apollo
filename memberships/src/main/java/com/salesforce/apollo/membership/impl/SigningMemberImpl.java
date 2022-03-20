@@ -34,8 +34,8 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
  */
 public class SigningMemberImpl extends MemberImpl implements SigningMember {
 
-    private PrivateKey certKey;
-    private Signer     signer;
+    private final PrivateKey certKey;
+    private final Signer     signer;
 
     /**
      * @param member
@@ -47,6 +47,7 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
 
     public SigningMemberImpl(Digest id, X509Certificate cert, PrivateKey certKey, Signer signer, PublicKey signerKey) {
         super(id, cert, signerKey);
+        this.certKey = certKey;
         this.signer = signer;
     }
 

@@ -79,6 +79,7 @@ public class MtlsServer implements ClientIdentity {
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
+                                                     .sslContextProvider(PROVIDER_BCJSSE)
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                                                            privateKey,
                                                                                            PROVIDER_BCJSSE));
