@@ -23,7 +23,6 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
@@ -830,20 +829,6 @@ public class View {
     }
 
     /**
-     * @return the collection of all failed members
-     */
-    public Collection<Participant> getFailed() {
-        return context.getOffline();
-    }
-
-    /**
-     * @return the collection of all live members
-     */
-    public Collection<Participant> getLive() {
-        return context.getActive();
-    }
-
-    /**
      * @return The member that represents this View
      */
     public Node getNode() {
@@ -1496,8 +1481,7 @@ public class View {
     }
 
     /**
-     * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
-     * state change driving the view.
+     * Process the updates of the supplied juicy gossip.
      *
      * @param gossip
      */
@@ -1507,8 +1491,7 @@ public class View {
     }
 
     /**
-     * Process the updates of the supplied juicy gossip. This is the Jesus Nut of
-     * state change driving the view.
+     * Process the updates of the supplied juicy gossip.
      *
      * @param certificatUpdates
      * @param list

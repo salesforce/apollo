@@ -97,10 +97,12 @@ public class SwarmTest {
             testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-                return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+                return testViews.stream()
+                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .count() == 0;
             }), " size: " + testViews.size() + " views: "
             + testViews.stream()
-                       .filter(e -> e.getLive().size() != testViews.size())
+                       .filter(e -> e.getContext().getActive().size() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getContext().getId(),
                                                v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
                        .toList());
@@ -122,12 +124,14 @@ public class SwarmTest {
             testViews.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
-                return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+                return testViews.stream()
+                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .count() == 0;
             });
 
             assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
             + testViews.stream()
-                       .filter(e -> e.getLive().size() != testViews.size())
+                       .filter(e -> e.getContext().getActive().size() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getContext().getId(),
                                                v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
                        .toList());
@@ -173,7 +177,7 @@ public class SwarmTest {
         views.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
+            return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;
         }));
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -188,7 +192,7 @@ public class SwarmTest {
         }
 
         List<View> invalid = views.stream()
-                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
                                   .filter(view -> view != null)
                                   .collect(Collectors.toList());
         assertEquals(0, invalid.size());

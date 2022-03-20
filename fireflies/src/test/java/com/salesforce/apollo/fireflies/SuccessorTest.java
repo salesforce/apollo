@@ -120,7 +120,7 @@ public class SuccessorTest {
             Utils.waitForCondition(15_000, 1_000, () -> {
                 return views.values()
                             .stream()
-                            .map(view -> view.getLive().size() != views.size() ? view : null)
+                            .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
                             .filter(view -> view != null)
                             .count() == 0;
             });
