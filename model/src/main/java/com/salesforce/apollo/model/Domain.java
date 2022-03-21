@@ -49,7 +49,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.model.delphinius.ShardedOracle;
 import com.salesforce.apollo.model.stereotomy.ShardedKERL;
 import com.salesforce.apollo.state.Mutator;
@@ -183,8 +183,8 @@ abstract public class Domain {
         return new ProtoKERLAdapter(commonKERL);
     }
 
-    public SigningMember getMember() {
-        return params.member();
+    public ControlledIdentifierMember getMember() {
+        return (ControlledIdentifierMember) params.member();
     }
 
     public void start() {

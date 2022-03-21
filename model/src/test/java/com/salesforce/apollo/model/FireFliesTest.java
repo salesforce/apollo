@@ -9,7 +9,6 @@ package com.salesforce.apollo.model;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,21 +33,19 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -125,28 +122,9 @@ public class FireFliesTest {
             routers.put(node, localRouter);
             localRouter.start();
         });
-
-        var certToMember = new View.CertToMember() {
-
-            @Override
-            public Member from(X509Certificate cert) {
-                var decoded = Stereotomy.decode(cert).get();
-                return new MemberImpl(((SelfAddressingIdentifier) decoded.identifier()).getDigest(), cert,
-                                      cert.getPublicKey());
-            }
-
-            @Override
-            public Digest idOf(X509Certificate cert) {
-                var decoded = Stereotomy.decode(cert).get();
-                return ((SelfAddressingIdentifier) decoded.identifier()).getDigest();
-            }
-        };
         domains.forEach(m -> {
-            var cert = m.provision(new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
-                                   SignatureAlgorithm.DEFAULT)
-                        .get();
-            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), cert, certToMember,
-                                  CertificateValidator.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
+            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), new InetSocketAddress(0),
+                                  EventValidation.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
         });
     }
 
@@ -156,7 +134,11 @@ public class FireFliesTest {
         domains.forEach(n -> n.start());
         views.values()
              .forEach(v -> v.start(Duration.ofMillis(10),
-                                   domains.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
+                                   domains.stream()
+                                          .map(n -> View.identityFor(0, new InetSocketAddress(0),
+                                                                     n.getMember().getEvent()))
+                                          .toList(),
+                                   scheduler));
         Thread.sleep(10_000);
     }
 
