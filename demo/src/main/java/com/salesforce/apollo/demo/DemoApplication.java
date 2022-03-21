@@ -8,7 +8,7 @@ package com.salesforce.apollo.demo;
 
 import java.time.Duration;
 
-import com.salesforce.apollo.model.Node;
+import com.salesforce.apollo.model.Domain;
 
 import io.dropwizard.Application;
 import io.dropwizard.setup.Environment;
@@ -20,7 +20,7 @@ import io.dropwizard.setup.Environment;
 public class DemoApplication extends Application<DemoConfiguration> {
 
     @SuppressWarnings("unused")
-    private Node node;
+    private Domain node;
 
     @Override
     public void run(DemoConfiguration configuration, Environment environment) throws Exception {

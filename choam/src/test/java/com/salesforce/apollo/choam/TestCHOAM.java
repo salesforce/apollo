@@ -18,8 +18,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,22 +59,24 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 5;
-    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final int                      CARDINALITY = 5;
+    private static final ExecutorService          exec        = Executors.newCachedThreadPool();
+    private static final boolean                  LARGE_TESTS = Boolean.getBoolean("large_tests");
+    private static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
 
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
     }
-
     protected CompletableFuture<Boolean>   checkpointOccurred;
     private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
     private List<SigningMember>            members;
     private MetricRegistry                 registry;
     private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;
+    private Map<Digest, List<Transaction>> transactions;;
 
     @AfterEach
     public void after() throws Exception {
@@ -91,7 +94,7 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
         transactions = new ConcurrentHashMap<>();
@@ -99,7 +102,6 @@ public class TestCHOAM {
         Random entropy = new Random();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        var exec = Router.createFjPool();
         var params = Parameters.newBuilder()
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
@@ -111,15 +113,8 @@ public class TestCHOAM {
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
-                               .setTxnPermits(100)
                                .setCheckpointBlockSize(1);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
-        params.getClientBackoff()
-              .setBase(10)
-              .setCap(100)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
         checkpointOccurred = new CompletableFuture<>();
@@ -131,17 +126,11 @@ public class TestCHOAM {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger execC = new AtomicInteger();
             var localRouter = new LocalRouter(prefix, m,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+                                              exec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -181,7 +170,6 @@ public class TestCHOAM {
     public void regenerateGenesis() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
-        Thread.sleep(2_000);
         assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS));
     }
 
@@ -190,22 +178,17 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final Duration timeout = Duration.ofSeconds(2);
+        final var timeout = Duration.ofSeconds(2);
 
-        var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 5_000 : 50;
-        final int max = LARGE_TESTS ? 100 : 10;
-        final CountDownLatch countdown = new CountDownLatch(clientCount * choams.size());
-        final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
+        final var transactioneers = new ArrayList<Transactioneer>();
+        final var clientCount = LARGE_TESTS ? 5_000 : 50;
+        final var max = LARGE_TESTS ? 100 : 10;
+        final var countdown = new CountDownLatch(clientCount * choams.size());
         for (int i = 0; i < clientCount; i++) {
-            choams.values()
-                  .stream()
-                  .map(c -> new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown))
-                  .forEach(e -> transactioneers.add(e));
+            choams.values().stream().map(c -> {
+                return new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown, txExecutor);
+            }).forEach(e -> transactioneers.add(e));
         }
-
-        Thread.sleep(2_000);
 
         transactioneers.stream().forEach(e -> e.start());
         try {
@@ -225,22 +208,21 @@ public class TestCHOAM {
 
     @Test
     public void submitTxn() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
         var session = choams.get(members.get(0).getId()).getSession();
-        Thread.sleep(2_000);
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                           .build();
-        CompletableFuture<?> result = session.submit(ForkJoinPool.commonPool(), tx, Duration.ofSeconds(3), scheduler);
-        result.get(60, TimeUnit.SECONDS);
+        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(6), txScheduler);
+        result.get(90, TimeUnit.SECONDS);
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
         return ul -> {
+            var file = checkpointer.apply(ul);
             checkpointOccurred.complete(true);
-            return checkpointer.apply(ul);
+            return file;
         };
     }
 }

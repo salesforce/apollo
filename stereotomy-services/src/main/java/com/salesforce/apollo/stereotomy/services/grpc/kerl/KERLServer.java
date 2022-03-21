@@ -4,19 +4,17 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services.grpc;
+package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.codahale.metrics.Timer.Context;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -27,6 +25,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 import io.grpc.stub.StreamObserver;
@@ -300,75 +299,6 @@ public class KERLServer extends KERLServiceImplBase {
             }
             responseObserver.onNext(state);
             responseObserver.onCompleted();
-        });
-    }
-
-    @Override
-    public void publish(KERLContext request, StreamObserver<Empty> responseObserver) {
-        Context timer = metrics != null ? metrics.publishKERLService().time() : null;
-        if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundPublishKERLRequest().mark(request.getSerializedSize());
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var result = s.publish(request.getKerl());
-            result.whenComplete((b, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
-        });
-    }
-
-    @Override
-    public void publishAttachments(AttachmentsContext request, StreamObserver<Empty> responseObserver) {
-        Context timer = metrics != null ? metrics.publishAttachmentsService().time() : null;
-        if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundPublishAttachmentsRequest().mark(request.getSerializedSize());
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            CompletableFuture<Void> result = s.publishAttachments(request.getAttachmentsList());
-            result.whenComplete((ks, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
-        });
-    }
-
-    @Override
-    public void publishEvents(KeyEventsContext request, StreamObserver<Empty> responseObserver) {
-        Context timer = metrics != null ? metrics.publishEventsService().time() : null;
-        if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundPublishEventsRequest().mark(request.getSerializedSize());
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            var result = s.publishEvents(request.getKeyEventList());
-            result.whenComplete((ks, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    responseObserver.onNext(Empty.getDefaultInstance());
-                    responseObserver.onCompleted();
-                }
-            });
         });
     }
 }

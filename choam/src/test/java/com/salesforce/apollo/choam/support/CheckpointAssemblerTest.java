@@ -110,7 +110,7 @@ public class CheckpointAssemblerTest {
             gos.close();
         }
 
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin());
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         List<SigningMember> members = certs.values()
                                            .stream()
                                            .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),

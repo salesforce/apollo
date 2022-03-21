@@ -71,14 +71,6 @@ public class MemberImpl implements Member {
     }
 
     /**
-     * @return the identifying certificate of the member
-     */
-    @Override
-    public X509Certificate getCertificate() {
-        return certificate;
-    }
-
-    /**
      * @return the unique id of this member
      */
     @Override

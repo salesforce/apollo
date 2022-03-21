@@ -38,6 +38,10 @@ import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.DelegatedKERL;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLClient;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
+import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLService;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;

@@ -22,7 +22,3 @@ __Current Functionality__
      * provided by Stereotomy and the crypto utils
 * Handling of the certificate authority certificate rotation
     * again provided by Stereotomy key rotation facilities
-
-## API
-
-Fireflies exposes the View, Member and Node as the fundamental abstractions.  The Fireflies rings are represented by the Ring abstraction and each view provides a access to the configured Rings and all the traversal mechanisms provided by such.  Several abstractions are provided to allow clients of the Apollo Fireflies substrate to "hook" into lifecycle and important transport events.  Clients making use of the FF substrate are designed to be driven by the round of the Fireflies Node for the Java process.  Given that much of FF is dependent on the 2 * T + 1 rings, this allows client layers to synchronize work with the underlying pulse of the system.  As the reliable message flooding is a value add of Apollo, the FF provides a simple channel oriented reliable broadcast API for both flooding - i.e. sending - and receiving messages within the group.

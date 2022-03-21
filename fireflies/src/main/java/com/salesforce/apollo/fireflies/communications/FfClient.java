@@ -14,7 +14,7 @@ import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Null;
+import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -23,8 +23,8 @@ import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunicatio
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
-import com.salesforce.apollo.fireflies.Node;
-import com.salesforce.apollo.fireflies.Participant;
+import com.salesforce.apollo.fireflies.View.Node;
+import com.salesforce.apollo.fireflies.View.Participant;
 
 /**
  * @author hal.hildebrand
@@ -61,7 +61,7 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
+    public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests, Node from) {
         Context timer = null;
         if (metrics != null) {
             timer = metrics.outboundGossipTimer().time();
@@ -69,6 +69,7 @@ public class FfClient implements Fireflies {
         try {
             SayWhat sw = SayWhat.newBuilder()
                                 .setContext(context.toDigeste())
+                                .setFrom(from.getIdentity().identity())
                                 .setNote(note)
                                 .setRing(ring)
                                 .setGossip(digests)
@@ -108,7 +109,7 @@ public class FfClient implements Fireflies {
             timer = metrics.outboundPingRate().time();
         }
         try {
-            client.ping(Null.newBuilder().setContext(context.toDigeste()).build());
+            client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);
         } finally {

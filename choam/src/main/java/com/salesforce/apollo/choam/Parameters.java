@@ -53,7 +53,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                          Digest genesisViewId, int checkpointBlockSize, DigestAlgorithm digestAlgorithm,
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
                          int regenerationCycles, Duration synchronizeTimeout, BootstrapParameters bootstrap,
-                         ProducerParameters producer, int txnPermits, ExponentialBackoff.Builder<Status> clientBackoff,
+                         ProducerParameters producer, ExponentialBackoff.Builder<Status> clientBackoff,
                          MvStoreBuilder mvBuilder) {
 
     public int toleranceLevel() {
@@ -405,7 +405,13 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private BootstrapParameters                    bootstrap             = BootstrapParameters.newBuilder().build();
         private int                                    checkpointBlockSize   = 8192;
         private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
-                                                                                                 .retryIf(s -> s.isOk());
+                                                                                                 .retryIf(s -> s.isOk())
+                                                                                                 .setBase(10)
+                                                                                                 .setCap(100)
+                                                                                                 .setInfiniteAttempts()
+                                                                                                 .setJitter()
+                                                                                                 .setExceptionHandler(t -> System.out.println(t.getClass()
+                                                                                                                                               .getSimpleName()));;
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Digest                                 genesisViewId;
@@ -418,14 +424,13 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private int                                    synchronizationCycles = 10;
         private Duration                               synchronizeDuration   = Duration.ofMillis(500);
         private Duration                               synchronizeTimeout    = Duration.ofSeconds(30);
-        private int                                    txnPermits            = 3_000;
         private SignatureAlgorithm                     viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combineParams, gossipDuration, maxCheckpointSegments, submitTimeout,
                                   genesisViewId, checkpointBlockSize, digestAlgorithm, viewSigAlgorithm,
                                   synchronizationCycles, synchronizeDuration, regenerationCycles, synchronizeTimeout,
-                                  bootstrap, producer, txnPermits, clientBackoff, mvBuilder);
+                                  bootstrap, producer, clientBackoff, mvBuilder);
         }
 
         public Builder clone() {
@@ -494,10 +499,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public Duration getTransactonTimeout() {
             return submitTimeout;
-        }
-
-        public int getTxnPermits() {
-            return txnPermits;
         }
 
         public SignatureAlgorithm getViewSigAlgorithm() {
@@ -576,11 +577,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
-            return this;
-        }
-
-        public Builder setTxnPermits(int txnPermits) {
-            this.txnPermits = txnPermits;
             return this;
         }
 

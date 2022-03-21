@@ -76,16 +76,16 @@ public class ViewAssemblyTest {
                                         .map(cpk -> new SigningMemberImpl(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new ContextImpl<>(viewId, 0.1, members.size(), 3);
+        Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
         final var executor = Executors.newCachedThreadPool();
         Parameters.Builder params = Parameters.newBuilder()
                                               .setProducer(ProducerParameters.newBuilder()
-                                                                             .setGossipDuration(Duration.ofMillis(100))
+                                                                             .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
-                                              .setGossipDuration(Duration.ofMillis(100));
+                                              .setGossipDuration(Duration.ofMillis(10));
         List<Map<Member, Join>> published = new CopyOnWriteArrayList<>();
 
         Map<Member, ViewAssembly> recons = new HashMap<>();
@@ -155,7 +155,6 @@ public class ViewAssemblyTest {
                 @Override
                 public void failed() {
                     super.failed();
-                    complete.countDown();
                 }
             });
         });

@@ -40,7 +40,6 @@ import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
 import com.salesforce.apollo.stereotomy.event.AttachmentEvent.AttachmentImpl;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.EventFactory;
@@ -194,6 +193,11 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
+        public Optional<EstablishmentEvent> getLastEstablishingEvent() {
+            return StereotomyImpl.this.getLastEstablishingEvent(state);
+        }
+
+        @Override
         public Optional<Verifier> getVerifier() {
             return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
         }
@@ -277,9 +281,9 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<CertificateWithPrivateKey> provision(Attachment validations, InetSocketAddress endpoint,
-                                                             Instant validFrom, Duration valid,
-                                                             List<CertExtension> extensions, SignatureAlgorithm algo) {
+        public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom,
+                                                             Duration valid, List<CertExtension> extensions,
+                                                             SignatureAlgorithm algo) {
 
             var coords = getState().getLastEstablishmentEvent();
             var lastEstablishing = kerl.getKeyEvent(coords);
@@ -287,7 +291,6 @@ public class StereotomyImpl implements Stereotomy {
                 log.warn("Cannot get last establishing event for: {}", getIdentifier());
                 return Optional.empty();
             }
-            var ewa = new EventWithAttachments(lastEstablishing.get(), validations);
             var signer = getSigner();
             if (signer.isEmpty()) {
                 log.warn("Cannot get signer for: {}", getIdentifier());
@@ -299,7 +302,8 @@ public class StereotomyImpl implements Stereotomy {
             var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
             var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", endpoint.getHostName(),
-                                                        endpoint.getPort(), ewa.toBase64(), qb64(signature)));
+                                                        endpoint.getPort(), qb64(state.getIdentifier()),
+                                                        qb64(signature)));
 
             return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
                                                                                    validFrom, validFrom.plus(valid),
@@ -434,19 +438,25 @@ public class StereotomyImpl implements Stereotomy {
         return keyStore.getKey(keyCoords);
     }
 
-    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex, Optional<KeyEvent> lastEstablishmentEvent) {
+    private Optional<KeyPair> getKeyPair(KeyState state, int keyIndex,
+                                         Optional<EstablishmentEvent> lastEstablishmentEvent) {
         if (lastEstablishmentEvent.isEmpty()) {
             return Optional.empty();
         }
-        KeyCoordinates keyCoords = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), keyIndex);
+        KeyCoordinates keyCoords = KeyCoordinates.of(lastEstablishmentEvent.get(), keyIndex);
         return getKeyPair(keyCoords);
+    }
+
+    private Optional<EstablishmentEvent> getLastEstablishingEvent(KeyState state) {
+        return kerl.getKeyEvent(state.getLastEstablishmentEvent()).map(ke -> (EstablishmentEvent) ke);
     }
 
     private Optional<Signer> getSigner(KeyState state) {
         var identifier = state.getIdentifier();
-        PrivateKey[] signers = new PrivateKey[state.getKeys().size()];
+        var signers = new PrivateKey[state.getKeys().size()];
+        var lastEstablishingEvent = getLastEstablishingEvent(state);
         for (int i = 0; i < signers.length; i++) {
-            Optional<KeyPair> keyPair = getKeyPair(state, i, kerl.getKeyEvent(state.getLastEstablishmentEvent()));
+            Optional<KeyPair> keyPair = getKeyPair(state, i, lastEstablishingEvent);
             if (keyPair.isEmpty()) {
                 log.warn("Last establishment event not found in KEL: {} : {} missing: {}", identifier,
                          state.getCoordinates(), state.getLastEstablishmentEvent());
@@ -481,13 +491,13 @@ public class StereotomyImpl implements Stereotomy {
     private KeyEvent interaction(KeyState state, InteractionSpecification.Builder spec) {
         InteractionSpecification.Builder specification = spec.clone();
         var identifier = state.getIdentifier();
-        Optional<KeyEvent> lastEstablishmentEvent = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        Optional<EstablishmentEvent> lastEstablishmentEvent = getLastEstablishingEvent(state);
         if (lastEstablishmentEvent.isEmpty()) {
             log.warn("missing establishment event: {} can't find: {}", kerl.getKeyEvent(state.getCoordinates()).get(),
                      state.getLastEstablishmentEvent());
             return null;
         }
-        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of((EstablishmentEvent) lastEstablishmentEvent.get(), 0);
+        KeyCoordinates currentKeyCoordinates = KeyCoordinates.of(lastEstablishmentEvent.get(), 0);
 
         Optional<KeyPair> keyPair = keyStore.getKey(currentKeyCoordinates);
 
@@ -579,7 +589,7 @@ public class StereotomyImpl implements Stereotomy {
             return null;
         }
 
-        var lastEstablishing = kerl.getKeyEvent(state.getLastEstablishmentEvent());
+        var lastEstablishing = getLastEstablishingEvent(state);
         if (lastEstablishing.isEmpty()) {
             log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
             return null;

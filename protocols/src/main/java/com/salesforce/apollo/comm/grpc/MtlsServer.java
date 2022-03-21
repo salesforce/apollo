@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.security.PrivateKey;
 import java.security.Provider;
-import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -55,8 +54,6 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class MtlsServer implements ClientIdentity {
-    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
-
     /**
      * Currently grpc-java doesn't return compressed responses, even if the client
      * has sent a compressed payload. This turns on gzip compression for all
@@ -76,9 +73,12 @@ public class MtlsServer implements ClientIdentity {
 
     public static final String TL_SV1_3 = "TLSv1.3";
 
+    private static final Provider PROVIDER_BCJSSE = ProviderUtils.getProviderBCJSSE();
+
     public static SslContext forClient(ClientAuth clientAuth, String alias, X509Certificate certificate,
                                        PrivateKey privateKey, CertificateValidator validator) {
         SslContextBuilder builder = SslContextBuilder.forClient()
+                                                     .sslContextProvider(PROVIDER_BCJSSE)
                                                      .keyManager(new NodeKeyManagerFactory(alias, certificate,
                                                                                            privateKey,
                                                                                            PROVIDER_BCJSSE));
@@ -173,20 +173,6 @@ public class MtlsServer implements ClientIdentity {
     }
 
     @Override
-    public X509Certificate getCert() {
-        return (X509Certificate) getCerts()[0];
-    }
-
-    @Override
-    public Certificate[] getCerts() {
-        try {
-            return sslSessionContext.get().getPeerCertificates();
-        } catch (SSLPeerUnverifiedException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    @Override
     public Digest getFrom() {
         try {
             return cachedMembership.get(getCert());
@@ -206,6 +192,14 @@ public class MtlsServer implements ClientIdentity {
         } catch (InterruptedException e) {
             throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
                                             e);
+        }
+    }
+
+    private X509Certificate getCert() {
+        try {
+            return (X509Certificate) sslSessionContext.get().getPeerCertificates()[0];
+        } catch (SSLPeerUnverifiedException e) {
+            throw new IllegalStateException(e);
         }
     }
 }

@@ -3,9 +3,10 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.fireflies.proto";
 option java_outer_classname = "FirefliesProto";
-option objc_class_prefix = "Ap";
-import "google/protobuf/any.proto";
+option objc_class_prefix = "Ff";
+import "google/protobuf/empty.proto";
 import "util.proto";
+import "stereotomy.proto";
 
 package fireflies;
 
@@ -14,23 +15,24 @@ service Fireflies {
      * Fireflies 3 phase gossip
      */
     rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (Null) {}
+    rpc update (State) returns (google.protobuf.Empty) {}
 
     /**
      * Fireflies liveness ping
      */
-    rpc ping (Null) returns (Null) {}
+    rpc ping (Ping) returns (google.protobuf.Empty) {}
 }
 
-message Null {
+message Ping {
     utils.Digeste context = 1;
 }
 
 message SayWhat {
     utils.Digeste context = 1;
-    SignedNote note = 2;
-    int32 ring = 3;
-    Digests gossip = 4;
+    Identity from = 2;
+    SignedNote note = 3;
+    int32 ring = 4;
+    Digests gossip = 5;
 }
 
 message State {
@@ -66,18 +68,22 @@ message SignedNote {
 message AccusationGossip {
     utils.Biff bff = 1;
     repeated SignedAccusation updates = 2;
-} 
-
-message EncodedCertificate {
-    utils.Digeste id = 1;
-    int64 epoch = 2;
-    utils.Digeste hash = 3;
-    bytes content = 4;
 }
 
-message CertificateGossip {
+message Identity {
+    string host = 1;
+    int32 port = 2;
+    int64 epoch = 3;
+    oneof event {
+        stereotomy.InceptionEvent inception = 4;
+        stereotomy.RotationEvent rotation = 5;
+    }
+    stereotomy.Attachment attachment = 6;
+}
+
+message IdentityGossip {
     utils.Biff bff = 1;
-    repeated EncodedCertificate updates = 2;
+    repeated Identity updates = 2;
 }
 
 message NoteGossip {
@@ -86,21 +92,20 @@ message NoteGossip {
 }
 
 message Digests { 
-    utils.Biff certificateBff = 1;
+    utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
     utils.Biff accusationBff = 3; 
 }
 
 message Gossip {
-    bool redirect = 1; 
-    CertificateGossip certificates = 2;
+    bool redirect = 1;
+    IdentityGossip identities = 2;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
 }
 
 message Update {
-    repeated EncodedCertificate certificates = 1;
+    repeated Identity identities = 1;
     repeated SignedNote notes = 2;
-    repeated SignedAccusation accusations = 3; 
+    repeated SignedAccusation accusations = 3;
 }
-

@@ -71,7 +71,7 @@ public class RingTest {
         Random entropy = new Random(0x1638);
         byte[] id = new byte[32];
         entropy.nextBytes(id);
-        context =  new ContextImpl<>(new Digest(DigestAlgorithm.DEFAULT, id), 1);
+        context = new ContextImpl<Member>(new Digest(DigestAlgorithm.DEFAULT, id), members.size(), 0.2, 2);
         ring = context.rings().findFirst().get();
         members.forEach(m -> context.activate(m));
 
@@ -123,14 +123,6 @@ public class RingTest {
             assertEquals(members.get(index), test, "error at index: " + index);
             index++;
         }
-    }
-
-    @Test
-    public void noRing() {
-        context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin());
-        assertEquals(1, context.getRingCount());
-        members.forEach(m -> context.activate(m));
-        assertEquals(MEMBER_COUNT, context.getActive().size());
     }
 
     @Test

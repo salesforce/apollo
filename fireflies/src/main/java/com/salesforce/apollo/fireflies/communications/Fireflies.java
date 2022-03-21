@@ -15,7 +15,7 @@ import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.fireflies.Node;
+import com.salesforce.apollo.fireflies.View.Node;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -37,7 +37,8 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests) {
+            public ListenableFuture<Gossip> gossip(Digest context, SignedNote note, int ring, Digests digests,
+                                                   Node from) {
                 return null;
             }
 
@@ -52,7 +53,7 @@ public interface Fireflies extends Link {
         };
     }
 
-    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests);
+    ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests, Node from);
 
     int ping(Digest context, int ping);
 

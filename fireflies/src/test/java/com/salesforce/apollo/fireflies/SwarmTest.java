@@ -9,10 +9,10 @@ package com.salesforce.apollo.fireflies;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.cert.X509Certificate;
+import java.net.InetSocketAddress;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -30,17 +30,23 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.salesfoce.apollo.fireflies.proto.Identity;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -49,37 +55,36 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final FirefliesParameters              parameters;
-    private static final int                              CARDINALITY = 100;
-
-    static {
-        parameters = FirefliesParameters.newBuilder()
-                                        .setCardinality(CARDINALITY)
-                                        .setCertificateValidator(CertificateValidator.NONE)
-                                        .build();
-    }
+    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static final int                                                   CARDINALITY = 100;
 
     @BeforeAll
     public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert -> cert));
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
+                                            new SecureRandom());
+        identities = IntStream.range(0, CARDINALITY)
+                              .parallel()
+                              .mapToObj(i -> stereotomy.newIdentifier().get())
+                              .map(ci -> {
+                                  @SuppressWarnings("unchecked")
+                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                  return casted;
+                              })
+                              .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                        controlled -> controlled));
     }
 
-    private List<Node>            members;
-    private List<View>            views;
-    private List<Router>          communications = new ArrayList<>();
-    private List<X509Certificate> seeds;
-    private MetricRegistry        registry;
-    private MetricRegistry        node0Registry;
+    private Map<Digest, ControlledIdentifierMember> members;
+    private List<View>                              views;
+    private List<Router>                            communications = new ArrayList<>();
+    private List<Identity>                          seeds;
+    private MetricRegistry                          registry;
+    private MetricRegistry                          node0Registry;
 
     @AfterEach
     public void after() {
         if (views != null) {
-            views.forEach(v -> v.getService().stop());
+            views.forEach(v -> v.stop());
             views.clear();
         }
 
@@ -100,13 +105,15 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-                return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+                return testViews.stream()
+                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .count() == 0;
             }), " size: " + testViews.size() + " views: "
             + testViews.stream()
-                       .filter(e -> e.getLive().size() != testViews.size())
+                       .filter(e -> e.getContext().getActive().size() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getContext().getId(),
                                                v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
                        .toList());
@@ -115,7 +122,7 @@ public class SwarmTest {
             + testViews.size() + " members");
         }
         System.out.println("Stopping views");
-        testViews.forEach(e -> e.getService().stop());
+        testViews.forEach(e -> e.stop());
         testViews.clear();
 //        communications.close();
         for (int i = 0; i < 4; i++) {
@@ -125,15 +132,17 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.getService().start(Duration.ofMillis(10), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
-                return testViews.stream().filter(view -> view.getLive().size() != testViews.size()).count() == 0;
+                return testViews.stream()
+                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .count() == 0;
             });
 
             assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
             + testViews.stream()
-                       .filter(e -> e.getLive().size() != testViews.size())
+                       .filter(e -> e.getContext().getActive().size() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getContext().getId(),
                                                v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
                        .toList());
@@ -144,16 +153,21 @@ public class SwarmTest {
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+            for (int i = 0; i < v.getContext().getRingCount(); i++) {
+                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
         assertTrue(testGraph.isSC());
 
         for (View view : views) {
-            for (int ring = 0; ring < view.getRings().size(); ring++) {
-                final Collection<Participant> membership = view.getRing(ring).members();
-                for (Node node : members) {
+            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
+                final var membership = view.getContext()
+                                           .ring(ring)
+                                           .members()
+                                           .stream()
+                                           .map(p -> members.get(p.getId()))
+                                           .toList();
+                for (Member node : members.values()) {
                     assertTrue(membership.contains(node));
                 }
             }
@@ -171,10 +185,10 @@ public class SwarmTest {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.getService().start(Duration.ofMillis(100), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getLive().size() != views.size()).count() == 0;
+            return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;
         }));
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -182,36 +196,41 @@ public class SwarmTest {
 
         Thread.sleep(5_000);
 
-        for (int i = 0; i < parameters.rings; i++) {
+        for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
             for (View view : views) {
-                assertEquals(views.get(0).getRing(i).getRing(), view.getRing(i).getRing());
+                assertEquals(views.get(0).getContext().ring(i).getRing(), view.getContext().ring(i).getRing());
             }
         }
 
         List<View> invalid = views.stream()
-                                  .map(view -> view.getLive().size() != views.size() ? view : null)
+                                  .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
                                   .filter(view -> view != null)
                                   .collect(Collectors.toList());
         assertEquals(0, invalid.size());
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
-            for (int i = 0; i < parameters.rings; i++) {
-                testGraph.addEdge(v.getNode(), v.getRing(i).successor(v.getNode()));
+            for (int i = 0; i < views.get(0).getContext().getRingCount(); i++) {
+                testGraph.addEdge(v.getNode(), v.getContext().ring(i).successor(v.getNode()));
             }
         }
         assertTrue(testGraph.isSC());
 
         for (View view : views) {
-            for (int ring = 0; ring < view.getRings().size(); ring++) {
-                final Collection<Participant> membership = view.getRing(ring).members();
-                for (Node node : members) {
+            for (int ring = 0; ring < view.getContext().getRingCount(); ring++) {
+                final var membership = view.getContext()
+                                           .ring(ring)
+                                           .members()
+                                           .stream()
+                                           .map(p -> members.get(p.getId()))
+                                           .toList();
+                for (Member node : members.values()) {
                     assertTrue(membership.contains(node));
                 }
             }
         }
 
-        views.forEach(view -> view.getService().stop());
+        views.forEach(view -> view.stop());
         ConsoleReporter.forRegistry(node0Registry)
                        .convertRatesTo(TimeUnit.SECONDS)
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
@@ -225,27 +244,24 @@ public class SwarmTest {
         node0Registry = new MetricRegistry();
 
         seeds = new ArrayList<>();
-        members = certs.values()
-                       .stream()
-                       .map(cert -> new Node(new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                                   cert.getX509Certificate(), cert.getPrivateKey(),
-                                                                   new SignerImpl(cert.getPrivateKey()),
-                                                                   cert.getX509Certificate().getPublicKey()),
-                                             cert, parameters))
-                       .collect(Collectors.toList());
-        assertEquals(certs.size(), members.size());
+        members = identities.values()
+                            .stream()
+                            .map(identity -> new ControlledIdentifierMember(identity))
+                            .collect(Collectors.toMap(m -> m.getId(), m -> m));
+        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
-        while (seeds.size() < parameters.toleranceLevel + 1) {
-            CertificateWithPrivateKey cert = certs.get(members.get(entropy.nextInt(24)).getId());
-            if (!seeds.contains(cert.getX509Certificate())) {
-                seeds.add(cert.getX509Certificate());
+        var randomized = members.values().stream().collect(Collectors.toList());
+        while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
+            var id = View.identityFor(0, new InetSocketAddress(0), randomized.get(entropy.nextInt(24)).getEvent());
+            if (!seeds.contains(id)) {
+                seeds.add(id);
             }
         }
 
         AtomicBoolean frist = new AtomicBoolean(true);
         final var prefix = UUID.randomUUID().toString();
-        views = members.stream().map(node -> {
-            Context<Participant> context = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
+        views = members.values().stream().map(node -> {
+            Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
                                                                            frist.getAndSet(false) ? node0Registry
                                                                                                   : registry);
@@ -257,7 +273,8 @@ public class SwarmTest {
                                            Executors.newFixedThreadPool(3));
             comms.start();
             communications.add(comms);
-            return new View(context, node, comms, fireflyMetricsImpl);
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
+                            DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
         }).collect(Collectors.toList());
     }
 }

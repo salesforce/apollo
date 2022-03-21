@@ -17,11 +17,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
@@ -53,51 +51,54 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
-        Thread.sleep(2_000);
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
                                   .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        AtomicReference<Entry<Member, SqlStateMachine>> txneer = new AtomicReference<>();
+        initial.get(30, TimeUnit.SECONDS);
+        var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
 
-        txneer.set(updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get());
-
-        var mutator = txneer.get().getValue().getMutator(choams.get(txneer.get().getKey().getId()).getSession());
-        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, countdown,
-                                               txScheduler));
-        System.out.println("Transaction member: " + txneer.get().getKey().getId());
+        var mutator = txneer.getValue().getMutator(choams.get(txneer.getKey().getId()).getSession());
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
+                                               countdown, txScheduler));
+        System.out.println("Transaction member: " + txneer.getKey().getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
+        var success = countdown.await(60, TimeUnit.SECONDS);
+        assertTrue(success,
+                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
 
-        Thread.sleep(5_000);
         System.out.println("Starting late joining node");
         var choam = choams.get(testSubject.getId());
         choam.context().activate(Collections.singletonList(testSubject));
         choam.start();
         routers.get(testSubject.getId()).start();
-        Thread.sleep(1000);
 
-        var success = countdown.await(60, TimeUnit.SECONDS);
-        assertTrue(success,
-                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
+        final ULong target = txneer.getValue().getCurrentBlock().height();
 
-        final ULong target = txneer.get().getValue().getCurrentBlock().height();
+        assertTrue(Utils.waitForCondition(120_000, 100, () -> {
 
-        assertTrue(Utils.waitForCondition(120_000, 100,
-                                          () -> members.stream()
-                                                       .map(m -> updaters.get(m))
-                                                       .map(ssm -> ssm.getCurrentBlock())
-                                                       .filter(cb -> cb != null)
-                                                       .map(cb -> cb.height())
-                                                       .filter(l -> l.compareTo(target) >= 0)
-                                                       .count() == members.size()),
-                   "state: " + members.stream()
-                                      .map(m -> updaters.get(m))
-                                      .map(ssm -> ssm.getCurrentBlock())
-                                      .filter(cb -> cb != null)
-                                      .map(cb -> cb.height())
-                                      .toList());
+            var max = members.stream()
+                             .map(m -> updaters.get(m))
+                             .map(ssm -> ssm.getCurrentBlock())
+                             .filter(cb -> cb != null)
+                             .map(cb -> cb.height())
+                             .max((a, b) -> a.compareTo(b))
+                             .get();
+            return members.stream()
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(target) >= 0)
+                          .filter(l -> l.compareTo(max) == 0)
+                          .count() == members.size();
+        }), "state: " + members.stream()
+                               .map(m -> updaters.get(m))
+                               .map(ssm -> ssm.getCurrentBlock())
+                               .filter(cb -> cb != null)
+                               .map(cb -> cb.height())
+                               .toList());
         System.out.println("target: " + target + " results: "
         + members.stream()
                  .map(m -> updaters.get(m))
@@ -135,5 +136,10 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                 assertEquals(entry.getValue(), candidate.get(entry.getKey()));
             }
         }
+    }
+
+    @Override
+    protected int checkpointBlockSize() {
+        return 10;
     }
 }

@@ -11,8 +11,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -114,21 +112,6 @@ public class LocalRouter extends Router {
     }
 
     private static final class ThreadIdentity implements ClientIdentity {
-        @Override
-        public X509Certificate getCert() {
-            Member member = CLIENT_ID_CONTEXT_KEY.get();
-            if (member == null) {
-                return null;
-            }
-            X509Certificate x509Certificate = member.getCertificate();
-            return x509Certificate;
-        }
-
-        @Override
-        public Certificate[] getCerts() {
-            return new Certificate[] { getCert() };
-        }
-
         @Override
         public Digest getFrom() {
             Member member = CLIENT_ID_CONTEXT_KEY.get();

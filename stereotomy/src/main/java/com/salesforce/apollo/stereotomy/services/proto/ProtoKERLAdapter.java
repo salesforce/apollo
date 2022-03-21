@@ -7,7 +7,6 @@
 package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -103,38 +102,6 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     @Override
     public Optional<KeyState_> getKeyState(Ident identifier) {
         return kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_());
-    }
-
-    @Override
-    public CompletableFuture<Void> publish(KERL_ k) {
-        List<KeyEvent> events = new ArrayList<>();
-        List<AttachmentEvent> attachments = new ArrayList<>();
-        k.getEventsList().stream().map(e -> ProtobufEventFactory.from(e)).forEach(ewa -> {
-            events.add(ewa.event());
-            attachments.add(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
-                                                                     ewa.attachments()));
-        });
-        return kerl.append(events, attachments).thenApply(l -> null);
-    }
-
-    @Override
-    public CompletableFuture<Void> publishAttachments(List<com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent> attachmentsList) {
-        return kerl.append(Collections.emptyList(),
-                           attachmentsList.stream()
-                                          .map(ae -> new AttachmentEventImpl(ae))
-                                          .map(ae -> (AttachmentEvent) ae)
-                                          .toList())
-                   .thenApply(l -> null);
-    }
-
-    @Override
-    public CompletableFuture<Void> publishEvents(List<KeyEvent_> keyEventList) {
-        KeyEvent[] events = new KeyEvent[keyEventList.size()];
-        int i = 0;
-        for (KeyEvent event : keyEventList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList()) {
-            events[i++] = event;
-        }
-        return kerl.append(events).thenApply(l -> null);
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

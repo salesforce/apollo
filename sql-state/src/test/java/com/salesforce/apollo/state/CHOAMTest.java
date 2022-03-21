@@ -26,11 +26,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -71,17 +71,19 @@ import com.salesforce.apollo.utils.Utils;
 public class CHOAMTest {
     private static final int CARDINALITY = 5;
 
-    private static final List<Transaction> GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
+    private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final boolean           LARGE_TESTS     = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(CHOAMTest.class).error("Error on thread: {}", t.getName(), e);
         });
+        var txns = MigrationTest.initializeBookSchema();
+        txns.add(initialInsert());
+        GENESIS_DATA = CHOAM.toGenesisData(txns);
     }
 
     private File                               baseDir;
-    private Map<Digest, List<Digest>>          blocks;
     private File                               checkpointDirBase;
     private Map<Digest, CHOAM>                 choams;
     private List<SigningMember>                members;
@@ -90,6 +92,7 @@ public class CHOAMTest {
     private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private Executor                           exec     = Executors.newCachedThreadPool();
 
     @AfterEach
     public void after() throws Exception {
@@ -130,9 +133,8 @@ public class CHOAMTest {
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
         scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
@@ -149,14 +151,7 @@ public class CHOAMTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
-        params.getClientBackoff()
-              .setBase(10)
-              .setCap(250)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
@@ -168,18 +163,11 @@ public class CHOAMTest {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            AtomicInteger exec = new AtomicInteger();
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + m.getId() + "["
-                                                  + exec.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context, metrics);
+            return createCHOAM(entropy, params, m, context, metrics, exec);
         }));
     }
 
@@ -196,23 +184,17 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        Thread.sleep(2_000);
-
-        final var initial = choams.get(members.get(0).getId())
-                                  .getSession()
-                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
-        initial.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-
         for (int i = 0; i < clientCount; i++) {
             updaters.entrySet().stream().map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, countdown,
+                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec, countdown,
                                           txScheduler);
             }).forEach(e -> transactioneers.add(e));
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions");
+        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions: " + countdown.getCount()
+        + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
 
         final ULong target = updaters.values()
                                      .stream()
@@ -269,7 +251,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics) {
+                              ChoamMetrics metrics, Executor exec) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -284,15 +266,13 @@ public class CHOAMTest {
                                                        .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(Router.createFjPool())
+                                                       .setExec(exec)
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {
 
                                                            @Override
                                                            public void beginBlock(ULong height, Digest hash) {
-                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
-                                                                     .add(hash);
                                                                up.getExecutor().beginBlock(height, hash);
                                                            }
 
@@ -310,15 +290,13 @@ public class CHOAMTest {
                                                            @Override
                                                            public void genesis(Digest hash,
                                                                                List<Transaction> initialization) {
-                                                               blocks.computeIfAbsent(m.getId(), k -> new ArrayList<>())
-                                                                     .add(hash);
                                                                up.getExecutor().genesis(hash, initialization);
                                                            }
                                                        })
                                                        .build()));
     }
 
-    private Txn initialInsert() {
+    private static Txn initialInsert() {
         return Txn.newBuilder()
                   .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
                                   "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",

@@ -12,7 +12,7 @@
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
             <artifactId>utils</artifactId>
-        </dependency> 
+        </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty-shaded</artifactId>
@@ -53,21 +53,7 @@
         <plugins>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId> 
-                <executions>
-                    <execution>
-                        <id>add-source</id>
-                        <phase>generate-test-sources</phase>
-                        <goals>
-                            <goal>add-test-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>${project.basedir}/src/test/proto</source>
-                            </sources>
-                        </configuration>
-                    </execution>
-                </executions>
+                <artifactId>build-helper-maven-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>org.xolstice.maven.plugins</groupId>

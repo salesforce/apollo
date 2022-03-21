@@ -8,22 +8,16 @@ package com.salesforce.apollo.membership.impl;
 
 import java.io.InputStream;
 import java.security.PrivateKey;
-import java.security.Provider;
 import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 
-import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-
-import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
-import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 
 /**
  * A signiner member of a view. This is a local member to the process that can
@@ -34,8 +28,7 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
  */
 public class SigningMemberImpl extends MemberImpl implements SigningMember {
 
-    private PrivateKey certKey;
-    private Signer     signer;
+    private final Signer signer;
 
     /**
      * @param member
@@ -53,18 +46,6 @@ public class SigningMemberImpl extends MemberImpl implements SigningMember {
     @Override
     public SignatureAlgorithm algorithm() {
         return signer.algorithm();
-    }
-
-    @Override
-    public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
-                                String tlsVersion) {
-        return MtlsServer.forClient(clientAuth, alias, certificate, certKey, validator);
-    }
-
-    @Override
-    public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator, Provider provider,
-                                String tlsVersion) {
-        return MtlsServer.forServer(clientAuth, alias, certificate, certKey, validator);
     }
 
     @Override

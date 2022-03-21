@@ -4,7 +4,7 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.stereotomy.services.grpc.proto";
 option java_outer_classname = "StereotomyServicesProto";
 option objc_class_prefix = "Stereo";
-import "google/protobuf/any.proto";
+import "google/protobuf/wrappers.proto";
 import "google/protobuf/empty.proto";
 import "util.proto";
 import "stereotomy.proto";
@@ -68,6 +68,10 @@ message KeyEventWitAttachmentsContext {
     repeated AttachmentEvent attachments = 3;
 }
 
+message AttachmentEvents { 
+    repeated AttachmentEvent attachments = 1;
+}
+
 service KERLService {
     rpc append (KeyEventsContext) returns(KeyStates) {}
     rpc appendKERL (KERLContext) returns(KeyStates) {}
@@ -79,9 +83,11 @@ service KERLService {
     rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
     rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
-    
-    rpc publish(KERLContext) returns(google.protobuf.Empty) {}
-    rpc publishEvents (KeyEventsContext) returns(google.protobuf.Empty) {}
+}
+
+service EventObserver { 
+    rpc publish(KERLContext) returns(AttachmentEvents) {}
+    rpc publishEvents (KeyEventsContext) returns(AttachmentEvents) {}
     rpc publishAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
 }
 
@@ -94,4 +100,9 @@ service Binder {
 // Resolver API
 service Resolver {
     rpc lookup (IdentifierContext) returns (stereotomy.Binding) {}
+}
+
+// Validator API
+service Validator {
+    rpc validate(KeyEventContext) returns (google.protobuf.BoolValue) {}
 }

@@ -74,11 +74,6 @@ public interface Member extends Comparable<Member>, Verifier {
     boolean equals(Object obj);
 
     /**
-     * @return the identifying certificate of the member
-     */
-    X509Certificate getCertificate();
-
-    /**
      * @return the unique id of this member
      */
     Digest getId();

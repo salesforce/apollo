@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy.services;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.concurrent.TimeoutException;
 
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -30,22 +28,15 @@ public interface Binder {
         void unbind(Identifier identifier) throws TimeoutException;
     }
 
-    public record Bound(InceptionEvent identifier, URI uri) {}
+    public record Bound(InceptionEvent identifier, String host, int port) {}
 
     public record Binding(Bound value, JohnHancock signature) {
         public static Binding from(com.salesfoce.apollo.stereotomy.event.proto.Binding binding) {
-            URI uri;
-            try {
-                uri = new URI(binding.getValue().getUri());
-            } catch (URISyntaxException e) {
-                return null;
-            }
-
-            return binding.equals(com.salesfoce.apollo.stereotomy.event.proto.Binding.getDefaultInstance()) ? null
-                                                                                                            : new Binding(new Bound(new InceptionEventImpl(binding.getValue()
-                                                                                                                                                                  .getIdentifier()),
-                                                                                                                                    uri),
-                                                                                                                          JohnHancock.from(binding.getSignature()));
+            var isEmpty = binding.equals(com.salesfoce.apollo.stereotomy.event.proto.Binding.getDefaultInstance());
+            return isEmpty ? null
+                           : new Binding(new Bound(new InceptionEventImpl(binding.getValue().getIdentifier()),
+                                                   binding.getValue().getHost(), binding.getValue().getPort()),
+                                         JohnHancock.from(binding.getSignature()));
         }
     }
 }

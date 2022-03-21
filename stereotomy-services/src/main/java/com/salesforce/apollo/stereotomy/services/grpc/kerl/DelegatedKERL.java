@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services.grpc;
+package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.Collections;
 import java.util.List;
@@ -28,8 +28,8 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public class DelegatedKERL implements KERL {
-    private final KERLService     client;
     private final DigestAlgorithm algorithm;
+    private final KERLService     client;
 
     public DelegatedKERL(KERLService client, DigestAlgorithm algorithm) {
         this.client = client;
@@ -39,11 +39,11 @@ public class DelegatedKERL implements KERL {
     @Override
     public CompletableFuture<Void> append(AttachmentEvent event) {
         var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
-        return client.publishAttachments(Collections.singletonList(builder.setCoordinates(event.coordinates()
-                                                                                               .toEventCoords())
-                                                                          .setAttachment(event.attachments()
-                                                                                              .toAttachemente())
-                                                                          .build()));
+        return client.append(Collections.emptyList(),
+                             Collections.singletonList(builder.setCoordinates(event.coordinates().toEventCoords())
+                                                              .setAttachment(event.attachments().toAttachemente())
+                                                              .build()))
+                     .thenApply(l -> null);
     }
 
     @Override

@@ -90,8 +90,9 @@ public class GenesisAssembly implements Genesis {
 
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().prefix("Genesis Assembly");
-        Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().getProbabilityByzantine(),
-                                                            view.context().memberCount(), view.context().getBias());
+        Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().memberCount(),
+                                                            view.context().getProbabilityByzantine(),
+                                                            view.context().getBias());
         reContext.activate(view.context().activeMembers());
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);

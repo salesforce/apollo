@@ -84,6 +84,10 @@ public class RotationEventImpl extends EstablishmentEventImpl implements Rotatio
         return KeyEvent_.newBuilder().setRotation(event).build();
     }
 
+    public com.salesfoce.apollo.stereotomy.event.proto.RotationEvent toRotationEvent_() {
+        return event;
+    }
+
     @Override
     public String toString() {
         return "\n" + event + "\n";

@@ -9,7 +9,6 @@ package com.salesforce.apollo.model;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -22,9 +21,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,17 +54,17 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class NodeTest {
+public class DomainTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final ArrayList<Node>        nodes   = new ArrayList<>();
+    private final ArrayList<Domain>      domains = new ArrayList<>();
     private final ArrayList<LocalRouter> routers = new ArrayList<>();
 
     @AfterEach
     public void after() {
-        nodes.forEach(n -> n.stop());
-        nodes.clear();
+        domains.forEach(n -> n.stop());
+        domains.clear();
         routers.forEach(r -> r.close());
         routers.clear();
     }
@@ -77,7 +74,7 @@ public class NodeTest {
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
         Utils.clean(checkpointDirBase.toFile());
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 0.2, CARDINALITY, 3);
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
@@ -87,7 +84,7 @@ public class NodeTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
 
             members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
@@ -111,22 +108,22 @@ public class NodeTest {
             routers.add(localRouter);
             params.getProducer().ethereal().setSigner(member);
             var exec = Router.createFjPool();
-            nodes.add(new Node(context, id, params,
-                               RuntimeParameters.newBuilder()
-                                                .setScheduler(scheduler)
-                                                .setMember(member)
-                                                .setContext(context)
-                                                .setExec(exec)
-                                                .setCommunications(localRouter)));
+            domains.add(new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                          RuntimeParameters.newBuilder()
+                                                           .setScheduler(scheduler)
+                                                           .setMember(member)
+                                                           .setContext(context)
+                                                           .setExec(exec)
+                                                           .setCommunications(localRouter)));
             localRouter.start();
         });
     }
 
     @Test
     public void smoke() throws Exception {
-        nodes.forEach(n -> n.start());
-        var oracle = nodes.get(0).getDelphi();
-        oracle.add(new Oracle.Namespace("test")).get(10, TimeUnit.SECONDS);
+        domains.forEach(n -> n.start());
+        var oracle = domains.get(0).getDelphi();
+        oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
     }
 
@@ -142,14 +139,7 @@ public class NodeTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
-        params.getClientBackoff()
-              .setBase(100)
-              .setCap(2000)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
@@ -187,33 +177,17 @@ public class NodeTest {
         var burcu = ns.subject("Burcu");
 
         // Map direct edges. Transitive edges added as a side effect
-        var completions = new ArrayList<CompletableFuture<?>>();
-
-        completions.add(oracle.map(helpDeskMembers, adminMembers));
-        completions.add(oracle.map(ali, adminMembers));
-        completions.add(oracle.map(ali, userMembers));
-        completions.add(oracle.map(burcu, userMembers));
-        completions.add(oracle.map(can, userMembers));
-        completions.add(oracle.map(managerMembers, userMembers));
-        completions.add(oracle.map(technicianMembers, userMembers));
-        completions.add(oracle.map(demet, helpDeskMembers));
-        completions.add(oracle.map(egin, helpDeskMembers));
-        completions.add(oracle.map(egin, userMembers));
-        completions.add(oracle.map(fuat, managerMembers));
-        completions.add(oracle.map(gl, managerMembers));
-        completions.add(oracle.map(hakan, technicianMembers));
-        completions.add(oracle.map(irmak, technicianMembers));
-        completions.add(oracle.map(abcTechMembers, technicianMembers));
-        completions.add(oracle.map(flaggedTechnicianMembers, technicianMembers));
-        completions.add(oracle.map(jale, abcTechMembers));
-
-        completions.forEach(cf -> {
-            try {
-                cf.get();
-            } catch (InterruptedException | ExecutionException e) {
-                fail("Failed completion");
-            }
-        });
+        CompletableFuture.allOf(oracle.map(helpDeskMembers, adminMembers), oracle.map(ali, adminMembers),
+                                oracle.map(ali, userMembers), oracle.map(burcu, userMembers),
+                                oracle.map(can, userMembers), oracle.map(managerMembers, userMembers),
+                                oracle.map(technicianMembers, userMembers), oracle.map(demet, helpDeskMembers),
+                                oracle.map(egin, helpDeskMembers), oracle.map(egin, userMembers),
+                                oracle.map(fuat, managerMembers), oracle.map(gl, managerMembers),
+                                oracle.map(hakan, technicianMembers), oracle.map(irmak, technicianMembers),
+                                oracle.map(abcTechMembers, technicianMembers),
+                                oracle.map(flaggedTechnicianMembers, technicianMembers),
+                                oracle.map(jale, abcTechMembers))
+                         .get();
 
         // Protected resource namespace
         var docNs = Oracle.namespace("Document");

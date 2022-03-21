@@ -30,8 +30,7 @@ Apollo uses Protobuf for all serialization and GRPC for all interprocess communi
 Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore, but...
 
 ## Not A Coin Platform(tm)
-Apollo isn't designed for coins, rather as essentially a distributed database.  Of course the systems of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
-
+Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
 ## WIP
 Note that Apollo Delphinius is very much a _work in progress_.  There is not yet an official release.  Thus, it is by no means a full featured, hardened distributed ledger platform.
@@ -48,6 +47,8 @@ To build Apollo, cd to the root directory of the repository and then do:
     mvn clean install
 
 Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
+
+You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
 
 ## Code Generation In Apollo
 Apollo requires code generation as part of the build.  This is done in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.

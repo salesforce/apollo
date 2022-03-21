@@ -86,6 +86,10 @@ public class InceptionEventImpl extends EstablishmentEventImpl implements Incept
         builder.setInception(event);
     }
 
+    public com.salesfoce.apollo.stereotomy.event.proto.InceptionEvent toInceptionEvent_() {
+        return event;
+    }
+
     @Override
     public KeyEvent_ toKeyEvent_() {
         return KeyEvent_.newBuilder().setInception(event).build();

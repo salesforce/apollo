@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
-import com.salesforce.apollo.model.Node;
+import com.salesforce.apollo.model.Domain;
 import com.salesforce.apollo.state.Emulator;
 
 /**
@@ -36,7 +36,7 @@ public class ShardedOracleTest {
         Executor exec = Executors.newSingleThreadExecutor();
         Emulator emmy = new Emulator();
 
-        emmy.start(Node.boostrapMigration());
+        emmy.start(Domain.boostrapMigration());
 
         ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
                                                  exec);

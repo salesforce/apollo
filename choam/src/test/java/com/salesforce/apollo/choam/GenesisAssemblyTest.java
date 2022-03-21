@@ -83,7 +83,7 @@ public class GenesisAssemblyTest {
                                         .map(cpk -> new SigningMemberImpl(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
-        Context<Member> base = new ContextImpl<>(viewId, 0.33, members.size(), 3);
+        Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 

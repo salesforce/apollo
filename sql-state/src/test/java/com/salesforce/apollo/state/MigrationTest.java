@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -44,10 +45,12 @@ public class MigrationTest {
     public static final String BOOK_SCHEMA_ROOT   = "bookSchema.xml";
 
     public static List<Message> initializeBookSchema() {
-        return Collections.singletonList(Txn.newBuilder()
-                                            .setMigration(MigrationTest.bookSchemaMigration())
-                                            .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
-                                            .build());
+        var list = new ArrayList<Message>();
+        list.add(Txn.newBuilder()
+                    .setMigration(MigrationTest.bookSchemaMigration())
+                    .setBatch(batch("create table books (id int, title varchar(50), author varchar(50), price float, qty int,  primary key (id))"))
+                    .build());
+        return list;
     }
 
     public static Migration bookSchemaMigration() {

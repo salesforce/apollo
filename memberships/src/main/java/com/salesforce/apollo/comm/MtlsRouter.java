@@ -8,11 +8,13 @@ package com.salesforce.apollo.comm;
 
 import java.io.IOException;
 import java.util.concurrent.Executor;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
+import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
 import com.salesforce.apollo.comm.grpc.MtlsClient;
 import com.salesforce.apollo.comm.grpc.MtlsServer;
 import com.salesforce.apollo.comm.grpc.ServerContextSupplier;
@@ -28,36 +30,49 @@ import io.grpc.util.MutableHandlerRegistry;
  *
  */
 public class MtlsRouter extends Router {
-    private static final Logger log = LoggerFactory.getLogger(MtlsRouter.class);
-
     public static class MtlsServerConnectionFactory implements ServerConnectionFactory {
-        private final EndpointProvider epProvider;
+        private final Function<Member, ClientContextSupplier> contextSupplier;
+        private final EndpointProvider                        epProvider;
 
-        public MtlsServerConnectionFactory(EndpointProvider epProvider) {
+        public MtlsServerConnectionFactory(EndpointProvider epProvider,
+                                           Function<Member, ClientContextSupplier> contextSupplier) {
             this.epProvider = epProvider;
+            this.contextSupplier = contextSupplier;
         }
 
         @Override
         public ManagedChannel connectTo(Member to, SigningMember from) {
-            return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(), from,
-                                  epProvider.getValiator()).getChannel();
+            return new MtlsClient(epProvider.addressFor(to), epProvider.getClientAuth(), epProvider.getAlias(),
+                                  contextSupplier.apply(from), epProvider.getValiator()).getChannel();
         }
     }
+
+    private static final Logger log = LoggerFactory.getLogger(MtlsRouter.class);
 
     private final EndpointProvider epProvider;
     private final MtlsServer       server;
 
     public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, ServerContextSupplier supplier,
-                      Executor executor) {
-        this(builder, ep, supplier, new MutableHandlerRegistry(), executor);
+                      Executor executor, Function<Member, ClientContextSupplier> clientContextSupplier) {
+        this(builder, ep, supplier, new MutableHandlerRegistry(), executor, clientContextSupplier);
     }
 
     public MtlsRouter(ServerConnectionCache.Builder builder, EndpointProvider ep, ServerContextSupplier supplier,
-                      MutableHandlerRegistry registry, Executor executor) {
-        super(builder.setFactory(new MtlsServerConnectionFactory(ep)).build(), registry);
+                      MutableHandlerRegistry registry, Executor executor,
+                      Function<Member, ClientContextSupplier> clientContextProvider) {
+        super(builder.setFactory(new MtlsServerConnectionFactory(ep, clientContextProvider)).build(), registry);
         epProvider = ep;
         this.server = new MtlsServer(epProvider.getBindAddress(), epProvider.getClientAuth(), epProvider.getAlias(),
                                      supplier, epProvider.getValiator(), registry, executor);
+    }
+
+    @Override
+    public void close() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+        server.stop();
+        super.close();
     }
 
     @Override
@@ -76,14 +91,5 @@ public class MtlsRouter extends Router {
             log.error("Cannot start server", e);
             throw new IllegalStateException("Cannot start server", e);
         }
-    }
-
-    @Override
-    public void close() {
-        if (!started.compareAndSet(true, false)) {
-            return;
-        }
-        server.stop();
-        super.close();
     }
 }

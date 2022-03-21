@@ -8,7 +8,6 @@ package com.salesforce.apollo.comm.grpc;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 
-import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -35,10 +34,6 @@ public interface BaseServerCommunications<T> {
 
     default void evaluate(StreamObserver<?> responseObserver, String id, Consumer<T> c, T s, Map<Digest, T> services) {
         evaluate(responseObserver, digest(id), c, s, services);
-    }
-
-    default X509Certificate getCert() {
-        return getClientIdentity().getCert();
     }
 
     ClientIdentity getClientIdentity();

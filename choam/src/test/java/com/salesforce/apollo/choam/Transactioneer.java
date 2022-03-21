@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,31 +33,33 @@ class Transactioneer {
     private final ByteMessage              tx        = ByteMessage.newBuilder()
                                                                   .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                                   .build();
+    private final Executor                 txnScheduler;
 
     Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
-                   CountDownLatch countdown) {
+                   CountDownLatch countdown, Executor txnScheduler) {
         this.session = session;
         this.timeout = timeout;
         this.max = max;
         this.scheduler = scheduler;
         this.countdown = countdown;
+        this.txnScheduler = txnScheduler;
     }
 
     void decorate(CompletableFuture<?> fs) {
         inFlight.incrementAndGet();
 
-        fs.whenCompleteAsync((o, t) -> {
+        fs.whenComplete((o, t) -> {
             inFlight.decrementAndGet();
 
             if (t != null) {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
+                            decorate(session.submit(txnScheduler, tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
-                    }, entropy.nextInt(10), TimeUnit.MILLISECONDS);
+                    }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
                 if (completed.incrementAndGet() >= max) {
@@ -65,7 +68,7 @@ class Transactioneer {
                     }
                 } else {
                     try {
-                        decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
+                        decorate(session.submit(txnScheduler, tx, timeout, scheduler));
                     } catch (InvalidTransaction e) {
                         e.printStackTrace();
                     }

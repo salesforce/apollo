@@ -8,16 +8,11 @@ package com.salesforce.apollo.comm.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.security.KeyPair;
 import java.security.Provider;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 
 import org.junit.jupiter.api.Test;
@@ -26,11 +21,7 @@ import com.google.protobuf.Any;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.cert.BcX500NameDnImpl;
-import com.salesforce.apollo.crypto.cert.CertExtension;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
-import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
@@ -86,17 +77,7 @@ public class TestMtls {
     }
 
     private CertificateWithPrivateKey clientIdentity() {
-        return generate(new BcX500NameDnImpl("CN=0fgdSAGdx_"));
-    }
-
-    CertificateWithPrivateKey generate(BcX500NameDnImpl dn) {
-        BigInteger sn = BigInteger.valueOf(Long.MAX_VALUE);
-        var notBefore = Instant.now();
-        var notAfter = Instant.now().plusSeconds(10_000);
-        List<CertExtension> extensions = Collections.emptyList();
-        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
-        X509Certificate selfSignedCert = Certificates.selfSign(true, dn, sn, keyPair, notBefore, notAfter, extensions);
-        return new CertificateWithPrivateKey(selfSignedCert, keyPair.getPrivate());
+        return Utils.getMember(0);
     }
 
     private MtlsServer server(InetSocketAddress serverAddress) {
@@ -120,7 +101,7 @@ public class TestMtls {
     }
 
     private CertificateWithPrivateKey serverIdentity() {
-        return generate(new BcX500NameDnImpl("CN=0fgadasdf3Q@SAGdx_"));
+        return Utils.getMember(1);
     }
 
     private CertificateValidator validator() {

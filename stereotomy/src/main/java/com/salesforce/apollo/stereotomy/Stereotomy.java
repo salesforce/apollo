@@ -7,6 +7,7 @@
 package com.salesforce.apollo.stereotomy;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
+import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
@@ -22,9 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.AttachmentEvent.Attachment;
-import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
@@ -37,16 +35,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  */
 public interface Stereotomy {
 
-    record Decoded(EstablishmentEvent keyEvent, Attachment attachments, InetSocketAddress endpoint,
-                   JohnHancock signature) {
-        public Identifier identifier() {
-            return keyEvent.getIdentifier();
-        }
-
-        public Verifier verifier() {
-            return new Verifier.DefaultVerifier(keyEvent.getKeys());
-        }
-    }
+    record Decoded(Identifier identifier, InetSocketAddress endpoint, JohnHancock signature) {}
 
     static Version currentVersion() {
         return new Version() {
@@ -68,8 +57,8 @@ public interface Stereotomy {
      * <ul>
      * <li>CN - Host name of the supplied endpoint</li>
      * <li>L - Port number of supplied endpoint</li>
-     * <li>UID - QB64 encoding of the KeyCoordinates of the keystate used</li>
-     * <li>DC - The signature of the key state of the coordinates in UID of the
+     * <li>UID - QB64 encoding of the Identifier</li>
+     * <li>DC - The signature of the key state of the identifier in the UID of the
      * generated public key that signs the certificate</li>
      * </ul>
      */
@@ -99,15 +88,7 @@ public interface Stereotomy {
             getLogger().warn("Invalid certificate, missing \\\"DC\\\" of dn= {}", dn);
             return Optional.empty();
         }
-        var ewa = EventWithAttachments.fromBase64(id);
-        if (ewa.event() instanceof EstablishmentEvent ee) {
-            return Optional.of(new Decoded(ee, ewa.attachments(), new InetSocketAddress(hostName, port),
-                                           signature(signature)));
-        } else {
-            getLogger().warn("Invalid certificate, keyEvent is not an EstablishmentEvent: {}",
-                             ewa.event().getClass().getSimpleName());
-            return Optional.empty();
-        }
+        return Optional.of(new Decoded(identifier(id), new InetSocketAddress(hostName, port), signature(signature)));
     }
 
     /**

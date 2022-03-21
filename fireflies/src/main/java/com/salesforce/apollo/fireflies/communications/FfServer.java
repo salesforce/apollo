@@ -7,9 +7,10 @@
 package com.salesforce.apollo.fireflies.communications;
 
 import com.codahale.metrics.Timer.Context;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Null;
+import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.RoutableService;
@@ -48,7 +49,7 @@ public class FfServer extends FirefliesImplBase {
                 responseObserver.onError(new IllegalStateException("Member has been removed"));
                 return;
             }
-            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, identity.getCert(),
+            Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getFrom(),
                                      request.getNote());
             if (timer != null) {
                 timer.stop();
@@ -61,9 +62,9 @@ public class FfServer extends FirefliesImplBase {
     }
 
     @Override
-    public void ping(Null request, StreamObserver<Null> responseObserver) {
+    public void ping(Ping request, StreamObserver<Empty> responseObserver) {
         router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundPingRate().mark();
@@ -72,7 +73,7 @@ public class FfServer extends FirefliesImplBase {
     }
 
     @Override
-    public void update(State request, StreamObserver<Null> responseObserver) {
+    public void update(State request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -87,9 +88,8 @@ public class FfServer extends FirefliesImplBase {
             s.update(request.getRing(), request.getUpdate(), from);
             if (timer != null) {
                 timer.stop();
-                metrics.outboundBandwidth().mark(Null.getDefaultInstance().getSerializedSize());
             }
-            responseObserver.onNext(Null.getDefaultInstance());
+            responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
         });
     }

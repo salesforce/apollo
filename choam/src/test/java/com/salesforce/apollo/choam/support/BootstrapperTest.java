@@ -69,7 +69,7 @@ public class BootstrapperTest {
 
     @Test
     public void smoke() throws Exception {
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 3);
+        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
 

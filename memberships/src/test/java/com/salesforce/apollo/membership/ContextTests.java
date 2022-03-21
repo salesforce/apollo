@@ -25,7 +25,7 @@ public class ContextTests {
 
     @Test
     public void consistency() {
-        Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 3);
+        Context<Member> context = new ContextImpl<Member>(DigestAlgorithm.DEFAULT.getOrigin().prefix(1), 10, 0.2, 2);
         List<SigningMember> members = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             SigningMemberImpl m = new SigningMemberImpl(Utils.getMember(i));

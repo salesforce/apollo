@@ -40,7 +40,8 @@ public class MtlsClient {
         channel = NettyChannelBuilder.forAddress(address)
                                      .sslContext(supplier.forClient(clientAuth, alias, validator, PROVIDER_BCJSSE,
                                                                     MtlsServer.TL_SV1_3))
-                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter)).build();
+                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                     .build();
 
     }
 
@@ -50,7 +51,8 @@ public class MtlsClient {
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(false).build();
         channel = NettyChannelBuilder.forAddress(address)
                                      .sslContext(forClient(clientAuth, alias, certificate, privateKey, validator))
-                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter)).build();
+                                     .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                     .build();
 
     }
 

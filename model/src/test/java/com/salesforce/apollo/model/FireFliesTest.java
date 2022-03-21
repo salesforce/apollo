@@ -9,7 +9,6 @@ package com.salesforce.apollo.model;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,7 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -35,22 +33,19 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.ssl.CertificateValidator;
-import com.salesforce.apollo.fireflies.FirefliesParameters;
-import com.salesforce.apollo.fireflies.Participant;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.MemberImpl;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
-import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -61,17 +56,17 @@ public class FireFliesTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final List<Node>             nodes   = new ArrayList<>();
-    private final Map<Node, LocalRouter> routers = new HashMap<>();
-    private final Map<Node, View>        views   = new HashMap<>();
+    private final List<ProcessDomain>             domains = new ArrayList<>();
+    private final Map<ProcessDomain, LocalRouter> routers = new HashMap<>();
+    private final Map<ProcessDomain, View>        views   = new HashMap<>();
 
     @AfterEach
     public void after() {
-        nodes.forEach(n -> n.stop());
-        nodes.clear();
+        domains.forEach(n -> n.stop());
+        domains.clear();
         routers.values().forEach(r -> r.close());
         routers.clear();
-        views.values().forEach(v -> v.getService().stop());
+        views.values().forEach(v -> v.stop());
         views.clear();
     }
 
@@ -89,7 +84,7 @@ public class FireFliesTest {
             @SuppressWarnings("unchecked")
             ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
                                                                                                                            .get();
-            var cert = id.provision(null, InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
+            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
                                     Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
             var member = new SigningMemberImpl(id.getIdentifier().getDigest(), cert.get().getX509Certificate(),
                                                cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0));
@@ -100,9 +95,9 @@ public class FireFliesTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         var foundations = new HashMap<Member, Context<Participant>>();
-        
+
         members.forEach((member, id) -> {
-            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), 0.2, CARDINALITY, 3);
+            var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             AtomicInteger execC = new AtomicInteger();
 
             var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
@@ -113,58 +108,38 @@ public class FireFliesTest {
                                                   return thread;
                                               }));
             params.getProducer().ethereal().setSigner(member);
-            var exec = Router.createFjPool(); 
+            var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new Node(foundation, id, params,
-                                RuntimeParameters.newBuilder()
-                                                 .setScheduler(scheduler)
-                                                 .setMember(member)
-                                                 .setContext(context)
-                                                 .setExec(exec)
-                                                 .setCommunications(localRouter));
-            nodes.add(node);
+            var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                         RuntimeParameters.newBuilder()
+                                                          .setScheduler(scheduler)
+                                                          .setMember(member)
+                                                          .setContext(context)
+                                                          .setExec(exec)
+                                                          .setCommunications(localRouter));
+            domains.add(node);
             foundations.put(member, foundation);
             routers.put(node, localRouter);
             localRouter.start();
         });
-
-        var ffParams = FirefliesParameters.newBuilder()
-                                          .setCertificateValidator(CertificateValidator.NONE)
-                                          .setCardinality(CARDINALITY)
-                                          .build();
-        var certToMember = new View.CertToMember() {
-
-            @Override
-            public Member from(X509Certificate cert) {
-                var decoded = Stereotomy.decode(cert).get();
-                return new MemberImpl(((SelfAddressingIdentifier) decoded.identifier()).getDigest(), cert,
-                                      decoded.keyEvent().getKeys().get(0));
-            }
-
-            @Override
-            public Digest idOf(X509Certificate cert) {
-                var decoded = Stereotomy.decode(cert).get();
-                return ((SelfAddressingIdentifier) decoded.identifier()).getDigest();
-            }
-        };
-        nodes.forEach(m -> {
-            var cert = m.provision(null, new InetSocketAddress(Utils.allocatePort()), Duration.ofDays(1),
-                                   SignatureAlgorithm.DEFAULT)
-                        .get();
-            var node = new com.salesforce.apollo.fireflies.Node(m.getMember(), cert, ffParams);
-            views.put(m, new View(foundations.get(m.getMember()), node, certToMember, routers.get(m), null));
+        domains.forEach(m -> {
+            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), new InetSocketAddress(0),
+                                  EventValidation.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
         });
     }
 
-    @Test
+//    @Test
     public void smokin() throws Exception {
         var scheduler = Executors.newSingleThreadScheduledExecutor();
-        nodes.forEach(n -> n.start());
+        domains.forEach(n -> n.start());
         views.values()
-             .forEach(v -> v.getService()
-                            .start(Duration.ofMillis(10),
-                                   nodes.stream().map(n -> n.getMember().getCertificate()).toList(), scheduler));
-        Thread.sleep(30_000);
+             .forEach(v -> v.start(Duration.ofMillis(10),
+                                   domains.stream()
+                                          .map(n -> View.identityFor(0, new InetSocketAddress(0),
+                                                                     n.getMember().getEvent()))
+                                          .toList(),
+                                   scheduler));
+        Thread.sleep(10_000);
     }
 
     private Builder params() {
@@ -179,14 +154,7 @@ public class FireFliesTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setTxnPermits(5000)
                                .setCheckpointBlockSize(200);
-        params.getClientBackoff()
-              .setBase(10)
-              .setCap(250)
-              .setInfiniteAttempts()
-              .setJitter()
-              .setExceptionHandler(t -> System.out.println(t.getClass().getSimpleName()));
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
