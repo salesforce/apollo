@@ -103,9 +103,7 @@ public class MtlsTest {
         identities.entrySet().forEach(e -> {
             InetSocketAddress endpoint = new InetSocketAddress(localhost, Utils.allocatePort());
             certs.put(e.getKey(),
-                      e.getValue()
-                       .provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT)
-                       .get());
+                      e.getValue().provision(Instant.now(), Duration.ofDays(1), SignatureAlgorithm.DEFAULT).get());
             endpoints.put(e.getKey(), endpoint);
         });
     }
