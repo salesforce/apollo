@@ -86,7 +86,7 @@ public class MembershipTests {
 
         var txneer = choams.get(members.get(0).getId());
 
-        assertTrue(Utils.waitForCondition(30_000, 1000, () -> txneer.active()), "Transactioneer did not become active");
+        assertTrue(Utils.waitForCondition(60_000, 1000, () -> txneer.active()), "Transactioneer did not become active");
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
@@ -159,7 +159,7 @@ public class MembershipTests {
             };
             params.getProducer().ethereal().setSigner(m);
             if (m.equals(testSubject)) {
-                params.setSynchronizationCycles(100);
+                params.setSynchronizationCycles(20);
             } else {
                 params.setSynchronizationCycles(1);
             }
