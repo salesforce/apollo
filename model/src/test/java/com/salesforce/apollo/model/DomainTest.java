@@ -109,6 +109,7 @@ public class DomainTest {
     @Test
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
+        Thread.sleep(2_000);
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
@@ -127,8 +128,7 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockSize(200);
-
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;
     }
 
