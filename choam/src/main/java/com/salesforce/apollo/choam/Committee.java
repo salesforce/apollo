@@ -101,7 +101,7 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log().trace("Cannot submit txn, inactive committee");
+        log().warn("Cannot submit txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
         return SubmitResult.newBuilder()
                            .setSuccess(false)
                            .setStatus("Cannot submit txn, inactive committee: " + getClass().getSimpleName() + " on: "
@@ -110,7 +110,7 @@ public interface Committee {
     }
 
     default ListenableFuture<Status> submitTxn(Transaction transaction) {
-        log().trace("Cannot submit txn, inactive committee");
+        log().warn("Cannot process txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
         SettableFuture<Status> f = SettableFuture.create();
         f.set(Status.UNAVAILABLE.withDescription("Cannot process txn, inactive committee: " + getClass().getSimpleName()
         + "on: " + params().member()));
