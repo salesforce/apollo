@@ -25,9 +25,11 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 public class ControlledIdentifierMember implements SigningMember {
 
     private final ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    private final Digest                                         id;
 
     public ControlledIdentifierMember(ControlledIdentifier<SelfAddressingIdentifier> identifier) {
         this.identifier = identifier;
+        this.id = identifier.getIdentifier().getDigest();
     }
 
     @Override
@@ -41,7 +43,7 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public int compareTo(Member o) {
-        return getId().compareTo(o.getId());
+        return id.compareTo(o.getId());
     }
 
     @Override
@@ -51,7 +53,7 @@ public class ControlledIdentifierMember implements SigningMember {
             return true;
         if ((obj == null) || !(obj instanceof Member))
             return false;
-        return getId().equals(((Member) obj).getId());
+        return id.equals(((Member) obj).getId());
     }
 
     @Override
@@ -69,12 +71,12 @@ public class ControlledIdentifierMember implements SigningMember {
 
     @Override
     public Digest getId() {
-        return identifier.getIdentifier().getDigest();
+        return id;
     }
 
     @Override
     public int hashCode() {
-        return getId().hashCode();
+        return id.hashCode();
     }
 
     @Override
