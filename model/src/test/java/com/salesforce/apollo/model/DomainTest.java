@@ -87,11 +87,11 @@ public class DomainTest {
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
+        var exec = Router.createFjPool();
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2));
             routers.add(localRouter);
-            var exec = Router.createFjPool();
             var domain = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setScheduler(scheduler)

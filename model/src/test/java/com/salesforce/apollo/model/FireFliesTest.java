@@ -91,11 +91,11 @@ public class FireFliesTest {
 
         var foundations = new HashMap<Member, Context<Participant>>();
 
+        var exec = Router.createFjPool();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2));
-            var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
