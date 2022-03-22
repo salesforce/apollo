@@ -261,7 +261,6 @@ public class CHOAMTest {
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(Router.createFjPool())
                                                        .setGenesisData(view -> GENESIS_DATA)
                                                        .setScheduler(scheduler)
                                                        .setMember(m)
