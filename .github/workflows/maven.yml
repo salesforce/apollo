@@ -14,6 +14,6 @@ jobs:
       with:
         java-version: '17'
         distribution: 'zulu'
-        cache: maven
+        cache: maven 
     - name: Build with Maven
       run: mvn -batch-mode clean package --file pom.xml
