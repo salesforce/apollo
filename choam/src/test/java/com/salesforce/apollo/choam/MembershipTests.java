@@ -41,6 +41,8 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
+import ch.qos.logback.classic.Level;
+
 /**
  * @author hal.hildebrand
  *
