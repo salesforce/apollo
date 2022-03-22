@@ -109,11 +109,11 @@ public class ViewAssemblyTest {
         });
         CountDownLatch complete = new CountDownLatch(committee.size());
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream()
-                                                    .collect(Collectors.toMap(m -> m,
-                                                                              m -> new LocalRouter(prefix, m,
-                                                                                                   ServerConnectionCache.newBuilder(),
-                                                                                                   executor)));
+        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor);
+            localRouter.setMember(m);
+            return localRouter;
+        }));
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)

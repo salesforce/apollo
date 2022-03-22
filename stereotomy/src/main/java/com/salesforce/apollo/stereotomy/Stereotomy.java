@@ -9,7 +9,6 @@ package com.salesforce.apollo.stereotomy;
 import static com.salesforce.apollo.crypto.QualifiedBase64.signature;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.identifier;
 
-import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,7 +34,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  */
 public interface Stereotomy {
 
-    record Decoded(Identifier identifier, InetSocketAddress endpoint, JohnHancock signature) {}
+    record Decoded(Identifier identifier, JohnHancock signature) {}
 
     static Version currentVersion() {
         return new Version() {
@@ -70,25 +69,13 @@ public interface Stereotomy {
             getLogger().warn("Invalid certificate, missing \"UID\" of dn= {}", dn);
             return Optional.empty();
         }
-        String portString = decoded.get("L");
-        if (portString == null) {
-            getLogger().warn("Invalid certificate, missing \"L\" of dn= {}", dn);
-            return Optional.empty();
-        }
-        int port = Integer.parseInt(portString);
-
-        String hostName = decoded.get("CN");
-        if (hostName == null) {
-            getLogger().warn("Invalid certificate, missing \\\"CN\\\" of dn= {}", dn);
-            return Optional.empty();
-        }
 
         String signature = decoded.get("DC");
         if (signature == null) {
-            getLogger().warn("Invalid certificate, missing \\\"DC\\\" of dn= {}", dn);
+            getLogger().warn("Invalid certificate, missing \"DC\" of dn= {}", dn);
             return Optional.empty();
         }
-        return Optional.of(new Decoded(identifier(id), new InetSocketAddress(hostName, port), signature(signature)));
+        return Optional.of(new Decoded(identifier(id), signature(signature)));
     }
 
     /**

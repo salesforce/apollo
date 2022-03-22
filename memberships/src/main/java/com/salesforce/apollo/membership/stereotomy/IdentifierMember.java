@@ -38,6 +38,16 @@ public class IdentifierMember implements Member {
     }
 
     @Override
+    // The id of a member uniquely identifies it
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if ((obj == null) || !(obj instanceof Member))
+            return false;
+        return getId().equals(((Member) obj).getId());
+    }
+
+    @Override
     public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
         return verifier().filtered(threshold, signature, message);
     }
@@ -45,6 +55,16 @@ public class IdentifierMember implements Member {
     @Override
     public Digest getId() {
         return ((SelfAddressingIdentifier) event.getIdentifier()).getDigest();
+    }
+
+    @Override
+    public int hashCode() {
+        return getId().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + getId();
     }
 
     @Override

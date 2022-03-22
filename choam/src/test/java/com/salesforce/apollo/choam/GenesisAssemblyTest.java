@@ -115,11 +115,11 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream()
-                                                    .collect(Collectors.toMap(m -> m,
-                                                                              m -> new LocalRouter(prefix, m,
-                                                                                                   ServerConnectionCache.newBuilder(),
-                                                                                                   ForkJoinPool.commonPool())));
+        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+            comm.setMember(m);
+            return comm;
+        }));
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)

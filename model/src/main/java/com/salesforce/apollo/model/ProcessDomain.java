@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.model;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,8 +56,7 @@ public class ProcessDomain extends Domain {
         foundation = null;
     }
 
-    public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Duration duration,
-                                                         SignatureAlgorithm signatureAlgorithm) {
-        return identifier.provision(endpoint, Instant.now(), duration, signatureAlgorithm);
+    public Optional<CertificateWithPrivateKey> provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {
+        return identifier.provision(Instant.now(), duration, signatureAlgorithm);
     }
 }

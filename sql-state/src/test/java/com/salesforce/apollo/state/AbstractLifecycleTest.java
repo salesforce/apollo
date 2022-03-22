@@ -126,7 +126,8 @@ abstract public class AbstractLifecycleTest {
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec);
+            localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream()

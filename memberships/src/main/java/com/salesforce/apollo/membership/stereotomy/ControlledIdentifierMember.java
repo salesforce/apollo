@@ -45,6 +45,16 @@ public class ControlledIdentifierMember implements SigningMember {
     }
 
     @Override
+    // The id of a member uniquely identifies it
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if ((obj == null) || !(obj instanceof Member))
+            return false;
+        return getId().equals(((Member) obj).getId());
+    }
+
+    @Override
     public Filtered filtered(SigningThreshold threshold, JohnHancock signature, InputStream message) {
         var verifier = identifier.getVerifier();
         if (verifier.isEmpty()) {
@@ -63,12 +73,22 @@ public class ControlledIdentifierMember implements SigningMember {
     }
 
     @Override
+    public int hashCode() {
+        return getId().hashCode();
+    }
+
+    @Override
     public JohnHancock sign(InputStream message) {
         var signer = identifier.getSigner();
         if (signer.isEmpty()) {
             throw new IllegalStateException("cannot obtain signer for: " + getId());
         }
         return signer.get().sign(message);
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + getId();
     }
 
     @Override

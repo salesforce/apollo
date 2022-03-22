@@ -130,10 +130,13 @@ abstract public class Domain {
     protected final Oracle                                         oracle;
     protected final Parameters                                     params;
     protected final SqlStateMachine                                sqlStateMachine;
+    protected final ControlledIdentifierMember                     member;
 
     public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
                   Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
-        params = params.clone();
+        var paramsClone = params.clone();
+        var runtimeClone = runtime.clone();
+        this.member = new ControlledIdentifierMember(id);
         var dir = checkpointBaseDir.toFile();
         if (!dir.exists()) {
             if (!dir.mkdirs()) {
@@ -147,18 +150,21 @@ abstract public class Domain {
         this.identifier = id;
         sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
 
-        this.params = params.build(runtime.setCheckpointer(sqlStateMachine.getCheckpointer())
-                                          .setProcessor(sqlStateMachine.getExecutor())
-                                          .setRestorer(sqlStateMachine.getBootstrapper())
-                                          .setKerl(() -> kerl())
-                                          .setGenesisData(members -> genesisOf(members))
-                                          .build());
+        paramsClone.getProducer().ethereal().setSigner(member);
+        this.params = paramsClone.build(runtimeClone.setCheckpointer(sqlStateMachine.getCheckpointer())
+                                                    .setProcessor(sqlStateMachine.getExecutor())
+                                                    .setMember(member)
+                                                    .setRestorer(sqlStateMachine.getBootstrapper())
+                                                    .setKerl(() -> kerl())
+                                                    .setGenesisData(members -> genesisOf(members))
+                                                    .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
-        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
-                                        params.getSubmitTimeout(), runtime.getExec());
-        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtime.getScheduler(),
-                                          params.getSubmitTimeout(), params.getDigestAlgorithm(), runtime.getExec());
+        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+                                        params.getSubmitTimeout(), runtimeClone.getExec());
+        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+                                          params.getSubmitTimeout(), params.getDigestAlgorithm(),
+                                          runtimeClone.getExec());
     }
 
     /**
@@ -184,7 +190,7 @@ abstract public class Domain {
     }
 
     public ControlledIdentifierMember getMember() {
-        return (ControlledIdentifierMember) params.member();
+        return member;
     }
 
     public void start() {

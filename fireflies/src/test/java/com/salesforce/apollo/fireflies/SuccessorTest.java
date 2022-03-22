@@ -113,8 +113,9 @@ public class SuccessorTest {
         ForkJoinPool executor = new ForkJoinPool();
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(prefix, node, builder, executor);
+            LocalRouter comms = new LocalRouter(prefix, builder, executor);
             communications.add(comms);
+            comms.setMember(node);
             comms.start();
             Context<Participant> context = ctxBuilder.build();
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,

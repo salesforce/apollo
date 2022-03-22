@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,47 +81,37 @@ public class FireFliesTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
 
-        var members = new HashMap<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>>();
-        for (int i = 0; i < CARDINALITY; i++) {
-            @SuppressWarnings("unchecked")
-            ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
-                                                                                                                           .get();
-            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
-                                    Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
-            var member = new SigningMemberImpl(id.getIdentifier().getDigest(), cert.get().getX509Certificate(),
-                                               cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0));
-            members.put(member, id);
-
-        }
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .parallel()
+                                  .mapToObj(i -> stereotomy.newIdentifier().get())
+                                  .map(ci -> {
+                                      @SuppressWarnings("unchecked")
+                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                      return casted;
+                                  })
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         var foundations = new HashMap<Member, Context<Participant>>();
 
-        members.forEach((member, id) -> {
+        identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            AtomicInteger execC = new AtomicInteger();
-
-            var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + member.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
-            params.getProducer().ethereal().setSigner(member);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(2));
             var exec = Router.createFjPool();
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setScheduler(scheduler)
-                                                          .setMember(member)
                                                           .setContext(context)
                                                           .setExec(exec)
                                                           .setCommunications(localRouter));
             domains.add(node);
-            foundations.put(member, foundation);
+            foundations.put(node.getMember(), foundation);
             routers.put(node, localRouter);
+            localRouter.setMember(node.getMember());
             localRouter.start();
         });
         domains.forEach(m -> {

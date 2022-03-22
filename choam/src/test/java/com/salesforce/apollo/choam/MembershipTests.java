@@ -136,12 +136,11 @@ public class MembershipTests {
                            .toList();
         SigningMember testSubject = members.get(cardinality - 1);
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(cardinality),
-                                                                        exec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);
+            comm.setMember(m);
+            return comm;
+        }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
