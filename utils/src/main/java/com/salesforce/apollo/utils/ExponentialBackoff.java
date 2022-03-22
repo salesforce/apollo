@@ -122,7 +122,7 @@ public class ExponentialBackoff<T> {
         this.infinite = infinite;
         this.exceptionHandler = exceptionHandler;
         this.retryIf = Objects.requireNonNull(retryIf);
-        log.info(toString());
+        log.debug(toString());
     }
 
     public void execute(Callable<T> task, CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
