@@ -77,19 +77,19 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(5);
+        final Duration timeout = Duration.ofSeconds(30);
         final var scheduler = Executors.newScheduledThreadPool(2);
 
         var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
 
         var success = false;
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 5; i++) {
             final var countdown = new CountDownLatch(1);
             var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown,
                                                     Executors.newSingleThreadExecutor());
 
             transactioneer.start();
-            success = countdown.await(10, TimeUnit.SECONDS);
+            success = countdown.await(timeout.toSeconds(), TimeUnit.SECONDS);
             if (success) {
                 System.out.println("completed");
                 break;
@@ -100,7 +100,7 @@ public class MembershipTests {
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(10_000, () -> blocks.get(testSubject.getId()).get() >= target);
+        success = Utils.waitForCondition(30_000, () -> blocks.get(testSubject.getId()).get() >= target);
         assertTrue(success, "Expecting: " + target + "completed: " + blocks);
 
     }
