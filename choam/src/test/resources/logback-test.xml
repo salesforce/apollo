@@ -23,6 +23,10 @@
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
+    <logger name="com.salesforce.apollo.choam.Session" level="trace"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     
     <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
