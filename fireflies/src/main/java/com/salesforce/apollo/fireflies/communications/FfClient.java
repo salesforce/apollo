@@ -76,8 +76,9 @@ public class FfClient implements Fireflies {
                                 .build();
             ListenableFuture<Gossip> result = client.gossip(sw);
             if (metrics != null) {
-                metrics.outboundBandwidth().mark(sw.getSerializedSize());
-                metrics.outboundGossip().mark(sw.getSerializedSize());
+                var serializedSize = sw.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundGossip().mark(serializedSize);
             }
             result.addListener(() -> {
                 if (metrics != null) {
@@ -88,8 +89,9 @@ public class FfClient implements Fireflies {
                         // ignored
                         return;
                     }
-                    metrics.inboundBandwidth().mark(gossip.getSerializedSize());
-                    metrics.gossipResponse().mark(gossip.getSerializedSize());
+                    var serializedSize = gossip.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.gossipResponse().mark(serializedSize);
                 }
             }, r -> r.run());
             return result;
@@ -139,8 +141,9 @@ public class FfClient implements Fireflies {
             State state = State.newBuilder().setContext(context.toDigeste()).setRing(ring).setUpdate(update).build();
             client.update(state);
             if (metrics != null) {
-                metrics.outboundBandwidth().mark(state.getSerializedSize());
-                metrics.outboundUpdate().mark(state.getSerializedSize());
+                var serializedSize = state.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.outboundUpdate().mark(serializedSize);
             }
         } catch (Throwable e) {
             throw new IllegalStateException("Unexpected exception in communication", e);

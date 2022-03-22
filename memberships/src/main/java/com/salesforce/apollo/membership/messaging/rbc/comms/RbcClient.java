@@ -36,7 +36,7 @@ public class RbcClient implements ReliableBroadcast {
     private final ManagedServerConnection channel;
     private final RBCFutureStub           client;
     private final Member                  member;
-    private final RbcMetrics           metrics;
+    private final RbcMetrics              metrics;
 
     public RbcClient(ManagedServerConnection channel, Member member, RbcMetrics metrics) {
         this.member = member;
@@ -59,8 +59,9 @@ public class RbcClient implements ReliableBroadcast {
     public ListenableFuture<Reconcile> gossip(MessageBff request) {
         Context timer = metrics == null ? null : metrics.outboundGossipTimer().time();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGossip().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundGossip().mark(serializedSize);
         }
         var result = client.gossip(request);
         if (metrics != null) {
@@ -69,8 +70,9 @@ public class RbcClient implements ReliableBroadcast {
                 try {
                     reconcile = result.get();
                     timer.stop();
-                    metrics.inboundBandwidth().mark(reconcile.getSerializedSize());
-                    metrics.gossipResponse().mark(reconcile.getSerializedSize());
+                    var serializedSize = reconcile.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.gossipResponse().mark(serializedSize);
                 } catch (InterruptedException | ExecutionException e) {
                     if (timer != null) {
                         timer.close();
@@ -85,8 +87,9 @@ public class RbcClient implements ReliableBroadcast {
     public void update(ReconcileContext request) {
         Context timer = metrics == null ? null : metrics.outboundUpdateTimer().time();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundUpdate().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(serializedSize);
+            metrics.outboundUpdate().mark(serializedSize);
         }
         try {
             var result = client.update(request);

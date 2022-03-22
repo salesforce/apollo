@@ -37,8 +37,9 @@ public class GossiperServer extends GossiperImplBase {
     public void gossip(Gossip request, StreamObserver<Update> responseObserver) {
         Context timer = metrics != null ? metrics.inboundGossipTimer().time() : null;
         if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundGossip().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGossip().mark(serializedSize);
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
@@ -49,8 +50,9 @@ public class GossiperServer extends GossiperImplBase {
             Update response = s.gossip(request, from);
             if (timer != null) {
                 timer.stop();
-                metrics.outboundBandwidth().mark(response.getSerializedSize());
-                metrics.gossipReply().mark(response.getSerializedSize());
+                var serializedSize = response.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.gossipReply().mark(serializedSize);
             }
             responseObserver.onNext(response);
             responseObserver.onCompleted();

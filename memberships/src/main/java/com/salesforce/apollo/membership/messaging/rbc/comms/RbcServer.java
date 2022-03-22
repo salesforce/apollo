@@ -43,8 +43,9 @@ public class RbcServer extends RBCImplBase {
     public void update(ReconcileContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
         if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundUpdate().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundUpdate().mark(serializedSize);
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             try {
@@ -68,8 +69,9 @@ public class RbcServer extends RBCImplBase {
     public void gossip(MessageBff request, StreamObserver<Reconcile> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundGossipTimer().time();
         if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundGossip().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGossip().mark(serializedSize);
         }
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             try {
@@ -82,8 +84,9 @@ public class RbcServer extends RBCImplBase {
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
                 if (metrics != null) {
-                    metrics.outboundBandwidth().mark(response.getSerializedSize());
-                    metrics.gossipReply().mark(response.getSerializedSize());
+                    var serializedSize = response.getSerializedSize();
+                    metrics.outboundBandwidth().mark(serializedSize);
+                    metrics.gossipReply().mark(serializedSize);
                 }
             } finally {
                 if (timer != null) {
