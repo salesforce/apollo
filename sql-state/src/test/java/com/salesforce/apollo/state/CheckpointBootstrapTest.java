@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -59,7 +58,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
-                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
+                                  .submit(txExecutor, initialInsert(), timeout, txScheduler);
         initial.get(30, TimeUnit.SECONDS);
 
         for (int i = 0; i < 1; i++) {
@@ -73,7 +72,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         checkpointOccurred.whenComplete((s, t) -> {
-            ForkJoinPool.commonPool().execute(() -> {
+            txExecutor.execute(() -> {
                 System.out.println("Starting late joining node");
                 var choam = choams.get(testSubject.getId());
                 choam.context().activate(Collections.singletonList(testSubject));

@@ -18,7 +18,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
 import org.joou.ULong;
@@ -54,7 +53,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
         final var initial = choams.get(members.get(0).getId())
                                   .getSession()
-                                  .submit(ForkJoinPool.commonPool(), initialInsert(), timeout, txScheduler);
+                                  .submit(txExecutor, initialInsert(), timeout, txScheduler);
         initial.get(30, TimeUnit.SECONDS);
         var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
 

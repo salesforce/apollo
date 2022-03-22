@@ -11,7 +11,6 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -80,7 +79,7 @@ class Transactioneer {
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(session.submit(ForkJoinPool.commonPool(), tx, timeout, scheduler));
+                decorate(session.submit(txnScheduler, tx, timeout, scheduler));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

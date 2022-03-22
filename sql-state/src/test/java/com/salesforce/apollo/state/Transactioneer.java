@@ -12,7 +12,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -91,7 +90,7 @@ class Transactioneer {
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(mutator.getSession().submit(ForkJoinPool.commonPool(), update.get(), timeout, scheduler));
+                decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

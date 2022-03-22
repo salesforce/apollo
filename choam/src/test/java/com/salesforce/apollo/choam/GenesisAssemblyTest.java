@@ -20,8 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -114,9 +114,10 @@ public class GenesisAssemblyTest {
             });
         });
 
+        Executor exec = Executors.newCachedThreadPool();
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), ForkJoinPool.commonPool());
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);
             comm.setMember(m);
             return comm;
         }));
@@ -135,6 +136,7 @@ public class GenesisAssemblyTest {
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
+                                                      .setExec(exec)
                                                       .setScheduler(scheduler)
                                                       .setContext(base)
                                                       .setMember(sm)

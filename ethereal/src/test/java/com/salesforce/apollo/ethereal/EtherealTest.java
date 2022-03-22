@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -148,8 +147,7 @@ public class EtherealTest {
             var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
             com.setMember(members.get(i));
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
-                                              metrics));
+            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, executor, metrics));
         }
         try {
             controllers.forEach(e -> e.start());
