@@ -11,7 +11,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -32,7 +31,6 @@ public class ExponentialBackoff<T> {
         private Consumer<Throwable> exceptionHandler = t -> {
                                                      };
         private boolean             infinite         = false;
-        private boolean             jitter           = false;
         private int                 maxAttempts      = DEFAULT_MAX_ATTEMPTS;
         private Predicate<T>        retryIf          = t -> false;
 
@@ -40,7 +38,7 @@ public class ExponentialBackoff<T> {
         }
 
         public ExponentialBackoff<T> build() {
-            return new ExponentialBackoff<>(cap, base, maxAttempts, jitter, infinite, retryIf, exceptionHandler);
+            return new ExponentialBackoff<>(cap, base, maxAttempts, infinite, retryIf, exceptionHandler);
         }
 
         public void execute(Callable<T> task, CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
@@ -77,11 +75,6 @@ public class ExponentialBackoff<T> {
             return this;
         }
 
-        public Builder<T> setJitter() {
-            this.jitter = true;
-            return this;
-        }
-
         public Builder<T> setMaxAttempts(final int maxAttempts) {
             this.maxAttempts = maxAttempts;
             return this;
@@ -100,12 +93,10 @@ public class ExponentialBackoff<T> {
 
     }
 
-    static final int DEFAULT_MAX_ATTEMPTS = 10;
-
-    static final long DEFAULT_WAIT_BASE_MILLIS = 100;
-
-    static final long           DEFAULT_WAIT_CAP_MILLIS = 60000;
-    private static final Logger log                     = LoggerFactory.getLogger(ExponentialBackoff.class);
+    static final int            DEFAULT_MAX_ATTEMPTS     = 10;
+    static final long           DEFAULT_WAIT_BASE_MILLIS = 100;
+    static final long           DEFAULT_WAIT_CAP_MILLIS  = 60000;
+    private static final Logger log                      = LoggerFactory.getLogger(ExponentialBackoff.class);
 
     public static <T> Builder<T> newBuilder() {
         return new Builder<>();
@@ -116,26 +107,18 @@ public class ExponentialBackoff<T> {
         return expWait <= 0 ? cap : Math.min(cap, expWait);
     }
 
-    static long getWaitTimeWithJitter(final long cap, final long base, final long n) {
-        return ThreadLocalRandom.current().nextLong(0, getWaitTime(cap, base, n));
-    }
-
-    private final long base;
-
+    private final long                base;
     private final long                cap;
     private final Consumer<Throwable> exceptionHandler;
     private final boolean             infinite;
-    private final boolean             jitter;
     private final int                 maxAttempts;
     private final Predicate<T>        retryIf;
 
-    public ExponentialBackoff(final long cap, final long base, final int maxAttempts, final boolean jitter,
-                              final boolean infinite, final Predicate<T> retryIf,
-                              Consumer<Throwable> exceptionHandler) {
+    public ExponentialBackoff(final long cap, final long base, final int maxAttempts, final boolean infinite,
+                              final Predicate<T> retryIf, Consumer<Throwable> exceptionHandler) {
         this.cap = cap;
         this.base = base;
         this.maxAttempts = maxAttempts;
-        this.jitter = jitter;
         this.infinite = infinite;
         this.exceptionHandler = exceptionHandler;
         this.retryIf = Objects.requireNonNull(retryIf);
@@ -161,8 +144,8 @@ public class ExponentialBackoff<T> {
 
     @Override
     public String toString() {
-        return "ExponentialBackoff [base=" + base + ", cap=" + cap + ", infinite=" + infinite + ", jitter=" + jitter
-        + ", maxAttempts=" + maxAttempts + "]";
+        return "ExponentialBackoff [base=" + base + ", cap=" + cap + ", infinite=" + infinite + ", maxAttempts="
+        + maxAttempts + "]";
     }
 
     private void execute(final Predicate<Long> predicate, final long attempt, final CompletableFuture<T> futureSailor,
@@ -182,8 +165,7 @@ public class ExponentialBackoff<T> {
             exceptionHandler.accept(e);
         }
         final var nextAttempt = attempt + 1;
-        final long waitTime = jitter ? getWaitTimeWithJitter(cap, base, nextAttempt)
-                                     : getWaitTime(cap, base, nextAttempt);
+        final long waitTime = getWaitTime(cap, base, nextAttempt);
         scheduler.schedule(() -> execute(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
                            TimeUnit.MILLISECONDS);
     }
@@ -196,8 +178,7 @@ public class ExponentialBackoff<T> {
             return;
         }
         final var nextAttempt = attempt + 1;
-        final long waitTime = jitter ? getWaitTimeWithJitter(cap, base, nextAttempt)
-                                     : getWaitTime(cap, base, nextAttempt);
+        final long waitTime = getWaitTime(cap, base, nextAttempt);
 
         exec.execute(() -> {
             final ListenableFuture<T> r;

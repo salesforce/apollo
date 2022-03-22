@@ -419,8 +419,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                                                                                                  .retryIf(s -> s.isOk())
                                                                                                  .setBase(200)
                                                                                                  .setCap(2000)
-                                                                                                 .setInfiniteAttempts()
-                                                                                                 .setJitter()
                                                                                                  .setExceptionHandler(t -> System.out.println(t.getClass()
                                                                                                                                                .getSimpleName()));
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();

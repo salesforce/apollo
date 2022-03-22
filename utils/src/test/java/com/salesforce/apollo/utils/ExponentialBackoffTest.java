@@ -41,8 +41,12 @@ public class ExponentialBackoffTest {
         final AtomicInteger exceptions = new AtomicInteger(0);
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
 
-        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(5000).setMaxAttempts(5)
-                          .setExceptionHandler(e -> exceptions.incrementAndGet()).executeAsync(() -> {
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(1)
+                          .setCap(5000)
+                          .setMaxAttempts(5)
+                          .setExceptionHandler(e -> exceptions.incrementAndGet())
+                          .executeAsync(() -> {
                               attempts.incrementAndGet();
                               final boolean shouldThrow = attempts.get() < 3;
                               SettableFuture<String> f = SettableFuture.create();
@@ -81,7 +85,10 @@ public class ExponentialBackoffTest {
         };
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
 
-        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(10).setInfiniteAttempts()
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(1)
+                          .setCap(10)
+                          .setInfiniteAttempts()
                           .setExceptionHandler(e -> exceptions.incrementAndGet())
                           .executeAsync(task, ForkJoinPool.commonPool(), futureSailor, scheduler);
 
@@ -95,8 +102,12 @@ public class ExponentialBackoffTest {
     @Test
     public void asyncTestNullFuture() throws Exception {
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
-        ExponentialBackoff.<String>newBuilder().setBase(100).setCap(5000).setMaxAttempts(5).setJitter()
-                          .setExceptionHandler(Throwable::printStackTrace).executeAsync(() -> {
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(100)
+                          .setCap(5000)
+                          .setMaxAttempts(5)
+                          .setExceptionHandler(Throwable::printStackTrace)
+                          .executeAsync(() -> {
                               return null;
                           }, ForkJoinPool.commonPool(), futureSailor, scheduler);
 
@@ -108,8 +119,12 @@ public class ExponentialBackoffTest {
     @Test
     public void asyncTestSuccessfulExecution() throws Exception {
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
-        ExponentialBackoff.<String>newBuilder().setBase(100).setCap(5000).setMaxAttempts(5).setJitter()
-                          .setExceptionHandler(Throwable::printStackTrace).executeAsync(() -> {
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(100)
+                          .setCap(5000)
+                          .setMaxAttempts(5)
+                          .setExceptionHandler(Throwable::printStackTrace)
+                          .executeAsync(() -> {
                               SettableFuture<String> f = SettableFuture.create();
                               f.set("Do something");
                               return f;
@@ -123,8 +138,11 @@ public class ExponentialBackoffTest {
     @Test
     public void asyncTestThatMaxAttemptsAreExceeded() throws Throwable {
         CompletableFuture<Long> futureSailor = new CompletableFuture<>();
-        ExponentialBackoff.<Long>newBuilder().setMaxAttempts(3).setBase(1)
-                          .setExceptionHandler(e -> System.out.println(e.getMessage())).executeAsync(() -> {
+        ExponentialBackoff.<Long>newBuilder()
+                          .setMaxAttempts(3)
+                          .setBase(1)
+                          .setExceptionHandler(e -> System.out.println(e.getMessage()))
+                          .executeAsync(() -> {
                               SettableFuture<Long> f = SettableFuture.create();
                               f.setException(new RuntimeException("Fake exception"));
                               return f;
@@ -171,8 +189,12 @@ public class ExponentialBackoffTest {
         final AtomicInteger exceptions = new AtomicInteger(0);
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
 
-        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(5000).setMaxAttempts(5)
-                          .setExceptionHandler(e -> exceptions.incrementAndGet()).execute(() -> {
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(1)
+                          .setCap(5000)
+                          .setMaxAttempts(5)
+                          .setExceptionHandler(e -> exceptions.incrementAndGet())
+                          .execute(() -> {
                               attempts.incrementAndGet();
                               final boolean shouldThrow = attempts.get() < 3;
                               if (shouldThrow) {
@@ -206,7 +228,10 @@ public class ExponentialBackoffTest {
         };
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
 
-        ExponentialBackoff.<String>newBuilder().setBase(1).setCap(10).setInfiniteAttempts()
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(1)
+                          .setCap(10)
+                          .setInfiniteAttempts()
                           .setExceptionHandler(e -> exceptions.incrementAndGet())
                           .execute(task, futureSailor, scheduler);
 
@@ -220,7 +245,10 @@ public class ExponentialBackoffTest {
     @Test
     public void testSuccessfulExecution() throws Exception {
         CompletableFuture<String> futureSailor = new CompletableFuture<>();
-        ExponentialBackoff.<String>newBuilder().setBase(100).setCap(5000).setMaxAttempts(5).setJitter()
+        ExponentialBackoff.<String>newBuilder()
+                          .setBase(100)
+                          .setCap(5000)
+                          .setMaxAttempts(5)
                           .setExceptionHandler(Throwable::printStackTrace)
                           .execute(() -> "Do something", futureSailor, scheduler);
 
@@ -232,8 +260,11 @@ public class ExponentialBackoffTest {
     @Test
     public void testThatMaxAttemptsAreExceeded() throws Throwable {
         CompletableFuture<Long> futureSailor = new CompletableFuture<>();
-        ExponentialBackoff.<Long>newBuilder().setMaxAttempts(3).setBase(1)
-                          .setExceptionHandler(e -> System.out.println(e.getMessage())).execute(() -> {
+        ExponentialBackoff.<Long>newBuilder()
+                          .setMaxAttempts(3)
+                          .setBase(1)
+                          .setExceptionHandler(e -> System.out.println(e.getMessage()))
+                          .execute(() -> {
                               throw new RuntimeException("Fake exception");
                           }, futureSailor, scheduler);
 
