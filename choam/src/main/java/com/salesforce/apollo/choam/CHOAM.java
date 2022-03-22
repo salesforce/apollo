@@ -678,6 +678,11 @@ public class CHOAM {
         session = new Session(params, service());
     }
 
+    public boolean active() {
+        final var c = current.get();
+        return !(c == null || c instanceof Formation);
+    }
+
     public Context<Member> context() {
         return params.context();
     }

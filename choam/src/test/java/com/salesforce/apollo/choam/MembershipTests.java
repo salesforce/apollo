@@ -82,26 +82,21 @@ public class MembershipTests {
 
         var txneer = choams.get(members.get(0).getId());
 
-        var success = false;
-        for (int i = 0; i < 5; i++) {
-            final var countdown = new CountDownLatch(1);
-            var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
-                                                    Executors.newSingleThreadExecutor());
+        assertTrue(Utils.waitForCondition(30, 1000, () -> txneer.active()), "Transactioneer did not become active");
 
-            transactioneer.start();
-            success = countdown.await(timeout.toSeconds(), TimeUnit.SECONDS);
-            if (success) {
-                System.out.println("completed");
-                break;
-            }
-            System.out.println("Did not complete: " + countdown.getCount() + " retrying: " + (i != 8));
-        }
+        final var countdown = new CountDownLatch(1);
+        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
+                                                Executors.newSingleThreadExecutor());
+
+        transactioneer.start();
+        assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");
+
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(30_000, () -> blocks.get(testSubject.getId()).get() >= target);
-        assertTrue(success, "Expecting: " + target + "completed: " + blocks);
+        assertTrue(Utils.waitForCondition(30_000, () -> blocks.get(testSubject.getId()).get() >= target),
+                   "Expecting: " + target + "completed: " + blocks);
 
     }
 
