@@ -80,12 +80,12 @@ public class MembershipTests {
         final Duration timeout = Duration.ofSeconds(30);
         final var scheduler = Executors.newScheduledThreadPool(2);
 
-        var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
+        var txneer = choams.get(members.get(0).getId());
 
         var success = false;
         for (int i = 0; i < 5; i++) {
             final var countdown = new CountDownLatch(1);
-            var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown,
+            var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
                                                     Executors.newSingleThreadExecutor());
 
             transactioneer.start();
