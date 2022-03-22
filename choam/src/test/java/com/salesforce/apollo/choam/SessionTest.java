@@ -94,7 +94,7 @@ public class SessionTest {
 
     @Test
     public void scalingTest() throws Exception {
-        var exec = Executors.newCachedThreadPool();
+        var exec = Executors.newFixedThreadPool(2);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         Parameters params = Parameters.newBuilder()

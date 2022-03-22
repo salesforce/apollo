@@ -80,7 +80,7 @@ public class ViewAssemblyTest {
         base.activate(members);
         Context<Member> committee = Committee.viewFor(viewId, base);
 
-        final var executor = Executors.newCachedThreadPool();
+        final var executor = Executors.newFixedThreadPool(cardinality);
         Parameters.Builder params = Parameters.newBuilder()
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(10))

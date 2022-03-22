@@ -60,7 +60,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class TestCHOAM {
     private static final int                      CARDINALITY = 5;
-    private static final ExecutorService          exec        = Executors.newCachedThreadPool();
+    private static final ExecutorService          exec        = Executors.newFixedThreadPool(CARDINALITY);
     private static final boolean                  LARGE_TESTS = Boolean.getBoolean("large_tests");
     private static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
     private static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);

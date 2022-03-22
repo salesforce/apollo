@@ -114,7 +114,7 @@ public class GenesisAssemblyTest {
             });
         });
 
-        Executor exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(cardinality);
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);

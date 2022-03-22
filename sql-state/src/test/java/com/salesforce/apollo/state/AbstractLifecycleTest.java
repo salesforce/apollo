@@ -64,7 +64,7 @@ abstract public class AbstractLifecycleTest {
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-    private static final ExecutorService          exec            = Executors.newCachedThreadPool();
+    private static final ExecutorService          exec            = Executors.newFixedThreadPool(CARDINALITY);
     private static final List<Transaction>        GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
     private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);

@@ -110,7 +110,7 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        var exec = Executors.newCachedThreadPool();
+        var exec = Executors.newFixedThreadPool(cardinality);
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()

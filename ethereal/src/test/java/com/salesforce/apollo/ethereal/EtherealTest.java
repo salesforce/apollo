@@ -108,7 +108,7 @@ public class EtherealTest {
         var builder = Config.deterministic()
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        var executor = Executors.newCachedThreadPool();
+        var executor = Executors.newFixedThreadPool(nProc);
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {

@@ -91,7 +91,7 @@ public class CHOAMTest {
     private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
-    private Executor                           exec     = Executors.newCachedThreadPool();
+    private Executor                           exec     = Executors.newFixedThreadPool(CARDINALITY);
 
     @AfterEach
     public void after() throws Exception {
