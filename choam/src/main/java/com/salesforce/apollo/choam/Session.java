@@ -28,7 +28,7 @@ import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
-import com.salesforce.apollo.choam.support.TransactionFailed;
+import com.salesforce.apollo.choam.support.TransactionCancelled;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
@@ -84,7 +84,7 @@ public class Session {
     public void cancelAll() {
         submitted.values()
                  .forEach(stx -> stx.onCompletion()
-                                    .completeExceptionally(new TransactionFailed("Transaction cancelled")));
+                                    .completeExceptionally(new TransactionCancelled("Transaction cancelled")));
     }
 
     /**

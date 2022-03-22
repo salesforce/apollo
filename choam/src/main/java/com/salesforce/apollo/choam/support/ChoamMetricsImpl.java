@@ -97,6 +97,8 @@ public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetri
         if (t != null) {
             if (t instanceof TimeoutException) {
                 transactionTimeout.inc();
+            } else if (t instanceof TransactionCancelled) {
+                // ignore
             } else {
                 failedTransactions.inc();
             }

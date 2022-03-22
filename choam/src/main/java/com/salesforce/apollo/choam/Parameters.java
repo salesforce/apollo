@@ -417,12 +417,12 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private int                                    checkpointBlockSize   = 8192;
         private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
                                                                                                  .retryIf(s -> s.isOk())
-                                                                                                 .setBase(10)
-                                                                                                 .setCap(100)
+                                                                                                 .setBase(200)
+                                                                                                 .setCap(2000)
                                                                                                  .setInfiniteAttempts()
                                                                                                  .setJitter()
                                                                                                  .setExceptionHandler(t -> System.out.println(t.getClass()
-                                                                                                                                               .getSimpleName()));;
+                                                                                                                                               .getSimpleName()));
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Digest                                 genesisViewId;
