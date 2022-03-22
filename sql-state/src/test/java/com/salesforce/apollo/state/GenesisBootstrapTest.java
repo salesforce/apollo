@@ -51,10 +51,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
-        final var initial = choams.get(members.get(0).getId())
-                                  .getSession()
-                                  .submit(txExecutor, initialInsert(), timeout, txScheduler);
-        initial.get(30, TimeUnit.SECONDS);
         var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
 
         var mutator = txneer.getValue().getMutator(choams.get(txneer.getKey().getId()).getSession());

@@ -56,11 +56,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
-        final var initial = choams.get(members.get(0).getId())
-                                  .getSession()
-                                  .submit(txExecutor, initialInsert(), timeout, txScheduler);
-        initial.get(30, TimeUnit.SECONDS);
-
         for (int i = 0; i < 1; i++) {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
@@ -68,8 +63,10 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                 return new Transactioneer(update, mutator, timeout, max, txExecutor, countdown, txScheduler);
             }).forEach(e -> transactioneers.add(e));
         }
+
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");
+
         transactioneers.stream().forEach(e -> e.start());
         checkpointOccurred.whenComplete((s, t) -> {
             txExecutor.execute(() -> {

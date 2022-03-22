@@ -65,21 +65,38 @@ abstract public class AbstractLifecycleTest {
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
     private static final ExecutorService          exec            = Executors.newFixedThreadPool(CARDINALITY);
-    private static final List<Transaction>        GENESIS_DATA    = CHOAM.toGenesisData(MigrationTest.initializeBookSchema());
+    private static final List<Transaction>        GENESIS_DATA;
     private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);
+
+    static {
+        var txns = MigrationTest.initializeBookSchema();
+        txns.add(initialInsert());
+        GENESIS_DATA = CHOAM.toGenesisData(txns);
+    }
+
+    private static Txn initialInsert() {
+        return Txn.newBuilder()
+                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                  .build();
+    }
 
     protected Map<Digest, AtomicInteger> blocks;
     protected CompletableFuture<Boolean> checkpointOccurred;
     protected Map<Digest, CHOAM>         choams;
     protected List<SigningMember>        members;
     protected Map<Digest, Router>        routers;
-    protected int                        toleranceLevel;
 
-    protected final Map<Member, SqlStateMachine> updaters   = new HashMap<>();
+    protected int                                toleranceLevel;
+    protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
     private File                                 baseDir;
     private File                                 checkpointDirBase;
-    private final Map<Member, Parameters>        parameters = new HashMap<>();
+
+    private final Map<Member, Parameters> parameters = new HashMap<>();
 
     public AbstractLifecycleTest() {
         super();
@@ -136,16 +153,6 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected abstract int checkpointBlockSize();
-
-    protected Txn initialInsert() {
-        return Txn.newBuilder()
-                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                  .build();
-    }
 
     protected Txn update(Random entropy, Mutator mutator) {
 
