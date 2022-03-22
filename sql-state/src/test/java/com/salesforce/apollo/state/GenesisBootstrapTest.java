@@ -51,12 +51,15 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
-        var txneer = updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).findFirst().get();
+        var txneer = updaters.get(members.get(0));
 
-        var mutator = txneer.getValue().getMutator(choams.get(txneer.getKey().getId()).getSession());
+        assertTrue(Utils.waitForCondition(30_000, () -> choams.get(members.get(0).getId()).active()),
+                   "txneer did not become active");
+
+        var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
                                                countdown, txScheduler));
-        System.out.println("Transaction member: " + txneer.getKey().getId());
+        System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         var success = countdown.await(60, TimeUnit.SECONDS);
@@ -69,7 +72,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         choam.start();
         routers.get(testSubject.getId()).start();
 
-        final ULong target = txneer.getValue().getCurrentBlock().height();
+        final ULong target = txneer.getCurrentBlock().height();
 
         assertTrue(Utils.waitForCondition(120_000, 100, () -> {
 

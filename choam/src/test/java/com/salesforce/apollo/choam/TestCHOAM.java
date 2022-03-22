@@ -191,6 +191,9 @@ public class TestCHOAM {
             }).forEach(e -> transactioneers.add(e));
         }
 
+        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+                   "System did not become active");
+
         transactioneers.stream().forEach(e -> e.start());
         try {
             countdown.await(60, TimeUnit.SECONDS);
@@ -211,6 +214,10 @@ public class TestCHOAM {
     public void submitTxn() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
+
+        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+                   "System did not become active");
+
         var session = choams.get(members.get(0).getId()).getSession();
         final ByteMessage tx = ByteMessage.newBuilder()
                                           .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))

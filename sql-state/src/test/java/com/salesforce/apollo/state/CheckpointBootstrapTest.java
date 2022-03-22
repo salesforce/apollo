@@ -56,6 +56,15 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
+        assertTrue(Utils.waitForCondition(30_000,
+                                          () -> choams.entrySet()
+                                                      .stream()
+                                                      .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                      .map(e -> e.getValue())
+                                                      .filter(c -> !c.active())
+                                                      .count() == 0),
+                   "System did not become active");
+
         for (int i = 0; i < 1; i++) {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
                 var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
