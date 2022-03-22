@@ -41,6 +41,8 @@ import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
+import ch.qos.logback.classic.Level;
+
 /**
  * @author hal.hildebrand
  *
@@ -50,6 +52,8 @@ public class MembershipTests {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
         });
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
     }
 
     private Map<Digest, AtomicInteger> blocks;
