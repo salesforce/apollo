@@ -108,7 +108,7 @@ public interface Committee {
     default ListenableFuture<Status> submitTxn(Transaction transaction) {
         log().trace("Cannot submit txn, inactive committee");
         SettableFuture<Status> f = SettableFuture.create();
-        f.set(Status.UNAVAILABLE.withDescription("Cannot submit txn, inactive committee on: " + params().member()));
+        f.set(Status.UNAVAILABLE.withDescription("Cannot process txn, inactive committee on: " + params().member()));
         return f;
     }
 
