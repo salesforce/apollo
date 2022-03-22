@@ -16,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.util.concurrent.ListenableFuture;
 
 /**
@@ -23,7 +26,6 @@ import com.google.common.util.concurrent.ListenableFuture;
  *
  */
 public class ExponentialBackoff<T> {
-
     public static final class Builder<T> {
         private long                base             = DEFAULT_WAIT_BASE_MILLIS;
         private long                cap              = DEFAULT_WAIT_CAP_MILLIS;
@@ -98,9 +100,12 @@ public class ExponentialBackoff<T> {
 
     }
 
-    static final int  DEFAULT_MAX_ATTEMPTS     = 10;
+    static final int DEFAULT_MAX_ATTEMPTS = 10;
+
     static final long DEFAULT_WAIT_BASE_MILLIS = 100;
-    static final long DEFAULT_WAIT_CAP_MILLIS  = 60000;
+
+    static final long           DEFAULT_WAIT_CAP_MILLIS = 60000;
+    private static final Logger log                     = LoggerFactory.getLogger(ExponentialBackoff.class);
 
     public static <T> Builder<T> newBuilder() {
         return new Builder<>();
@@ -115,7 +120,8 @@ public class ExponentialBackoff<T> {
         return ThreadLocalRandom.current().nextLong(0, getWaitTime(cap, base, n));
     }
 
-    private final long                base;
+    private final long base;
+
     private final long                cap;
     private final Consumer<Throwable> exceptionHandler;
     private final boolean             infinite;
@@ -133,6 +139,7 @@ public class ExponentialBackoff<T> {
         this.infinite = infinite;
         this.exceptionHandler = exceptionHandler;
         this.retryIf = Objects.requireNonNull(retryIf);
+        log.info(toString());
     }
 
     public void execute(Callable<T> task, CompletableFuture<T> futureSailor, ScheduledExecutorService scheduler) {
@@ -150,6 +157,12 @@ public class ExponentialBackoff<T> {
         } else {
             executeAsync(exec, 0, task, futureSailor, attempt -> attempt < maxAttempts, scheduler);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "ExponentialBackoff [base=" + base + ", cap=" + cap + ", infinite=" + infinite + ", jitter=" + jitter
+        + ", maxAttempts=" + maxAttempts + "]";
     }
 
     private void execute(final Predicate<Long> predicate, final long attempt, final CompletableFuture<T> futureSailor,
