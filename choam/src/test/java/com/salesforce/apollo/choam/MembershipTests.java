@@ -73,7 +73,7 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        SigningMember testSubject = initialize(2000, 37);
+        SigningMember testSubject = initialize(2000, 12);
         System.out.println("Test subject: " + testSubject);
         routers.entrySet()
                .stream()
@@ -112,7 +112,7 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        var exec = Executors.newFixedThreadPool(2 * cardinality);
+        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
@@ -130,7 +130,7 @@ public class MembershipTests {
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
         params.getCombineParams().setExec(exec);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
