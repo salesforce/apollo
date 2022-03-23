@@ -32,12 +32,19 @@ import java.util.stream.IntStream;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.LoggerFactory;
 
+import com.chiralbehaviors.tron.Fsm;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
+import com.salesforce.apollo.choam.Committee;
+import com.salesforce.apollo.choam.GenesisAssembly;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters;
+import com.salesforce.apollo.choam.Producer;
+import com.salesforce.apollo.choam.Session;
+import com.salesforce.apollo.choam.ViewAssembly;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -53,6 +60,8 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
+
+import ch.qos.logback.classic.Level;
 
 /**
  * @author hal.hildebrand
@@ -73,8 +82,13 @@ abstract public class AbstractLifecycleTest {
         var txns = MigrationTest.initializeBookSchema();
         txns.add(initialInsert());
         GENESIS_DATA = CHOAM.toGenesisData(txns);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
-//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
     private static Txn initialInsert() {
