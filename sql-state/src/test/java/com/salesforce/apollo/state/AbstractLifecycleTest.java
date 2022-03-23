@@ -215,6 +215,7 @@ abstract public class AbstractLifecycleTest {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockSize(checkpointBlockSize());
 
+        params.getCombineParams().setExec(exec);               
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }

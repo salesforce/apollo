@@ -129,6 +129,7 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
+        params.getCombineParams().setExec(exec);
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
