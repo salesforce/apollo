@@ -126,11 +126,11 @@ abstract public class Domain {
     protected final CHOAM                                          choam;
     protected final KERL                                           commonKERL;
     protected final ControlledIdentifier<SelfAddressingIdentifier> identifier;
+    protected final ControlledIdentifierMember                     member;
     protected final Mutator                                        mutator;
     protected final Oracle                                         oracle;
     protected final Parameters                                     params;
     protected final SqlStateMachine                                sqlStateMachine;
-    protected final ControlledIdentifierMember                     member;
 
     public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
                   Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
@@ -146,7 +146,7 @@ abstract public class Domain {
         if (!dir.isDirectory()) {
             throw new IllegalArgumentException("Must be a directory: " + checkpointBaseDir);
         }
-        var checkpointDir = new File(dir, qb64(((SelfAddressingIdentifier) id.getIdentifier()).getDigest()));
+        var checkpointDir = new File(dir, qb64(id.getIdentifier().getDigest()));
         this.identifier = id;
         sqlStateMachine = new SqlStateMachine(dbURL, new Properties(), checkpointDir);
 
@@ -165,6 +165,10 @@ abstract public class Domain {
         this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(),
                                           runtimeClone.getExec());
+    }
+
+    public boolean active() {
+        return choam.active();
     }
 
     /**

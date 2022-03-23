@@ -31,7 +31,6 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -87,7 +86,8 @@ public class DomainTest {
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        var exec = Router.createFjPool();
+        var exec = Executors.newCachedThreadPool();
+        params.getCombineParams().setExec(exec);
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2));
@@ -109,7 +109,8 @@ public class DomainTest {
     @Test
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
-        Thread.sleep(2_000);
+        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
+                   "Domains did not fully activate");
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
