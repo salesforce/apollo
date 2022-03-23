@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -84,7 +83,7 @@ public class SliceIterator<Comm extends Link> {
             }
             futureSailor.addListener(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
                                                                          slice.get(current.get()))),
-                                     ForkJoinPool.commonPool());
+                                     r -> r.run());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
