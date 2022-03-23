@@ -8,7 +8,7 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
-## Building
+## Building Apollo
 To build Apollo, cd to the root directory of the repository and then do:
    
     mvn clean install
@@ -61,7 +61,9 @@ Again, I stress that because these generated source directories are under the "<
 Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
 
 ## IDE Integration
-Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass, and I have no idea about IntellJ or Visual Code, so you're on your own there.
+Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
+
+I have no idea about IntellJ or Visual Code, so you're on your own there.
 
 What I _strongly_ recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
 
