@@ -119,7 +119,7 @@ public class GenesisAssembly implements Genesis {
                                                                      : params().metrics().getReconfigureMetrics());
 
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
-                  view.context().getId(), nextAssembly.keySet(), params().member());
+                  reContext.getId(), nextAssembly.keySet(), params().member());
     }
 
     @Override

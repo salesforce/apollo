@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -38,7 +37,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
     @Test
     public void checkpointBootstrap() throws Exception {
-        final SigningMember testSubject = members.get(CARDINALITY - 1);
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;

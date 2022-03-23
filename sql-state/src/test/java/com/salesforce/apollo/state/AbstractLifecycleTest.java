@@ -101,17 +101,17 @@ abstract public class AbstractLifecycleTest {
                   .build();
     }
 
-    protected Map<Digest, AtomicInteger> blocks;
-    protected CompletableFuture<Boolean> checkpointOccurred;
-    protected Map<Digest, CHOAM>         choams;
-    protected List<SigningMember>        members;
-    protected Map<Digest, Router>        routers;
-
+    protected Map<Digest, AtomicInteger>         blocks;
+    protected CompletableFuture<Boolean>         checkpointOccurred;
+    protected Map<Digest, CHOAM>                 choams;
+    protected List<SigningMember>                members;
+    protected Map<Digest, Router>                routers;
+    protected SigningMember                      testSubject;
     protected int                                toleranceLevel;
     protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
-    private File                                 baseDir;
-    private File                                 checkpointDirBase;
 
+    private File                          baseDir;
+    private File                          checkpointDirBase;
     private final Map<Member, Parameters> parameters = new HashMap<>();
 
     public AbstractLifecycleTest() {
@@ -153,9 +153,8 @@ abstract public class AbstractLifecycleTest {
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.add(m))
                            .toList();
-        final SigningMember testSubject = members.get(CARDINALITY - 1);
+        testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -166,6 +165,7 @@ abstract public class AbstractLifecycleTest {
         choams = members.stream()
                         .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
                                                                                    m.equals(testSubject), context)));
+        members.stream().filter(m -> !m.equals(testSubject)).forEach(m -> context.activate(m));
     }
 
     protected abstract int checkpointBlockSize();

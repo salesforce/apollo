@@ -24,7 +24,6 @@ import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -35,7 +34,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        final SigningMember testSubject = members.get(CARDINALITY - 1);
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
         final CountDownLatch countdown = new CountDownLatch(1);
