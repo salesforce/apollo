@@ -139,7 +139,7 @@ public class MembershipTests {
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))
                            .toList();
-        SigningMember testSubject = members.get(cardinality - 1);
+        SigningMember testSubject = members.get(3); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);
