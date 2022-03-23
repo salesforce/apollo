@@ -64,7 +64,7 @@ abstract public class AbstractLifecycleTest {
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-    private static final ExecutorService          exec            = Executors.newFixedThreadPool(CARDINALITY);
+    private static final ExecutorService          exec            = Executors.newCachedThreadPool();
     private static final List<Transaction>        GENESIS_DATA;
     private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
     private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);
@@ -215,7 +215,7 @@ abstract public class AbstractLifecycleTest {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockSize(checkpointBlockSize());
 
-        params.getCombineParams().setExec(exec);               
+        params.getCombineParams().setExec(exec);
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }

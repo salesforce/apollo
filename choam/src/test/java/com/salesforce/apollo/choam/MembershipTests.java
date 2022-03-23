@@ -73,7 +73,7 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        SigningMember testSubject = initialize(2000, 12);
+        SigningMember testSubject = initialize(2000, 5);
         System.out.println("Test subject: " + testSubject);
         routers.entrySet()
                .stream()
