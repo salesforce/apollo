@@ -114,6 +114,7 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockSize(1);
+        params.getCombineParams().setExec(exec);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
