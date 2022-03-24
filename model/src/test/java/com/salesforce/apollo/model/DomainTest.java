@@ -84,7 +84,7 @@ public class DomainTest {
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var exec = Executors.newCachedThreadPool();
         params.getCombineParams().setExec(exec);
