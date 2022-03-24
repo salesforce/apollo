@@ -74,8 +74,8 @@ public class ReliableBroadcaster {
     public record Msg(Digest source, ByteString content, Digest hash) {}
 
     public record Parameters(int bufferSize, int maxMessages, Context<Member> context, DigestAlgorithm digestAlgorithm,
-                             SigningMember member, RbcMetrics metrics, double falsePositiveRate,
-                             int deliveredCacheSize, Executor exec) {
+                             SigningMember member, RbcMetrics metrics, double falsePositiveRate, int deliveredCacheSize,
+                             Executor exec) {
         public static class Builder implements Cloneable {
             private int             bufferSize         = 500;
             private Context<Member> context;
@@ -85,7 +85,7 @@ public class ReliableBroadcaster {
             private double          falsePositiveRate  = 0.125;
             private int             maxMessages        = 100;
             private SigningMember   member;
-            private RbcMetrics   metrics;
+            private RbcMetrics      metrics;
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, context, digestAlgorithm, member, metrics,
@@ -503,13 +503,9 @@ public class ReliableBroadcaster {
 
     public void removeRoundListener(UUID registration) {
         roundListeners.remove(registration);
-    }
+    } 
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
-        start(ForkJoinPool.commonPool(), duration, scheduler);
-    }
-
-    public void start(Executor exec, Duration duration, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
             return;
         }
@@ -517,7 +513,7 @@ public class ReliableBroadcaster {
                                                          .nextInt((int) Math.max(1, duration.toMillis() * 2)));
         log.info("Starting Reliable Broadcaster[{}] for {}", params.context.getId(), params.member);
         comm.register(params.context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(exec, duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -562,8 +558,8 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void handle(Executor exec, Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link,
-                        int ring, Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
+    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link, int ring,
+                        Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
         try {
             if (futureSailor.isEmpty()) {
                 if (timer != null) {
@@ -594,7 +590,7 @@ public class ReliableBroadcaster {
             }
             if (started.get()) {
                 try {
-                    scheduler.schedule(() -> oneRound(exec, duration, scheduler), duration.toMillis(),
+                    scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
                                        TimeUnit.MILLISECONDS);
                 } catch (RejectedExecutionException e) {
                     return;
@@ -612,16 +608,15 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void oneRound(Executor exec, Duration duration, ScheduledExecutorService scheduler) {
+    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.get()) {
             return;
         }
 
-        exec.execute(() -> {
+        params.exec.execute(() -> {
             var timer = params.metrics == null ? null : params.metrics.gossipRoundDuration().time();
             gossiper.execute((link, ring) -> gossipRound(link, ring),
-                             (futureSailor, link, ring) -> handle(exec, futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
+                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
         });
     }
 }
