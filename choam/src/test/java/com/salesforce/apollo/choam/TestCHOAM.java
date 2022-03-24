@@ -35,9 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -103,7 +101,7 @@ public class TestCHOAM {
     }
 
     @BeforeEach
-    public void before() { 
+    public void before() {
         exec = Executors.newCachedThreadPool();
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
         txExecutor = Executors.newFixedThreadPool(CARDINALITY);
@@ -182,13 +180,6 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS));
-    }
-
-    @Test
     public void submitMultiplTxn() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
@@ -222,22 +213,7 @@ public class TestCHOAM {
                            .build()
                            .report();
         }
-    }
-
-    @Test
-    public void submitTxn() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-
-        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
-                   "System did not become active");
-
-        var session = choams.get(members.get(0).getId()).getSession();
-        final ByteMessage tx = ByteMessage.newBuilder()
-                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                          .build();
-        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(6), txScheduler);
-        result.get(90, TimeUnit.SECONDS);
+        assertTrue(checkpointOccurred.get());
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
