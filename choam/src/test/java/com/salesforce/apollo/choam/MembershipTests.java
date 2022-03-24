@@ -73,7 +73,7 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        SigningMember testSubject = initialize(2000, 5);
+        SigningMember testSubject = initialize(2000, 11);
         System.out.println("Test subject: " + testSubject);
         routers.entrySet()
                .stream()
@@ -85,7 +85,7 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
 
         final Duration timeout = Duration.ofSeconds(30);
-        final var scheduler = Executors.newScheduledThreadPool(2);
+        final var scheduler = Executors.newScheduledThreadPool(1);
 
         var txneer = choams.get(members.get(0).getId());
 
@@ -116,15 +116,13 @@ public class MembershipTests {
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
-                                                                .setGossipDuration(Duration.ofMillis(10))
-                                                                .setMaxSyncBlocks(1000)
-                                                                .setMaxViewBlocks(1000)
+                                                                .setGossipDuration(Duration.ofMillis(20))
                                                                 .build())
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin())
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
-                                                              .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(50))
+                                                              .setGossipDuration(Duration.ofMillis(20))
+                                                              .setBatchInterval(Duration.ofMillis(150))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
@@ -137,7 +135,7 @@ public class MembershipTests {
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))
                            .toList();
-        SigningMember testSubject = members.get(3); // hardwired
+        SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);

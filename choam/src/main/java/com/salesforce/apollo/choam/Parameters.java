@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -145,7 +144,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             private Function<ULong, File>                          checkpointer      = NULL_CHECKPOINTER;
             private Router                                         communications;
             private Context<Member>                                context;
-            private Executor                                       exec              = ForkJoinPool.commonPool();
+            private Executor                                       exec              = r -> r.run();
             private FoundationSeal                                 foundation        = FoundationSeal.getDefaultInstance();
             private Function<Map<Member, Join>, List<Transaction>> genesisData       = view -> new ArrayList<>();
             private Supplier<KERL_>                                kerl              = () -> KERL_.getDefaultInstance();
