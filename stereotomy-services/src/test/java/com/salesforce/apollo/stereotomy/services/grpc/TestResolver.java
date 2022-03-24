@@ -56,8 +56,11 @@ public class TestResolver {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        serverRouter = new LocalRouter(prefix, serverMember, builder, ForkJoinPool.commonPool());
-        clientRouter = new LocalRouter(prefix, clientMember, builder, ForkJoinPool.commonPool());
+        serverRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool());
+        clientRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool());
+
+        serverRouter.setMember(serverMember);
+        clientRouter.setMember(clientMember);
 
         serverRouter.start();
         clientRouter.start();

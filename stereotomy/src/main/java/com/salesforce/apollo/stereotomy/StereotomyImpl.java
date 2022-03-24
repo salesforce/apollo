@@ -10,7 +10,6 @@ import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 import static com.salesforce.apollo.crypto.SigningThreshold.unweighted;
 import static com.salesforce.apollo.stereotomy.identifier.QualifiedBase64Identifier.qb64;
 
-import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -281,9 +280,8 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
-        public Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom,
-                                                             Duration valid, List<CertExtension> extensions,
-                                                             SignatureAlgorithm algo) {
+        public Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid,
+                                                             List<CertExtension> extensions, SignatureAlgorithm algo) {
 
             var coords = getState().getLastEstablishmentEvent();
             var lastEstablishing = kerl.getKeyEvent(coords);
@@ -301,9 +299,7 @@ public class StereotomyImpl implements Stereotomy {
 
             var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
-            var dn = new BcX500NameDnImpl(String.format("CN=%s, L=%s, UID=%s, DC=%s", endpoint.getHostName(),
-                                                        endpoint.getPort(), qb64(state.getIdentifier()),
-                                                        qb64(signature)));
+            var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(state.getIdentifier()), qb64(signature)));
 
             return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
                                                                                    validFrom, validFrom.plus(valid),

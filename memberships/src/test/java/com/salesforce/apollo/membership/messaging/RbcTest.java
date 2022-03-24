@@ -149,7 +149,7 @@ public class RbcTest {
         final var prefix = UUID.randomUUID().toString();
         messengers = members.stream().map(node -> {
             AtomicInteger exec = new AtomicInteger();
-            var comms = new LocalRouter(prefix, node,
+            var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
@@ -160,6 +160,7 @@ public class RbcTest {
                                             return thread;
                                         }));
             communications.add(comms);
+            comms.setMember(node);
             comms.start();
             return new ReliableBroadcaster(parameters.setMember(node).build(), comms);
         }).collect(Collectors.toList());

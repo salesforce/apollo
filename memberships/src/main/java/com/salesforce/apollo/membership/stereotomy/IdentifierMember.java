@@ -23,6 +23,7 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 public class IdentifierMember implements Member {
 
     private final EstablishmentEvent event;
+    private final Digest             id;
 
     public IdentifierMember(EstablishmentEvent event) {
         if (!(event.getIdentifier() instanceof SelfAddressingIdentifier)) {
@@ -30,11 +31,22 @@ public class IdentifierMember implements Member {
             + event.getIdentifier().getClass());
         }
         this.event = event;
+        this.id = ((SelfAddressingIdentifier) event.getIdentifier()).getDigest();
     }
 
     @Override
     public int compareTo(Member o) {
         return getId().compareTo(o.getId());
+    }
+
+    @Override
+    // The id of a member uniquely identifies it
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if ((obj == null) || !(obj instanceof Member))
+            return false;
+        return id.equals(((Member) obj).getId());
     }
 
     @Override
@@ -44,7 +56,17 @@ public class IdentifierMember implements Member {
 
     @Override
     public Digest getId() {
-        return ((SelfAddressingIdentifier) event.getIdentifier()).getDigest();
+        return id;
+    }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + getId();
     }
 
     @Override

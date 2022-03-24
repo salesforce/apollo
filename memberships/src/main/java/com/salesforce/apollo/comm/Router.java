@@ -69,10 +69,10 @@ abstract public class Router {
                                 ForkJoinPool.defaultForkJoinWorkerThreadFactory, Utils.uncaughtHandler(logger), false);
     }
 
-    protected final AtomicBoolean started = new AtomicBoolean();
+    protected final MutableHandlerRegistry registry;
+    protected final AtomicBoolean          started = new AtomicBoolean();
 
     private final ServerConnectionCache             cache;
-    private final MutableHandlerRegistry            registry;
     private final Map<Class<?>, RoutableService<?>> services = new ConcurrentHashMap<>();
 
     public Router(ServerConnectionCache cache, MutableHandlerRegistry registry) {
@@ -80,7 +80,7 @@ abstract public class Router {
         this.registry = registry;
     }
 
-    public void close() { 
+    public void close() {
         if (!started.compareAndSet(true, false)) {
             return;
         }

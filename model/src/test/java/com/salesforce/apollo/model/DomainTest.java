@@ -10,19 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,16 +31,12 @@ import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -79,49 +73,44 @@ public class DomainTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
 
-        var members = new HashMap<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>>();
-        for (int i = 0; i < CARDINALITY; i++) {
-            @SuppressWarnings("unchecked")
-            ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
-                                                                                                                           .get();
-            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
-                                    Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .parallel()
+                                  .mapToObj(i -> stereotomy.newIdentifier().get())
+                                  .map(ci -> {
+                                      @SuppressWarnings("unchecked")
+                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                      return casted;
+                                  })
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
-            members.put(new SigningMemberImpl(id.getDigest(), cert.get().getX509Certificate(),
-                                              cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0)),
-                        id);
-        }
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-        members.keySet().forEach(m -> context.activate(m));
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
-
-        members.forEach((member, id) -> {
-            AtomicInteger execC = new AtomicInteger();
-
-            var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + member.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
+        var exec = Executors.newCachedThreadPool();
+        params.getCombineParams().setExec(exec);
+        identities.forEach((member, id) -> {
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(2));
             routers.add(localRouter);
-            params.getProducer().ethereal().setSigner(member);
-            var exec = Router.createFjPool();
-            domains.add(new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
-                                          RuntimeParameters.newBuilder()
-                                                           .setScheduler(scheduler)
-                                                           .setMember(member)
-                                                           .setContext(context)
-                                                           .setExec(exec)
-                                                           .setCommunications(localRouter)));
+            var domain = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                           RuntimeParameters.newBuilder()
+                                                            .setScheduler(scheduler)
+                                                            .setContext(context)
+                                                            .setExec(exec)
+                                                            .setCommunications(localRouter));
+            domains.add(domain);
+            localRouter.setMember(domain.getMember());
             localRouter.start();
         });
+
+        domains.forEach(domain -> context.activate(domain.getMember()));
     }
 
     @Test
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
+                   "Domains did not fully activate");
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
         smoke(oracle);
@@ -140,8 +129,7 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockSize(200);
-
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;
     }
 

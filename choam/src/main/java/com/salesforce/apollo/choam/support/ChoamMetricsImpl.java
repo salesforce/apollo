@@ -29,20 +29,20 @@ import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
 public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetrics {
 
     private final RbcMetrics      combineMetrics;
-    private final Counter         completedTransactions;
+    private final Meter           completedTransactions;
     private final Counter         droppedTransactions;
     private final Counter         droppedValidations;
-    private final Counter         failedTransactions;
+    private final Meter           failedTransactions;
     private final EtherealMetrics producerMetrics;
     private final Histogram       publishedBytes;
     private final Meter           publishedTransactions;
     private final Meter           publishedValidations;
     private final EtherealMetrics reconfigureMetrics;
     private final Timer           transactionLatency;
-    private final Counter         transactionSubmitFailed;
-    private final Counter         transactionSubmitRetry;
-    private final Counter         transactionSubmitSuccess;
-    private final Counter         transactionTimeout;
+    private final Meter           transactionSubmitFailed;
+    private final Meter           transactionSubmitRetry;
+    private final Meter           transactionSubmitSuccess;
+    private final Meter           transactionTimeout;
 
     public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
@@ -56,12 +56,12 @@ public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetri
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
         publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
         transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
-        transactionSubmitRetry = registry.counter(name(context.shortString(), "transaction.submit.retry"));
-        transactionSubmitFailed = registry.counter(name(context.shortString(), "transaction.submit.failed"));
-        transactionSubmitSuccess = registry.counter(name(context.shortString(), "transaction.submit.success"));
-        transactionTimeout = registry.counter(name(context.shortString(), "transaction.timeout"));
-        completedTransactions = registry.counter(name(context.shortString(), "transactions.completed"));
-        failedTransactions = registry.counter(name(context.shortString(), "transactions.failed"));
+        transactionSubmitRetry = registry.meter(name(context.shortString(), "transaction.submit.retry"));
+        transactionSubmitFailed = registry.meter(name(context.shortString(), "transaction.submit.failed"));
+        transactionSubmitSuccess = registry.meter(name(context.shortString(), "transaction.submit.success"));
+        transactionTimeout = registry.meter(name(context.shortString(), "transaction.timeout"));
+        completedTransactions = registry.meter(name(context.shortString(), "transactions.completed"));
+        failedTransactions = registry.meter(name(context.shortString(), "transactions.failed"));
     }
 
     @Override
@@ -96,12 +96,15 @@ public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetri
     public void transactionComplete(Throwable t) {
         if (t != null) {
             if (t instanceof TimeoutException) {
-                transactionTimeout.inc();
+                transactionTimeout.mark();
+                ;
+            } else if (t instanceof TransactionCancelled) {
+                // ignore
             } else {
-                failedTransactions.inc();
+                failedTransactions.mark();
             }
         } else {
-            completedTransactions.inc();
+            completedTransactions.mark();
         }
     }
 
@@ -112,22 +115,22 @@ public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetri
 
     @Override
     public void transactionSubmitRetry() {
-        transactionSubmitRetry.inc();
+        transactionSubmitRetry.mark();
     }
 
     @Override
     public void transactionSubmittedFail() {
-        transactionSubmitFailed.inc();
+        transactionSubmitFailed.mark();
     }
 
     @Override
     public void transactionSubmittedSuccess() {
-        transactionSubmitSuccess.inc();
+        transactionSubmitSuccess.mark();
     }
 
     @Override
     public void transactionTimeout() {
-        transactionTimeout.inc();
+        transactionTimeout.mark();
     }
 
 }

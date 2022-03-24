@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -92,7 +91,7 @@ public class CHOAMTest {
     private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
-    private Executor                           exec     = Executors.newCachedThreadPool();
+    private Executor                           exec     = Executors.newFixedThreadPool(CARDINALITY);
 
     @AfterEach
     public void after() throws Exception {
@@ -153,6 +152,7 @@ public class CHOAMTest {
                                                               .build())
                                .setCheckpointBlockSize(200);
 
+        params.getCombineParams().setExec(exec);               
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
         members = IntStream.range(0, CARDINALITY)
@@ -163,7 +163,8 @@ public class CHOAMTest {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, m, ServerConnectionCache.newBuilder().setTarget(30), exec);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec);
+            localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -183,6 +184,9 @@ public class CHOAMTest {
         System.out.println("Warm up");
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
+
+        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+                   "System did not become active");
 
         for (int i = 0; i < clientCount; i++) {
             updaters.entrySet().stream().map(e -> {
@@ -261,7 +265,6 @@ public class CHOAMTest {
         params.getProducer().ethereal().setSigner(m);
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(Router.createFjPool())
                                                        .setGenesisData(view -> GENESIS_DATA)
                                                        .setScheduler(scheduler)
                                                        .setMember(m)

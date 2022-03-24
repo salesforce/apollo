@@ -11,14 +11,14 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,14 +32,11 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -79,47 +76,37 @@ public class FireFliesTest {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
                                             new SecureRandom());
 
-        var members = new HashMap<SigningMember, ControlledIdentifier<SelfAddressingIdentifier>>();
-        for (int i = 0; i < CARDINALITY; i++) {
-            @SuppressWarnings("unchecked")
-            ControlledIdentifier<SelfAddressingIdentifier> id = (ControlledIdentifier<SelfAddressingIdentifier>) stereotomy.newIdentifier()
-                                                                                                                           .get();
-            var cert = id.provision(InetSocketAddress.createUnresolved("localhost", 0), Instant.now(),
-                                    Duration.ofHours(1), SignatureAlgorithm.DEFAULT);
-            var member = new SigningMemberImpl(id.getIdentifier().getDigest(), cert.get().getX509Certificate(),
-                                               cert.get().getPrivateKey(), id.getSigner().get(), id.getKeys().get(0));
-            members.put(member, id);
-
-        }
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .parallel()
+                                  .mapToObj(i -> stereotomy.newIdentifier().get())
+                                  .map(ci -> {
+                                      @SuppressWarnings("unchecked")
+                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                      return casted;
+                                  })
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         var foundations = new HashMap<Member, Context<Participant>>();
 
-        members.forEach((member, id) -> {
+        var exec = Router.createFjPool();
+        identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            AtomicInteger execC = new AtomicInteger();
-
-            var localRouter = new LocalRouter(prefix, member, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2, r -> {
-                                                  Thread thread = new Thread(r, "Router exec" + member.getId() + "["
-                                                  + execC.getAndIncrement() + "]");
-                                                  thread.setDaemon(true);
-                                                  return thread;
-                                              }));
-            params.getProducer().ethereal().setSigner(member);
-            var exec = Router.createFjPool();
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(2));
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setScheduler(scheduler)
-                                                          .setMember(member)
                                                           .setContext(context)
                                                           .setExec(exec)
                                                           .setCommunications(localRouter));
             domains.add(node);
-            foundations.put(member, foundation);
+            foundations.put(node.getMember(), foundation);
             routers.put(node, localRouter);
+            localRouter.setMember(node.getMember());
             localRouter.start();
         });
         domains.forEach(m -> {

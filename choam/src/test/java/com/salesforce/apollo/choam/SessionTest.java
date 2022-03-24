@@ -94,7 +94,8 @@ public class SessionTest {
 
     @Test
     public void scalingTest() throws Exception {
-        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        var exec = Executors.newFixedThreadPool(2);
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
@@ -104,7 +105,7 @@ public class SessionTest {
 
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
-            ForkJoinPool.commonPool().execute(() -> {
+            exec.execute(() -> {
                 try {
                     Thread.sleep(1);
                 } catch (InterruptedException e) {
@@ -132,7 +133,7 @@ public class SessionTest {
             Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
             CompletableFuture<Object> result;
             try {
-                result = session.submit(ForkJoinPool.commonPool(), tx, null, exec).whenComplete((r, t) -> {
+                result = session.submit(exec, tx, null, scheduler).whenComplete((r, t) -> {
                     if (t != null) {
                         if (t instanceof CompletionException ce) {
                             reg.counter(t.getCause().getClass().getSimpleName()).inc();

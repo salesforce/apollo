@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -253,8 +252,7 @@ public class StereotomyTests {
 
     private void provision(ControlledIdentifier<?> i, Stereotomy controller) throws Exception {
         var now = Instant.now();
-        var endpoint = new InetSocketAddress("fu-manchin-chu.com", 1080);
-        var cwpk = i.provision(endpoint, now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
+        var cwpk = i.provision(now, Duration.ofSeconds(100), SignatureAlgorithm.DEFAULT).get();
         assertNotNull(cwpk);
         var cert = cwpk.getX509Certificate();
         assertNotNull(cert);
@@ -267,7 +265,6 @@ public class StereotomyTests {
         assertFalse(decoded.isEmpty());
 
         assertEquals(i.getIdentifier(), decoded.get().identifier());
-        assertEquals(endpoint, decoded.get().endpoint());
         final var qb64Id = qb64(basicId);
 
         assertTrue(i.getVerifier().get().verify(decoded.get().signature(), qb64Id));

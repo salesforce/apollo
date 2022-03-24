@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -109,7 +108,7 @@ public class EtherealTest {
         var builder = Config.deterministic()
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        var executor = Executors.newCachedThreadPool();
+        var executor = Executors.newFixedThreadPool(nProc);
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
@@ -145,10 +144,10 @@ public class EtherealTest {
                                             .build()
                                             .toByteString());
             }
-            Router com = new LocalRouter(prefix, members.get(i), ServerConnectionCache.newBuilder(), executor);
+            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor);
             comms.add(com);
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, ForkJoinPool.commonPool(),
-                                              metrics));
+            com.setMember(members.get(i));
+            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, executor, metrics));
         }
         try {
             controllers.forEach(e -> e.start());

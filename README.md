@@ -8,6 +8,15 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
+## Building Apollo
+To build Apollo, cd to the root directory of the repository and then do:
+   
+    mvn clean install
+
+Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
+
+You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
+
 ## Requirements
 Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and above
 
@@ -38,17 +47,7 @@ Note that Apollo Delphinius is very much a _work in progress_.  There is not yet
 ## Requirements
 Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
 
-Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first.
-
-
-## Building
-To build Apollo, cd to the root directory of the repository and then do:
-   
-    mvn clean install
-
-Note that the  _install_  maven goal is **required**, as this installs the modules in your local repository for use by dependent modules within the rest of the build.  You must have invoked maven on the Apollo project root with the "install" goal at least once, to correctly build any arbitrary submodule.
-
-You can, of course, use the "--also-make-dependents" argument for maven "-amd" if you want to build a particular module without performing the full build.
+Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first. If you feel you must do so, please make sure to include the "install" goal and please make sure you add the "--also-make-dependents" or "--amd" parameter to your maven invocation.
 
 ## Code Generation In Apollo
 Apollo requires code generation as part of the build.  This is done in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.
@@ -62,9 +61,11 @@ Again, I stress that because these generated source directories are under the "<
 Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
 
 ## IDE Integration
-Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are many known gotchas that I literally don't know how to resolve sometimes in Eclipse Maven integration, and I have no idea about IntellJ or Visual Code, so you're on your own there.
+Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
 
-What I recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete.
+I have no idea about IntellJ or Visual Code, so you're on your own there.
+
+What I _strongly_ recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
 
 After you do this, you shouldn't have any issue *if* your IDE Maven integration knows about and takes care of using the build-helper plugin to manage compilation directories for the module in the IDE.  However....
 

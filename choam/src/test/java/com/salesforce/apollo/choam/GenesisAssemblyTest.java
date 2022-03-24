@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -77,6 +76,7 @@ public class GenesisAssemblyTest {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
         var scheduler = Executors.newScheduledThreadPool(cardinality);
+        var exec = Executors.newCachedThreadPool();
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> Utils.getMember(i))
@@ -92,6 +92,7 @@ public class GenesisAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(100));
+        params.getCombineParams().setExec(exec);
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
@@ -115,11 +116,11 @@ public class GenesisAssemblyTest {
         });
 
         final var prefix = UUID.randomUUID().toString();
-        Map<Member, Router> communications = members.stream()
-                                                    .collect(Collectors.toMap(m -> m,
-                                                                              m -> new LocalRouter(prefix, m,
-                                                                                                   ServerConnectionCache.newBuilder(),
-                                                                                                   ForkJoinPool.commonPool())));
+        Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);
+            comm.setMember(m);
+            return comm;
+        }));
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
@@ -135,6 +136,7 @@ public class GenesisAssemblyTest {
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
+                                                      .setExec(exec)
                                                       .setScheduler(scheduler)
                                                       .setContext(base)
                                                       .setMember(sm)

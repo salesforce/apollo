@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.stereotomy;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -52,25 +51,21 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
     <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(Builder<I> newBuilder);
 
     /**
-     * Provision a certificate that encodes the host, port and this identifier using
-     * a generated Basic Identifier. The certificate returned is signed by this self
-     * same generated basic identifier
+     * Provision a certificate that encodes this identifier using a generated Basic
+     * Identifier. The certificate returned is signed by this self same generated
+     * basic identifier
      * <p>
      * A new key pair is generated and this becomes the signing key of the
      * certificate. This new public key is then signed by this identifier's current
-     * key state's key(s). The resulting certificate encodes the KeyCoordinates of
-     * this KeyState for the identifier that was used for signing.
+     * key state's key(s)..
      * <p>
      * The values are encoded into the SubjectDN of the certificate as follows:
      * <ul>
-     * <li>CN - Host name of the supplied endpoint</li>
-     * <li>L - Port number of supplied endpoint</li>
      * <li>UID -B64 encoding of the member Identifier</li>
      * <li>DC - The signature of the key state of the identifier in UID of the
      * generated public key that signs the certificate</li>
      * </ul>
      * 
-     * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
      * @param valid              - how long the certificate will be valid
@@ -80,29 +75,25 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                  List<CertExtension> extensions, SignatureAlgorithm algo);
+    Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, List<CertExtension> extensions,
+                                                  SignatureAlgorithm algo);
 
     /**
-     * Provision a certificate that encodes the host, port and this identifier using
-     * a generated Basic Identifier. The certificate returned is signed by this self
-     * same generated basic identifier
+     * Provision a certificate that encodes this identifier using a generated Basic
+     * Identifier. The certificate returned is signed by this self same generated
+     * basic identifier
      * <p>
      * A new key pair is generated and this becomes the signing key of the
      * certificate. This new public key is then signed by this identifier's current
-     * key state's key(s). The resulting certificate encodes the KeyCoordinates of
-     * this KeyState for the identifier that was used for signing.
+     * key state's key(s).
      * <p>
      * The values are encoded into the SubjectDN of the certificate as follows:
      * <ul>
-     * <li>CN - Host name of the supplied endpoint</li>
-     * <li>L - Port number of supplied endpoint</li>
      * <li>UID -B64 encoding of the member Identifier</li>
      * <li>DC - The signature of the key state of the identifier in UID of the
      * generated public key that signs the certificate</li>
      * </ul>
      * 
-     * @param endpoint           - the InetSocketAddress of the server side endpoint
      * @param validFrom          - the Instant which the generated certificate
      *                           becomes valid
      * @param valid              - how long the certificate will be valid
@@ -111,9 +102,8 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return a CertificateWithPrivateKey that is self signed by the public key of
      *         the X509Certificate
      */
-    default Optional<CertificateWithPrivateKey> provision(InetSocketAddress endpoint, Instant validFrom, Duration valid,
-                                                          SignatureAlgorithm algo) {
-        return provision(endpoint, validFrom, valid, Collections.emptyList(), algo);
+    default Optional<CertificateWithPrivateKey> provision(Instant validFrom, Duration valid, SignatureAlgorithm algo) {
+        return provision(validFrom, valid, Collections.emptyList(), algo);
     }
 
     /**

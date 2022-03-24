@@ -126,7 +126,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                                     TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
                                     Supplier<KERL_> kerl, FoundationSeal foundation) {
-        public static class Builder {
+        public static class Builder implements Cloneable {
             private final static Function<ULong, File>             NULL_CHECKPOINTER = h -> {
                                                                                          File cp;
                                                                                          try {
@@ -160,6 +160,17 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             public RuntimeParameters build() {
                 return new RuntimeParameters(context, communications, member, scheduler, genesisData, processor,
                                              restorer, checkpointer, metrics, exec, kerl, foundation);
+            }
+
+            @Override
+            public Builder clone() {
+                Object clone;
+                try {
+                    clone = super.clone();
+                } catch (CloneNotSupportedException e) {
+                    throw new IllegalStateException("unable to clone", e);
+                }
+                return (Builder) clone;
             }
 
             public Function<ULong, File> getCheckpointer() {
@@ -406,12 +417,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private int                                    checkpointBlockSize   = 8192;
         private ExponentialBackoff.Builder<Status>     clientBackoff         = ExponentialBackoff.<Status>newBuilder()
                                                                                                  .retryIf(s -> s.isOk())
-                                                                                                 .setBase(10)
-                                                                                                 .setCap(100)
-                                                                                                 .setInfiniteAttempts()
-                                                                                                 .setJitter()
+                                                                                                 .setBase(200)
+                                                                                                 .setCap(2000)
                                                                                                  .setExceptionHandler(t -> System.out.println(t.getClass()
-                                                                                                                                               .getSimpleName()));;
+                                                                                                                                               .getSimpleName()));
         private ReliableBroadcaster.Parameters.Builder combineParams         = ReliableBroadcaster.Parameters.newBuilder();
         private DigestAlgorithm                        digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Digest                                 genesisViewId;

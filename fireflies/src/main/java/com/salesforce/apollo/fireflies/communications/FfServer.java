@@ -40,8 +40,9 @@ public class FfServer extends FirefliesImplBase {
     public void gossip(SayWhat request, StreamObserver<Gossip> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundGossipTimer().time();
         if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundGossip().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGossip().mark(serializedSize);
         }
         router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();
@@ -53,8 +54,9 @@ public class FfServer extends FirefliesImplBase {
                                      request.getNote());
             if (timer != null) {
                 timer.stop();
-                metrics.outboundBandwidth().mark(gossip.getSerializedSize());
-                metrics.gossipReply().mark(gossip.getSerializedSize());
+                var serializedSize = gossip.getSerializedSize();
+                metrics.outboundBandwidth().mark(serializedSize);
+                metrics.gossipReply().mark(serializedSize);
             }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
@@ -76,8 +78,9 @@ public class FfServer extends FirefliesImplBase {
     public void update(State request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics == null ? null : metrics.inboundUpdateTimer().time();
         if (metrics != null) {
-            metrics.inboundBandwidth().mark(request.getSerializedSize());
-            metrics.inboundUpdate().mark(request.getSerializedSize());
+            var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundUpdate().mark(serializedSize);
         }
         router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Digest from = identity.getFrom();

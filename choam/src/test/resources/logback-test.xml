@@ -22,7 +22,11 @@
     <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
         additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger> 
+    </logger>
+    <logger name="com.salesforce.apollo.choam.Session" level="info"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     
     <logger name="com.chiralbehaviors.tron" level="info"
         additivity="false">
@@ -44,7 +48,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-	<root level="warn">
+	<root level="info">
 		<appender-ref ref="STDOUT" />
 	</root>
 

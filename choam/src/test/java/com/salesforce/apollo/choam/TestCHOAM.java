@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -36,9 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
@@ -59,12 +56,8 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int                      CARDINALITY = 5;
-    private static final ExecutorService          exec        = Executors.newCachedThreadPool();
-    private static final boolean                  LARGE_TESTS = Boolean.getBoolean("large_tests");
-    private static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-    private static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
-
+    private static final int     CARDINALITY = 5;
+    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
@@ -73,10 +66,13 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean>   checkpointOccurred;
     private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
+    private ExecutorService                exec;
     private List<SigningMember>            members;
     private MetricRegistry                 registry;
     private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;;
+    private Map<Digest, List<Transaction>> transactions;
+    private ExecutorService                txExecutor;
+    private ScheduledExecutorService       txScheduler;;
 
     @AfterEach
     public void after() throws Exception {
@@ -90,10 +86,25 @@ public class TestCHOAM {
         }
         members = null;
         registry = null;
+        if (exec != null) {
+            exec.shutdown();
+        }
+        if (txScheduler != null) {
+            txScheduler.shutdown();
+        }
+        if (txExecutor != null) {
+            txExecutor.shutdown();
+        }
+        exec = null;
+        txScheduler = null;
+        txExecutor = null;
     }
 
     @BeforeEach
     public void before() {
+        exec = Executors.newCachedThreadPool();
+        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+        txExecutor = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
@@ -114,6 +125,7 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockSize(1);
+        params.getCombineParams().setExec(exec);
         params.getCombineParams().setMetrics(metrics.getCombineMetrics());
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
 
@@ -126,11 +138,12 @@ public class TestCHOAM {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, m,
+            var localRouter = new LocalRouter(prefix,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
                                               exec);
+            localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -167,13 +180,6 @@ public class TestCHOAM {
     }
 
     @Test
-    public void regenerateGenesis() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS));
-    }
-
-    @Test
     public void submitMultiplTxn() throws Exception {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
@@ -190,6 +196,9 @@ public class TestCHOAM {
             }).forEach(e -> transactioneers.add(e));
         }
 
+        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+                   "System did not become active");
+
         transactioneers.stream().forEach(e -> e.start());
         try {
             countdown.await(60, TimeUnit.SECONDS);
@@ -204,18 +213,7 @@ public class TestCHOAM {
                            .build()
                            .report();
         }
-    }
-
-    @Test
-    public void submitTxn() throws Exception {
-        routers.values().forEach(r -> r.start());
-        choams.values().forEach(ch -> ch.start());
-        var session = choams.get(members.get(0).getId()).getSession();
-        final ByteMessage tx = ByteMessage.newBuilder()
-                                          .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                          .build();
-        CompletableFuture<?> result = session.submit(txExecutor, tx, Duration.ofSeconds(6), txScheduler);
-        result.get(90, TimeUnit.SECONDS);
+        assertTrue(checkpointOccurred.get());
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {

@@ -137,37 +137,31 @@ public class LocalRouter extends Router {
         return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
     }
 
-    private final Member member;
-    private final Server server;
+    private final Executor                          executor;
+    private final ConcurrencyLimitServerInterceptor limiter;
+    private Member                                  member;
+    private final String                            prefix;
+    private Server                                  server;
 
-    public LocalRouter(String prefix, Member member, ServerConnectionCache.Builder builder, Executor executor) {
-        this(prefix, member, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(),
-             () -> defaultServerLimit(), executor);
+    public LocalRouter(String prefix, ServerConnectionCache.Builder builder, Executor executor) {
+        this(prefix, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(), () -> defaultServerLimit(),
+             executor);
     }
 
-    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+    public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
                        MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor) {
         super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit)).build(), registry);
-        this.member = member;
-        serverMembers.put(member.getId(), member);
 
-        ConcurrencyLimitServerInterceptor limiter;
-        limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit.get())
-                                                                                             .build())
-                                                   .build();
-        final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
-        server = InProcessServerBuilder.forName(name)
-                                       .executor(executor)
-                                       .intercept(interceptor())
-                                       .intercept(limiter)
-                                       .fallbackHandlerRegistry(registry)
-                                       .build();
-        log.info("Created server: {} on: {}", name, member);
+        this.limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit.get())
+                                                                                                  .build())
+                                                        .build();
+        this.prefix = prefix;
+        this.executor = executor;
     }
 
-    public LocalRouter(String prefix, Member member, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
+    public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
                        Supplier<Limit> serverLimit, Executor executor) {
-        this(prefix, member, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
+        this(prefix, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
     }
 
     @Override
@@ -188,18 +182,37 @@ public class LocalRouter extends Router {
         return LOCAL_IDENTITY;
     }
 
+    public Member getMember() {
+        return member;
+    }
+
+    public void setMember(Member member) {
+        this.member = member;
+    }
+
     @Override
     public void start() {
+        if (member == null) {
+            throw new IllegalStateException("Must set member before starting");
+        }
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
+
+        server = InProcessServerBuilder.forName(name)
+                                       .executor(executor)
+                                       .intercept(interceptor())
+                                       .intercept(limiter)
+                                       .fallbackHandlerRegistry(registry)
+                                       .build();
         try {
             serverMembers.put(member.getId(), member);
             server.start();
         } catch (IOException e) {
             log.error("Cannot start in process server for: " + member, e);
         }
-        log.info("Starting server for: " + member);
+        log.info("Starting server: {} for: {}", name, member);
     }
 
     private ServerInterceptor interceptor() {

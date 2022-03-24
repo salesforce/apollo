@@ -50,6 +50,13 @@ public class MembershipTests {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(MembershipTests.class).error("Error on thread: {}", t.getName(), e);
         });
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
     private Map<Digest, AtomicInteger> blocks;
@@ -77,31 +84,26 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(5);
+        final Duration timeout = Duration.ofSeconds(30);
         final var scheduler = Executors.newScheduledThreadPool(2);
 
-        var txneer = choams.entrySet().stream().filter(e -> !e.getKey().equals(testSubject.getId())).findFirst().get();
+        var txneer = choams.get(members.get(0).getId());
 
-        var success = false;
-        for (int i = 0; i < 9; i++) {
-            final var countdown = new CountDownLatch(1);
-            var transactioneer = new Transactioneer(txneer.getValue().getSession(), timeout, 1, scheduler, countdown,
-                                                    Executors.newSingleThreadExecutor());
+        assertTrue(Utils.waitForCondition(120_00, 1000, () -> txneer.active()), "Transactioneer did not become active");
 
-            transactioneer.start();
-            success = countdown.await(10, TimeUnit.SECONDS);
-            if (success) {
-                System.out.println("completed");
-                break;
-            }
-            System.out.println("Did not complete: " + countdown.getCount() + " retrying: " + (i != 8));
-        }
+        final var countdown = new CountDownLatch(1);
+        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
+                                                Executors.newSingleThreadExecutor());
+
+        transactioneer.start();
+        assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");
+
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        success = Utils.waitForCondition(10_000, () -> blocks.get(testSubject.getId()).get() >= target);
-        assertTrue(success, "Expecting: " + target + "completed: " + blocks);
+        assertTrue(Utils.waitForCondition(30_000, () -> blocks.get(testSubject.getId()).get() >= target),
+                   "Expecting: " + target + "completed: " + blocks);
 
     }
 
@@ -127,21 +129,21 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
+        params.getCombineParams().setExec(exec);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
                            .map(cpk -> new SigningMemberImpl(cpk))
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))
                            .toList();
-        SigningMember testSubject = members.get(cardinality - 1);
+        SigningMember testSubject = members.get(3); // hardwired
         final var prefix = UUID.randomUUID().toString();
-        routers = members.stream()
-                         .collect(Collectors.toMap(m -> m.getId(),
-                                                   m -> new LocalRouter(prefix, m,
-                                                                        ServerConnectionCache.newBuilder()
-                                                                                             .setTarget(cardinality),
-                                                                        exec)));
+        routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);
+            comm.setMember(m);
+            return comm;
+        }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -161,7 +163,7 @@ public class MembershipTests {
             };
             params.getProducer().ethereal().setSigner(m);
             if (m.equals(testSubject)) {
-                params.setSynchronizationCycles(100);
+                params.setSynchronizationCycles(20);
             } else {
                 params.setSynchronizationCycles(1);
             }
