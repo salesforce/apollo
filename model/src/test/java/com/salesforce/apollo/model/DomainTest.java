@@ -109,7 +109,7 @@ public class DomainTest {
     @Test
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
-        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
                    "Domains did not fully activate");
         var oracle = domains.get(0).getDelphi();
         oracle.add(new Oracle.Namespace("test")).get();
