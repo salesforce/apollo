@@ -8,7 +8,6 @@ package com.salesforce.apollo.comm;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -21,7 +20,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
-import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.BindableService;
 import io.grpc.util.MutableHandlerRegistry;
@@ -59,15 +57,6 @@ abstract public class Router {
     }
 
     private final static Logger log = LoggerFactory.getLogger(Router.class);
-
-    public static ForkJoinPool createFjPool() {
-        return createFjPool(log);
-    }
-
-    public static ForkJoinPool createFjPool(Logger logger) {
-        return new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
-                                ForkJoinPool.defaultForkJoinWorkerThreadFactory, Utils.uncaughtHandler(logger), false);
-    }
 
     protected final MutableHandlerRegistry registry;
     protected final AtomicBoolean          started = new AtomicBoolean();
