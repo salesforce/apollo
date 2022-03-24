@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -59,12 +58,8 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int                      CARDINALITY = 5;
-    private static final ExecutorService          exec        = Executors.newFixedThreadPool(CARDINALITY);
-    private static final boolean                  LARGE_TESTS = Boolean.getBoolean("large_tests");
-    private static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-    private static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
-
+    private static final int     CARDINALITY = 5;
+    private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
@@ -73,10 +68,13 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean>   checkpointOccurred;
     private Map<Digest, AtomicInteger>     blocks;
     private Map<Digest, CHOAM>             choams;
+    private ExecutorService                exec;
     private List<SigningMember>            members;
     private MetricRegistry                 registry;
     private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;;
+    private Map<Digest, List<Transaction>> transactions;
+    private ExecutorService                txExecutor;
+    private ScheduledExecutorService       txScheduler;;
 
     @AfterEach
     public void after() throws Exception {
@@ -90,10 +88,25 @@ public class TestCHOAM {
         }
         members = null;
         registry = null;
+        if (exec != null) {
+            exec.shutdown();
+        }
+        if (txScheduler != null) {
+            txScheduler.shutdown();
+        }
+        if (txExecutor != null) {
+            txExecutor.shutdown();
+        }
+        exec = null;
+        txScheduler = null;
+        txExecutor = null;
     }
 
     @BeforeEach
-    public void before() {
+    public void before() { 
+        exec = Executors.newCachedThreadPool();
+        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+        txExecutor = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);

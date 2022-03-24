@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -166,8 +167,12 @@ public class ExponentialBackoff<T> {
         }
         final var nextAttempt = attempt + 1;
         final long waitTime = getWaitTime(cap, base, nextAttempt);
-        scheduler.schedule(() -> execute(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
-                           TimeUnit.MILLISECONDS);
+        try {
+            scheduler.schedule(() -> execute(predicate, nextAttempt, futureSailor, task, scheduler), waitTime,
+                               TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            // ignore
+        }
     }
 
     private void executeAsync(final Executor exec, final long attempt, Callable<ListenableFuture<T>> task,
@@ -179,38 +184,51 @@ public class ExponentialBackoff<T> {
         }
         final var nextAttempt = attempt + 1;
         final long waitTime = getWaitTime(cap, base, nextAttempt);
-
-        exec.execute(() -> {
-            final ListenableFuture<T> r;
-            try {
-                r = task.call();
-            } catch (Exception e) {
-                exceptionHandler.accept(e);
-                scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate, scheduler),
-                                   waitTime, TimeUnit.MILLISECONDS);
-                return;
-            }
-
-            if (r == null) {
-                if (!retryIf.test(null)) {
-                    futureSailor.complete(null);
+        try {
+            exec.execute(() -> {
+                final ListenableFuture<T> r;
+                try {
+                    r = task.call();
+                } catch (Exception e) {
+                    exceptionHandler.accept(e);
+                    try {
+                        scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate,
+                                                              scheduler),
+                                           waitTime, TimeUnit.MILLISECONDS);
+                    } catch (RejectedExecutionException ex) {
+                        // ignore
+                    }
                     return;
                 }
-            }
 
-            r.addListener(() -> {
-                try {
-                    T result = r.get();
-                    if (!retryIf.test(result)) {
-                        futureSailor.complete(result);
+                if (r == null) {
+                    if (!retryIf.test(null)) {
+                        futureSailor.complete(null);
                         return;
                     }
-                } catch (final Exception e) {
-                    exceptionHandler.accept(e);
                 }
-                scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate, scheduler),
-                                   waitTime, TimeUnit.MILLISECONDS);
-            }, exec);
-        });
+
+                r.addListener(() -> {
+                    try {
+                        T result = r.get();
+                        if (!retryIf.test(result)) {
+                            futureSailor.complete(result);
+                            return;
+                        }
+                    } catch (final Exception e) {
+                        exceptionHandler.accept(e);
+                    }
+                    try {
+                        scheduler.schedule(() -> executeAsync(exec, nextAttempt, task, futureSailor, predicate,
+                                                              scheduler),
+                                           waitTime, TimeUnit.MILLISECONDS);
+                    } catch (RejectedExecutionException e) {
+                        // ignore
+                    }
+                }, s -> s.run());
+            });
+        } catch (RejectedExecutionException e) {
+            // ignore
+        }
     }
 }
