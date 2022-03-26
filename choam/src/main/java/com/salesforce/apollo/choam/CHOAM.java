@@ -796,6 +796,7 @@ public class CHOAM {
         Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointBlockSize());
         if (cp == null) {
             transitions.fail();
+            return null;
         }
 
         final HashedCertifiedBlock v = view.get();

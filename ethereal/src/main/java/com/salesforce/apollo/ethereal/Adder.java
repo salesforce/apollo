@@ -280,8 +280,11 @@ public interface Adder {
                     log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
                 }
             } finally {
-                remove(wp);
-                mtx.unlock();
+                try {
+                    remove(wp);
+                } finally {
+                    mtx.unlock();
+                }
             }
         }
 

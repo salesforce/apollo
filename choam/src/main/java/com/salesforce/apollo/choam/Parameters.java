@@ -117,6 +117,105 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             }
             return builder.open();
         }
+
+        public int getAutoCommitBufferSize() {
+            return autoCommitBufferSize;
+        }
+
+        public int getAutoCompactFillRate() {
+            return autoCompactFillRate;
+        }
+
+        public int getCachConcurrency() {
+            return cachConcurrency;
+        }
+
+        public int getCachSize() {
+            return cachSize;
+        }
+
+        public File getFileName() {
+            return fileName;
+        }
+
+        public int getKeysPerPage() {
+            return keysPerPage;
+        }
+
+        public int getPageSplitSize() {
+            return pageSplitSize;
+        }
+
+        public boolean isCompress() {
+            return compress;
+        }
+
+        public boolean isCompressHigh() {
+            return compressHigh;
+        }
+
+        public boolean isReadOnly() {
+            return readOnly;
+        }
+
+        public boolean isRecoveryMode() {
+            return recoveryMode;
+        }
+
+        public MvStoreBuilder setAutoCommitBufferSize(int autoCommitBufferSize) {
+            this.autoCommitBufferSize = autoCommitBufferSize;
+            return this;
+        }
+
+        public MvStoreBuilder setAutoCompactFillRate(int autoCompactFillRate) {
+            this.autoCompactFillRate = autoCompactFillRate;
+            return this;
+        }
+
+        public MvStoreBuilder setCachConcurrency(int cachConcurrency) {
+            this.cachConcurrency = cachConcurrency;
+            return this;
+        }
+
+        public MvStoreBuilder setCachSize(int cachSize) {
+            this.cachSize = cachSize;
+            return this;
+        }
+
+        public MvStoreBuilder setCompress(boolean compress) {
+            this.compress = compress;
+            return this;
+        }
+
+        public MvStoreBuilder setCompressHigh(boolean compressHigh) {
+            this.compressHigh = compressHigh;
+            return this;
+        }
+
+        public MvStoreBuilder setFileName(File fileName) {
+            this.fileName = fileName;
+            return this;
+        }
+
+        public MvStoreBuilder setKeysPerPage(int keysPerPage) {
+            this.keysPerPage = keysPerPage;
+            return this;
+        }
+
+        public MvStoreBuilder setPageSplitSize(int pageSplitSize) {
+            this.pageSplitSize = pageSplitSize;
+            return this;
+        }
+
+        public MvStoreBuilder setReadOnly(boolean readOnly) {
+            this.readOnly = readOnly;
+            return this;
+        }
+
+        public MvStoreBuilder setRecoveryMode(boolean recoveryMode) {
+            this.recoveryMode = recoveryMode;
+            return this;
+        }
     }
 
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
