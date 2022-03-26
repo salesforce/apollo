@@ -105,7 +105,7 @@ public class RbcTest {
                                                                                  .setMaxMessages(100)
                                                                                  .setFalsePositiveRate(0.0125)
                                                                                  .setBufferSize(500)
-                                                                                 .setExec(ForkJoinPool.commonPool());
+                                                                                 .setExec(Executors.newCachedThreadPool());
 
     @BeforeAll
     public static void beforeClass() {
