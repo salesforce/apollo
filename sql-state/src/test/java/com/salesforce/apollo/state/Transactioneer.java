@@ -50,7 +50,7 @@ class Transactioneer {
 
     void decorate(CompletableFuture<?> fs) {
         inFlight.incrementAndGet();
-        fs.whenComplete((o, t) -> {
+        fs.whenCompleteAsync((o, t) -> {
             inFlight.decrementAndGet();
             if (t != null) {
                 if (t instanceof CompletionException e) {
@@ -84,7 +84,7 @@ class Transactioneer {
                     }
                 }
             }
-        });
+        }, executor);
     }
 
     void start() {
