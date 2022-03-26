@@ -1168,7 +1168,8 @@ public class View {
                 }
                 return;
             } catch (ExecutionException e) {
-                if (e.getCause() instanceof StatusRuntimeException sre) {
+                var cause = e.getCause();
+                if (cause instanceof StatusRuntimeException sre) {
                     if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
                         sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
                         sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
@@ -1177,7 +1178,7 @@ public class View {
                         log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
                     }
                 } else {
-                    log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e.getCause());
+                    log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), cause);
                 }
                 try {
                     link.close();

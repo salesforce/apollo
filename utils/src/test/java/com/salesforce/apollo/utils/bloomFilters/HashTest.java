@@ -97,7 +97,8 @@ public class HashTest {
         double missing = m - frequency.elementSet().size();
         double pc = ((missing / (double) m) * 100.0);
         if (pc < 0.5 | missing < 2.0) {
-            String.format("Missing: k: %s m: %s missing: %s : %s seed: %s", k, m, (int) missing, pc, seed);
+            System.out.println(String.format("Missing: k: %s m: %s missing: %s : %s seed: %s", k, m, (int) missing, pc,
+                                             seed));
         } else {
             System.out.println(String.format("OK: k: %s m: %s missing: %s : %s", k, m, (int) missing, pc));
         }

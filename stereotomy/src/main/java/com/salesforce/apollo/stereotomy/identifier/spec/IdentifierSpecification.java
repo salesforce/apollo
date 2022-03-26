@@ -243,7 +243,7 @@ public class IdentifierSpecification<D extends Identifier> {
         }
 
         public Builder<D> setFormat(Format format) {
-            format = requireNonNull(format);
+            this.format = requireNonNull(format);
             return this;
         }
 
@@ -280,7 +280,7 @@ public class IdentifierSpecification<D extends Identifier> {
         }
 
         public Builder<D> setNextSigningThreshold(SigningThreshold nextSigningThreshold) {
-            nextSigningThreshold = requireNonNull(nextSigningThreshold);
+            this.nextSigningThreshold = requireNonNull(nextSigningThreshold);
             return this;
         }
 

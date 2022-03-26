@@ -129,7 +129,7 @@ public class MigrationTest {
 
         statement = connection.createStatement();
         try {
-            cb = statement.executeQuery("select * from test.books");
+            statement.executeQuery("select * from test.books");
             fail("Did not successfully roll back, test schema still exists");
         } catch (JdbcSQLSyntaxErrorException e) {
             // expected

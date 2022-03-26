@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -124,10 +125,10 @@ public class ServerConnectionCache {
     public class ManagedServerConnection implements Comparable<ManagedServerConnection> {
         public final ManagedChannel channel;
         public final Digest         id;
-        private volatile int        borrowed   = 0;
+        private final AtomicInteger borrowed   = new AtomicInteger();
         private final Instant       created    = Instant.now(clock);
         private volatile Instant    lastUsed   = Instant.now(clock);
-        private volatile int        usageCount = 0;
+        private final AtomicInteger usageCount = new AtomicInteger();
 
         public ManagedServerConnection(Digest id, ManagedChannel channel) {
             this.id = id;
@@ -136,7 +137,7 @@ public class ServerConnectionCache {
 
         @Override
         public int compareTo(ManagedServerConnection o) {
-            return Integer.compare(usageCount, o.usageCount);
+            return Integer.compare(usageCount.get(), o.usageCount.get());
         }
 
         @Override
@@ -163,8 +164,7 @@ public class ServerConnectionCache {
         }
 
         private boolean decrementBorrow() {
-            borrowed = borrowed - 1;
-            if (borrowed == 0) {
+            if (borrowed.decrementAndGet() == 0) {
                 lastUsed = Instant.now(clock);
                 return true;
             }
@@ -172,9 +172,8 @@ public class ServerConnectionCache {
         }
 
         private boolean incrementBorrow() {
-            borrowed = borrowed + 1;
-            usageCount = usageCount + 1;
-            return borrowed == 1;
+            usageCount.incrementAndGet();
+            return borrowed.incrementAndGet() == 1;
         }
     }
 

@@ -54,9 +54,11 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
                 case POPULAR:
                     pop++;
                     updated = true;
+                    break;
                 case UNPOPULAR:
                     unpop++;
                     updated = true;
+                    break;
                 default:
                     break;
                 }

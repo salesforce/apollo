@@ -27,7 +27,8 @@ public class DomainMaintenance implements Trigger {
         var dsl = DSL.using(conn);
         dsl.deleteFrom(EDGE)
            .where(EDGE.TYPE.eq(type))
-           .and(EDGE.PARENT.eq((Long) oldRow[0]).or(EDGE.CHILD.eq((Long) oldRow[0])));
+           .and(EDGE.PARENT.eq((Long) oldRow[0]).or(EDGE.CHILD.eq((Long) oldRow[0])))
+           .execute();
     }
 
     @Override

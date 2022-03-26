@@ -21,7 +21,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
@@ -81,7 +80,7 @@ public class ReliableBroadcaster {
             private Context<Member> context;
             private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private Executor        exec               = ForkJoinPool.commonPool();
+            private Executor        exec               = r -> r.run();
             private double          falsePositiveRate  = 0.125;
             private int             maxMessages        = 100;
             private SigningMember   member;
@@ -369,7 +368,7 @@ public class ReliableBroadcaster {
             if ((size() < highWaterMark) || !garbageCollecting.tryAcquire()) {
                 return;
             }
-            ForkJoinPool.commonPool().execute(Utils.wrapped(() -> {
+            params.exec.execute(Utils.wrapped(() -> {
                 try {
                     int startSize = state.size();
                     if (startSize < highWaterMark) {
@@ -503,7 +502,7 @@ public class ReliableBroadcaster {
 
     public void removeRoundListener(UUID registration) {
         roundListeners.remove(registration);
-    } 
+    }
 
     public void start(Duration duration, ScheduledExecutorService scheduler) {
         if (!started.compareAndSet(false, true)) {
@@ -590,8 +589,7 @@ public class ReliableBroadcaster {
             }
             if (started.get()) {
                 try {
-                    scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(),
-                                       TimeUnit.MILLISECONDS);
+                    scheduler.schedule(() -> oneRound(duration, scheduler), duration.toMillis(), TimeUnit.MILLISECONDS);
                 } catch (RejectedExecutionException e) {
                     return;
                 }
@@ -616,7 +614,8 @@ public class ReliableBroadcaster {
         params.exec.execute(() -> {
             var timer = params.metrics == null ? null : params.metrics.gossipRoundDuration().time();
             gossiper.execute((link, ring) -> gossipRound(link, ring),
-                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
+                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler,
+                                                                  timer));
         });
     }
 }

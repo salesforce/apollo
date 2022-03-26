@@ -47,7 +47,7 @@ class Transactioneer {
     void decorate(CompletableFuture<?> fs) {
         inFlight.incrementAndGet();
 
-        fs.whenComplete((o, t) -> {
+        fs.whenCompleteAsync((o, t) -> {
             inFlight.decrementAndGet();
 
             if (t != null) {
@@ -73,7 +73,7 @@ class Transactioneer {
                     }
                 }
             }
-        });
+        }, txnScheduler);
     }
 
     void start() {
