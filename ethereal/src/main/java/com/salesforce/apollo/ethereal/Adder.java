@@ -44,10 +44,10 @@ public interface Adder {
 
         class WaitingPreUnit {
             private final List<WaitingPreUnit> children       = new ArrayList<>();
-            private boolean                    failed         = false;
-            private int                        missingParents = 0;
+            private volatile boolean           failed         = false;
+            private volatile int               missingParents = 0;
             private final PreUnit              pu;
-            private int                        waitingParents = 0;
+            private volatile int               waitingParents = 0;
 
             WaitingPreUnit(PreUnit pu) {
                 this.pu = pu;
@@ -161,8 +161,9 @@ public interface Adder {
             waitingById.put(id, wp);
             checkParents(wp);
             checkIfMissing(wp);
-            if (wp.missingParents > 0) {
-                log.trace("missing parents: {} for: {} on: {}", wp.missingParents, wp, conf.pid());
+            var current = wp.missingParents;
+            if (current > 0) {
+                log.trace("missing parents: {} for: {} on: {}", current, wp, conf.pid());
                 return;
             }
             log.trace("Unit now waiting: {} on: {}", pu, conf.pid());
@@ -192,8 +193,10 @@ public interface Adder {
                 wp.children.clear();
                 wp.children.addAll(mp.neededBy);
                 for (var ch : wp.children) {
-                    ch.missingParents--;
-                    ch.waitingParents++;
+                    final var missingParents = ch.missingParents;
+                    ch.missingParents = missingParents - 1;
+                    final var waitingParents = ch.waitingParents;
+                    ch.waitingParents = waitingParents + 1;
                     log.trace("Found parent {} for: {} on: {}", wp, ch, conf.pid());
                 }
                 missing.remove(wp.pu.id());
@@ -217,10 +220,12 @@ public interface Adder {
                     long parentID = id(height, creator, epoch);
                     var par = waitingById.get(parentID);
                     if (par != null) {
-                        wp.waitingParents++;
+                        final var waitingParents = wp.waitingParents;
+                        wp.waitingParents = waitingParents + 1;
                         par.children.add(wp);
                     } else {
-                        wp.missingParents++;
+                        final var missingParents = wp.missingParents;
+                        wp.missingParents = missingParents + 1;
                         registerMissing(parentID, wp);
                     }
                 }
@@ -291,13 +296,15 @@ public interface Adder {
 
         /** remove waitingPreunit from the buffer zone and notify its children. */
         private void remove(WaitingPreUnit wp) {
-            if (wp.failed) {
+            final var failed = wp.failed;
+            if (failed) {
                 removeFailed(wp);
             } else {
                 waiting.remove(wp.pu.hash());
                 waitingById.remove(wp.pu.id());
                 for (var ch : wp.children) {
-                    ch.waitingParents--;
+                    final var waitingParents = ch.waitingParents;
+                    ch.waitingParents = waitingParents - 1;
                     sendIfReady(ch);
                 }
             }
