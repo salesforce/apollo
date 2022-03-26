@@ -106,7 +106,7 @@ public class ViewAssembly implements Reconfiguration {
                                 .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
         committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
-                                                new ArrayList<>(nextAssembly.values()), comms);
+                                                new ArrayList<>(nextAssembly.values()), comms, params().exec());
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
         Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().memberCount(),

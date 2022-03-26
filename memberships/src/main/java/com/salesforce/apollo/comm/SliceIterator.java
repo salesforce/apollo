@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -35,17 +36,19 @@ public class SliceIterator<Comm extends Link> {
     private static final Logger                 log     = LoggerFactory.getLogger(SliceIterator.class);
     private final CommonCommunications<Comm, ?> comm;
     private AtomicInteger                       current = new AtomicInteger(0);
+    private final Executor                      exec;
     private final String                        label;
     private final SigningMember                 member;
     private final List<? extends Member>        slice;
 
     public SliceIterator(String label, SigningMember member, List<? extends Member> slice,
-                         CommonCommunications<Comm, ?> comm) {
+                         CommonCommunications<Comm, ?> comm, Executor exec) {
         assert member != null && slice != null && comm != null;
         this.label = label;
         this.member = member;
         this.slice = slice;
         this.comm = comm;
+        this.exec = exec;
     }
 
     public <T> void iterate(BiFunction<Comm, Member, ListenableFuture<T>> round,
@@ -83,7 +86,7 @@ public class SliceIterator<Comm extends Link> {
             }
             futureSailor.addListener(() -> allowed.accept(handler.handle(Optional.of(futureSailor), link,
                                                                          slice.get(current.get()))),
-                                     r -> r.run());
+                                     exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
