@@ -175,14 +175,15 @@ public class ContextGossiper {
                 log.error("error gossiping with {} on: {}", link.getMember(), member, e);
                 return;
             } catch (ExecutionException e) {
-                if (e.getCause() instanceof StatusRuntimeException sre) {
+                var cause = e.getCause();
+                if (cause instanceof StatusRuntimeException sre) {
                     final var code = sre.getStatus().getCode();
                     if (code.equals(Status.UNAVAILABLE.getCode()) || code.equals(Status.NOT_FOUND.getCode()) ||
                         code.equals(Status.UNIMPLEMENTED.getCode())) {
                         return;
                     }
                 }
-                log.warn("error gossiping with {} on: {}", link.getMember(), member, e.getCause());
+                log.warn("error gossiping with {} on: {}", link.getMember(), member, cause);
                 return;
             }
             log.debug("gossip update with {} on: {}", link.getMember(), member);

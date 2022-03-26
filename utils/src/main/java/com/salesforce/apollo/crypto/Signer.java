@@ -26,7 +26,7 @@ public interface Signer {
 
     class MockSigner implements Signer {
         private final SignatureAlgorithm algorithm;
-        
+
         public MockSigner(SignatureAlgorithm algorithm) {
             this.algorithm = algorithm;
         }
@@ -67,7 +67,7 @@ public interface Signer {
         private final PrivateKey[]       privateKeys;
 
         public SignerImpl(List<PrivateKey> privateKeys) {
-            this((PrivateKey[]) privateKeys.toArray());
+            this(privateKeys.toArray(new PrivateKey[privateKeys.size()]));
         }
 
         public SignerImpl(PrivateKey privateKey) {

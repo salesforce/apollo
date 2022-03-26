@@ -293,7 +293,8 @@ public class Mutator {
                    .setSql(sql)
                    .setArgs(Arguments.newBuilder()
                                      .setVersion(tfr.getVersion())
-                                     .setArgs(tfr.write(Arrays.asList(arguments))))
+                                     .setArgs(arguments == null ? ByteString.EMPTY
+                                                                : tfr.write(Arrays.asList(arguments))))
                    .build();
     }
 
@@ -360,8 +361,8 @@ public class Mutator {
     }
 
     public Statement statement(EXECUTION execution, String sql, Object... args) {
-        Value[] paramValues = new Value[args.length];
-        for (int i = 0; i < args.length; i++) {
+        Value[] paramValues = new Value[args == null ? 0 : args.length];
+        for (int i = 0; i < (args == null ? 0 : args.length); i++) {
             paramValues[i] = convert(args[i]);
         }
 

@@ -44,10 +44,10 @@ public interface Adder {
 
         class WaitingPreUnit {
             private final List<WaitingPreUnit> children       = new ArrayList<>();
-            private volatile boolean           failed         = false;
-            private volatile int               missingParents = 0;
+            private boolean                    failed         = false;
+            private int                        missingParents = 0;
             private final PreUnit              pu;
-            private volatile int               waitingParents = 0;
+            private int                        waitingParents = 0;
 
             WaitingPreUnit(PreUnit pu) {
                 this.pu = pu;
@@ -140,7 +140,9 @@ public interface Adder {
 
         @Override
         public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
-            waiting.entrySet().stream().filter(e -> !have.contains(e.getKey()))
+            waiting.entrySet()
+                   .stream()
+                   .filter(e -> !have.contains(e.getKey()))
                    .forEach(e -> missing.add(e.getValue().pu.toPreUnit_s()));
         }
 
@@ -249,7 +251,9 @@ public interface Adder {
                     wp.failed = true;
                     return;
                 }
-                var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> (Digest) e)
+                var digests = Stream.of(parents)
+                                    .map(e -> e == null ? (Digest) null : e.hash())
+                                    .map(e -> (Digest) e)
                                     .toList();
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
                 if (!calculated.equals(wp.pu.view().controlHash())) {
