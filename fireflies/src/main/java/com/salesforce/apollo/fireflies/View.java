@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -641,7 +642,7 @@ public class View {
                          .build();
         }
 
-        public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
+        public void start(Executor exec, Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -659,11 +660,13 @@ public class View {
             long interval = d.toMillis();
             int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> {
-                try {
-                    oneRound(d, scheduler);
-                } catch (Throwable e) {
-                    log.error("unexpected error during gossip round", e);
-                }
+                exec.execute(Utils.wrapped(() -> {
+                    try {
+                        oneRound(exec, d, scheduler);
+                    } catch (Throwable e) {
+                        log.error("unexpected error during gossip round", e);
+                    }
+                }, log));
             }, initialDelay, TimeUnit.MILLISECONDS);
             log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), initialDelay, seedList);
         }
@@ -834,8 +837,8 @@ public class View {
     /**
      * Start the View
      */
-    public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
-        service.start(d, seeds, scheduler);
+    public void start(Executor exec, Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
+        service.start(exec, d, seeds, scheduler);
     }
 
     /**
@@ -1338,7 +1341,7 @@ public class View {
      * @param scheduler
      * @param d
      */
-    void oneRound(Duration d, ScheduledExecutorService scheduler) {
+    void oneRound(Executor exec, Duration d, ScheduledExecutorService scheduler) {
         Timer.Context timer = metrics != null ? metrics.gossipRoundDuration().time() : null;
         round.incrementAndGet();
         try {
@@ -1356,11 +1359,13 @@ public class View {
                     }
                 }
                 scheduler.schedule(() -> {
-                    try {
-                        oneRound(d, scheduler);
-                    } catch (Throwable e) {
-                        log.error("unexpected error during gossip round on: {}", node.getId(), e);
-                    }
+                    exec.execute(Utils.wrapped(() -> {
+                        try {
+                            oneRound(exec, d, scheduler);
+                        } catch (Throwable e) {
+                            log.error("unexpected error during gossip round on: {}", node.getId(), e);
+                        }
+                    }, log));
                 }, d.toMillis(), TimeUnit.MILLISECONDS);
             });
         } catch (Throwable e) {

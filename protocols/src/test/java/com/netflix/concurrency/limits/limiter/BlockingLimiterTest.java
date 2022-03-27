@@ -51,7 +51,8 @@ public class BlockingLimiterTest {
         ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
         try {
             for (Future<?> future : IntStream.range(0, numThreads)
-                                             .mapToObj(x -> executorService.submit(() -> limiter.acquire(null).get()
+                                             .mapToObj(x -> executorService.submit(() -> limiter.acquire(null)
+                                                                                                .get()
                                                                                                 .onSuccess()))
                                              .collect(Collectors.toList())) {
                 future.get(1, TimeUnit.SECONDS);
@@ -61,7 +62,7 @@ public class BlockingLimiterTest {
         }
     }
 
-//    @Test TODO HSH - figure out why this flaps ;)
+    @Test
     public void testTimeout() {
         Duration timeout = Duration.ofMillis(50);
         SettableLimit limit = SettableLimit.startingAt(1);

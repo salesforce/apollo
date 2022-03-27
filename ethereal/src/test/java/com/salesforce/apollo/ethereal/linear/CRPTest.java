@@ -171,7 +171,7 @@ public class CRPTest {
         assertTrue(rs.called);
     }
 
-//    @Test // Disabled for now, as it flaps rarely - TODO
+    @Test
     public void useDifferentRSproducesDifferentPermutations() throws Exception {
         DagAdder d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
