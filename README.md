@@ -56,7 +56,7 @@ The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for
 
 Code generation is output into the (module dir)/target/generated-sources directory.  For GRPC/Proto, there are 2 directory roots: "(module dir)/target/generated-sources/protobuf/grpc-java" and "(module dir)/target/generated-sources/protobuf/java".  For JOOQ, the root directory is "(module dir)/target/generated-sources/jooq".
 
-Again, I stress that because these generated source directories are under the "<module dir>/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
+Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
 
 Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
 
