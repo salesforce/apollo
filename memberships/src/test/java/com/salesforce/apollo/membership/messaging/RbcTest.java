@@ -20,7 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -104,8 +103,7 @@ public class RbcTest {
     private static final Parameters.Builder               parameters = Parameters.newBuilder()
                                                                                  .setMaxMessages(100)
                                                                                  .setFalsePositiveRate(0.0125)
-                                                                                 .setBufferSize(500)
-                                                                                 .setExec(Executors.newCachedThreadPool());
+                                                                                 .setBufferSize(500);
 
     @BeforeAll
     public static void beforeClass() {
@@ -143,26 +141,20 @@ public class RbcTest {
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
-        parameters.setMetrics(metrics).setContext(context);
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
+        final var exec = Executors.newCachedThreadPool();
         messengers = members.stream().map(node -> {
-            AtomicInteger exec = new AtomicInteger();
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(2, r -> {
-                                            Thread thread = new Thread(r, "Router exec" + node.getId() + "["
-                                            + exec.getAndIncrement() + "]");
-                                            thread.setDaemon(true);
-                                            return thread;
-                                        }));
+                                        Executors.newFixedThreadPool(2));
             communications.add(comms);
             comms.setMember(node);
             comms.start();
-            return new ReliableBroadcaster(parameters.setMember(node).build(), comms);
+            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");

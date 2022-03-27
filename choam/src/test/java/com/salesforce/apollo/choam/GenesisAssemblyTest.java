@@ -92,7 +92,6 @@ public class GenesisAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(100));
-        params.getCombineParams().setExec(exec);
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();

@@ -87,7 +87,6 @@ public class DomainTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var exec = Executors.newCachedThreadPool();
-        params.getCombineParams().setExec(exec);
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2));

@@ -152,7 +152,6 @@ public class CHOAMTest {
                                                               .build())
                                .setCheckpointBlockSize(200);
 
-        params.getCombineParams().setExec(exec);               
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
         members = IntStream.range(0, CARDINALITY)

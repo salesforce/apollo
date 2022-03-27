@@ -87,7 +87,6 @@ public class ViewAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(10));
-        params.getCombineParams().setExec(exec);
         List<Map<Member, Join>> published = new CopyOnWriteArrayList<>();
 
         Map<Member, ViewAssembly> recons = new HashMap<>();

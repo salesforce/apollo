@@ -642,11 +642,9 @@ public class CHOAM {
             return thread;
         });
         nextView();
-        combine = new ReliableBroadcaster(params.combine()
-                                                .setMember(params.member())
-                                                .setContext(params.context())
-                                                .build(),
-                                          params.communications());
+        combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
+                                          params.communications(),
+                                          params.metrics() == null ? null : params.metrics().getCombineMetrics());
         linear = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r, "Linear " + params.member().getId());
             thread.setDaemon(true);
