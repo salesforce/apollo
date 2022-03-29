@@ -12,13 +12,13 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
+import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class FireflyMetricsImpl extends BandwidthMetricsImpl implements FireflyMetrics {
+public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMetrics {
     private final Meter gossipReply;
     private final Meter gossipResponse;
     private final Timer gossipRoundDuration;

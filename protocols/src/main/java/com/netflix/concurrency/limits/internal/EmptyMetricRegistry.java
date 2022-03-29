@@ -15,21 +15,32 @@
  */
 package com.netflix.concurrency.limits.internal;
 
-import com.netflix.concurrency.limits.MetricRegistry;
-
 import java.util.function.Supplier;
+
+import com.netflix.concurrency.limits.MetricRegistry;
 
 public final class EmptyMetricRegistry implements MetricRegistry {
     public static final EmptyMetricRegistry INSTANCE = new EmptyMetricRegistry();
-    
-    private EmptyMetricRegistry() {}
-    
+
+    private EmptyMetricRegistry() {
+    }
+
     @Override
     public SampleListener distribution(String id, String... tagNameValuePairs) {
-        return value -> { };
+        return value -> {
+        };
     }
 
     @Override
     public void gauge(String id, Supplier<Number> supplier, String... tagNameValuePairs) {
+    }
+
+    @Override
+    public Counter counter(String id, String... tagNameValuePairs) {
+        return new Counter() {
+            @Override
+            public void increment() {
+            }
+        };
     }
 }

@@ -113,7 +113,7 @@ public class SuccessorTest {
         Executor executor = Executors.newCachedThreadPool();
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(prefix, builder, executor);
+            LocalRouter comms = new LocalRouter(prefix, builder, executor, metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();

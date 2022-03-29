@@ -45,7 +45,7 @@ public class BlockingLimiterTest {
 
     @Test
     public void testMultipleBlockedThreads() throws InterruptedException, ExecutionException, TimeoutException {
-        int numThreads = 8;
+        int numThreads = 80;
         SettableLimit limit = SettableLimit.startingAt(1);
         BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
         ExecutorService executorService = Executors.newFixedThreadPool(numThreads);

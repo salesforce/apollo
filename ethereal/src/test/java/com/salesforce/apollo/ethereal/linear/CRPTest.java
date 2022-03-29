@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -177,7 +178,7 @@ public class CRPTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        Random rand = new Random(0x1638);
+        Random rand = new SecureRandom();
         var rsData = new HashMap<Integer, byte[]>();
         for (int level = 0; level < 10; level++) {
             var randData = new byte[64];
@@ -186,7 +187,7 @@ public class CRPTest {
         }
         var rs = new DeterministicRandomSource(rsData);
 
-        var crpFixedPrefix = (short) 0;
+        var crpFixedPrefix = (short) 1;
         var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
         assertNotNull(crpIt);
 
@@ -201,11 +202,9 @@ public class CRPTest {
         assertTrue(rs.called);
 
         for (int level = 0; level < 10; level++) {
-            for (int ix = 0; ix < 64; ix++) {
-                var randData = new byte[64];
-                rand.nextBytes(randData);
-                rsData.put(level, randData);
-            }
+            var randData = new byte[64];
+            rand.nextBytes(randData);
+            rsData.put(level, randData);
         }
         rs = new DeterministicRandomSource(rsData);
 

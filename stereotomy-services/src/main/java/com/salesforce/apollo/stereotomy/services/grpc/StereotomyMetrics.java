@@ -8,13 +8,13 @@ package com.salesforce.apollo.stereotomy.services.grpc;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface StereotomyMetrics extends BandwidthMetrics {
+public interface StereotomyMetrics extends EdpointMetrics {
 
     Timer appendEventsClient();
 

@@ -75,11 +75,11 @@ public class ReliableBroadcaster {
     public record Parameters(int bufferSize, int maxMessages, DigestAlgorithm digestAlgorithm, double falsePositiveRate,
                              int deliveredCacheSize) {
         public static class Builder implements Cloneable {
-            private int             bufferSize         = 500;
+            private int             bufferSize         = 1500;
             private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.125;
-            private int             maxMessages        = 100;
+            private double          falsePositiveRate  = 0.0125;
+            private int             maxMessages        = 500;
 
             public Parameters build() {
                 return new Parameters(bufferSize, maxMessages, digestAlgorithm, falsePositiveRate, deliveredCacheSize);

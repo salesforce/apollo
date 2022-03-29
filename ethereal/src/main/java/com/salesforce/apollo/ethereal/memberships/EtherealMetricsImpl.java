@@ -12,14 +12,14 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
+import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
-    private final Meter inboundBandwidth;
+public class EtherealMetricsImpl extends EndpointMetricsImpl implements EtherealMetrics, EdpointMetrics {
     private final Meter gossipReply;
     private final Meter gossipResponse;
     private final Timer gossipRoundDuration;
@@ -27,19 +27,16 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
     private final Timer inboundGossipTimer;
     private final Meter inboundUpdate;
     private final Timer inboundUpdateTimer;
-    private final Meter outboundBandwidth;
     private final Meter outboundGossip;
     private final Timer outboundGossipTimer;
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
     public EtherealMetricsImpl(Digest context, String system, MetricRegistry registry) {
-        inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
-        outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
-
+        super(registry);
         outboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.outbound.duration"));
         outboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.outbound.bytes"));
-        
+
         inboundUpdateTimer = registry.timer(name(context.shortString(), system, "ethereal.update.inbound.duration"));
         inboundUpdate = registry.meter(name(context.shortString(), system, "ethereal.update.inbound.bytes"));
 
@@ -50,7 +47,7 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
         inboundGossipTimer = registry.timer(name(context.shortString(), system, "ethereal.gossip.inbound.duration"));
         inboundGossip = registry.meter(name(context.shortString(), system, "ethereal.gossip.inbound.bytes"));
         gossipReply = registry.meter(name(context.shortString(), system, "ethereal.gossip.reply.bytes"));
-        
+
         gossipRoundDuration = registry.timer(name(context.shortString(), system, "ethereal.gossip.round.duration"));
 
     }
@@ -71,11 +68,6 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
     }
 
     @Override
-    public Meter inboundBandwidth() {
-        return inboundBandwidth;
-    }
-
-    @Override
     public Meter inboundGossip() {
         return inboundGossip;
     }
@@ -93,11 +85,6 @@ public class EtherealMetricsImpl implements EtherealMetrics, BandwidthMetrics {
     @Override
     public Timer inboundUpdateTimer() {
         return inboundUpdateTimer;
-    }
-
-    @Override
-    public Meter outboundBandwidth() {
-        return outboundBandwidth;
     }
 
     @Override

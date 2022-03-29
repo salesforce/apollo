@@ -9,13 +9,13 @@ package com.salesforce.apollo.choam.support;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface ChoamMetrics extends BandwidthMetrics {
+public interface ChoamMetrics extends EdpointMetrics {
 
     void publishedBatch(int batchSize, int byteSize, int validations);
 

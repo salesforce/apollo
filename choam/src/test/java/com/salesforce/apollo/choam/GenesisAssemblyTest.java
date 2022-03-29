@@ -116,7 +116,7 @@ public class GenesisAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comm.setMember(m);
             return comm;
         }));

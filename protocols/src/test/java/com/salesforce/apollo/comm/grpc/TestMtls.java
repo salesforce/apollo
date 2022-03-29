@@ -44,7 +44,6 @@ public class TestMtls {
         try {
             server.start();
             server.bind(server());
-            Thread.sleep(1_000);
             MtlsClient client = client(serverAddress);
 
             for (int i = 0; i < 100; i++) {

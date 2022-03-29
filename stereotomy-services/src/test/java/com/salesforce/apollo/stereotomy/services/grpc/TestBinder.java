@@ -58,8 +58,8 @@ public class TestBinder {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        serverRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool());
-        clientRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool());
+        serverRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
+        clientRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
 
         serverRouter.setMember(serverMember);
         clientRouter.setMember(clientMember);

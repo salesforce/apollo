@@ -20,13 +20,13 @@ import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
-import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
+import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class ChoamMetricsImpl extends BandwidthMetricsImpl implements ChoamMetrics {
+public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetrics {
 
     private final RbcMetrics      combineMetrics;
     private final Meter           completedTransactions;

@@ -140,7 +140,7 @@ public class TestCHOAM {
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              exec);
+                                              exec, metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));

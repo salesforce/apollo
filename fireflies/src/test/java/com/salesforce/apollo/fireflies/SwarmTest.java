@@ -264,20 +264,19 @@ public class SwarmTest {
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
-            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
-                                                                           frist.getAndSet(false) ? node0Registry
-                                                                                                  : registry);
+            FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
+                                                                frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        exec);
+                                        exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 }

@@ -95,7 +95,7 @@ public class FireFliesTest {
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2));
+                                              Executors.newFixedThreadPool(2), null);
             var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
             var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()

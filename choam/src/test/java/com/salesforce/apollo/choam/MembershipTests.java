@@ -137,7 +137,7 @@ public class MembershipTests {
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec, null);
             comm.setMember(m);
             return comm;
         }));

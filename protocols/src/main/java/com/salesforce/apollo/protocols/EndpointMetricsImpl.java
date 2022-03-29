@@ -13,18 +13,25 @@ import com.codahale.metrics.MetricRegistry;
  * @author hal.hildebrand
  *
  */
-public class BandwidthMetricsImpl implements BandwidthMetrics {
-    private final Meter inboundBandwidth;
-    private final Meter outboundBandwidth;
+public class EndpointMetricsImpl implements EdpointMetrics {
+    private final Meter          inboundBandwidth;
+    private final LimitsRegistry limits;
+    private final Meter          outboundBandwidth;
 
-    public BandwidthMetricsImpl(MetricRegistry registry) {
+    public EndpointMetricsImpl(MetricRegistry registry) {
         inboundBandwidth = registry.meter(INBOUND_BANDWIDTH);
         outboundBandwidth = registry.meter(OUTBOUND_BANDWIDTH);
+        limits = new LimitsRegistry("endpoint", registry);
     }
 
     @Override
     public Meter inboundBandwidth() {
         return inboundBandwidth;
+    }
+
+    @Override
+    public LimitsRegistry limitsMetrics() {
+        return limits;
     }
 
     @Override

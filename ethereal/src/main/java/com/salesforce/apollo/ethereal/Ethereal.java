@@ -253,7 +253,7 @@ public class Ethereal {
             }
         };
 
-        var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory());
+        var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory(config.digestAlgorithm()));
 
         Runnable start = () -> {
             log.debug("Starting Ethereal on: {}", config.pid());
