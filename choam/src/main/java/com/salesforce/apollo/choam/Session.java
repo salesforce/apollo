@@ -11,7 +11,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -23,7 +25,6 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -112,12 +113,15 @@ public class Session {
             timeout = params.submitTimeout();
         }
         var stxn = new SubmittedTransaction(hash, txn, result);
-        submit(exec, stxn, scheduler);
+        submitted.put(stxn.hash(), stxn);
+
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
         var futureTimeout = scheduler.schedule(() -> {
             log.debug("Timeout of txn: {} on: {}", hash, params.member());
             result.completeExceptionally(new TimeoutException("Transaction timeout"));
         }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+
+        submit(exec, stxn);
         return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
@@ -145,50 +149,65 @@ public class Session {
         }
     }
 
-    private void submit(Executor exec, SubmittedTransaction stx, ScheduledExecutorService scheduler) {
-        submitted.put(stx.hash(), stx);
-        CompletableFuture<Status> submitted = new CompletableFuture<Status>().whenComplete((r, t) -> {
-            if (!stx.onCompletion().isDone()) {
-                log.trace("Transaction submission: {} completed: {} on: {}", stx.hash(), r, params.member());
-                return;
-            }
-            if (t != null) {
-                log.trace("Transaction submission: {} completed: {} exceptionally on: {}", stx.hash(), r,
-                          params.member(), t);
-                stx.onCompletion().completeExceptionally(t);
-            }
-            if (r == null || !r.isOk()) {
-                log.trace("Transaction submission: {} completed: {} timeout on: {}", stx.hash(), r, params.member());
-                stx.onCompletion().completeExceptionally(new TimeoutException("Cannot submit txn"));
-            }
-        });
-        final var clientBackoff = params.clientBackoff().retryIf(s -> {
-            if (stx.onCompletion().isDone()) {
-                log.trace("Transaction submission: {} already complete: {} on: {}", stx.hash(), s, params.member());
-                return false;
-            }
-            if (s.isOk()) {
-                log.trace("Transaction submission: {} complete: {} on: {}", stx.hash(), s, params.member());
-                if (params.metrics() != null) {
-                    params.metrics().transactionSubmittedSuccess();
+    private void submit(Executor exec, SubmittedTransaction stx) {
+        var listener = params.txnLimiter().acquire(null);
+        if (listener.isEmpty()) {
+            log.trace("Transaction submission: {} rejected on: {}", stx.hash(), params.member());
+            stx.onCompletion().completeExceptionally(new TimeoutException("Transaction submission rejected"));
+            return;
+        }
+        var futureResult = service.apply(stx);
+
+        try {
+            futureResult.addListener(() -> {
+                if (!stx.onCompletion().isDone()) {
+                    listener.get().onIgnore();
+                    log.trace("Transaction submission: {} already completed on: {}", stx.hash(), params.member());
+                    return;
                 }
-                return false;
-            }
+
+                try {
+                    var status = futureResult.get();
+                    if (status == null || !status.isOk()) {
+                        listener.get().onDropped();
+                        log.trace("Transaction submission: {} status: {} timeout on: {}", stx.hash(), status,
+                                  params.member());
+                        final var timeoutEx = new TimeoutException("Cannot submit txn");
+                        stx.onCompletion().completeExceptionally(timeoutEx);
+                        if (params.metrics() != null) {
+                            params.metrics().transactionComplete(timeoutEx);
+                        }
+                        return;
+                    }
+                    listener.get().onSuccess();
+                    log.trace("Transaction submission: {} status: {} on: {}", stx.hash(), status, params.member());
+                    if (params.metrics() != null) {
+                        params.metrics().transactionSubmittedSuccess();
+                    }
+                } catch (InterruptedException e) {
+                    listener.get().onDropped();
+                    log.trace("Transaction submission: {} interrupted on: {}", stx.hash(), params.member(), e);
+                    stx.onCompletion().completeExceptionally(e);
+                    if (params.metrics() != null) {
+                        params.metrics().transactionComplete(e);
+                    }
+                } catch (ExecutionException e) {
+                    listener.get().onDropped();
+                    log.trace("Transaction submission: {} completed exceptionally on: {}", stx.hash(), params.member(),
+                              e.getCause());
+                    stx.onCompletion().completeExceptionally(e.getCause());
+                    if (params.metrics() != null) {
+                        params.metrics().transactionComplete(e.getCause());
+                    }
+                }
+            }, exec);
+        } catch (RejectedExecutionException e) {
+            listener.get().onDropped();
+            log.trace("Transaction submission: {} rejected on: {}", stx.hash(), params.member(), e);
+            stx.onCompletion().completeExceptionally(e);
             if (params.metrics() != null) {
-                params.metrics().transactionSubmitRetry();
+                params.metrics().transactionComplete(e);
             }
-            log.trace("Retrying: {} status: {} on: {}", stx.hash(), s, params.member());
-            return true;
-        }).build();
-        clientBackoff.executeAsync(exec, () -> {
-            if (stx.onCompletion().isDone()) {
-                log.trace("Submission completed of: {} on: {}", stx.hash(), params.member());
-                SettableFuture<Status> f = SettableFuture.create();
-                f.set(Status.OK);
-                return f;
-            }
-            log.trace("Attempting submission of: {} on: {}", stx.hash(), params.member());
-            return service.apply(stx);
-        }, submitted, scheduler);
+        }
     }
 }

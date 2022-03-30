@@ -22,6 +22,10 @@ import java.util.function.Supplier;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 
+import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.limit.AIMDLimit;
+import com.netflix.concurrency.limits.limiter.LifoBlockingLimiter;
+import com.netflix.concurrency.limits.limiter.SimpleLimiter;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -39,9 +43,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
-import com.salesforce.apollo.utils.ExponentialBackoff;
-
-import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
@@ -52,7 +53,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                          int checkpointBlockSize, DigestAlgorithm digestAlgorithm, SignatureAlgorithm viewSigAlgorithm,
                          int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
                          Duration synchronizeTimeout, BootstrapParameters bootstrap, ProducerParameters producer,
-                         ExponentialBackoff.Builder<Status> clientBackoff, MvStoreBuilder mvBuilder) {
+                         MvStoreBuilder mvBuilder, Limiter<Void> txnLimiter) {
 
     public int toleranceLevel() {
         final double n = runtime.context.getRingCount();
@@ -510,36 +511,38 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
     public static class Builder implements Cloneable {
 
-        private BootstrapParameters                bootstrap             = BootstrapParameters.newBuilder().build();
-        private int                                checkpointBlockSize   = 8192;
-        private ExponentialBackoff.Builder<Status> clientBackoff         = ExponentialBackoff.<Status>newBuilder()
-                                                                                             .retryIf(s -> s.isOk())
-                                                                                             .setBase(200)
-                                                                                             .setCap(2000)
-                                                                                             .setExceptionHandler(t -> System.out.println(t.getClass()
-                                                                                                                                           .getSimpleName()));
-        private ReliableBroadcaster.Parameters     combine         = ReliableBroadcaster.Parameters.newBuilder()
-                                                                                                         .build();
-        private DigestAlgorithm                    digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Digest                             genesisViewId;
-        private Duration                           gossipDuration        = Duration.ofSeconds(1);
-        private int                                maxCheckpointSegments = 200;
-        private MvStoreBuilder                     mvBuilder             = new MvStoreBuilder();
-        private ProducerParameters                 producer              = ProducerParameters.newBuilder().build();
-        private int                                regenerationCycles    = 20;
-        private Duration                           submitTimeout         = Duration.ofSeconds(30);
-        private int                                synchronizationCycles = 10;
-        private Duration                           synchronizeDuration   = Duration.ofMillis(500);
-        private Duration                           synchronizeTimeout    = Duration.ofSeconds(30);
-        private SignatureAlgorithm                 viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private BootstrapParameters            bootstrap             = BootstrapParameters.newBuilder().build();
+        private int                            checkpointBlockSize   = 8192;
+        private ReliableBroadcaster.Parameters combine               = ReliableBroadcaster.Parameters.newBuilder()
+                                                                                                     .build();
+        private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private Digest                         genesisViewId;
+        private Duration                       gossipDuration        = Duration.ofSeconds(1);
+        private int                            maxCheckpointSegments = 200;
+        private MvStoreBuilder                 mvBuilder             = new MvStoreBuilder();
+        private ProducerParameters             producer              = ProducerParameters.newBuilder().build();
+        private int                            regenerationCycles    = 20;
+        private Duration                       submitTimeout         = Duration.ofSeconds(30);
+        private int                            synchronizationCycles = 10;
+        private Duration                       synchronizeDuration   = Duration.ofMillis(500);
+        private Duration                       synchronizeTimeout    = Duration.ofSeconds(30);
+        private Limiter<Void>                  txnLimiter            = LifoBlockingLimiter.<Void>newBuilder(SimpleLimiter.newBuilder()
+                                                                                                                         .limit(AIMDLimit.newBuilder()
+                                                                                                                                         .maxLimit(5_000)
+                                                                                                                                         .minLimit(100)
+                                                                                                                                         .build())
+                                                                                                                         .build())
+                                                                                          .build();
+        private SignatureAlgorithm             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
-            return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout,
-                                  genesisViewId, checkpointBlockSize, digestAlgorithm, viewSigAlgorithm,
-                                  synchronizationCycles, synchronizeDuration, regenerationCycles, synchronizeTimeout,
-                                  bootstrap, producer, clientBackoff, mvBuilder);
+            return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
+                                  checkpointBlockSize, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
+                                  synchronizeDuration, regenerationCycles, synchronizeTimeout, bootstrap, producer,
+                                  mvBuilder, txnLimiter);
         }
 
+        @Override
         public Builder clone() {
             try {
                 return (Builder) super.clone();
@@ -556,11 +559,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return checkpointBlockSize;
         }
 
-        public ExponentialBackoff.Builder<Status> getClientBackoff() {
-            return clientBackoff;
-        }
-
-        public ReliableBroadcaster.Parameters  getCombine() {
+        public ReliableBroadcaster.Parameters getCombine() {
             return combine;
         }
 
@@ -608,6 +607,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return submitTimeout;
         }
 
+        public Limiter<Void> getTxnLimiter() {
+            return txnLimiter;
+        }
+
         public SignatureAlgorithm getViewSigAlgorithm() {
             return viewSigAlgorithm;
         }
@@ -619,11 +622,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public Builder setCheckpointBlockSize(int checkpointBlockSize) {
             this.checkpointBlockSize = checkpointBlockSize;
-            return this;
-        }
-
-        public Builder setClientBackoff(ExponentialBackoff.Builder<Status> clientBackoff) {
-            this.clientBackoff = clientBackoff;
             return this;
         }
 
@@ -684,6 +682,11 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public Builder setTransactonTimeout(Duration transactonTimeout) {
             this.submitTimeout = transactonTimeout;
+            return this;
+        }
+
+        public Builder setTxnLimiter(Limiter<Void> txnLimiter) {
+            this.txnLimiter = txnLimiter;
             return this;
         }
 

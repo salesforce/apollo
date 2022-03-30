@@ -104,7 +104,7 @@ public class TestCHOAM {
     public void before() {
         exec = Executors.newCachedThreadPool();
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        txExecutor = Executors.newFixedThreadPool(CARDINALITY);
+        txExecutor = Executors.newCachedThreadPool();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
