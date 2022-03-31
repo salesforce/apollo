@@ -23,6 +23,7 @@ import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 
 import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.netflix.concurrency.limits.limiter.LifoBlockingLimiter;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
@@ -53,7 +54,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                          int checkpointBlockSize, DigestAlgorithm digestAlgorithm, SignatureAlgorithm viewSigAlgorithm,
                          int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
                          Duration synchronizeTimeout, BootstrapParameters bootstrap, ProducerParameters producer,
-                         MvStoreBuilder mvBuilder, Limiter<Void> txnLimiter) {
+                         MvStoreBuilder mvBuilder, LimiterBuilder txnLimiterBuilder) {
 
     public int toleranceLevel() {
         final double n = runtime.context.getRingCount();
@@ -225,34 +226,35 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
                                     Supplier<KERL_> kerl, FoundationSeal foundation) {
         public static class Builder implements Cloneable {
-            private final static Function<ULong, File>             NULL_CHECKPOINTER = h -> {
-                                                                                         File cp;
-                                                                                         try {
-                                                                                             cp = File.createTempFile("cp-"
-                                                                                             + h, ".chk");
-                                                                                             cp.deleteOnExit();
-                                                                                             try (
-                                                                                             var os = new FileOutputStream(cp)) {
-                                                                                                 os.write("Give me food or give me slack or kill me".getBytes());
-                                                                                             }
-                                                                                         } catch (IOException e) {
-                                                                                             throw new IllegalStateException(e);
-                                                                                         }
-                                                                                         return cp;
-                                                                                     };
-            private Function<ULong, File>                          checkpointer      = NULL_CHECKPOINTER;
+            private final static Function<ULong, File> NULL_CHECKPOINTER;
+            static {
+                NULL_CHECKPOINTER = h -> {
+                    File cp;
+                    try {
+                        cp = File.createTempFile("cp-" + h, ".chk");
+                        cp.deleteOnExit();
+                        try (var os = new FileOutputStream(cp)) {
+                            os.write("Give me food or give me slack or kill me".getBytes());
+                        }
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    return cp;
+                };
+            }
+            private Function<ULong, File>                          checkpointer = NULL_CHECKPOINTER;
             private Router                                         communications;
             private Context<Member>                                context;
-            private Executor                                       exec              = r -> r.run();
-            private FoundationSeal                                 foundation        = FoundationSeal.getDefaultInstance();
-            private Function<Map<Member, Join>, List<Transaction>> genesisData       = view -> new ArrayList<>();
-            private Supplier<KERL_>                                kerl              = () -> KERL_.getDefaultInstance();
+            private Executor                                       exec         = r -> r.run();
+            private FoundationSeal                                 foundation   = FoundationSeal.getDefaultInstance();
+            private Function<Map<Member, Join>, List<Transaction>> genesisData  = view -> new ArrayList<>();
+            private Supplier<KERL_>                                kerl         = () -> KERL_.getDefaultInstance();
             private SigningMember                                  member;
             private ChoamMetrics                                   metrics;
-            private TransactionExecutor                            processor         = (i, h, t, f) -> {
-                                                                                     };
-            private BiConsumer<ULong, CheckpointState>             restorer          = (height, checkpointState) -> {
-                                                                                     };
+            private TransactionExecutor                            processor    = (i, h, t, f) -> {
+                                                                                };
+            private BiConsumer<ULong, CheckpointState>             restorer     = (height, checkpointState) -> {
+                                                                                };
             private ScheduledExecutorService                       scheduler;
 
             public RuntimeParameters build() {
@@ -509,6 +511,97 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         return new Builder();
     }
 
+    public static class LimiterBuilder {
+        private Duration backlogDuration = Duration.ofSeconds(1);
+        private int      backlogSize     = 100;
+        private double   backoffRatio    = 0.9;
+        private int      initialLimit    = 1_000;
+        private int      maxLimit        = 5_000;
+        private int      minLimit        = 100;
+        private Duration timeout         = Duration.ofSeconds(2);
+
+        public Limiter<Void> build(String name, MetricRegistry metrics) {
+            final SimpleLimiter<Void> limiter = SimpleLimiter.newBuilder()
+                                                             .named(name)
+                                                             .metricRegistry(metrics)
+                                                             .limit(AIMDLimit.newBuilder()
+                                                                             .initialLimit(initialLimit)
+                                                                             .timeout(timeout)
+                                                                             .maxLimit(maxLimit)
+                                                                             .minLimit(minLimit)
+                                                                             .backoffRatio(backoffRatio)
+                                                                             .build())
+                                                             .build();
+            return LifoBlockingLimiter.<Void>newBuilder(limiter)
+                                      .backlogSize(backlogSize)
+                                      .backlogTimeout(backlogDuration)
+                                      .build();
+        }
+
+        public Duration getbacklogDuration() {
+            return backlogDuration;
+        }
+
+        public int getBacklogSize() {
+            return backlogSize;
+        }
+
+        public double getBackoffRatio() {
+            return backoffRatio;
+        }
+
+        public int getInitialLimit() {
+            return initialLimit;
+        }
+
+        public int getMaxLimit() {
+            return maxLimit;
+        }
+
+        public int getMinLimit() {
+            return minLimit;
+        }
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public LimiterBuilder setBacklogDuration(Duration backlogDuration) {
+            this.backlogDuration = backlogDuration;
+            return this;
+        }
+
+        public LimiterBuilder setBacklogSize(int backlogSize) {
+            this.backlogSize = backlogSize;
+            return this;
+        }
+
+        public LimiterBuilder setBackoffRatio(double backoffRatio) {
+            this.backoffRatio = backoffRatio;
+            return this;
+        }
+
+        public LimiterBuilder setInitialLimit(int initialLimit) {
+            this.initialLimit = initialLimit;
+            return this;
+        }
+
+        public LimiterBuilder setMaxLimit(int maxLimit) {
+            this.maxLimit = maxLimit;
+            return this;
+        }
+
+        public LimiterBuilder setMinLimit(int minLimit) {
+            this.minLimit = minLimit;
+            return this;
+        }
+
+        public LimiterBuilder setTimeout(Duration timeout) {
+            this.timeout = timeout;
+            return this;
+        }
+    }
+
     public static class Builder implements Cloneable {
 
         private BootstrapParameters            bootstrap             = BootstrapParameters.newBuilder().build();
@@ -526,20 +619,14 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private int                            synchronizationCycles = 10;
         private Duration                       synchronizeDuration   = Duration.ofMillis(500);
         private Duration                       synchronizeTimeout    = Duration.ofSeconds(30);
-        private Limiter<Void>                  txnLimiter            = LifoBlockingLimiter.<Void>newBuilder(SimpleLimiter.newBuilder()
-                                                                                                                         .limit(AIMDLimit.newBuilder()
-                                                                                                                                         .maxLimit(5_000)
-                                                                                                                                         .minLimit(100)
-                                                                                                                                         .build())
-                                                                                                                         .build())
-                                                                                          .build();
+        private LimiterBuilder                 txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockSize, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
                                   synchronizeDuration, regenerationCycles, synchronizeTimeout, bootstrap, producer,
-                                  mvBuilder, txnLimiter);
+                                  mvBuilder, txnLimiterBuilder);
         }
 
         @Override
@@ -607,8 +694,8 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return submitTimeout;
         }
 
-        public Limiter<Void> getTxnLimiter() {
-            return txnLimiter;
+        public LimiterBuilder getTxnLimiterBuilder() {
+            return txnLimiterBuilder;
         }
 
         public SignatureAlgorithm getViewSigAlgorithm() {
@@ -685,8 +772,8 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return this;
         }
 
-        public Builder setTxnLimiter(Limiter<Void> txnLimiter) {
-            this.txnLimiter = txnLimiter;
+        public Builder setTxnLimiterBuilder(LimiterBuilder txnLimiterBuilder) {
+            this.txnLimiterBuilder = txnLimiterBuilder;
             return this;
         }
 

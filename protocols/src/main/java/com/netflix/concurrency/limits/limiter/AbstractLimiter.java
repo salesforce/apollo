@@ -15,6 +15,10 @@
  */
 package com.netflix.concurrency.limits.limiter;
 
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.MetricIds;
@@ -22,21 +26,17 @@ import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
 import com.netflix.concurrency.limits.limit.VegasLimit;
 
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
-
 public abstract class AbstractLimiter<ContextT> implements Limiter<ContextT> {
-    public static final String ID_TAG = "id";
+    public static final String ID_TAG     = "id";
     public static final String STATUS_TAG = "status";
 
     public abstract static class Builder<BuilderT extends Builder<BuilderT>> {
         private static final AtomicInteger idCounter = new AtomicInteger();
 
-        private Limit limit = VegasLimit.newDefault();
+        private Limit          limit = VegasLimit.newDefault();
         private Supplier<Long> clock = System::nanoTime;
 
-        protected String name = "unnamed-" + idCounter.incrementAndGet();
+        protected String         name     = "unnamed-" + idCounter.incrementAndGet();
         protected MetricRegistry registry = EmptyMetricRegistry.INSTANCE;
 
         public BuilderT named(String name) {
@@ -55,16 +55,16 @@ public abstract class AbstractLimiter<ContextT> implements Limiter<ContextT> {
         }
 
         public BuilderT metricRegistry(MetricRegistry registry) {
-            this.registry = registry;
+            this.registry = registry == null ? EmptyMetricRegistry.INSTANCE : registry;
             return self();
         }
 
         protected abstract BuilderT self();
     }
 
-    private final AtomicInteger inFlight = new AtomicInteger();
-    private final Supplier<Long> clock;
-    private final Limit limitAlgorithm;
+    private final AtomicInteger          inFlight = new AtomicInteger();
+    private final Supplier<Long>         clock;
+    private final Limit                  limitAlgorithm;
     private final MetricRegistry.Counter successCounter;
     private final MetricRegistry.Counter droppedCounter;
     private final MetricRegistry.Counter ignoredCounter;
@@ -79,10 +79,14 @@ public abstract class AbstractLimiter<ContextT> implements Limiter<ContextT> {
         this.limitAlgorithm.notifyOnChange(this::onNewLimit);
 
         builder.registry.gauge(MetricIds.LIMIT_NAME, this::getLimit);
-        this.successCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG, "success");
-        this.droppedCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG, "dropped");
-        this.ignoredCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG, "ignored");
-        this.rejectedCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG, "rejected");
+        this.successCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG,
+                                                       "success");
+        this.droppedCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG,
+                                                       "dropped");
+        this.ignoredCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG,
+                                                       "ignored");
+        this.rejectedCounter = builder.registry.counter(MetricIds.CALL_NAME, ID_TAG, builder.name, STATUS_TAG,
+                                                        "rejected");
     }
 
     protected Optional<Listener> createRejectedListener() {
@@ -122,7 +126,9 @@ public abstract class AbstractLimiter<ContextT> implements Limiter<ContextT> {
         return limit;
     }
 
-    public int getInflight() { return inFlight.get(); }
+    public int getInflight() {
+        return inFlight.get();
+    }
 
     protected void onNewLimit(int newLimit) {
         limit = newLimit;

@@ -102,9 +102,9 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
-        exec = Executors.newCachedThreadPool();
+        exec = Executors.newFixedThreadPool(CARDINALITY);
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        txExecutor = Executors.newCachedThreadPool();
+        txExecutor = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
@@ -120,12 +120,12 @@ public class TestCHOAM {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(10_000)
-                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockSize(1);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
 
         checkpointOccurred = new CompletableFuture<>();
         members = IntStream.range(0, CARDINALITY)

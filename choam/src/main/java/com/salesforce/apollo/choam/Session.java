@@ -12,8 +12,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -26,10 +24,13 @@ import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Message;
+import com.netflix.concurrency.limits.Limiter;
+import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
 import com.salesforce.apollo.choam.support.TransactionCancelled;
+import com.salesforce.apollo.choam.support.TransactionFailed;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
@@ -73,10 +74,17 @@ public class Session {
     private final Parameters                                               params;
     private final Function<SubmittedTransaction, ListenableFuture<Status>> service;
     private final Map<Digest, SubmittedTransaction>                        submitted = new ConcurrentHashMap<>();
+    private final Limiter<Void>                                            limiter;
 
     public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<Status>> service) {
         this.params = params;
         this.service = service;
+        final var metrics = params.metrics();
+        this.limiter = params.txnLimiterBuilder()
+                             .build(params.member().getId().shortString(),
+                                    metrics == null ? EmptyMetricRegistry.INSTANCE
+                                                    : metrics.getMetricRegistry(params.context().getId().shortString()
+                                                    + ".txnLimiter"));
     }
 
     /**
@@ -94,12 +102,12 @@ public class Session {
      * @param transaction - the Message to submit as a transaction
      * @param timeout     - non null timeout of the transaction
      * @param scheduler
-     * @param exec
+     * 
      * @return onCompletion - the future result of the submitted transaction
      * @throws InvalidTransaction - if the submitted transaction is invalid in any
      *                            way
      */
-    public <T> CompletableFuture<T> submit(Executor exec, Message transaction, Duration timeout,
+    public <T> CompletableFuture<T> submit(Message transaction, Duration timeout,
                                            ScheduledExecutorService scheduler) throws InvalidTransaction {
         final int n = nonce.getAndIncrement();
 
@@ -118,14 +126,19 @@ public class Session {
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
         var futureTimeout = scheduler.schedule(() -> {
             log.debug("Timeout of txn: {} on: {}", hash, params.member());
-            result.completeExceptionally(new TimeoutException("Transaction timeout"));
+            final var to = new TimeoutException("Transaction timeout");
+            result.completeExceptionally(to);
+            if (params.metrics() != null) {
+                params.metrics().transactionComplete(to);
+            }
         }, timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        submit(exec, stxn);
-        return result.whenComplete((r, t) -> {
+        final var completion = result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
         });
+        submit(stxn);
+        return completion;
     }
 
     public int submitted() {
@@ -149,65 +162,56 @@ public class Session {
         }
     }
 
-    private void submit(Executor exec, SubmittedTransaction stx) {
-        var listener = params.txnLimiter().acquire(null);
+    private void submit(SubmittedTransaction stx) {
+        var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
             log.trace("Transaction submission: {} rejected on: {}", stx.hash(), params.member());
-            stx.onCompletion().completeExceptionally(new TimeoutException("Transaction submission rejected"));
+            if (params.metrics() != null) {
+                params.metrics().transactionSubmittedFail();
+                ;
+            }
+            stx.onCompletion().completeExceptionally(new TransactionFailed("Transaction submission rejected"));
             return;
         }
         var futureResult = service.apply(stx);
 
-        try {
-            futureResult.addListener(() -> {
-                if (!stx.onCompletion().isDone()) {
-                    listener.get().onIgnore();
-                    log.trace("Transaction submission: {} already completed on: {}", stx.hash(), params.member());
+        futureResult.addListener(() -> {
+            try {
+                var status = futureResult.get();
+                if (status == null || !status.isOk()) {
+                    listener.get().onDropped();
+                    log.trace("Transaction submission: {} failed: {} on: {}", stx.hash(), status, params.member());
+                    if (params.metrics() != null) {
+                        if (status.getDescription().startsWith("Transaction buffer full")) {
+                            params.metrics().transactionSubmittedBufferFull();
+                        } else {
+                            params.metrics().transactionSubmittedFail();
+                        }
+                    }
+                    stx.onCompletion().completeExceptionally(new TransactionFailed("Cannot submit txn"));
                     return;
                 }
-
-                try {
-                    var status = futureResult.get();
-                    if (status == null || !status.isOk()) {
-                        listener.get().onDropped();
-                        log.trace("Transaction submission: {} status: {} timeout on: {}", stx.hash(), status,
-                                  params.member());
-                        final var timeoutEx = new TimeoutException("Cannot submit txn");
-                        stx.onCompletion().completeExceptionally(timeoutEx);
-                        if (params.metrics() != null) {
-                            params.metrics().transactionComplete(timeoutEx);
-                        }
-                        return;
-                    }
-                    listener.get().onSuccess();
-                    log.trace("Transaction submission: {} status: {} on: {}", stx.hash(), status, params.member());
-                    if (params.metrics() != null) {
-                        params.metrics().transactionSubmittedSuccess();
-                    }
-                } catch (InterruptedException e) {
-                    listener.get().onDropped();
-                    log.trace("Transaction submission: {} interrupted on: {}", stx.hash(), params.member(), e);
-                    stx.onCompletion().completeExceptionally(e);
-                    if (params.metrics() != null) {
-                        params.metrics().transactionComplete(e);
-                    }
-                } catch (ExecutionException e) {
-                    listener.get().onDropped();
-                    log.trace("Transaction submission: {} completed exceptionally on: {}", stx.hash(), params.member(),
-                              e.getCause());
-                    stx.onCompletion().completeExceptionally(e.getCause());
-                    if (params.metrics() != null) {
-                        params.metrics().transactionComplete(e.getCause());
-                    }
+                listener.get().onSuccess();
+                log.trace("Transaction submitted: {} on: {}", stx.hash(), params.member());
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedSuccess();
                 }
-            }, exec);
-        } catch (RejectedExecutionException e) {
-            listener.get().onDropped();
-            log.trace("Transaction submission: {} rejected on: {}", stx.hash(), params.member(), e);
-            stx.onCompletion().completeExceptionally(e);
-            if (params.metrics() != null) {
-                params.metrics().transactionComplete(e);
+            } catch (InterruptedException e) {
+                listener.get().onDropped();
+                log.trace("Transaction submission: {} interrupted on: {}", stx.hash(), params.member(), e);
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedFail();
+                }
+                stx.onCompletion().completeExceptionally(e);
+            } catch (ExecutionException e) {
+                listener.get().onDropped();
+                log.trace("Transaction submission: {} completed exceptionally on: {}", stx.hash(), params.member(),
+                          e.getCause());
+                if (params.metrics() != null) {
+                    params.metrics().transactionSubmittedFail();
+                }
+                stx.onCompletion().completeExceptionally(e.getCause());
             }
-        }
+        }, r -> r.run());
     }
 }

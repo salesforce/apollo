@@ -21,6 +21,7 @@ import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
 import com.salesforce.apollo.protocols.EndpointMetricsImpl;
+import com.salesforce.apollo.protocols.LimitsRegistry;
 
 /**
  * @author hal.hildebrand
@@ -38,14 +39,16 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final Meter           publishedTransactions;
     private final Meter           publishedValidations;
     private final EtherealMetrics reconfigureMetrics;
+    private final MetricRegistry  registry;
     private final Timer           transactionLatency;
     private final Meter           transactionSubmitFailed;
-    private final Meter           transactionSubmitRetry;
     private final Meter           transactionSubmitSuccess;
+    private final Meter           transactionSubmittedBufferFull;
     private final Meter           transactionTimeout;
 
     public ChoamMetricsImpl(Digest context, MetricRegistry registry) {
         super(registry);
+        this.registry = registry;
         combineMetrics = new RbcMetricsImpl(context, "combine", registry);
         producerMetrics = new EtherealMetricsImpl(context, "producer", registry);
         reconfigureMetrics = new EtherealMetricsImpl(context, "reconfigure", registry);
@@ -56,12 +59,12 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
         publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
         transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
-        transactionSubmitRetry = registry.meter(name(context.shortString(), "transaction.submit.retry"));
         transactionSubmitFailed = registry.meter(name(context.shortString(), "transaction.submit.failed"));
         transactionSubmitSuccess = registry.meter(name(context.shortString(), "transaction.submit.success"));
         transactionTimeout = registry.meter(name(context.shortString(), "transaction.timeout"));
         completedTransactions = registry.meter(name(context.shortString(), "transactions.completed"));
         failedTransactions = registry.meter(name(context.shortString(), "transactions.failed"));
+        transactionSubmittedBufferFull = registry.meter(name(context.shortString(), "transaction.submit.buffer.full"));
     }
 
     @Override
@@ -73,6 +76,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     @Override
     public RbcMetrics getCombineMetrics() {
         return combineMetrics;
+    }
+
+    @Override
+    public com.netflix.concurrency.limits.MetricRegistry getMetricRegistry(String prefix) {
+        return new LimitsRegistry(prefix, registry);
     }
 
     @Override
@@ -114,8 +122,8 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     }
 
     @Override
-    public void transactionSubmitRetry() {
-        transactionSubmitRetry.mark();
+    public void transactionSubmittedBufferFull() {
+        transactionSubmittedBufferFull.mark();
     }
 
     @Override
@@ -132,5 +140,4 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     public void transactionTimeout() {
         transactionTimeout.mark();
     }
-
 }

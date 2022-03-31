@@ -86,7 +86,7 @@ public class SessionTest {
         Session session = new Session(params, service);
         final String content = "Give me food or give me slack or kill me";
         Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
-        var result = session.submit(ForkJoinPool.commonPool(), tx, null, exec);
+        var result = session.submit(tx, null, exec);
         assertEquals(1, session.submitted());
         assertEquals(content, result.get(1, TimeUnit.SECONDS));
         assertEquals(0, session.submitted());
@@ -133,7 +133,7 @@ public class SessionTest {
             Message tx = ByteMessage.newBuilder().setContents(ByteString.copyFromUtf8(content)).build();
             CompletableFuture<Object> result;
             try {
-                result = session.submit(exec, tx, null, scheduler).whenComplete((r, t) -> {
+                result = session.submit(tx, null, scheduler).whenComplete((r, t) -> {
                     if (t != null) {
                         if (t instanceof CompletionException ce) {
                             reg.counter(t.getCause().getClass().getSimpleName()).inc();

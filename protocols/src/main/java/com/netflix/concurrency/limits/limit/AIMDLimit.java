@@ -18,29 +18,34 @@ package com.netflix.concurrency.limits.limit;
 import com.netflix.concurrency.limits.Limit;
 import com.netflix.concurrency.limits.internal.Preconditions;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Loss based dynamic {@link Limit} that does an additive increment as long as 
+ * Loss based dynamic {@link Limit} that does an additive increment as long as
  * there are no errors and a multiplicative decrement when there is an error.
  */
 public final class AIMDLimit extends AbstractLimit {
-    private static final long DEFAULT_TIMEOUT = TimeUnit.SECONDS.toNanos(5);
-
     public static class Builder {
-        private int minLimit = 20;
-        private int initialLimit = 20;
-        private int maxLimit = 200;
         private double backoffRatio = 0.9;
-        private long timeout = DEFAULT_TIMEOUT;
+        private int    initialLimit = 20;
+        private int    maxLimit     = 200;
+        private int    minLimit     = 20;
+        private long   timeout      = DEFAULT_TIMEOUT;
 
-        public Builder initialLimit(int initialLimit) {
-            this.initialLimit = initialLimit;
+        public Builder backoffRatio(double backoffRatio) {
+            Preconditions.checkArgument(backoffRatio < 1.0 && backoffRatio >= 0.5,
+                                        "Backoff ratio must be in the range [0.5, 1.0)");
+            this.backoffRatio = backoffRatio;
             return this;
         }
 
-        public Builder minLimit(int minLimit) {
-            this.minLimit = minLimit;
+        public AIMDLimit build() {
+            return new AIMDLimit(this);
+        }
+
+        public Builder initialLimit(int initialLimit) {
+            this.initialLimit = initialLimit;
             return this;
         }
 
@@ -49,14 +54,27 @@ public final class AIMDLimit extends AbstractLimit {
             return this;
         }
 
-        public Builder backoffRatio(double backoffRatio) {
-            Preconditions.checkArgument(backoffRatio < 1.0 && backoffRatio >= 0.5, "Backoff ratio must be in the range [0.5, 1.0)");
-            this.backoffRatio = backoffRatio;
+        public Builder minLimit(int minLimit) {
+            this.minLimit = minLimit;
             return this;
         }
 
         /**
          * Timeout threshold that when exceeded equates to a drop.
+         * 
+         * @param timeout
+         * @param units
+         * @return Chainable builder
+         */
+        public Builder timeout(Duration duration) {
+            Preconditions.checkArgument(duration.toNanos() > 0, "Timeout must be positive");
+            this.timeout = duration.toNanos();
+            return this;
+        }
+
+        /**
+         * Timeout threshold that when exceeded equates to a drop.
+         * 
          * @param timeout
          * @param units
          * @return Chainable builder
@@ -66,20 +84,18 @@ public final class AIMDLimit extends AbstractLimit {
             this.timeout = units.toNanos(timeout);
             return this;
         }
-        
-        public AIMDLimit build() {
-            return new AIMDLimit(this);
-        }
     }
-    
+
+    private static final long DEFAULT_TIMEOUT = TimeUnit.SECONDS.toNanos(5);
+
     public static Builder newBuilder() {
         return new Builder();
     }
-    
+
     private final double backoffRatio;
-    private final long timeout;
-    private final int minLimit;
-    private final int maxLimit;
+    private final int    maxLimit;
+    private final int    minLimit;
+    private final long   timeout;
 
     private AIMDLimit(Builder builder) {
         super(builder.initialLimit);
@@ -88,7 +104,12 @@ public final class AIMDLimit extends AbstractLimit {
         this.maxLimit = builder.maxLimit;
         this.minLimit = builder.minLimit;
     }
-    
+
+    @Override
+    public String toString() {
+        return "AIMDLimit [limit=" + getLimit() + "]";
+    }
+
     @Override
     protected int _update(long startTime, long rtt, int inflight, boolean didDrop) {
         int currentLimit = getLimit();
@@ -96,7 +117,7 @@ public final class AIMDLimit extends AbstractLimit {
         if (didDrop || rtt > timeout) {
             currentLimit = (int) (currentLimit * backoffRatio);
         } else if (inflight * 2 >= currentLimit) {
-            currentLimit =  currentLimit + 1;
+            currentLimit = currentLimit + 1;
         }
 
         if (currentLimit >= maxLimit) {
@@ -104,10 +125,5 @@ public final class AIMDLimit extends AbstractLimit {
         }
 
         return Math.min(maxLimit, Math.max(minLimit, currentLimit));
-    }
-
-    @Override
-    public String toString() {
-        return "AIMDLimit [limit=" + getLimit() + "]";
     }
 }

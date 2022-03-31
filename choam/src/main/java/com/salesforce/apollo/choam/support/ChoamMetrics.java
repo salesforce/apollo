@@ -7,6 +7,7 @@
 package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.Timer;
+import com.netflix.concurrency.limits.MetricRegistry;
 import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.protocols.EdpointMetrics;
@@ -17,26 +18,28 @@ import com.salesforce.apollo.protocols.EdpointMetrics;
  */
 public interface ChoamMetrics extends EdpointMetrics {
 
-    void publishedBatch(int batchSize, int byteSize, int validations);
-
-    Timer transactionLatency();
-
-    void transactionTimeout();
-
-    void transactionComplete(Throwable t);
-
     void dropped(int transactions, int validations);
 
-    void transactionSubmittedSuccess();
-
-    void transactionSubmittedFail();
-
-    void transactionSubmitRetry();
-
     RbcMetrics getCombineMetrics();
+
+    MetricRegistry getMetricRegistry(String prefix);
 
     EtherealMetrics getProducerMetrics();
 
     EtherealMetrics getReconfigureMetrics();
+
+    void publishedBatch(int batchSize, int byteSize, int validations);
+
+    void transactionComplete(Throwable t);
+
+    Timer transactionLatency();
+
+    void transactionSubmittedBufferFull();
+
+    void transactionSubmittedFail();
+
+    void transactionSubmittedSuccess();
+
+    void transactionTimeout();
 
 }
