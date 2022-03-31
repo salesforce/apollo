@@ -87,7 +87,6 @@ public class ViewAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(10))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(10));
-        params.getCombineParams().setExec(exec);
         List<Map<Member, Join>> published = new CopyOnWriteArrayList<>();
 
         Map<Member, ViewAssembly> recons = new HashMap<>();
@@ -112,7 +111,7 @@ public class ViewAssemblyTest {
         CountDownLatch complete = new CountDownLatch(committee.size());
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -168,7 +167,7 @@ public class ViewAssemblyTest {
 
             recons.values().forEach(r -> r.assembled());
 
-            complete.await(60, TimeUnit.SECONDS);
+            complete.await(120, TimeUnit.SECONDS);
             assertEquals(committee.size(), published.size());
         } finally {
             recons.values().forEach(r -> r.stop());

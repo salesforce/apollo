@@ -152,7 +152,6 @@ public class CHOAMTest {
                                                               .build())
                                .setCheckpointBlockSize(200);
 
-        params.getCombineParams().setExec(exec);               
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
         members = IntStream.range(0, CARDINALITY)
@@ -163,7 +162,8 @@ public class CHOAMTest {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec,
+                                              metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));

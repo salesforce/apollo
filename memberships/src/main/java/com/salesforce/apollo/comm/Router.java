@@ -8,6 +8,7 @@ package com.salesforce.apollo.comm;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -15,6 +16,8 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.concurrency.limits.Limit;
+import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
@@ -97,4 +100,12 @@ abstract public class Router {
     abstract public ClientIdentity getClientIdentityProvider();
 
     abstract public void start();
+
+    public static Limit defaultServerLimit() {
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
+    }
+
+    public static Limit defaultClientLimit() {
+        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
+    }
 }

@@ -8,13 +8,13 @@ package com.salesforce.apollo.membership.messaging.rbc;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface RbcMetrics extends BandwidthMetrics {
+public interface RbcMetrics extends EdpointMetrics {
 
     Meter gossipReply();
 

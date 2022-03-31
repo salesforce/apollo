@@ -126,7 +126,7 @@ public class Bootstrapper {
                   params.member().getId());
         long seed = Utils.bitStreamEntropy().nextLong();
         BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
-                                                                        params.combine().getFalsePositiveRate());
+                                                                        params.combine().falsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
         store.blocksFrom(start.get(), end, params.bootstrap().maxSyncBlocks()).forEachRemaining(h -> blocksBff.add(h));
@@ -246,7 +246,7 @@ public class Bootstrapper {
                   link.getMember().getId(), params.member().getId());
         long seed = Utils.bitStreamEntropy().nextLong();
         ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
-                                                                      params.combine().getFalsePositiveRate());
+                                                                      params.combine().falsePositiveRate());
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));
         BlockReplication replication = BlockReplication.newBuilder()

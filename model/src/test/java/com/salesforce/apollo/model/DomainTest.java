@@ -87,10 +87,9 @@ public class DomainTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var exec = Executors.newCachedThreadPool();
-        params.getCombineParams().setExec(exec);
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2));
+                                              Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()

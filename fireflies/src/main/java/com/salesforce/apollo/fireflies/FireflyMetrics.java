@@ -8,13 +8,13 @@ package com.salesforce.apollo.fireflies;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface FireflyMetrics extends BandwidthMetrics {
+public interface FireflyMetrics extends EdpointMetrics {
 
     Meter gossipReply();
 

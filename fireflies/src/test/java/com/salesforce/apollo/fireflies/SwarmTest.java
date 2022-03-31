@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -94,7 +95,8 @@ public class SwarmTest {
 
     @Test
     public void churn() throws Exception {
-        initialize();
+        Executor exec = Executors.newCachedThreadPool();
+        initialize(exec);
 
         List<View> testViews = new ArrayList<>();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
@@ -105,7 +107,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream()
@@ -132,7 +134,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
+            testViews.forEach(view -> view.start(exec, Duration.ofMillis(10), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
@@ -181,11 +183,11 @@ public class SwarmTest {
 
     @Test
     public void swarm() throws Exception {
-        initialize();
+        Executor exec = Executors.newCachedThreadPool();
+        initialize(exec);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
-
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
+        views.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;
@@ -238,7 +240,7 @@ public class SwarmTest {
                        .report();
     }
 
-    private void initialize() {
+    private void initialize(Executor exec) {
         Random entropy = new Random(0x666);
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
@@ -262,20 +264,19 @@ public class SwarmTest {
         final var prefix = UUID.randomUUID().toString();
         views = members.values().stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
-            FireflyMetricsImpl fireflyMetricsImpl = new FireflyMetricsImpl(context.getId(),
-                                                                           frist.getAndSet(false) ? node0Registry
-                                                                                                  : registry);
+            FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
+                                                                frist.getAndSet(false) ? node0Registry : registry);
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        Executors.newFixedThreadPool(3));
+                                        exec, metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, fireflyMetricsImpl);
+                            DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
     }
 }

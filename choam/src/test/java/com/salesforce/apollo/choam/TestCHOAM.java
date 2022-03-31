@@ -102,7 +102,7 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
-        exec = Executors.newCachedThreadPool();
+        exec = Executors.newFixedThreadPool(CARDINALITY);
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
         txExecutor = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
@@ -120,14 +120,12 @@ public class TestCHOAM {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(10_000)
-                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockSize(1);
-        params.getCombineParams().setExec(exec);
-        params.getCombineParams().setMetrics(metrics.getCombineMetrics());
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.000125);
+        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
 
         checkpointOccurred = new CompletableFuture<>();
         members = IntStream.range(0, CARDINALITY)
@@ -142,7 +140,7 @@ public class TestCHOAM {
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              exec);
+                                              exec, metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));

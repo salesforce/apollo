@@ -8,13 +8,13 @@ package com.salesforce.apollo.ethereal.memberships;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.salesforce.apollo.protocols.BandwidthMetrics;
+import com.salesforce.apollo.protocols.EdpointMetrics;
 
 /**
  * @author hal.hildebrand
  *
  */
-public interface EtherealMetrics extends BandwidthMetrics {
+public interface EtherealMetrics extends EdpointMetrics {
 
     Meter gossipReply();
 

@@ -32,7 +32,7 @@ class Transactioneer {
     private final ByteMessage              tx        = ByteMessage.newBuilder()
                                                                   .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                                   .build();
-    private final Executor                 txnScheduler;
+    private final Executor                 txnExecutor;
 
     Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
                    CountDownLatch countdown, Executor txnScheduler) {
@@ -41,7 +41,7 @@ class Transactioneer {
         this.max = max;
         this.scheduler = scheduler;
         this.countdown = countdown;
-        this.txnScheduler = txnScheduler;
+        this.txnExecutor = txnScheduler;
     }
 
     void decorate(CompletableFuture<?> fs) {
@@ -54,7 +54,7 @@ class Transactioneer {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(session.submit(txnScheduler, tx, timeout, scheduler));
+                            decorate(session.submit(tx, timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -67,19 +67,19 @@ class Transactioneer {
                     }
                 } else {
                     try {
-                        decorate(session.submit(txnScheduler, tx, timeout, scheduler));
+                        decorate(session.submit(tx, timeout, scheduler));
                     } catch (InvalidTransaction e) {
                         e.printStackTrace();
                     }
                 }
             }
-        }, txnScheduler);
+        }, txnExecutor);
     }
 
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(session.submit(txnScheduler, tx, timeout, scheduler));
+                decorate(session.submit(tx, timeout, scheduler));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

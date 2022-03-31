@@ -14,9 +14,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -210,7 +208,7 @@ public class ServerConnectionCache {
     private final Map<Digest, ManagedServerConnection>   cache = new HashMap<>();
     private final Clock                                  clock;
     private final ServerConnectionFactory                factory;
-    private final ReadWriteLock                          lock  = new ReentrantReadWriteLock(true);
+    private final ReentrantLock                          lock  = new ReentrantLock();
     private final ServerConnectionCacheMetrics           metrics;
     private final Duration                               minIdle;
     private final PriorityQueue<ManagedServerConnection> queue = new PriorityQueue<>();
@@ -310,18 +308,6 @@ public class ServerConnectionCache {
         });
     }
 
-    public int getIdleCount() {
-        return lock(() -> queue.size());
-    }
-
-    public int getInUseCount() {
-        return lock(() -> cache.size() - queue.size());
-    }
-
-    public int getOpenCount() {
-        return lock(() -> cache.size());
-    }
-
     public void release(ManagedServerConnection connection) {
         lock(() -> {
             if (connection.decrementBorrow()) {
@@ -357,12 +343,11 @@ public class ServerConnectionCache {
     }
 
     private <T> T lock(Supplier<T> supplier) {
-        final Lock l = lock.writeLock();
-        l.lock();
+        lock.lock();
         try {
             return supplier.get();
         } finally {
-            l.unlock();
+            lock.unlock();
         }
     }
 

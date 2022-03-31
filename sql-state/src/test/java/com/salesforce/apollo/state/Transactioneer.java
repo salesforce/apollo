@@ -53,16 +53,10 @@ class Transactioneer {
         fs.whenCompleteAsync((o, t) -> {
             inFlight.decrementAndGet();
             if (t != null) {
-                if (t instanceof CompletionException e) {
-                    if (!(e.getCause() instanceof TimeoutException)) {
-                        System.out.println(e.getCause().toString());
-                    }
-                }
-
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
+                            decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -73,7 +67,7 @@ class Transactioneer {
                 if (complete < max) {
                     scheduler.schedule(() -> {
                         try {
-                            decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
+                            decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
                         } catch (InvalidTransaction e) {
                             e.printStackTrace();
                         }
@@ -90,7 +84,7 @@ class Transactioneer {
     void start() {
         scheduler.schedule(() -> {
             try {
-                decorate(mutator.getSession().submit(executor, update.get(), timeout, scheduler));
+                decorate(mutator.getSession().submit(update.get(), timeout, scheduler));
             } catch (InvalidTransaction e) {
                 throw new IllegalStateException(e);
             }

@@ -51,21 +51,22 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             return new Builder().requiredByLinear();
         }
 
-        private int              bias            = 3;
-        private boolean          canSkipLevel    = false;
-        private Clock            clock           = Clock.systemUTC();
+        private int              bias                          = 3;
+        private boolean          canSkipLevel                  = false;
+        private Clock            clock                         = Clock.systemUTC();
         private short            crpFixedPrefix;
-        private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int              epochLength     = 30;
+        private short            commonVoteDeterministicPrefix = 10;
+        private DigestAlgorithm  digestAlgorithm               = DigestAlgorithm.DEFAULT;
+        private int              epochLength                   = 30;
         private int              firstDecidedRound;
-        private double           fpr             = 0.125;
-        private int              lastLevel       = -1;
+        private double           fpr                           = 0.125;
+        private int              lastLevel                     = -1;
         private short            nProc;
-        private int              numberOfEpochs  = 3;
-        private int              orderStartLevel = 6;
-        private double           pByz            = -1;
+        private int              numberOfEpochs                = 3;
+        private int              orderStartLevel               = 6;
+        private double           pByz                          = -1;
         private short            pid;
-        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
+        private Signer           signer                        = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
         private int              zeroVoteRoundForCommonVote;
@@ -125,8 +126,8 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
                 addLastLevel();
             }
             return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              10, crpFixedPrefix, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs, wtk,
-                              clock, bias, verifiers, fpr);
+                              commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
+                              canSkipLevel, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
         }
 
         @Override

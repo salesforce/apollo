@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -110,10 +110,10 @@ public class SuccessorTest {
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)
                                                .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
-        ForkJoinPool executor = new ForkJoinPool();
+        Executor executor = Executors.newCachedThreadPool();
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
-            LocalRouter comms = new LocalRouter(prefix, builder, executor);
+            LocalRouter comms = new LocalRouter(prefix, builder, executor, metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();
@@ -122,7 +122,7 @@ public class SuccessorTest {
                             DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toMap(v -> v.getNode().getId(), v -> v));
 
-        views.values().forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
+        views.values().forEach(view -> view.start(executor, Duration.ofMillis(10), seeds, scheduler));
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {

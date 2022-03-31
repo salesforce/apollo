@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.comm;
 
+import static com.codahale.metrics.MetricRegistry.name;
 import static com.salesforce.apollo.crypto.QualifiedBase64.digest;
 import static com.salesforce.apollo.crypto.QualifiedBase64.qb64;
 
@@ -14,7 +15,6 @@ import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -25,12 +25,12 @@ import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientIntercep
 import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import com.netflix.concurrency.limits.grpc.server.ConcurrencyLimitServerInterceptor;
 import com.netflix.concurrency.limits.grpc.server.GrpcServerLimiterBuilder;
-import com.netflix.concurrency.limits.limit.AIMDLimit;
 import com.salesforce.apollo.comm.ServerConnectionCache.ServerConnectionFactory;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.protocols.LimitsRegistry;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -61,12 +61,15 @@ public class LocalRouter extends Router {
 
     public static class LocalServerConnectionFactory implements ServerConnectionFactory {
 
-        private final Supplier<Limit> clientLimit;
-        private final String          prefix;
+        private GrpcClientLimiterBuilder limitBuilder;
+        private final String             prefix;
 
-        public LocalServerConnectionFactory(String prefix, Supplier<Limit> clientLimit) {
-            this.clientLimit = clientLimit;
+        public LocalServerConnectionFactory(String prefix, Supplier<Limit> clientLimit, LimitsRegistry limitsRegistry) {
             this.prefix = prefix;
+            limitBuilder = new GrpcClientLimiterBuilder().limit(clientLimit.get()).blockOnLimit(false);
+            if (limitsRegistry != null) {
+                limitBuilder.metricRegistry(limitsRegistry);
+            }
         }
 
         @Override
@@ -88,12 +91,11 @@ public class LocalRouter extends Router {
             };
             final var name = String.format(NAME_TEMPLATE, prefix, qb64(to.getId()));
             final InProcessChannelBuilder builder;
+            limitBuilder.named(name(from.getId().shortString(), "to", to.getId().shortString()));
             builder = InProcessChannelBuilder.forName(name)
                                              .directExecutor()
                                              .intercept(clientInterceptor,
-                                                        new ConcurrencyLimitClientInterceptor(new GrpcClientLimiterBuilder().limit(clientLimit.get())
-                                                                                                                            .blockOnLimit(false)
-                                                                                                                            .build()));
+                                                        new ConcurrencyLimitClientInterceptor(limitBuilder.build()));
             disableTrash(builder);
             InternalInProcessChannelBuilder.setStatsEnabled(builder, false);
             return builder.build();
@@ -129,39 +131,36 @@ public class LocalRouter extends Router {
     private static final Logger              log                   = LoggerFactory.getLogger(LocalRouter.class);
     private static final Map<Digest, Member> serverMembers         = new ConcurrentHashMap<>();
 
-    public static Limit defaultClientLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(2_000).timeout(500, TimeUnit.MILLISECONDS).build();
-    }
+    private final Executor           executor;
+    private Member                   member;
+    private final String             prefix;
+    private Server                   server;
+    private GrpcServerLimiterBuilder limitsBuilder;
 
-    public static Limit defaultServerLimit() {
-        return AIMDLimit.newBuilder().initialLimit(100).maxLimit(10_000).timeout(500, TimeUnit.MILLISECONDS).build();
-    }
-
-    private final Executor                          executor;
-    private final ConcurrencyLimitServerInterceptor limiter;
-    private Member                                  member;
-    private final String                            prefix;
-    private Server                                  server;
-
-    public LocalRouter(String prefix, ServerConnectionCache.Builder builder, Executor executor) {
-        this(prefix, () -> defaultClientLimit(), builder, new MutableHandlerRegistry(), () -> defaultServerLimit(),
-             executor);
+    public LocalRouter(String prefix, ServerConnectionCache.Builder builder, Executor executor,
+                       LimitsRegistry limitsRegistry) {
+        this(prefix, () -> Router.defaultClientLimit(), builder, new MutableHandlerRegistry(),
+             () -> Router.defaultServerLimit(), executor, limitsRegistry);
     }
 
     public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
-                       MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor) {
-        super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit)).build(), registry);
+                       MutableHandlerRegistry registry, Supplier<Limit> serverLimit, Executor executor,
+                       LimitsRegistry limitsRegistry) {
+        super(builder.setFactory(new LocalServerConnectionFactory(prefix, clientLimit, limitsRegistry)).build(),
+              registry);
 
-        this.limiter = ConcurrencyLimitServerInterceptor.newBuilder(new GrpcServerLimiterBuilder().limit(serverLimit.get())
-                                                                                                  .build())
-                                                        .build();
+        limitsBuilder = new GrpcServerLimiterBuilder().limit(serverLimit.get());
+        if (limitsRegistry != null) {
+            limitsBuilder.metricRegistry(limitsRegistry);
+        }
+
         this.prefix = prefix;
         this.executor = executor;
     }
 
     public LocalRouter(String prefix, Supplier<Limit> clientLimit, ServerConnectionCache.Builder builder,
-                       Supplier<Limit> serverLimit, Executor executor) {
-        this(prefix, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor);
+                       Supplier<Limit> serverLimit, Executor executor, LimitsRegistry limitsRegistry) {
+        this(prefix, clientLimit, builder, new MutableHandlerRegistry(), serverLimit, executor, limitsRegistry);
     }
 
     @Override
@@ -200,10 +199,12 @@ public class LocalRouter extends Router {
         }
         final var name = String.format(NAME_TEMPLATE, prefix, qb64(member.getId()));
 
+        limitsBuilder.named(name(member.getId().shortString(), "service"));
         server = InProcessServerBuilder.forName(name)
                                        .executor(executor)
                                        .intercept(interceptor())
-                                       .intercept(limiter)
+                                       .intercept(ConcurrencyLimitServerInterceptor.newBuilder(limitsBuilder.build())
+                                                                                   .build())
                                        .fallbackHandlerRegistry(registry)
                                        .build();
         try {

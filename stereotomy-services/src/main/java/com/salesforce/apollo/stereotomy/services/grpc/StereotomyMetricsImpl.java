@@ -12,13 +12,13 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.protocols.BandwidthMetricsImpl;
+import com.salesforce.apollo.protocols.EndpointMetricsImpl;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class StereotomyMetricsImpl extends BandwidthMetricsImpl implements StereotomyMetrics {
+public class StereotomyMetricsImpl extends EndpointMetricsImpl implements StereotomyMetrics {
     private final Timer appendEventsClient;
     private final Timer appendEventsService;
     private final Timer appendKERLClient;

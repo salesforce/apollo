@@ -47,16 +47,16 @@ Note that Apollo Delphinius is very much a _work in progress_.  There is not yet
 ## Requirements
 Apollo is a pure Java application  The build system uses Maven, and requires Maven 3.8.1+.  The Maven enforcer plugin enforces dependency convergance and Apollo is built using Java 17.
 
-Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being seperated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that you can't simply cd into a module and build it without building its dependencies first. If you feel you must do so, please make sure to include the "install" goal and please make sure you add the "--also-make-dependents" or "--amd" parameter to your maven invocation.
+Apollo is a [multi module Maven project](https://maven.apache.org/guides/mini/guide-multiple-modules.html).  This means that the various modules of Apollo are built and versioned as a whole, rather than being separated out into individual repositories.  This also means that modules refer to other modules within the project as dependencies, and consequently must be built in the correct order.  Note that Maven does this by default, so there should be no issues.  However, it does mean that one can't simply cd into a module and build it without building its dependencies first. If you feel you must do so, please make sure to include the "install" goal and please make sure you add the "--also-make-dependents" or "--amd" parameter to your maven invocation.
 
 ## Code Generation In Apollo
-Apollo requires code generation as part of the build.  This is done in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.
+Apollo requires code generation as part of the build.  This is performed in the Maven "generate-sources" phase of the build.  Consequently, this build phase *must* be run at least once in order to generate the java sources required by the rest of the build.
 
 The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for the various serializable forms and network protocols used by Apollo.  The JOOQ code generation is for the JOOQ SQL functionality.
 
-Code generation is output into the <module dir>/target/generated-sources directory.  For GRPC/Proto, there are 2 directory roots: "<module dir>/target/generated-sources/protobuf/grpc-java" and "<module dir>/target/generated-sources/protobuf/java".  For JOOQ, the root directory is "<module dir>/target/generated-sources/jooq".
+Code generation is output into the (module dir)/target/generated-sources directory.  For GRPC/Proto, there are 2 directory roots: "(module dir)/target/generated-sources/protobuf/grpc-java" and "(module dir)/target/generated-sources/protobuf/java".  For JOOQ, the root directory is "(module dir)/target/generated-sources/jooq".
 
-Again, I stress that because these generated source directories are under the "<module dir>/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
+Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
 
 Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
 
@@ -65,11 +65,11 @@ Because of the code generation requirements (really, I can't do jack about them,
 
 I have no idea about IntellJ or Visual Code, so you're on your own there.
 
-What I _strongly_ recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
+What I  _strongly_  recommend is first building from the command line with -DskipTests - i.e "mvn clean install -DskipTests".  This will ensure all dependencies are downloaded and all the code generation is complete. Further, if you haven't updated from this repo in a while, don't try to be clever.  Delete all the modules from this project from your ide, build/test from the command line and _then_ reimport things. Don't ask for trouble, I always say.
 
 After you do this, you shouldn't have any issue *if* your IDE Maven integration knows about and takes care of using the build-helper plugin to manage compilation directories for the module in the IDE.  However....
 
-Myself, I find that I have to first select the top level Apollo.app module, and then Menu -> Run As -> Maven generate sources.  This *should* generate all the sources required for every submodule, so...  But I have often found that - due to some oddness of Maven and/or Eclipse - that this is insufficient.  Worse, sometimes on import into the IDE, the build-helper is (randomly) ignored and the generated source directories are not added to the module's compilation path.  So, you have to do it manually.  which requires that "mvn generate-sources" has been run...  So.....  Apologies.  Wish it wasn't this complex, but it is what it is, and no, Gradle won't solve this problem and I am not going to convert the Apollo build to it anyways, so apologies.
+Myself, I find that I have to first select the top level Apollo.app module, and then Menu -> Run As -> Maven generate sources (or the equivalent in your IDE).  This *should* generate all the sources required for every submodule, so...
 
 Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience.  I know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
 
@@ -84,8 +84,8 @@ By default, the build uses a reduced number of simulated clients for testing.  T
 This requires a decent amount of resources, using two orders of magnitude more simulated clients in the tests, with longer serial transaction chains per transactioneer client.  This runs fine on my Apple M1max, but this is a beefy machine.  YMMV.
 
 ## Current Status
-Currently, the system is in devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is now using Aleph-BFT instead of Avalanche for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
+Currently, the system is in devlopment.  Fundamental identity and digest/signature/pubKey encodings has been integrated.  Apollo is using Aleph-BFT for consensus, in the form of the Ethereal module.  CHOAM has now replaced Consortium, and the SQL replicated state machine now uses CHOAM for it's linear log and transaction model.
 
-Simple Model stand in for multitenant shards is in place and being worked upon currently.  This integrates Stereotomy and Delphinius using CHOAM.  An E2E test of the ReBAC Delphinius service is now being tested.  Full integration of Nodes using Fireflies discovery is also tested and working.
+Multitenant shards is in place and being worked upon currently.  This integrates Stereotomy and Delphinius using CHOAM.  An E2E test of the ReBAC Delphinius service is in development being tested.  Full integration of ProcessDomains using Fireflies discovery is in development.
 
 

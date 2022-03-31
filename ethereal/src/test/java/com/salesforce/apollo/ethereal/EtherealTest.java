@@ -144,7 +144,7 @@ public class EtherealTest {
                                             .build()
                                             .toByteString());
             }
-            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor);
+            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
             comms.add(com);
             com.setMember(members.get(i));
             gossipers.add(new ContextGossiper(controller, context, members.get(i), com, executor, metrics));

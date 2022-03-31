@@ -92,7 +92,6 @@ public class GenesisAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(100));
-        params.getCombineParams().setExec(exec);
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
@@ -117,7 +116,7 @@ public class GenesisAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comm.setMember(m);
             return comm;
         }));
@@ -190,8 +189,9 @@ public class GenesisAssemblyTest {
         try {
             communications.values().forEach(r -> r.start());
             genii.values().forEach(r -> r.start());
+            Thread.sleep(1_000); // why oh why
 
-            Utils.waitForCondition(40_000, () -> published.size() == committee.activeMembers().size());
+            Utils.waitForCondition(120_000, () -> published.size() == committee.activeMembers().size());
             assertEquals(published.size(), committee.activeMembers().size());
         } finally {
             communications.values().forEach(r -> r.close());

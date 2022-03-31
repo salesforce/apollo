@@ -127,7 +127,6 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockSize(checkpointBlockSize);
-        params.getCombineParams().setExec(exec);
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
@@ -138,7 +137,7 @@ public class MembershipTests {
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec, null);
             comm.setMember(m);
             return comm;
         }));

@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal.random.beacon;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
@@ -15,8 +16,18 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class DeterministicRandomSource implements RandomSource {
+    final DigestAlgorithm algo;
+
+    public DeterministicRandomSource(DigestAlgorithm algo) {
+        this.algo = algo;
+    }
 
     public static class DsrFactory implements RandomSourceFactory {
+        public DsrFactory(DigestAlgorithm algo) {
+            this.algo = algo;
+        }
+
+        final DigestAlgorithm algo;
 
         @Override
         public byte[] dealingData(int epoch) {
@@ -26,7 +37,7 @@ public class DeterministicRandomSource implements RandomSource {
 
         @Override
         public RandomSource newRandomSource(Dag dag) {
-            return new DeterministicRandomSource();
+            return new DeterministicRandomSource(algo);
         }
 
     }
@@ -38,8 +49,6 @@ public class DeterministicRandomSource implements RandomSource {
 
     @Override
     public byte[] randomBytes(short process, int level) {
-        byte[] answer = new byte[33];
-        answer[32] = (byte) (process + level);
-        return answer;
+        return algo.getOrigin().prefix(process).prefix(level).getBytes();
     }
 }
