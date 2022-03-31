@@ -167,7 +167,7 @@ public class ViewAssemblyTest {
 
             recons.values().forEach(r -> r.assembled());
 
-            complete.await(60, TimeUnit.SECONDS);
+            complete.await(120, TimeUnit.SECONDS);
             assertEquals(committee.size(), published.size());
         } finally {
             recons.values().forEach(r -> r.stop());

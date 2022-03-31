@@ -189,8 +189,9 @@ public class GenesisAssemblyTest {
         try {
             communications.values().forEach(r -> r.start());
             genii.values().forEach(r -> r.start());
+            Thread.sleep(1_000); // why oh why
 
-            Utils.waitForCondition(40_000, () -> published.size() == committee.activeMembers().size());
+            Utils.waitForCondition(120_000, () -> published.size() == committee.activeMembers().size());
             assertEquals(published.size(), committee.activeMembers().size());
         } finally {
             communications.values().forEach(r -> r.close());
