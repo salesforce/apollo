@@ -158,7 +158,7 @@ public class RbcTest {
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(5);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(50);
         messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();
@@ -175,7 +175,7 @@ public class RbcTest {
                 receiver.setRound(round);
             }
             var rnd = r;
-            messengers.parallelStream().forEach(view -> {
+            messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
                 Utils.secureEntropy().nextBytes(rand);
                 ByteBuffer buf = ByteBuffer.wrap(new byte[36]);
@@ -187,7 +187,6 @@ public class RbcTest {
             boolean success = round.await(20, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
-            round = new CountDownLatch(messengers.size());
             current.incrementAndGet();
             for (Receiver receiver : receivers.values()) {
                 receiver.reset();
