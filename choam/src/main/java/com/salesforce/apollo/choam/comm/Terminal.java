@@ -14,14 +14,13 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.comm.Link;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-
-import io.grpc.Status;
 
 /**
  * Terminal RPC endpoint for CHOAM
@@ -66,14 +65,9 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public ListenableFuture<Status> submit(SubmitTransaction request) {
-                SettableFuture<Status> f = SettableFuture.create();
-                var result = service.submit(request, member.getId()); 
-                if (result.getSuccess()) {
-                    f.set(Status.OK);
-                } else {
-                    f.set(Status.UNAVAILABLE.withDescription(result.getStatus()));
-                }
+            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+                SettableFuture<SubmitResult> f = SettableFuture.create();
+                f.set(service.submit(request, member.getId()));
                 return f;
             }
 
@@ -84,6 +78,7 @@ public interface Terminal extends Link {
         };
     }
 
+    @Override
     void close();
 
     ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
@@ -94,7 +89,7 @@ public interface Terminal extends Link {
 
     ListenableFuture<ViewMember> join(JoinRequest join);
 
-    ListenableFuture<Status> submit(SubmitTransaction request);
+    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
 
     ListenableFuture<Initial> sync(Synchronize sync);
 }

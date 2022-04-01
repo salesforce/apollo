@@ -20,6 +20,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.joou.ULong;
 
 import com.google.common.util.concurrent.SettableFuture;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
@@ -32,8 +34,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
-
-import io.grpc.Status;
 
 /**
  * Single node emulation of the SQL State Machine for testing, development, etc.
@@ -77,10 +77,10 @@ public class Emulator {
         Session session = new Session(params, st -> {
             lock.lock();
             try {
-                SettableFuture<Status> f = SettableFuture.create();
+                SettableFuture<SubmitResult> f = SettableFuture.create();
                 Transaction txn = st.transaction();
                 txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion());
-                f.set(Status.OK);
+                f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
                 return f;
             } finally {
                 lock.unlock();

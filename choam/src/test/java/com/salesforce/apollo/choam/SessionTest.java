@@ -31,6 +31,8 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
@@ -42,7 +44,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /**
@@ -66,7 +67,7 @@ public class SessionTest {
                                                               .setMember(new SigningMemberImpl(Utils.getMember(0)))
                                                               .build());
         @SuppressWarnings("unchecked")
-        Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
+        Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service = stx -> {
             ForkJoinPool.commonPool().execute(() -> {
                 try {
                     Thread.sleep(100);
@@ -79,8 +80,8 @@ public class SessionTest {
                     throw new IllegalStateException(e);
                 }
             });
-            SettableFuture<Status> f = SettableFuture.create();
-            f.set(Status.OK);
+            SettableFuture<SubmitResult> f = SettableFuture.create();
+            f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
             return f;
         };
         Session session = new Session(params, service);
@@ -104,7 +105,7 @@ public class SessionTest {
                                                               .build());
 
         @SuppressWarnings("unchecked")
-        Function<SubmittedTransaction, ListenableFuture<Status>> service = stx -> {
+        Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service = stx -> {
             exec.execute(() -> {
                 try {
                     Thread.sleep(1);
@@ -117,8 +118,8 @@ public class SessionTest {
                     throw new IllegalStateException(e);
                 }
             });
-            SettableFuture<Status> f = SettableFuture.create();
-            f.set(Status.OK);
+            SettableFuture<SubmitResult> f = SettableFuture.create();
+            f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
             return f;
         };
 

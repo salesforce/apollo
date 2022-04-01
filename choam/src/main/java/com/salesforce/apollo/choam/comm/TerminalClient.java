@@ -6,11 +6,6 @@
  */
 package com.salesforce.apollo.choam.comm;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.choam.proto.BlockReplication;
 import com.salesfoce.apollo.choam.proto.Blocks;
@@ -18,6 +13,7 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
@@ -27,9 +23,6 @@ import com.salesforce.apollo.choam.support.ChoamMetrics;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.membership.Member;
-
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 
 /**
  * @author hal.hildebrand
@@ -91,65 +84,8 @@ public class TerminalClient implements Terminal {
     }
 
     @Override
-    public ListenableFuture<Status> submit(SubmitTransaction request) {
-        final var submit = client.submit(request);
-        return new ListenableFuture<Status>() {
-
-            @Override
-            public boolean cancel(boolean mayInterruptIfRunning) {
-                return submit.cancel(mayInterruptIfRunning);
-            }
-
-            @Override
-            public boolean isCancelled() {
-                return submit.isCancelled();
-            }
-
-            @Override
-            public boolean isDone() {
-                return submit.isDone();
-            }
-
-            @Override
-            public Status get() throws InterruptedException, ExecutionException {
-                try {
-                    final var result = submit.get();
-                    if (result.getSuccess()) {
-                        return Status.OK;
-                    } else {
-                        return Status.UNAVAILABLE.withDescription(result.getStatus());
-                    }
-                } catch (ExecutionException e) {
-                    final var cause = e.getCause();
-                    if (cause instanceof StatusRuntimeException sre) {
-                        return sre.getStatus();
-                    }
-                    throw e;
-                }
-            }
-
-            @Override
-            public Status get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException,
-                                                           TimeoutException {
-                try {
-                    final var result = submit.get(timeout, unit);
-                    return result != null ? Status.OK : null;
-                } catch (TimeoutException e) {
-                    return Status.UNAVAILABLE.withDescription("Server Timeout");
-                } catch (ExecutionException e) {
-                    final var cause = e.getCause();
-                    if (cause instanceof StatusRuntimeException sre) {
-                        return sre.getStatus();
-                    }
-                    throw e;
-                }
-            }
-
-            @Override
-            public void addListener(Runnable listener, Executor executor) {
-                submit.addListener(listener, executor);
-            }
-        };
+    public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
+        return client.submit(request);
     }
 
     @Override

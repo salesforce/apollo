@@ -26,6 +26,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Message;
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
+import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 import com.salesforce.apollo.choam.support.SubmittedTransaction;
@@ -35,8 +37,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
-
-import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
@@ -70,13 +70,13 @@ public class Session {
                                transaction.getContent().asReadOnlyByteBuffer());
     }
 
-    private AtomicInteger                                                  nonce     = new AtomicInteger();
-    private final Parameters                                               params;
-    private final Function<SubmittedTransaction, ListenableFuture<Status>> service;
-    private final Map<Digest, SubmittedTransaction>                        submitted = new ConcurrentHashMap<>();
-    private final Limiter<Void>                                            limiter;
+    private AtomicInteger                                                        nonce     = new AtomicInteger();
+    private final Parameters                                                     params;
+    private final Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service;
+    private final Map<Digest, SubmittedTransaction>                              submitted = new ConcurrentHashMap<>();
+    private final Limiter<Void>                                                  limiter;
 
-    public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<Status>> service) {
+    public Session(Parameters params, Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service) {
         this.params = params;
         this.service = service;
         final var metrics = params.metrics();
@@ -177,12 +177,13 @@ public class Session {
 
         futureResult.addListener(() -> {
             try {
-                var status = futureResult.get();
-                if (status == null || !status.isOk()) {
+                var result = futureResult.get();
+                if (result.getResult() != Result.PUBLISHED) {
                     listener.get().onDropped();
-                    log.trace("Transaction submission: {} failed: {} on: {}", stx.hash(), status, params.member());
+                    log.trace("Transaction submission: {} failed: {} {} on: {}", stx.hash(), result.getResult(),
+                              result.getErrorMsg() == null ? "" : " error: " + result.getErrorMsg(), params.member());
                     if (params.metrics() != null) {
-                        if (status.getDescription().startsWith("Transaction buffer full")) {
+                        if (result.getResult() == Result.BUFFER_FULL) {
                             params.metrics().transactionSubmittedBufferFull();
                         } else {
                             params.metrics().transactionSubmittedFail();

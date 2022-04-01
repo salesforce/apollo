@@ -62,6 +62,7 @@ import com.salesfoce.apollo.choam.proto.Join;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -323,13 +324,13 @@ public class CHOAM {
         }
 
         @Override
-        public ListenableFuture<Status> submitTxn(Transaction transaction) {
+        public ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
             Member target = servers.next();
             try (var link = comm.apply(target, params.member())) {
                 if (link == null) {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
-                    SettableFuture<Status> f = SettableFuture.create();
-                    f.set(Status.UNAVAILABLE.withDescription("No link to server"));
+                    SettableFuture<SubmitResult> f = SettableFuture.create();
+                    f.set(SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build());
                     return f;
                 }
 //                log.trace("Submitting received txn: {} to: {} in: {} on: {}",
@@ -339,14 +340,17 @@ public class CHOAM {
                                                     .setTransaction(transaction)
                                                     .build());
             } catch (StatusRuntimeException e) {
-                SettableFuture<Status> f = SettableFuture.create();
-                f.set(e.getStatus());
+                SettableFuture<SubmitResult> f = SettableFuture.create();
+                f.set(SubmitResult.newBuilder()
+                                  .setResult(Result.ERROR_SUBMITTING)
+                                  .setErrorMsg(e.getStatus().toString())
+                                  .build());
                 return f;
             } catch (Throwable e) {
                 log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(), e);
-                SettableFuture<Status> f = SettableFuture.create();
-                f.set(Status.INTERNAL.withCause(e).withDescription("Failed submitting txn"));
+                SettableFuture<SubmitResult> f = SettableFuture.create();
+                f.set(SubmitResult.newBuilder().setResult(Result.ERROR_SUBMITTING).setErrorMsg(e.toString()).build());
                 return f;
             }
         }
@@ -1150,19 +1154,22 @@ public class CHOAM {
         restore();
     }
 
-    private Function<SubmittedTransaction, ListenableFuture<Status>> service() {
+    private Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service() {
         return stx -> {
 //            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
-            SettableFuture<Status> f = SettableFuture.create();
+            SettableFuture<SubmitResult> f = SettableFuture.create();
             final var c = current.get();
             if (c == null) {
-                f.set(Status.UNAVAILABLE.withDescription("No committee to submit txn"));
+                f.set(SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build());
                 return f;
             }
             try {
                 return c.submitTxn(stx.transaction());
             } catch (StatusRuntimeException e) {
-                f.set(e.getStatus());
+                f.set(SubmitResult.newBuilder()
+                                  .setResult(Result.ERROR_SUBMITTING)
+                                  .setErrorMsg(e.getStatus().toString())
+                                  .build());
                 return f;
             }
         };
@@ -1176,15 +1183,12 @@ public class CHOAM {
     private SubmitResult submit(SubmitTransaction request, Digest from) {
         if (params.context().getMember(from) == null) {
             log.debug("Invalid transaction submission from non member: {} on: {}", from, params.member());
-            return SubmitResult.newBuilder()
-                               .setSuccess(false)
-                               .setStatus("Invalid transaction submission from non member")
-                               .build();
+            return SubmitResult.newBuilder().setResult(Result.INVALID_SUBMIT).build();
         }
         final var c = current.get();
         if (c == null) {
             log.debug("No committee to submit txn from: {} on: {}", from, params.member());
-            return SubmitResult.newBuilder().setSuccess(false).setStatus("No committee to submit txn").build();
+            return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
         }
         log.trace("Submiting received txn: {} from: {} on: {}",
                   hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
