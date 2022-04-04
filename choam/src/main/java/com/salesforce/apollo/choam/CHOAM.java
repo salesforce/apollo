@@ -41,8 +41,6 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Fsm;
 import com.google.common.base.Function;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -69,9 +67,13 @@ import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesfoce.apollo.utils.proto.PubKey;
 import com.salesforce.apollo.choam.comm.Concierge;
+import com.salesforce.apollo.choam.comm.Submitter;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
+import com.salesforce.apollo.choam.comm.TxnSubmission;
+import com.salesforce.apollo.choam.comm.TxnSubmitClient;
+import com.salesforce.apollo.choam.comm.TxnSubmitServer;
 import com.salesforce.apollo.choam.fsm.Combine;
 import com.salesforce.apollo.choam.fsm.Merchantile;
 import com.salesforce.apollo.choam.support.Bootstrapper;
@@ -99,7 +101,6 @@ import com.salesforce.apollo.utils.RoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /**
@@ -223,6 +224,13 @@ public class CHOAM {
         }
     }
 
+    public class TransSubmission implements Submitter {
+        @Override
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
+        }
+    }
+
     public class Trampoline implements Concierge {
 
         @Override
@@ -243,11 +251,6 @@ public class CHOAM {
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
             return CHOAM.this.join(request, from);
-        }
-
-        @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.submit(request, from);
         }
 
         @Override
@@ -324,34 +327,33 @@ public class CHOAM {
         }
 
         @Override
-        public ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
+        public SubmitResult submitTxn(Transaction transaction) {
             Member target = servers.next();
-            try (var link = comm.apply(target, params.member())) {
+            try (var link = submissionComm.apply(target, params.member())) {
                 if (link == null) {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
-                    SettableFuture<SubmitResult> f = SettableFuture.create();
-                    f.set(SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build());
-                    return f;
+                    return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
                 }
-//                log.trace("Submitting received txn: {} to: {} in: {} on: {}",
-//                          hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
+                if (log.isTraceEnabled()) {
+                    log.trace("Submitting received txn: {} to: {} in: {} on: {}",
+                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
+                }
                 return link.submit(SubmitTransaction.newBuilder()
                                                     .setContext(params.context().getId().toDigeste())
                                                     .setTransaction(transaction)
                                                     .build());
             } catch (StatusRuntimeException e) {
-                SettableFuture<SubmitResult> f = SettableFuture.create();
-                f.set(SubmitResult.newBuilder()
-                                  .setResult(Result.ERROR_SUBMITTING)
-                                  .setErrorMsg(e.getStatus().toString())
-                                  .build());
-                return f;
+                log.trace("Failed submitting txn: {} status:{} to: {} in: {} on: {}",
+                          hashOf(transaction, params.digestAlgorithm()), e.getStatus(), target.getId(), viewId,
+                          params.member());
+                return SubmitResult.newBuilder()
+                                   .setResult(Result.ERROR_SUBMITTING)
+                                   .setErrorMsg(e.getStatus().toString())
+                                   .build();
             } catch (Throwable e) {
                 log.debug("Failed submitting txn: {} to: {} in: {} on: {}",
                           hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member(), e);
-                SettableFuture<SubmitResult> f = SettableFuture.create();
-                f.set(SubmitResult.newBuilder().setResult(Result.ERROR_SUBMITTING).setErrorMsg(e.toString()).build());
-                return f;
+                return SubmitResult.newBuilder().setResult(Result.ERROR_SUBMITTING).setErrorMsg(e.toString()).build();
             }
         }
 
@@ -618,6 +620,7 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
+    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final ExecutorService                                       executions;
     private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -671,6 +674,13 @@ public class CHOAM {
                                                      params.metrics(), r),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
+        final Submitter txnSubmissionService = new TransSubmission();
+        submissionComm = params.communications()
+                               .create(params.member(), params.context().getId(), txnSubmissionService,
+                                       r -> new TxnSubmitServer(params.communications().getClientIdentityProvider(),
+                                                                params.metrics(), r),
+                                       TxnSubmitClient.getCreate(params.metrics()),
+                                       TxnSubmission.getLocalLoopback(params.member(), txnSubmissionService));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
@@ -1154,23 +1164,20 @@ public class CHOAM {
         restore();
     }
 
-    private Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service() {
+    private Function<SubmittedTransaction, SubmitResult> service() {
         return stx -> {
-//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
-            SettableFuture<SubmitResult> f = SettableFuture.create();
+//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member()); 
             final var c = current.get();
             if (c == null) {
-                f.set(SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build());
-                return f;
+                return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
             }
             try {
                 return c.submitTxn(stx.transaction());
             } catch (StatusRuntimeException e) {
-                f.set(SubmitResult.newBuilder()
-                                  .setResult(Result.ERROR_SUBMITTING)
-                                  .setErrorMsg(e.getStatus().toString())
-                                  .build());
-                return f;
+                return SubmitResult.newBuilder()
+                                   .setResult(Result.ERROR_SUBMITTING)
+                                   .setErrorMsg(e.getStatus().toString())
+                                   .build();
             }
         };
     }

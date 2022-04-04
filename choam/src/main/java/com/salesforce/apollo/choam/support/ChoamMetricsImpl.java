@@ -42,6 +42,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     private final MetricRegistry  registry;
     private final Timer           transactionLatency;
     private final Meter           transactionSubmitFailed;
+    private final Meter           transactionSubmitRetry;
     private final Meter           transactionSubmitSuccess;
     private final Meter           transactionSubmittedBufferFull;
     private final Meter           transactionTimeout;
@@ -59,6 +60,7 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
         publishedBytes = registry.histogram(name(context.shortString(), "unit.bytes"));
         publishedValidations = registry.meter(name(context.shortString(), "validations.published"));
         transactionLatency = registry.timer(name(context.shortString(), "transaction.latency"));
+        transactionSubmitRetry = registry.meter(name(context.shortString(), "transaction.submit.retry"));
         transactionSubmitFailed = registry.meter(name(context.shortString(), "transaction.submit.failed"));
         transactionSubmitSuccess = registry.meter(name(context.shortString(), "transaction.submit.success"));
         transactionTimeout = registry.meter(name(context.shortString(), "transaction.timeout"));
@@ -119,6 +121,11 @@ public class ChoamMetricsImpl extends EndpointMetricsImpl implements ChoamMetric
     @Override
     public Timer transactionLatency() {
         return transactionLatency;
+    }
+
+    @Override
+    public void transactionSubmitRetry() {
+        transactionSubmitRetry.mark();
     }
 
     @Override

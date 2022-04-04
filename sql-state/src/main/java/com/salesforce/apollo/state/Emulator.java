@@ -19,7 +19,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.joou.ULong;
 
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
 import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
@@ -77,11 +76,9 @@ public class Emulator {
         Session session = new Session(params, st -> {
             lock.lock();
             try {
-                SettableFuture<SubmitResult> f = SettableFuture.create();
                 Transaction txn = st.transaction();
                 txnExec.execute(txnIndex.incrementAndGet(), CHOAM.hashOf(txn, algorithm), txn, st.onCompletion());
-                f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
-                return f;
+                return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
             } finally {
                 lock.unlock();
             }

@@ -26,8 +26,6 @@ import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Function;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
@@ -67,7 +65,7 @@ public class SessionTest {
                                                               .setMember(new SigningMemberImpl(Utils.getMember(0)))
                                                               .build());
         @SuppressWarnings("unchecked")
-        Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service = stx -> {
+        Function<SubmittedTransaction, SubmitResult> service = stx -> {
             ForkJoinPool.commonPool().execute(() -> {
                 try {
                     Thread.sleep(100);
@@ -80,9 +78,7 @@ public class SessionTest {
                     throw new IllegalStateException(e);
                 }
             });
-            SettableFuture<SubmitResult> f = SettableFuture.create();
-            f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
-            return f;
+            return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         };
         Session session = new Session(params, service);
         final String content = "Give me food or give me slack or kill me";
@@ -105,7 +101,7 @@ public class SessionTest {
                                                               .build());
 
         @SuppressWarnings("unchecked")
-        Function<SubmittedTransaction, ListenableFuture<SubmitResult>> service = stx -> {
+        Function<SubmittedTransaction, SubmitResult> service = stx -> {
             exec.execute(() -> {
                 try {
                     Thread.sleep(1);
@@ -118,9 +114,7 @@ public class SessionTest {
                     throw new IllegalStateException(e);
                 }
             });
-            SettableFuture<SubmitResult> f = SettableFuture.create();
-            f.set(SubmitResult.newBuilder().setResult(Result.PUBLISHED).build());
-            return f;
+            return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         };
 
         MetricRegistry reg = new MetricRegistry();

@@ -14,8 +14,6 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.comm.Link;
@@ -65,21 +63,11 @@ public interface Terminal extends Link {
             }
 
             @Override
-            public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
-                SettableFuture<SubmitResult> f = SettableFuture.create();
-                f.set(service.submit(request, member.getId()));
-                return f;
-            }
-
-            @Override
             public ListenableFuture<Initial> sync(Synchronize sync) {
                 return null;
             }
         };
     }
-
-    @Override
-    void close();
 
     ListenableFuture<CheckpointSegments> fetch(CheckpointReplication request);
 
@@ -88,8 +76,6 @@ public interface Terminal extends Link {
     ListenableFuture<Blocks> fetchViewChain(BlockReplication replication);
 
     ListenableFuture<ViewMember> join(JoinRequest join);
-
-    ListenableFuture<SubmitResult> submit(SubmitTransaction request);
 
     ListenableFuture<Initial> sync(Synchronize sync);
 }

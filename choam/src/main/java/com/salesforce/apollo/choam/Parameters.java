@@ -513,12 +513,12 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
     public static class LimiterBuilder {
         private Duration backlogDuration = Duration.ofSeconds(1);
-        private int      backlogSize     = 100;
+        private int      backlogSize     = 1_000;
         private double   backoffRatio    = 0.9;
         private int      initialLimit    = 1_000;
         private int      maxLimit        = 5_000;
-        private int      minLimit        = 100;
-        private Duration timeout         = Duration.ofSeconds(2);
+        private int      minLimit        = 1_000;
+        private Duration timeout         = Duration.ofSeconds(1);
 
         public Limiter<Void> build(String name, MetricRegistry metrics) {
             final SimpleLimiter<Void> limiter = SimpleLimiter.newBuilder()

@@ -60,6 +60,7 @@ public class Producer {
 
         @Override
         public void assembled() {
+            assembly.stop();
             final var slate = assembly.getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get()));

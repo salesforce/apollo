@@ -365,7 +365,6 @@ public class Orderer {
                         if (u.creator() != config.pid()) {
                             creator.consume(Collections.singletonList(u), lastTiming);
                         }
-                        ;
                     } finally {
                         currentThread = null;
                     }

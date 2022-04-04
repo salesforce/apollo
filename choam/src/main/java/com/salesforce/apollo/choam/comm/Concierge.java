@@ -12,8 +12,6 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.ViewMember;
 import com.salesforce.apollo.crypto.Digest;
@@ -31,8 +29,6 @@ public interface Concierge {
     Blocks fetchViewChain(BlockReplication request, Digest from);
 
     ViewMember join(JoinRequest request, Digest from);
-
-    SubmitResult submit(SubmitTransaction request, Digest from);
 
     Initial sync(Synchronize request, Digest from);
 

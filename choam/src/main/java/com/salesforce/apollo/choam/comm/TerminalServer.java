@@ -12,8 +12,6 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalImplBase;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -22,7 +20,6 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.protocols.ClientIdentity;
 
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
@@ -80,23 +77,6 @@ public class TerminalServer extends TerminalImplBase {
             }
             responseObserver.onNext(s.join(request, from));
             responseObserver.onCompleted();
-        });
-    }
-
-    @Override
-    public void submit(SubmitTransaction request, StreamObserver<SubmitResult> responseObserver) {
-        router.evaluate(responseObserver, request.hasContext() ? new Digest(request.getContext()) : null, s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
-            try {
-                responseObserver.onNext(s.submit(request, from));
-                responseObserver.onCompleted();
-            } catch (StatusRuntimeException e) {
-                responseObserver.onError(e);
-            }
         });
     }
 

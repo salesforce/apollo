@@ -15,8 +15,6 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
@@ -104,11 +102,9 @@ public interface Committee {
         return SubmitResult.newBuilder().setResult(Result.INACTIVE).build();
     }
 
-    default ListenableFuture<SubmitResult> submitTxn(Transaction transaction) {
+    default SubmitResult submitTxn(Transaction transaction) {
         log().debug("Cannot process txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
-        SettableFuture<SubmitResult> f = SettableFuture.create();
-        f.set(SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build());
-        return f;
+        return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
     }
 
     boolean validate(HashedCertifiedBlock hb);

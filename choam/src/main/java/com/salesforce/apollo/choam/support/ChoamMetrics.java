@@ -34,6 +34,8 @@ public interface ChoamMetrics extends EdpointMetrics {
 
     Timer transactionLatency();
 
+    void transactionSubmitRetry();
+
     void transactionSubmittedBufferFull();
 
     void transactionSubmittedFail();

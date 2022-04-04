@@ -9,9 +9,11 @@ import "stereotomy.proto";
 
 package apollo.choam;
 
-service Terminal {
+service TransactionSubmission {
     rpc submit (SubmitTransaction) returns (SubmitResult) {}
+}
 
+service Terminal {
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
 

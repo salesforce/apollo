@@ -15,12 +15,17 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.ByteMessage;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
+import com.salesforce.apollo.utils.Utils;
 
 class Transactioneer {
     private final static Random entropy = new Random();
+    private final static Logger log     = LoggerFactory.getLogger(Transactioneer.class);
 
     private final AtomicInteger            completed = new AtomicInteger();
     private final CountDownLatch           countdown;
@@ -32,16 +37,22 @@ class Transactioneer {
     private final ByteMessage              tx        = ByteMessage.newBuilder()
                                                                   .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                                                   .build();
+    private final Executor                 txnCompletion;
     private final Executor                 txnExecutor;
 
-    Transactioneer(Session session, Duration timeout, int max, ScheduledExecutorService scheduler,
-                   CountDownLatch countdown, Executor txnScheduler) {
+    Transactioneer(Session session, Executor txnCompletion, Duration timeout, int max,
+                   ScheduledExecutorService scheduler, CountDownLatch countdown, Executor txnScheduler) {
         this.session = session;
         this.timeout = timeout;
         this.max = max;
         this.scheduler = scheduler;
         this.countdown = countdown;
         this.txnExecutor = txnScheduler;
+        this.txnCompletion = txnCompletion;
+    }
+
+    public int getCompleted() {
+        return completed.get();
     }
 
     void decorate(CompletableFuture<?> fs) {
@@ -53,11 +64,13 @@ class Transactioneer {
             if (t != null) {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
-                        try {
-                            decorate(session.submit(tx, timeout, scheduler));
-                        } catch (InvalidTransaction e) {
-                            e.printStackTrace();
-                        }
+                        txnExecutor.execute(Utils.wrapped(() -> {
+                            try {
+                                decorate(session.submit(tx, timeout, scheduler));
+                            } catch (InvalidTransaction e) {
+                                throw new IllegalStateException(e);
+                            }
+                        }, log));
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 }
             } else {
@@ -66,23 +79,27 @@ class Transactioneer {
                         countdown.countDown();
                     }
                 } else {
-                    try {
-                        decorate(session.submit(tx, timeout, scheduler));
-                    } catch (InvalidTransaction e) {
-                        e.printStackTrace();
-                    }
+                    txnExecutor.execute(Utils.wrapped(() -> {
+                        try {
+                            decorate(session.submit(tx, timeout, scheduler));
+                        } catch (InvalidTransaction e) {
+                            throw new IllegalStateException(e);
+                        }
+                    }, log));
                 }
             }
-        }, txnExecutor);
+        }, txnCompletion);
     }
 
     void start() {
         scheduler.schedule(() -> {
-            try {
-                decorate(session.submit(tx, timeout, scheduler));
-            } catch (InvalidTransaction e) {
-                throw new IllegalStateException(e);
-            }
+            txnExecutor.execute(Utils.wrapped(() -> {
+                try {
+                    decorate(session.submit(tx, timeout, scheduler));
+                } catch (InvalidTransaction e) {
+                    throw new IllegalStateException(e);
+                }
+            }, log));
         }, 2, TimeUnit.SECONDS);
     }
 }

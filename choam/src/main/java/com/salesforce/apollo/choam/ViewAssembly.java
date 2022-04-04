@@ -160,6 +160,7 @@ public class ViewAssembly implements Reconfiguration {
     @Override
     public void complete() {
         log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(), params().member());
+        transitions.complete();
     }
 
     @Override
@@ -180,6 +181,7 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void failed() {
+        log.error("Failed view assembly for: {} on: {}", nextViewId, params().member());
         stop();
     }
 

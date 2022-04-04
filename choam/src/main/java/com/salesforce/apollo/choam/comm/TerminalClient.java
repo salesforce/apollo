@@ -13,8 +13,6 @@ import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Initial;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
-import com.salesfoce.apollo.choam.proto.SubmitResult;
-import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Synchronize;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc;
 import com.salesfoce.apollo.choam.proto.TerminalGrpc.TerminalFutureStub;
@@ -81,11 +79,6 @@ public class TerminalClient implements Terminal {
 
     public void release() {
         close();
-    }
-
-    @Override
-    public ListenableFuture<SubmitResult> submit(SubmitTransaction request) {
-        return client.submit(request);
     }
 
     @Override

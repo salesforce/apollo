@@ -108,11 +108,12 @@ public class TxDataSource implements DataSource {
             mode.set(Mode.CLOSED);
             blockingThread = Thread.currentThread();
             try {
-                Validate validation = validations.poll(1, TimeUnit.SECONDS);
-                while (validation == null) {
-                    validation = validations.poll(2, TimeUnit.MILLISECONDS);
+                Validate validation = validations.take();
+                if (validation != null) {
+                    builder.addValidations(validation);
+                } else {
+                    System.out.println("No waiting validations on: " + member.getId());
                 }
-                builder.addValidations(validation);
             } catch (InterruptedException e) {
                 return ByteString.EMPTY;
             } finally {
