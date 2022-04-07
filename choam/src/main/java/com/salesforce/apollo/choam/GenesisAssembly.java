@@ -109,6 +109,7 @@ public class GenesisAssembly implements Genesis {
             config.setPid(pid).setnProc((short) view.roster().size());
         }
         config.setEpochLength(7).setNumberOfEpochs(3);
+        config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal().deterministic(config.build(), dataSource(),
                                                   (preblock, last) -> transitions.process(preblock, last),
                                                   epoch -> transitions.nextEpoch(epoch));
@@ -119,7 +120,7 @@ public class GenesisAssembly implements Genesis {
                                                                      : params().metrics().getReconfigureMetrics());
 
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
-                  reContext.getId(), nextAssembly.keySet(), params().member());
+                  reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
 
     @Override
@@ -133,7 +134,7 @@ public class GenesisAssembly implements Genesis {
                                                        new NullBlock(params().digestAlgorithm())));
         var validate = view.generateValidation(reconfiguration);
         log.trace("Certifying genesis block: {} for: {} count: {} on: {}", reconfiguration.hash, view.context().getId(),
-                  slate.size(), params().member());
+                  slate.size(), params().member().getId());
         ds = new OneShot();
         ds.setValue(validate.toByteString());
     }
@@ -215,7 +216,7 @@ public class GenesisAssembly implements Genesis {
                  .forEach(v -> b.addCertifications(v.getWitness()));
         view.publish(new HashedCertifiedBlock(params().digestAlgorithm(), b.build()));
         log.debug("Genesis block: {} published for: {} on: {}", reconfiguration.hash, view.context().getId(),
-                  params().member());
+                  params().member().getId());
     }
 
     public void start() {
@@ -229,7 +230,7 @@ public class GenesisAssembly implements Genesis {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Stopping view assembly: {} on: {}", view.context().getId(), params().member());
+        log.trace("Stopping view assembly: {} on: {}", view.context().getId(), params().member().getId());
         coordinator.stop();
         controller.stop();
         final var cur = blockingThread;
@@ -241,10 +242,10 @@ public class GenesisAssembly implements Genesis {
 
     private void certify(Validate v) {
         log.trace("Validating reconfiguration block: {} height: {} on: {}", reconfiguration.hash,
-                  reconfiguration.height(), params().member());
+                  reconfiguration.height(), params().member().getId());
         if (!view.validate(reconfiguration, v)) {
             log.warn("Cannot validate reconfiguration block: {} produced on: {}", reconfiguration.hash,
-                     params().member());
+                     params().member().getId());
             return;
         }
         var member = view.context().getMember(Digest.from(v.getWitness().getId()));
@@ -283,7 +284,7 @@ public class GenesisAssembly implements Genesis {
         if (m == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                          params().member());
+                          params().member().getId());
             }
             return;
         }
@@ -296,7 +297,7 @@ public class GenesisAssembly implements Genesis {
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
             if (log.isTraceEnabled()) {
                 log.trace("Could not verify consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
             }
             return;
         }
@@ -305,13 +306,13 @@ public class GenesisAssembly implements Genesis {
         if (consensusKey == null) {
             if (log.isTraceEnabled()) {
                 log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+                          ViewContext.print(vm, params().digestAlgorithm()), params().member().getId());
             }
             return;
         }
         if (log.isTraceEnabled()) {
             log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                      params().member());
+                      params().member().getId());
         }
         var proposed = proposals.computeIfAbsent(mid, k -> new Proposed(join, m));
         if (join.getEndorsementsList().size() == 1) {
@@ -335,7 +336,7 @@ public class GenesisAssembly implements Genesis {
         final var cid = Digest.from(v.getWitness().getId());
         var certifier = view.context().getMember(cid);
         if (certifier == null) {
-            log.warn("Unknown certifier: {} on: {}", cid, params().member());
+            log.warn("Unknown certifier: {} on: {}", cid, params().member().getId());
             return; // do not have the join yet
         }
         final var hash = Digest.from(v.getHash());
@@ -345,16 +346,16 @@ public class GenesisAssembly implements Genesis {
         }
         var proposed = proposals.get(hash);
         if (proposed == null) {
-            log.warn("Invalid certification, unknown view join: {} on: {}", hash, params().member());
+            log.warn("Invalid certification, unknown view join: {} on: {}", hash, params().member().getId());
             return; // do not have the join yet
         }
         if (!view.validate(proposed.join.getMember(), v)) {
             log.warn("Invalid cetification for view join: {} from: {} on: {}", hash,
-                     Digest.from(v.getWitness().getId()), params().member());
+                     Digest.from(v.getWitness().getId()), params().member().getId());
             return;
         }
         proposed.certifications.put(certifier, v.getWitness());
         log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), hash,
-                  certifier.getId(), params().member());
+                  certifier.getId(), params().member().getId());
     }
 }

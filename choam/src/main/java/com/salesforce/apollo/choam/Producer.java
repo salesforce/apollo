@@ -60,7 +60,6 @@ public class Producer {
 
         @Override
         public void assembled() {
-            assembly.stop();
             final var slate = assembly.getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get()));
@@ -76,9 +75,6 @@ public class Producer {
         @Override
         public void checkAssembly() {
             ds.validationsOnly();
-            if (ds.getRemaining() > 0) {
-                log.info("Assembling with: {} dropped batches on: {}", ds.getRemaining(), params().member());
-            }
             if (assembled.get()) {
                 assembled();
             }
@@ -128,11 +124,11 @@ public class Producer {
             assembly = new ViewAssembly(nextViewId, view, comms) {
                 @Override
                 public void complete() {
-                    super.complete();
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
                               params().member());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
+                    super.complete();
                 }
             };
             assembly.start();
@@ -202,6 +198,7 @@ public class Producer {
             config.setPid(pid).setnProc((short) view.roster().size());
         }
 
+        config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                                   epoch -> newEpoch(epoch));
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();

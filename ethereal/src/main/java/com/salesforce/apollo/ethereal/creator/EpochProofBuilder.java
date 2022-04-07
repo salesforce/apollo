@@ -57,25 +57,26 @@ public interface EpochProofBuilder {
         JohnHancock add(DecodedShare decoded) {
             Digest key = new Digest(decoded.proof.getMsg().getHash());
             var shares = data.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-            log.trace("WTK current: {} threshold: {} on: {}", shares.size(), conf.WTKey().threshold(), conf.pid());
+            log.trace("WTK current: {} threshold: {} on: {}", shares.size(), conf.WTKey().threshold(), conf.logLabel());
             if (decoded.share != null) {
                 shares.put(decoded.share.owner(), decoded.share);
-                log.trace("share: {} added: {} from: {} on: {}", key, shares.size(), decoded.share.owner(), conf.pid());
+                log.trace("share: {} added: {} from: {} on: {}", key, shares.size(), decoded.share.owner(),
+                          conf.logLabel());
                 if (shares.size() >= conf.WTKey().threshold()) {
                     JohnHancock sig = conf.WTKey().combineShares(shares.values());
                     if (sig != null) {
-                        log.trace("WTK threshold reached on: {}", conf.pid());
+                        log.trace("WTK threshold reached on: {}", conf.logLabel());
                         return sig;
                     } else {
                         log.trace("WTK threshold reached, but combined shares failed to produce signature on: {}",
-                                  conf.pid());
+                                  conf.logLabel());
                     }
                 } else {
                     log.trace("WTK share threshold: {} not reached: {} on: {}", shares.size(), conf.WTKey().threshold(),
-                              conf.pid());
+                              conf.logLabel());
                 }
             } else {
-                log.trace("WTK no shares decoded: {} on: {}", shares.size(), conf.pid());
+                log.trace("WTK no shares decoded: {} on: {}", shares.size(), conf.logLabel());
             }
             return null;
         }
@@ -96,19 +97,19 @@ public interface EpochProofBuilder {
             }
             var share = decodeShare(u.data());
             if (share == null) {
-                log.debug("WTK cannot decode: {} data: {} on: {}", u, u.data(), conf.pid());
+                log.debug("WTK cannot decode: {} data: {} on: {}", u, u.data(), conf.logLabel());
                 return null;
             }
             if (!conf.WTKey().verifyShare(share)) {
-                log.warn("WTK cannot verify share: {} data: {} on: {}", u, u.data(), conf.pid());
+                log.warn("WTK cannot verify share: {} data: {} on: {}", u, u.data(), conf.logLabel());
                 return null;
             }
             var sig = shares.add(share);
             if (sig != null) {
-                log.debug("WTK signature generated: {} on: {}", u, conf.pid());
+                log.debug("WTK signature generated: {} on: {}", u, conf.logLabel());
                 return encodeSignature(sig, share.proof);
             }
-            log.debug("WTK signature generation failed: {} on: {}", u, conf.pid());
+            log.debug("WTK signature generation failed: {} on: {}", u, conf.logLabel());
             return null;
         }
 
@@ -128,8 +129,8 @@ public interface EpochProofBuilder {
         public ByteString buildShare(Unit lastTimingUnit) {
             var proof = encodeProof(lastTimingUnit);
             Share share = conf.WTKey().createShare(proof, conf.pid());
-            log.debug("WTK share built on: {} from: {} proof: {} share: {} on: {}", conf.pid(), lastTimingUnit, proof,
-                      share, conf.pid());
+            log.debug("WTK share built on: {} from: {} proof: {} share: {} on: {}", lastTimingUnit.creator(),
+                      lastTimingUnit, proof, share, conf.logLabel());
             if (share != null) {
                 return encodeShare(share, proof);
             }

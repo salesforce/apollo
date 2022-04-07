@@ -19,7 +19,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -116,14 +115,14 @@ public class Orderer {
             final Lock lock = mx.writeLock();
             lock.lock();
             try {
-                log.trace("Sending: {} on: {}", u, config.pid());
+                log.trace("Sending: {} on: {}", u, config.logLabel());
                 insert(u);
             } finally {
                 lock.unlock();
             }
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Order Executor[" + conf.pid() + "]");
+            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
             t.setDaemon(true);
             return t;
         });
@@ -148,7 +147,7 @@ public class Orderer {
                 final Lock lock = mx.writeLock();
                 lock.lock();
                 try {
-                    log.debug("Adding: {} on: {}", preunits, config.pid());
+                    log.debug("Adding: {} on: {}", preunits, config.logLabel());
                     var errors = new HashMap<Digest, Correctness>();
                     while (preunits.size() > 0) {
                         var epoch = preunits.get(0).epoch();
@@ -160,7 +159,7 @@ public class Orderer {
                         if (ep != null) {
                             errors.putAll(ep.adder().addPreunits(preunits.subList(0, end)));
                         } else {
-                            log.debug("No epoch for: {} on: {}", preunits, config.pid());
+                            log.debug("No epoch for: {} on: {}", preunits, config.logLabel());
                         }
                         preunits = preunits.subList(end, preunits.size());
                     }
@@ -271,19 +270,12 @@ public class Orderer {
     }
 
     public void stop() {
-        log.trace("Stopping Orderer on: {}", config.pid());
+        log.trace("Stopping Orderer on: {}", config.logLabel());
         started.set(false);
-        executor.shutdown();
+        executor.shutdownNow();
         final var c = currentThread;
         if (c != null) {
             c.interrupt();
-        }
-        currentThread = null;
-        try {
-            executor.awaitTermination(1, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            log.warn("Orderer executor could not be shutdown, retrying on: {}", config.pid());
-            executor.shutdownNow();
         }
         if (previous.get() != null) {
             previous.get().close();
@@ -291,7 +283,7 @@ public class Orderer {
         if (current != null) {
             current.get().close();
         }
-        log.trace("Orderer stopped on: {}", config.pid());
+        log.trace("Orderer stopped on: {}", config.logLabel());
     }
 
     /**
@@ -418,7 +410,8 @@ public class Orderer {
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
                 toPreblock.accept(round);
-                log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch, config.pid());
+                log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
+                          config.logLabel());
             }
             current.set(epoch);
         };
@@ -431,7 +424,7 @@ public class Orderer {
      */
     private void insert(Unit unit) {
         if (unit.creator() != config.pid()) {
-            log.warn("Invalid unit creator: {} on: {}", unit.creator(), config.pid());
+            log.warn("Invalid unit creator: {} on: {}", unit.creator(), config.logLabel());
             return;
         }
         var rslt = getEpoch(unit.epoch());
@@ -441,10 +434,10 @@ public class Orderer {
         }
         if (ep != null) {
             ep.dag.insert(unit);
-            log.debug("Inserted: {} on: {}", unit, config.pid());
+            log.debug("Inserted: {} on: {}", unit, config.logLabel());
         } else {
             log.trace("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
-                      unit.creator(), unit.epoch(), unit.height(), unit.level(), config.pid());
+                      unit.creator(), unit.epoch(), unit.height(), unit.level(), config.logLabel());
         }
     }
 

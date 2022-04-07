@@ -38,13 +38,12 @@ public class Extender {
 
     private final int                               commonVoteDeterministicPrefix;
     private final CommonRandomPermutation           crpIterator;
-    private AtomicReference<Unit>                   currentTU        = new AtomicReference<>();
+    private AtomicReference<Unit>                   currentTU = new AtomicReference<>();
     private final Dag                               dag;
-    private final Map<Digest, SuperMajorityDecider> deciders         = new ConcurrentHashMap<>();
+    private final Map<Digest, SuperMajorityDecider> deciders  = new ConcurrentHashMap<>();
     private final DigestAlgorithm                   digestAlgorithm;
     private final int                               firstDecidedRound;
-    private AtomicBoolean                           lastDecideResult = new AtomicBoolean();
-    private AtomicReference<List<Unit>>             lastTUs          = new AtomicReference<>();
+    private AtomicReference<List<Unit>>             lastTUs   = new AtomicReference<>();
     private final int                               orderStartLevel;
     private final RandomSource                      randomSource;
     private final int                               zeroVoteRoundForCommonVote;
@@ -64,7 +63,6 @@ public class Extender {
     }
 
     public TimingRound nextRound() {
-        lastDecideResult.set(false);
         var dagMaxLevel = dag.maxLevel();
         if (dagMaxLevel < orderStartLevel) {
             log.trace("No round, max dag level: {} is < order start level: {} on: {}", dagMaxLevel, orderStartLevel,
@@ -92,7 +90,6 @@ public class Extender {
                 next.add(previousTU);
                 lastTUs.set(next);
                 currentTU.set(uc);
-                lastDecideResult.set(true);
                 deciders.clear();
                 decided.set(true);
                 log.trace("Round decided");

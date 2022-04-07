@@ -189,15 +189,15 @@ public class TestCHOAM {
         } finally {
             routers.values().forEach(e -> e.close());
             choams.values().forEach(e -> e.stop());
-            System.out.println();
-
-            ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
         }
         assertTrue(checkpointOccurred.get());
+        System.out.println();
+
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {

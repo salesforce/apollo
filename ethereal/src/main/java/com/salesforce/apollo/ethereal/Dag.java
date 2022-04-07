@@ -157,7 +157,7 @@ public interface Dag {
         public void insert(Unit v) {
             if (v.epoch() != epoch) {
                 throw new IllegalStateException("Invalid insert of: " + v + " into epoch: " + epoch + " on: "
-                + config.pid());
+                + config.logLabel());
             }
             write(() -> {
                 var unit = v.embed(this);
@@ -283,7 +283,10 @@ public interface Dag {
         }
 
         private void _sync(Consumer<PreUnit> send) {
-            units.values().stream().filter(u -> u.creator() == config.pid()).map(u -> u.toPreUnit())
+            units.values()
+                 .stream()
+                 .filter(u -> u.creator() == config.pid())
+                 .map(u -> u.toPreUnit())
                  .forEach(pu -> send.accept(pu));
         }
 
@@ -293,7 +296,7 @@ public interface Dag {
             try {
                 return call.call();
             } catch (Exception e) {
-                throw new IllegalStateException("Error during read locked call", e);
+                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
             } finally {
                 lock.unlock();
             }
@@ -305,7 +308,7 @@ public interface Dag {
             try {
                 r.run();
             } catch (Exception e) {
-                throw new IllegalStateException("Error during read locked call", e);
+                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
             } finally {
                 lock.unlock();
             }
@@ -353,7 +356,7 @@ public interface Dag {
             try {
                 r.run();
             } catch (Exception e) {
-                throw new IllegalStateException("Error during write locked call", e);
+                throw new IllegalStateException("Error during write locked call on: " + config.logLabel(), e);
             } finally {
                 lock.unlock();
             }
@@ -430,7 +433,8 @@ public interface Dag {
                 throw new IllegalStateException("Wrong number of heights passed to fiber map: " + heights.length
                 + " expected: " + width);
             }
-            List<List<Unit>> result = IntStream.range(0, width).mapToObj(e -> new ArrayList<Unit>())
+            List<List<Unit>> result = IntStream.range(0, width)
+                                               .mapToObj(e -> new ArrayList<Unit>())
                                                .collect(Collectors.toList());
             var unknown = 0;
             final Lock lock = mx.readLock();
@@ -524,7 +528,7 @@ public interface Dag {
     }
 
     static Dag newDag(Config config, int epoch) {
-        log.trace("New dag for epoch: {} on: {}", epoch, config.pid());
+        log.trace("New dag for epoch: {} on: {}", epoch, config.logLabel());
 //        return new dag(config.nProc(), epoch, new ConcurrentHashMap<>(),
 //                       newFiberMap(config.nProc(), config.epochLength()),
 //                       newFiberMap(config.nProc(), config.epochLength()), newSlottedUnits(config.nProc()),

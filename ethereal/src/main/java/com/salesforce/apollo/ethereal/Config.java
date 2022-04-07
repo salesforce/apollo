@@ -22,10 +22,11 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote, int firstDecidedRound,
-                     int orderStartLevel, int commonVoteDeterministicPrefix, short crpFixedPrefix, Signer signer,
-                     DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     WeakThresholdKey WTKey, Clock clock, double bias, Verifier[] verifiers, double fpr) {
+public record Config(String label, short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote,
+                     int firstDecidedRound, int orderStartLevel, int commonVoteDeterministicPrefix,
+                     short crpFixedPrefix, Signer signer, DigestAlgorithm digestAlgorithm, int lastLevel,
+                     boolean canSkipLevel, int numberOfEpochs, WeakThresholdKey WTKey, Clock clock, double bias,
+                     Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -46,20 +47,25 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
         return new Builder(config);
     }
 
+    public String logLabel() {
+        return label + "(" + pid + ")";
+    }
+
     public static class Builder implements Cloneable {
         public static Builder empty() {
             return new Builder().requiredByLinear();
         }
 
         private int              bias                          = 3;
-        private boolean          canSkipLevel                  = false;
+        private boolean          canSkipLevel                  = true;
         private Clock            clock                         = Clock.systemUTC();
-        private short            crpFixedPrefix;
         private short            commonVoteDeterministicPrefix = 10;
+        private short            crpFixedPrefix;
         private DigestAlgorithm  digestAlgorithm               = DigestAlgorithm.DEFAULT;
         private int              epochLength                   = 30;
         private int              firstDecidedRound;
         private double           fpr                           = 0.125;
+        private String           label                         = "";
         private int              lastLevel                     = -1;
         private short            nProc;
         private int              numberOfEpochs                = 3;
@@ -114,7 +120,7 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Config build() {
             if (pByz <= -1) {
-                pByz = 1.0 / (double) bias;
+                pByz = 1.0 / bias;
             }
             final var minimalQuorum = Dag.minimalQuorum(nProc, bias);
             if (wtk == null) {
@@ -125,9 +131,9 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
             if (lastLevel <= 0) {
                 addLastLevel();
             }
-            return new Config(nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound, orderStartLevel,
-                              commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm, lastLevel,
-                              canSkipLevel, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
+            return new Config(label, nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound,
+                              orderStartLevel, commonVoteDeterministicPrefix, crpFixedPrefix, signer, digestAlgorithm,
+                              lastLevel, canSkipLevel, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -165,6 +171,10 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public double getFpr() {
             return fpr;
+        }
+
+        public String getLabel() {
+            return label;
         }
 
         public int getLastLevel() {
@@ -254,6 +264,11 @@ public record Config(short nProc, int epochLength, short pid, int zeroVoteRoundF
 
         public Builder setFpr(double fpr) {
             this.fpr = fpr;
+            return this;
+        }
+
+        public Builder setLabel(String label) {
+            this.label = label;
             return this;
         }
 

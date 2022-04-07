@@ -110,7 +110,7 @@ public class Creator {
      * on which the last timing unit of each epoch is expected to appear.
      */
     public void consume(List<Unit> units, Queue<Unit> lastTiming) {
-        log.trace("Processing next units: {} on: {}", units.size(), conf.pid());
+        log.trace("Processing next units: {} on: {}", units.size(), conf.logLabel());
         mx.lock();
         try {
             for (Unit u : units) {
@@ -118,15 +118,15 @@ public class Creator {
             }
             var built = ready();
             if (built == null) {
-                log.trace("Not ready to create unit on: {}", conf.pid());
+                log.trace("Not ready to create unit on: {}", conf.logLabel());
             }
             while (built != null) {
-                log.trace("Ready, creating unit on: {}", conf.pid());
+                log.trace("Ready, creating unit on: {}", conf.logLabel());
                 createUnit(built.parents, built.level, getData(built.level, lastTiming));
                 built = ready();
             }
         } catch (Throwable e) {
-            log.error("Error in processing units on: {}", conf.pid(), e);
+            log.error("Error in processing units on: {}", conf.logLabel(), e);
         } finally {
             mx.unlock();
         }
@@ -139,21 +139,25 @@ public class Creator {
     private built buildParents() {
         if (conf.canSkipLevel()) {
             final Unit[] parents = getParents();
-            if (count(parents) >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.pid());
+            final var count = count(parents);
+            if (count >= quorum) {
+                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
                 return new built(parents, level.get());
             } else {
-                log.trace("Parents not ready: {} on: {}", parents, conf.pid());
+                log.warn("Parents (skip level) not ready: {} current: {} required: {} on: {}", parents, count, quorum,
+                         conf.logLabel());
                 return null;
             }
         } else {
             var l = candidates[conf.pid()].level() + 1;
             final Unit[] parents = getParentsForLevel(l);
-            if (count(parents) >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.pid());
+            final var count = count(parents);
+            if (count >= quorum) {
+                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
                 return new built(parents, l);
             } else {
-                log.trace("Parents not ready on: {}", conf.pid());
+                log.warn("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
+                         conf.logLabel());
                 return null;
             }
         }
@@ -175,9 +179,9 @@ public class Creator {
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm(), conf.signer());
         if (log.isTraceEnabled()) {
-            log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.pid());
+            log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.logLabel());
         } else {
-            log.debug("Created unit: {} on: {}", u, conf.pid());
+            log.debug("Created unit: {} on: {}", u, conf.logLabel());
         }
         update(u);
         send.accept(u);
@@ -199,7 +203,7 @@ public class Creator {
         }
         Unit timingUnit = lastTiming.poll();
         if (timingUnit == null) {
-            log.trace("No timing unit: {} on: {}", level, conf.pid());
+            log.trace("No timing unit: {} on: {}", level, conf.logLabel());
             return ByteString.EMPTY;
         }
         // in a rare case there can be timing units from previous epochs left on
@@ -209,14 +213,15 @@ public class Creator {
             if (timingUnit.epoch() == e) {
                 epochDone.set(true);
                 if (e == conf.numberOfEpochs() - 1) {
+                    log.trace("Finished, timing unit: {} level: {} on: {}", timingUnit, level, conf.logLabel());
                     // the epoch we just finished is the last epoch we were supposed to produce
                     return ByteString.EMPTY;
                 }
-                log.debug("TimingUnit: {}, new epoch required: {} on: {}", level, timingUnit, conf.pid());
+                log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
-            log.debug("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
-                      timingUnit.epoch(), e, conf.pid());
+            log.info("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
+                     timingUnit.epoch(), e, conf.logLabel());
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
@@ -254,7 +259,7 @@ public class Creator {
      * creates a dealing with the provided data.
      **/
     private void newEpoch(int epoch, ByteString data) {
-        log.trace("Changing epoch to: {} on: {}", epoch, conf.pid());
+        log.trace("Changing epoch to: {} on: {}", epoch, conf.logLabel());
         this.epoch.set(epoch);
         epochDone.set(false);
 
@@ -274,11 +279,11 @@ public class Creator {
         boolean ready = !epochDone.get() && level.get() > l;
         if (ready) {
             log.trace("Ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, level.get(), l,
-                      conf.pid());
+                      conf.logLabel());
             return buildParents();
         }
-        log.trace("Not ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, level.get(), l,
-                  conf.pid());
+        log.trace("Not ready to create epochDone: {} epoch: {} level: {} candidate level: {} on: {}", epochDone,
+                  epoch.get(), level.get(), l, conf.logLabel());
         return null;
     }
 
@@ -287,7 +292,7 @@ public class Creator {
      * with NProc nils). This is useful when switching to a new epoch.
      */
     private void resetEpoch() {
-        log.debug("Resetting epoch on: {}", conf.pid());
+        log.debug("Resetting epoch on: {}", conf.logLabel());
         for (int i = 0; i < candidates.length; i++) {
             candidates[i] = null;
         }
@@ -301,13 +306,13 @@ public class Creator {
      * the unit.
      */
     private void update(Unit unit) {
-        log.trace("updating: {} on: {}", unit, conf.pid());
+        log.trace("updating: {} on: {}", unit, conf.logLabel());
         // if the unit is from an older epoch or unit's creator is known to be a forker,
         // we simply ignore it
         final int e = epoch.get();
         if (frozen.contains(unit.creator()) || unit.epoch() < e) {
             log.debug("Unit: {} rejected frozen: {} current: {} on: {}", unit, frozen.contains(unit.creator()), epoch,
-                      conf.pid());
+                      conf.logLabel());
             return;
         }
 
@@ -316,7 +321,7 @@ public class Creator {
         // the first unit from a new epoch is always a dealing unit.
         if (unit.epoch() > e) {
             if (!epochProof.get().verify(unit)) {
-                log.warn("Unit did not verify epoch, rejected on: {}", conf.pid());
+                log.warn("Unit did not verify epoch, rejected on: {}", conf.logLabel());
                 return;
             }
             newEpoch(unit.epoch(), unit.data());
@@ -327,11 +332,11 @@ public class Creator {
         // that the current epoch is finished) switch to a new epoch.
         ByteString ep = epochProof.get().tryBuilding(unit);
         if (ep != null) {
-            log.debug("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.pid());
+            log.debug("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.logLabel());
             newEpoch(e + 1, ep);
             return;
         }
-        log.trace("No epoch proof generated from: {} on: {}", unit, conf.pid());
+        log.trace("No epoch proof generated from: {} on: {}", unit, conf.logLabel());
 
         updateCandidates(unit);
     }
@@ -348,23 +353,23 @@ public class Creator {
         var prev = candidates[u.creator()];
         if (prev == null || prev.level() < u.level()) {
             candidates[u.creator()] = u;
-            log.trace("Update candidate to: {} on: {}", u, conf.pid());
+            log.trace("Update candidate to: {} on: {}", u, conf.logLabel());
             if (u.level() == maxLvl.get()) {
                 onMaxLvl.incrementAndGet();
-                log.trace("Update candidate onMaxLvl incremented to: {} by: {} on: {}", onMaxLvl.get(), u, conf.pid());
-            }
-            if (u.level() > maxLvl.get()) {
+                log.trace("Update candidate onMaxLvl incremented to: {} by: {} on: {}", onMaxLvl.get(), u,
+                          conf.logLabel());
+            } else if (u.level() > maxLvl.get()) {
                 maxLvl.set(u.level());
                 onMaxLvl.set(1);
                 log.trace("Update candidate {} new maxLvl: {} onMaxLvl: {} on: {}", u, maxLvl.get(), onMaxLvl.get(),
-                          conf.pid());
+                          conf.logLabel());
             }
             level.set(maxLvl.get());
-            log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.pid());
+            log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.logLabel());
             if (onMaxLvl.get() >= quorum) {
                 level.incrementAndGet();
                 log.trace("Update candidate onMaxLvl: {} >= quorum: {} level now: {} via: {} on: {}", onMaxLvl.get(),
-                          quorum, level.get(), u, conf.pid());
+                          quorum, level.get(), u, conf.logLabel());
             }
         }
     }
