@@ -18,18 +18,51 @@ message Gossip {
     utils.Digeste context = 1;
     int32 ring = 2;
     utils.Biff have = 3;
+    Have haves = 4;
+}
+
+message Have {
+    utils.Biff haveUnits = 1;
+    utils.Biff havePreVotes = 2;
+    utils.Biff haveCommits = 3;
 }
 
 message Update {
     repeated PreUnit_s missing = 1;
     repeated PreUnit_s waiting = 2;
     utils.Biff have = 3;
+    
+    repeated SignedPreVote missingPreVotes = 4;
+    repeated SignedCommit missingCommits = 5;
+    Have haves = 6;
 }
 
 message ContextUpdate {
     utils.Digeste context = 1;
     int32 ring = 2;
     Update update = 3;
+}
+
+message PreVote {
+    int64 unit = 1;
+    utils.Digeste hash = 2;
+    utils.Digeste source = 3;
+}
+
+message Commit {
+    int64 unit = 1;
+    utils.Digeste hash = 2;
+    utils.Digeste source = 3;
+}
+
+message SignedPreVote {
+    utils.Sig signature = 1;
+    PreVote vote = 2;
+}
+
+message SignedCommit {
+    utils.Sig signature = 1;
+    Commit commit = 2;
 }
 
 message EpochProof {
