@@ -251,11 +251,6 @@ public interface Dag {
             return config.pid();
         }
 
-        @Override
-        public void sync(Consumer<PreUnit> send) {
-            read(() -> _sync(send));
-        }
-
         /**
          * return all units present in dag that are above (in height sense) given
          * heights. When called with null argument, returns all units in the dag. Units
@@ -280,14 +275,6 @@ public interface Dag {
                 var res = levelUnits.getFiber(level);
                 return res != null ? res : newSlottedUnits(config.nProc());
             });
-        }
-
-        private void _sync(Consumer<PreUnit> send) {
-            units.values()
-                 .stream()
-                 .filter(u -> u.creator() == config.pid())
-                 .map(u -> u.toPreUnit())
-                 .forEach(pu -> send.accept(pu));
         }
 
         private <T> T read(Callable<T> call) {
@@ -588,8 +575,6 @@ public interface Dag {
     short nProc();
 
     short pid();
-
-    void sync(Consumer<PreUnit> send);
 
     List<Unit> unitsAbove(int[] heights);
 
