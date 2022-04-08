@@ -196,8 +196,7 @@ public final class LifoBlockingLimiter<ContextT> implements Limiter<ContextT> {
         }
 
         // Create a holder for a listener and block until a listener is released by
-        // another
-        // operation. Holders will be unblocked in LIFO order
+        // another operation. Holders will be unblocked in LIFO order
         backlogCounter.incrementAndGet();
         final ListenerHolder<ContextT> event = new ListenerHolder<>(context);
 
@@ -208,8 +207,8 @@ public final class LifoBlockingLimiter<ContextT> implements Limiter<ContextT> {
 
             if (!event.await(backlogTimeoutMillis.apply(context), TimeUnit.MILLISECONDS)) {
                 // Remove the holder from the backlog. This item is likely to be at the end of
-                // the
-                // list so do a removeLastOccurance to minimize the number of items to traverse
+                // the list so do a removeLastOccurance to minimize the number of items to
+                // traverse
                 synchronized (lock) {
                     backlog.removeLastOccurrence(event);
                 }

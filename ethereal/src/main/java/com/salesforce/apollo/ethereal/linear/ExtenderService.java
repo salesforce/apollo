@@ -43,7 +43,7 @@ public class ExtenderService {
     }
 
     public void chooseNextTimingUnits() {
-        log.trace("Signaling to see if we can produce a block on: {}", config.pid());
+        log.trace("Signaling to see if we can produce a block on: {}", config.logLabel());
         timingUnitDecider();
     }
 
@@ -56,11 +56,11 @@ public class ExtenderService {
         exclusive.acquireUninterruptibly();
         try {
             var round = ordering.nextRound();
-            log.trace("Starting timing round: {} on: {}", round, config.pid());
+            log.trace("Starting timing round: {} on: {}", round, config.logLabel());
             while (round != null) {
-                log.debug("Producing timing round: {} on: {}", round, config.pid());
+                log.trace("Producing timing round: {} on: {}", round, config.logLabel());
                 var units = round.orderedUnits(config.digestAlgorithm());
-                log.debug("Output of: {} preBlock: {} on: {}", round, units, config.pid());
+                log.trace("Output of: {} preBlock: {} on: {}", round, units, config.logLabel());
                 output.accept(units);
                 round = ordering.nextRound();
             }

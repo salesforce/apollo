@@ -53,6 +53,7 @@ public interface Adder {
                 this.pu = pu;
             }
 
+            @Override
             public String toString() {
                 return "wpu[" + pu.shortString() + "]";
             }
@@ -96,27 +97,27 @@ public interface Adder {
             try {
                 var alreadyInDag = dag.get(preunits.stream().map(e -> e.hash()).toList());
 
-                log.trace("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.pid());
+                log.trace("Add preunits: {} already in dag: {} on: {}", preunits, alreadyInDag, conf.logLabel());
 
                 for (int i = 0; i < preunits.size(); i++) {
                     var pu = preunits.get(i);
                     if (pu.creator() == conf.pid()) {
-                        log.debug("Self created: {} on: {}", pu, conf.pid());
+                        log.debug("Self created: {} on: {}", pu, conf.logLabel());
                         continue;
                     }
                     if (pu.creator() >= conf.nProc()) {
-                        log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.pid());
+                        log.debug("Invalid creator: {} > {} on: {}", pu, conf.nProc() - 1, conf.logLabel());
                         errors.put(pu.hash(), Correctness.DATA_ERROR);
                         failed.set(i, true);
                     }
                     if (alreadyInDag.get(i) != null) {
                         Correctness check = checkCorrectness(pu);
                         if (check != Correctness.CORRECT) {
-                            log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.pid());
+                            log.debug("Failed correctness check: {} : {} on: {}", pu, check, conf.logLabel());
                             errors.put(pu.hash(), check);
                             failed.set(i, true);
                         } else {
-                            log.trace("Duplicate unit: {} on: {}", pu, conf.pid());
+                            log.trace("Duplicate unit: {} on: {}", pu, conf.logLabel());
                             errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
                             failed.set(i, true);
                         }
@@ -135,7 +136,7 @@ public interface Adder {
 
         @Override
         public void close() {
-            log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.pid());
+            log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
         }
 
         @Override
@@ -149,12 +150,12 @@ public interface Adder {
         // addPreunit as a waitingPreunit to the buffer zone.
         private void addToWaiting(PreUnit pu) {
             if (waiting.containsKey(pu.hash())) {
-                log.trace("Already waiting unit: {} on: {}", pu, conf.pid());
+                log.trace("Already waiting unit: {} on: {}", pu, conf.logLabel());
                 return;
             }
             var id = pu.id();
             if (waitingById.get(id) != null) {
-                throw new IllegalStateException("Fork in the road"); // fork! TODO
+                throw new IllegalStateException("Fork in the road on: " + conf.logLabel()); // fork! TODO
             }
             var wp = new WaitingPreUnit(pu);
             waiting.put(pu.hash(), wp);
@@ -163,10 +164,10 @@ public interface Adder {
             checkIfMissing(wp);
             var current = wp.missingParents;
             if (current > 0) {
-                log.trace("missing parents: {} for: {} on: {}", current, wp, conf.pid());
+                log.trace("missing parents: {} for: {} on: {}", current, wp, conf.logLabel());
                 return;
             }
-            log.trace("Unit now waiting: {} on: {}", pu, conf.pid());
+            log.trace("Unit now waiting: {} on: {}", pu, conf.logLabel());
             sendIfReady(wp);
         }
 
@@ -176,7 +177,7 @@ public interface Adder {
             }
             if (pu.epoch() != dag.epoch()) {
                 log.error("Invalid epoch: {} expected: {}, but received: {} on: {}", pu, dag.epoch(), pu.epoch(),
-                          conf.pid());
+                          conf.logLabel());
                 return Correctness.DATA_ERROR;
             }
             return Correctness.CORRECT;
@@ -187,7 +188,7 @@ public interface Adder {
          * waitingPreunit, depending on if it was missing
          */
         private void checkIfMissing(WaitingPreUnit wp) {
-            log.trace("Checking if missing: {} on: {}", wp, conf.pid());
+            log.trace("Checking if missing: {} on: {}", wp, conf.logLabel());
             var mp = missing.get(wp.pu.id());
             if (mp != null) {
                 wp.children.clear();
@@ -197,7 +198,7 @@ public interface Adder {
                     ch.missingParents = missingParents - 1;
                     final var waitingParents = ch.waitingParents;
                     ch.waitingParents = waitingParents + 1;
-                    log.trace("Found parent {} for: {} on: {}", wp, ch, conf.pid());
+                    log.trace("Found parent {} for: {} on: {}", wp, ch, conf.logLabel());
                 }
                 missing.remove(wp.pu.id());
             } else {
@@ -234,7 +235,7 @@ public interface Adder {
         }
 
         private void handleInvalidControlHash(PreUnit witness, Unit[] parents) {
-            log.debug("Invalid control hash witness: {} parents: {} on: {}", witness, parents, conf.pid());
+            log.debug("Invalid control hash witness: {} parents: {} on: {}", witness, parents, conf.logLabel());
             var ids = new ArrayList<Long>();
             short pid = 0;
             for (var height : witness.view().heights()) {
@@ -246,7 +247,7 @@ public interface Adder {
         // The waiting pre unit is ready to be added to ye DAG, may fail if parents
         // don't check out
         private void handleReady(WaitingPreUnit wp) {
-            log.debug("Handle ready: {} on: {}", wp, conf.pid());
+            log.debug("Handle ready: {} on: {}", wp, conf.logLabel());
             mtx.lock();
             try {
                 // 1. Decode Parents
@@ -258,7 +259,7 @@ public interface Adder {
                 }
                 var digests = Stream.of(parents)
                                     .map(e -> e == null ? (Digest) null : e.hash())
-                                    .map(e -> (Digest) e)
+                                    .map(e -> e)
                                     .toList();
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
                 if (!calculated.equals(wp.pu.view().controlHash())) {
@@ -273,11 +274,11 @@ public interface Adder {
                 // 3. Check
                 var err = dag.check(freeUnit);
                 if (err != null) {
-                    log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.pid());
+                    log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.logLabel());
                 } else {
                     // 4. Insert
                     dag.insert(freeUnit);
-                    log.debug("Inserted: {} on: {}", freeUnit, conf.pid());
+                    log.debug("Inserted: {} on: {}", freeUnit, conf.logLabel());
                 }
             } finally {
                 try {
@@ -294,7 +295,7 @@ public interface Adder {
          */
         private void registerMissing(long id, WaitingPreUnit wp) {
             missing.computeIfAbsent(id, i -> new MissingPreUnit(conf.clock().instant())).neededBy.add(wp);
-            log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.pid());
+            log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.logLabel());
         }
 
         /** remove waitingPreunit from the buffer zone and notify its children. */
@@ -327,11 +328,11 @@ public interface Adder {
 
         private void sendIfReady(WaitingPreUnit ch) {
             if (ch.parentsOutput()) {
-                log.trace("Sending unit for processing: {} on: {}", ch, conf.pid());
+                log.trace("Sending unit for processing: {} on: {}", ch, conf.logLabel());
                 try {
                     handleReady(ch);
                 } catch (Throwable t) {
-                    log.error("Unable to handle: {} on: {}", ch.pu, conf.pid(), t);
+                    log.error("Unable to handle: {} on: {}", ch.pu, conf.logLabel(), t);
                 }
             }
         }

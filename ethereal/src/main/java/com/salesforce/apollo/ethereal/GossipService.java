@@ -52,7 +52,7 @@ public class GossipService {
     }
 
     public Gossip gossip(Digest context, int ring) {
-        log.trace("Gossiping for: {} on: {}", context, orderer.getConfig().pid());
+        log.trace("Gossiping for: {} on: {}", context, orderer.getConfig().logLabel());
         mx.lock();
         try {
             return Gossip.newBuilder()
@@ -68,7 +68,7 @@ public class GossipService {
     public Update gossip(Gossip gossip) {
         Update.Builder update = orderer.missing(BloomFilter.from(gossip.getHave()));
         log.trace("GossipService received for: {} missing: {} on: {}", Digest.from(gossip.getContext()),
-                  update.getMissingCount(), orderer.getConfig().pid());
+                  update.getMissingCount(), orderer.getConfig().logLabel());
         return update.setHave(biffs.get(Utils.bitStreamEntropy().nextInt(biffs.size())).toBff()).build();
     }
 
@@ -81,7 +81,7 @@ public class GossipService {
         if (missing.isEmpty()) {
             return;
         }
-        log.trace("GossipService update: {} on: {}", missing.size(), orderer.getConfig().pid());
+        log.trace("GossipService update: {} on: {}", missing.size(), orderer.getConfig().logLabel());
         mx.lock();
         try {
             missing.forEach(pu -> {

@@ -6,7 +6,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>demo</artifactId>
-    <name>Demo: RBAC + Identity + Key Management</name>
+    <name>Demo: ReBAC + Identity + Key Management</name>
 
     <dependencies>
         <dependency>

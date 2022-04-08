@@ -29,7 +29,7 @@ public class ProviderUtils {
         PROVIDER_JSSE = Security.getProvider(PROVIDER_NAME_BCJSSE);
     }
 
-    public static Provider getProviderBC() { 
+    public static Provider getProviderBC() {
         if (!initialized.get()) {
             throw new IllegalStateException("Provider has not been initialized");
         }
@@ -55,10 +55,6 @@ public class ProviderUtils {
         // TODO Use new constructor when available
 //        return new BouncyCastleJsseProvider(fips);
         return new BouncyCastleJsseProvider(fips, new JcaTlsCryptoProvider());
-    }
-
-    static Provider createProviderBCJSSE(boolean fips, Provider bc) {
-        return new BouncyCastleJsseProvider(fips, bc);
     }
 
     static Provider createProviderBCJSSE(Provider bc) {
@@ -114,8 +110,6 @@ public class ProviderUtils {
     }
 
     static void setup(boolean bcPriority, boolean bcjssePriority, boolean fips) {
-        String javaVersion = System.getProperty("java.version");
-        boolean oldJDK = javaVersion.startsWith("1.5") || javaVersion.startsWith("1.6");
 
         Provider bc = getProviderBC();
         Provider bcjsse = getProviderBCJSSE();
@@ -130,7 +124,7 @@ public class ProviderUtils {
             removeProviderBCJSSE();
         }
         if (!isProviderBCJSSE(bcjsse, fips)) {
-            bcjsse = oldJDK ? createProviderBCJSSE(fips, bc) : createProviderBCJSSE(fips);
+            bcjsse = createProviderBCJSSE(fips);
         }
 
         if (bcPriority) {

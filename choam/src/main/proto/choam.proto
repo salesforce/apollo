@@ -4,17 +4,16 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.choam.proto";
 option java_outer_classname = "ChoamProto";
 option objc_class_prefix = "Chp";
-import "google/protobuf/any.proto";
-import "google/protobuf/empty.proto";
-import "google/protobuf/timestamp.proto";
 import "util.proto";
 import "stereotomy.proto";
 
 package apollo.choam;
 
-service Terminal {
+service TransactionSubmission {
     rpc submit (SubmitTransaction) returns (SubmitResult) {}
+}
 
+service Terminal {
     /* reconfiguration */
     rpc join (JoinRequest) returns (ViewMember) {}
 
@@ -36,8 +35,18 @@ message SubmitTransaction {
 }
 
 message SubmitResult {
-    bool success = 1;
-    string status = 2;
+    enum Result {
+        INVALID_RESULT = 0;
+        PUBLISHED = 1;
+        BUFFER_FULL = 2;
+        INACTIVE = 3;
+        NO_COMMITTEE = 4;
+        UNAVAILABLE = 6;
+        INVALID_SUBMIT = 7;
+        ERROR_SUBMITTING = 8;
+    }
+    Result result = 1;
+    string errorMsg = 2;
 }
 
 message Block {

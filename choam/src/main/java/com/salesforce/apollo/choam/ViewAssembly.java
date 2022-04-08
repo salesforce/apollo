@@ -130,10 +130,15 @@ public class ViewAssembly implements Reconfiguration {
             pid++;
         }
         config.setPid(pid).setnProc((short) view.roster().size());
-        config.setEpochLength(7).setNumberOfEpochs(epochs());
+        config.setEpochLength(3).setNumberOfEpochs(3);
+        config.setLabel("View Recon" + nextViewId + " on: " + params().member().getId());
         controller = new Ethereal().deterministic(config.build(), dataSource(),
-                                                  (preblock, last) -> process(preblock, last),
-                                                  epoch -> transitions.nextEpoch(epoch));
+                                                  (preblock, last) -> process(preblock, last), epoch -> {
+                                                      log.trace("Next epoch: {} state: {} on: {}", epoch,
+                                                                transitions.fsm().getCurrentState(),
+                                                                params().member().getId());
+                                                      transitions.nextEpoch(epoch);
+                                                  });
 
         coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
                                           params().exec(),
@@ -141,13 +146,14 @@ public class ViewAssembly implements Reconfiguration {
                                                                      : params().metrics().getReconfigureMetrics());
 
         log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
-                  nextViewId, reContext.getId(), nextAssembly.keySet(), params().member());
+                  nextViewId, reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
 
     @Override
     public void certify() {
         ds = new OneShot();
-        log.debug("Certifying Join proposals of: {} count: {} on: {}", nextViewId, proposals.size(), params().member());
+        log.debug("Certifying Join proposals of: {} count: {} state: {} on: {}", nextViewId, proposals.size(),
+                  transitions.fsm().getCurrentState(), params().member());
         ds.setValue(Reassemble.newBuilder()
                               .setValidations(Validations.newBuilder()
                                                          .addAllValidations(proposals.values().stream().map(p -> {
@@ -159,7 +165,9 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void complete() {
-        log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(), params().member());
+        log.debug("View Assembly: {} completed with: {} members state: {} on: {}", nextViewId, slate.size(),
+                  transitions.fsm().getCurrentState(), params().member().getId());
+        transitions.complete();
     }
 
     @Override
@@ -170,22 +178,27 @@ public class ViewAssembly implements Reconfiguration {
                  .sorted(Comparator.comparing(p -> p.member.getId()))
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
         if (slate.size() > params().toleranceLevel()) {
-            log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+            log.debug("Electing slate: {} of: {} state: {} on: {}", slate.size(), nextViewId,
+                      transitions.fsm().getCurrentState(), params().member());
             transitions.complete();
         } else {
-            log.debug("Failed to elect slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+            log.debug("Failed to elect slate: {} of: {} state: {} on: {}", slate.size(), nextViewId,
+                      transitions.fsm().getCurrentState(), params().member().getId());
             transitions.failed();
         }
     }
 
     @Override
     public void failed() {
+        log.error("Failed view assembly for: {} state: {} on: {}", nextViewId, transitions.fsm().getCurrentState(),
+                  params().member());
         stop();
     }
 
     @Override
     public void gather() {
-        log.trace("Gathering assembly for: {} on: {}", nextViewId, params().member());
+        log.trace("Gathering assembly for: {} state: {} on: {}", nextViewId, transitions.fsm().getCurrentState(),
+                  params().member());
         JoinRequest request = JoinRequest.newBuilder()
                                          .setContext(params().context().getId().toDigeste())
                                          .setNextView(nextViewId.toDigeste())
@@ -198,7 +211,8 @@ public class ViewAssembly implements Reconfiguration {
             if (proposals.containsKey(m.getId())) {
                 return null;
             }
-            log.trace("Requesting Join from: {} on: {}", term.getMember().getId(), params().member());
+            log.trace("Requesting Join from: {} state: {} on: {}", term.getMember().getId(),
+                      transitions.fsm().getCurrentState(), params().member().getId());
             return term.join(request);
         }, (futureSailor, term, m) -> consider(futureSailor, term, m, proceed),
                                               () -> completeSlice(retryDelay, proceed, reiterate, countDown)));
@@ -212,8 +226,9 @@ public class ViewAssembly implements Reconfiguration {
 
     @Override
     public void nominate() {
-        log.debug("Nominating proposal for: {} members: {} on: {}", nextViewId,
-                  proposals.values().stream().map(p -> p.member.getId()).toList(), params().member());
+        log.debug("Nominating proposal for: {} members: {} state: {} on: {}", nextViewId,
+                  proposals.values().stream().map(p -> p.member.getId()).toList(), transitions.fsm().getCurrentState(),
+                  params().member().getId());
         ds.setValue(Reassemble.newBuilder()
                               .setViewMembers(ViewMembers.newBuilder()
                                                          .addAllMembers(proposals.values()
@@ -242,7 +257,8 @@ public class ViewAssembly implements Reconfiguration {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Stopping view assembly: {} on: {}", nextViewId, params().member());
+        log.trace("Stopping view assembly: {} state: {} on: {}", nextViewId, transitions.fsm().getCurrentState(),
+                  params().member());
         coordinator.stop();
         controller.stop();
         final var cur = blockingThread;
@@ -250,10 +266,6 @@ public class ViewAssembly implements Reconfiguration {
         if (cur != null) {
             cur.interrupt();
         }
-    }
-
-    protected int epochs() {
-        return 3;
     }
 
     protected Reconfigure getStartState() {
@@ -264,27 +276,32 @@ public class ViewAssembly implements Reconfiguration {
         final var cid = Digest.from(v.getWitness().getId());
         var certifier = view.context().getMember(cid);
         if (certifier == null) {
-            log.warn("Unknown certifier: {} on: {}", cid, params().member());
+            log.warn("Unknown certifier: {} state: {} on: {}", cid, transitions.fsm().getCurrentState(),
+                     params().member());
             return; // do not have the join yet
         }
         final var hash = Digest.from(v.getHash());
         final var member = nextAssembly.get(hash);
         if (member == null) {
+            log.warn("Unknown validation member: {} state: {} on: {}", hash, transitions.fsm().getCurrentState(),
+                     params().member());
             return;
         }
         var proposed = proposals.get(hash);
         if (proposed == null) {
-            log.warn("Invalid certification, unknown view join: {} on: {}", hash, params().member());
+            log.warn("Invalid certification, unknown view join: {} state: {} on: {}", hash,
+                     transitions.fsm().getCurrentState(), params().member().getId());
             return; // do not have the join yet
         }
         if (!view.validate(proposed.vm, v)) {
-            log.warn("Invalid cetification for view join: {} from: {} on: {}", hash,
-                     Digest.from(v.getWitness().getId()), params().member());
+            log.warn("Invalid cetification for view join: {} state: {} from: {} on: {}", hash,
+                     Digest.from(v.getWitness().getId()), transitions.fsm().getCurrentState(),
+                     params().member().getId());
             return;
         }
         proposed.validations.put(certifier, v);
-        log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), hash,
-                  certifier.getId(), params().member());
+        log.debug("Validation of view member: {}:{} using certifier: {} state: {} on: {}", member.getId(), hash,
+                  certifier.getId(), transitions.fsm().getCurrentState(), params().member().getId());
     }
 
     void assembled() {
@@ -296,7 +313,8 @@ public class ViewAssembly implements Reconfiguration {
         final var count = proposals.size();
         if (count == nextAssembly.size()) {
             proceed.set(false);
-            log.trace("Proposal assembled: {} on: {}", nextViewId, params().member());
+            log.trace("Proposal assembled: {} state: {} on: {}", nextViewId, transitions.fsm().getCurrentState(),
+                      params().member().getId());
             transitions.gathered();
             return;
         }
@@ -308,21 +326,23 @@ public class ViewAssembly implements Reconfiguration {
 
         if (count > params().toleranceLevel()) {
             if (countDown.decrementAndGet() >= 0) {
-                log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} on: {}", nextViewId,
-                          proposals.keySet().stream().toList(), nextAssembly.size(), params().member());
+                log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} delay: {} state: {} on: {}",
+                          nextViewId, proposals.keySet().stream().toList(), nextAssembly.size(), delay,
+                          transitions.fsm().getCurrentState(), params().member().getId());
                 proceed.set(true);
                 params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);
                 return;
             }
             proceed.set(false);
-            log.trace("Proposal assembled: {} gathered: {} out of: {} on: {}", nextViewId, count, nextAssembly.size(),
-                      params().member());
+            log.trace("Proposal assembled: {} gathered: {} out of: {} state: {} on: {}", nextViewId, count,
+                      nextAssembly.size(), transitions.fsm().getCurrentState(), params().member().getId());
             transitions.gathered();
             return;
         }
 
-        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying on: {}", nextViewId,
-                  proposals.keySet().stream().toList(), params().toleranceLevel() + 1, params().member());
+        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying: {} state: {} on: {}", nextViewId,
+                  proposals.keySet().stream().toList(), params().toleranceLevel() + 1, delay,
+                  transitions.fsm().getCurrentState(), params().member().getId());
         proceed.set(true);
         params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -335,31 +355,38 @@ public class ViewAssembly implements Reconfiguration {
         ViewMember member;
         try {
             member = futureSailor.get().get();
-            log.debug("Join reply from: {} on: {}", term.getMember().getId(), params().member().getId());
+            log.debug("Join reply from: {} state: {} on: {}", term.getMember().getId(),
+                      transitions.fsm().getCurrentState(), params().member().getId());
         } catch (InterruptedException e) {
-            log.debug("Error join response from: {} on: {}", term.getMember().getId(), params().member().getId(), e);
+            log.debug("Error join response from: {} state: {} on: {}", term.getMember().getId(),
+                      transitions.fsm().getCurrentState(), params().member().getId(), e);
             return proceed.get();
         } catch (ExecutionException e) {
             var cause = e.getCause();
             if (cause instanceof StatusRuntimeException sre) {
                 if (!sre.getStatus().getCode().equals(Status.UNAVAILABLE.getCode())) {
-                    log.debug("Error join response from: {} on: {}", term.getMember().getId(),
-                              params().member().getId(), sre);
+                    log.debug("Error join response from: {} state: {} on: {}", term.getMember().getId(),
+                              transitions.fsm().getCurrentState(), params().member().getId(), sre);
                 }
+            } else {
+                log.trace("Error join response from: {} state: {} on: {}", term.getMember().getId(),
+                          transitions.fsm().getCurrentState(), params().member().getId(), e.getCause());
             }
             return proceed.get();
         }
         if (member.equals(ViewMember.getDefaultInstance())) {
-            log.debug("Empty join response from: {} on: {}", term.getMember().getId(), params().member().getId());
+            log.debug("Empty join response from: {} state: {} on: {}", term.getMember().getId(),
+                      transitions.fsm().getCurrentState(), params().member().getId());
             return proceed.get();
         }
         var vm = new Digest(member.getId());
         if (!m.getId().equals(vm)) {
-            log.debug("Invalid join response from: {} expected: {} on: {}", term.getMember().getId(), vm,
-                      params().member().getId());
+            log.debug("Invalid join response from: {} expected: {} state: {} on: {}", term.getMember().getId(), vm,
+                      transitions.fsm().getCurrentState(), params().member().getId());
             return proceed.get();
         }
-        log.debug("Adding delegate to: {} from: {} on: {}", getViewId(), term.getMember().getId(), params().member());
+        log.debug("Adding delegate to: {} from: {} state: {} on: {}", getViewId(), term.getMember().getId(),
+                  transitions.fsm().getCurrentState(), params().member().getId());
         join(member);
 
         return proceed.get();
@@ -374,7 +401,11 @@ public class ViewAssembly implements Reconfiguration {
                 }
                 try {
                     blockingThread = Thread.currentThread();
+                    log.trace("Waiting for data state: {} on: {}", transitions.fsm().getCurrentState(),
+                              params().member().getId());
                     final var take = ds.get();
+                    log.trace("Data received: {}, state: {} proceeding on: {}", take.size(),
+                              transitions.fsm().getCurrentState(), params().member().getId());
                     return take;
                 } finally {
                     blockingThread = null;
@@ -392,8 +423,8 @@ public class ViewAssembly implements Reconfiguration {
         final var m = nextAssembly.get(mid);
         if (m == null) {
             if (log.isTraceEnabled()) {
-                log.trace("Invalid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                          params().member());
+                log.trace("Invalid view member: {} state: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                          transitions.fsm().getCurrentState(), params().member().getId());
             }
             return;
         }
@@ -402,8 +433,9 @@ public class ViewAssembly implements Reconfiguration {
 
         if (!m.verify(signature(vm.getSignature()), encoded.toByteString())) {
             if (log.isTraceEnabled()) {
-                log.trace("Could not verify consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+                log.trace("Could not verify consensus key from view member: {} state: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), transitions.fsm().getCurrentState(),
+                          params().member().getId());
             }
             return;
         }
@@ -411,14 +443,15 @@ public class ViewAssembly implements Reconfiguration {
         PublicKey consensusKey = publicKey(encoded);
         if (consensusKey == null) {
             if (log.isTraceEnabled()) {
-                log.trace("Could not deserialize consensus key from view member: {} on: {}",
-                          ViewContext.print(vm, params().digestAlgorithm()), params().member());
+                log.trace("Could not deserialize consensus key from view member: {} state: {} on: {}",
+                          ViewContext.print(vm, params().digestAlgorithm()), transitions.fsm().getCurrentState(),
+                          params().member().getId());
             }
             return;
         }
         if (log.isTraceEnabled()) {
-            log.trace("Valid view member: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
-                      params().member());
+            log.trace("Valid view member: {} state: {} on: {}", ViewContext.print(vm, params().digestAlgorithm()),
+                      transitions.fsm().getCurrentState(), params().member().getId());
         }
         proposals.computeIfAbsent(mid, k -> new Proposed(vm, m, new ConcurrentHashMap<>()));
     }
@@ -437,11 +470,15 @@ public class ViewAssembly implements Reconfiguration {
     }
 
     private void process(PreBlock preblock, boolean last) {
+        log.trace("Preblock last: {} state: {} on: {}", last, transitions.fsm().getCurrentState(),
+                  params().member().getId());
         preblock.data().stream().map(e -> {
             try {
-                return Reassemble.parseFrom(e);
+                final var parseFrom = Reassemble.parseFrom(e);
+                return parseFrom;
             } catch (InvalidProtocolBufferException ex) {
-                log.trace("Error parsing Reassemble on: {}", params().member());
+                log.trace("Error parsing Reassemble state: {} on: {}", transitions.fsm().getCurrentState(),
+                          params().member().getId());
                 return (Reassemble) null;
             }
         }).filter(e -> e != null).forEach(re -> process(re));
@@ -452,7 +489,8 @@ public class ViewAssembly implements Reconfiguration {
 
     private void process(Reassemble re) {
         if (re.getAssemblyCase() != AssemblyCase.ASSEMBLY_NOT_SET) {
-            log.trace("Processing: {} on: {}", re.getAssemblyCase(), params().member());
+            log.trace("Processing: {} state: {} on: {}", re.getAssemblyCase(), transitions.fsm().getCurrentState(),
+                      params().member().getId());
         }
         switch (re.getAssemblyCase()) {
         case VALIDATIONS:

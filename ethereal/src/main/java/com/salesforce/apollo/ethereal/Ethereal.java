@@ -144,6 +144,7 @@ public class Ethereal {
         if (consensus == null) {
             throw new IllegalStateException("Error occurred initializing consensus");
         }
+//        System.out.println("Controller config: " + config);
         return new Controller(consensus.starte, consensus.stope, consensus.orderer);
     }
 
@@ -188,7 +189,7 @@ public class Ethereal {
         Consumer<List<Unit>> makePreblock = units -> {
             PreBlock preBlock = toPreBlock(units);
             if (preBlock != null) {
-                log.debug("Emitting pre block: {} on: {}");
+                log.debug("Emitting pre block on: {}", config.logLabel());
                 preblockSink.accept(preBlock);
             }
             var timingUnit = units.get(units.size() - 1);
@@ -208,7 +209,7 @@ public class Ethereal {
                 try {
                     wtkey = wtkChan.exchange(null);
                 } catch (InterruptedException e) {
-                    throw new IllegalStateException("Unable to exchange wtk", e);
+                    throw new IllegalStateException("Unable to exchange wtk on: " + config.logLabel(), e);
                 }
                 logWTK(wtkey);
                 var orderer = new Orderer(Config.builderFrom(config).setWtk(wtkey).build(), ds, makePreblock,
@@ -221,7 +222,7 @@ public class Ethereal {
         };
         Runnable stop = () -> {
             if (!Utils.waitForCondition(10, () -> started.get())) {
-                log.trace("Waited 10ms for start and unsuccessful, proceeding");
+                log.trace("Waited 10ms for start and unsuccessful, proceeding on: " + config.logLabel());
             }
             Orderer orderer = ord.get();
             if (orderer != null) {
@@ -234,21 +235,21 @@ public class Ethereal {
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
                                               Consumer<Integer> newEpochAction) {
         Consumer<List<Unit>> makePreblock = units -> {
-            log.trace("Make pre block: {} on: {}", units, config.pid());
+            log.trace("Make pre block: {} on: {}", units, config.logLabel());
             PreBlock preBlock = toPreBlock(units);
             var timingUnit = units.get(units.size() - 1);
             var last = false;
             if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
                 log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
-                          config.pid());
+                          config.logLabel());
                 last = true;
             }
             if (preBlock != null) {
-                log.debug("Emitting pre block: {} on: {}", units, config.pid());
+                log.debug("Emitting pre block: {} on: {}", units, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
-                    log.error("Error consuming pre block: {} on: {}", units, config.pid(), t);
+                    log.error("Error consuming pre block: {} on: {}", units, config.logLabel(), t);
                 }
             }
         };
@@ -256,12 +257,12 @@ public class Ethereal {
         var orderer = new Orderer(config, ds, makePreblock, newEpochAction, new DsrFactory(config.digestAlgorithm()));
 
         Runnable start = () -> {
-            log.debug("Starting Ethereal on: {}", config.pid());
+            log.debug("Starting Ethereal on: {}", config.logLabel());
             started.set(true);
             orderer.start();
         };
         Runnable stop = () -> {
-            log.debug("Stopping Ethereal on: {}", config.pid());
+            log.debug("Stopping Ethereal on: {}", config.logLabel());
             started.set(false);
             orderer.stop();
         };
@@ -273,7 +274,8 @@ public class Ethereal {
         for (var provider : wtkey.shareProviders().keySet()) {
             providers.add(provider);
         }
-        log.info("Global Weak Threshold Key threshold: {} share providers: {}", wtkey.threshold(), providers);
+        log.info("Global Weak Threshold Key threshold: {} share providers: {} on: {}", wtkey.threshold(), providers,
+                 config.logLabel());
     }
 
     private Controller setup(Config conf, Exchanger<WeakThresholdKey> wtkChan) {
@@ -284,10 +286,11 @@ public class Ethereal {
                 try {
                     wtkChan.exchange(rsf.getWTK(head.creator()));
                 } catch (InterruptedException e) {
-                    throw new IllegalStateException("Error publishing weak threshold key downstream", e);
+                    throw new IllegalStateException("Error publishing weak threshold key downstream on: "
+                    + conf.logLabel(), e);
                 }
             } else {
-                throw new IllegalStateException("Setup phase: wrong level");
+                throw new IllegalStateException("Setup phase: wrong level on: " + conf.logLabel());
             }
         };
 

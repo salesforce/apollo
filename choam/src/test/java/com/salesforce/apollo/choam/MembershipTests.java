@@ -92,8 +92,8 @@ public class MembershipTests {
         assertTrue(Utils.waitForCondition(120_00, 1000, () -> txneer.active()), "Transactioneer did not become active");
 
         final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getSession(), timeout, 1, scheduler, countdown,
-                                                Executors.newSingleThreadExecutor());
+        var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
+                                                scheduler, countdown, Executors.newSingleThreadExecutor());
 
         transactioneer.start();
         assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");

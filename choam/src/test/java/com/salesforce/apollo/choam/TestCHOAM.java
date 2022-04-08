@@ -20,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -63,16 +62,13 @@ public class TestCHOAM {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
     }
-    protected CompletableFuture<Boolean>   checkpointOccurred;
-    private Map<Digest, AtomicInteger>     blocks;
-    private Map<Digest, CHOAM>             choams;
-    private ExecutorService                exec;
-    private List<SigningMember>            members;
-    private MetricRegistry                 registry;
-    private Map<Digest, Router>            routers;
-    private Map<Digest, List<Transaction>> transactions;
-    private ExecutorService                txExecutor;
-    private ScheduledExecutorService       txScheduler;;
+    protected CompletableFuture<Boolean> checkpointOccurred;
+    private Map<Digest, AtomicInteger>   blocks;
+    private Map<Digest, CHOAM>           choams;
+    private ExecutorService              exec;
+    private List<SigningMember>          members;
+    private MetricRegistry               registry;
+    private Map<Digest, Router>          routers;
 
     @AfterEach
     public void after() throws Exception {
@@ -89,26 +85,15 @@ public class TestCHOAM {
         if (exec != null) {
             exec.shutdown();
         }
-        if (txScheduler != null) {
-            txScheduler.shutdown();
-        }
-        if (txExecutor != null) {
-            txExecutor.shutdown();
-        }
         exec = null;
-        txScheduler = null;
-        txExecutor = null;
     }
 
     @BeforeEach
     public void before() {
         exec = Executors.newFixedThreadPool(CARDINALITY);
-        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        txExecutor = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
-        transactions = new ConcurrentHashMap<>();
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
@@ -119,8 +104,8 @@ public class TestCHOAM {
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
-                                                              .setMaxBatchCount(10_000)
-                                                              .setMaxBatchByteSize(10 * 1024 * 1024)
+                                                              .setMaxBatchCount(15_000)
+                                                              .setMaxBatchByteSize(200 * 1024 * 1024)
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
@@ -149,15 +134,9 @@ public class TestCHOAM {
             blocks.put(m.getId(), recording);
             final TransactionExecutor processor = new TransactionExecutor() {
 
-                @Override
-                public void endBlock(ULong height, Digest hash) {
-                    recording.incrementAndGet();
-                }
-
                 @SuppressWarnings({ "unchecked", "rawtypes" })
                 @Override
                 public void execute(int index, Digest hash, Transaction t, CompletableFuture f) {
-                    transactions.computeIfAbsent(m.getId(), d -> new ArrayList<>()).add(t);
                     if (f != null) {
                         f.complete(new Object());
                     }
@@ -182,36 +161,43 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final var timeout = Duration.ofSeconds(2);
+        final var timeout = Duration.ofSeconds(3);
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 5_000 : 50;
-        final var max = LARGE_TESTS ? 100 : 10;
+        final var max = LARGE_TESTS ? 500 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
-        for (int i = 0; i < clientCount; i++) {
-            choams.values().stream().map(c -> {
-                return new Transactioneer(c.getSession(), timeout, max, txScheduler, countdown, txExecutor);
-            }).forEach(e -> transactioneers.add(e));
-        }
+
+        choams.values().forEach(c -> {
+            final var txnCompletion = Executors.newFixedThreadPool(2);
+            final var txnExecutor = Executors.newFixedThreadPool(1);
+            final var txScheduler = Executors.newScheduledThreadPool(1);
+            for (int i = 0; i < clientCount; i++) {
+                transactioneers.add(new Transactioneer(c.getSession(), txnCompletion, timeout, max, txScheduler,
+                                                       countdown, txnExecutor));
+            }
+        });
 
         assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
                    "System did not become active");
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            countdown.await(60, TimeUnit.SECONDS);
+            final var complete = countdown.await(600, TimeUnit.SECONDS);
+            assertTrue(complete, "All clients did not complete: "
+            + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {
             routers.values().forEach(e -> e.close());
             choams.values().forEach(e -> e.stop());
-            System.out.println();
-
-            ConsoleReporter.forRegistry(registry)
-                           .convertRatesTo(TimeUnit.SECONDS)
-                           .convertDurationsTo(TimeUnit.MILLISECONDS)
-                           .build()
-                           .report();
         }
         assertTrue(checkpointOccurred.get());
+        System.out.println();
+
+        ConsoleReporter.forRegistry(registry)
+                       .convertRatesTo(TimeUnit.SECONDS)
+                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+                       .build()
+                       .report();
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {

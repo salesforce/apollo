@@ -15,12 +15,11 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import com.salesfoce.apollo.choam.proto.Certification;
 import com.salesfoce.apollo.choam.proto.JoinRequest;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.SubmitTransaction;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.ViewMember;
@@ -33,8 +32,6 @@ import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
-
-import io.grpc.Status;
 
 /**
  * @author hal.hildebrand
@@ -102,19 +99,12 @@ public interface Committee {
 
     default SubmitResult submit(SubmitTransaction request) {
         log().debug("Cannot submit txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
-        return SubmitResult.newBuilder()
-                           .setSuccess(false)
-                           .setStatus("Cannot submit txn, inactive committee: " + getClass().getSimpleName() + " on: "
-                           + params().member())
-                           .build();
+        return SubmitResult.newBuilder().setResult(Result.INACTIVE).build();
     }
 
-    default ListenableFuture<Status> submitTxn(Transaction transaction) {
+    default SubmitResult submitTxn(Transaction transaction) {
         log().debug("Cannot process txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
-        SettableFuture<Status> f = SettableFuture.create();
-        f.set(Status.UNAVAILABLE.withDescription("Cannot process txn, inactive committee: " + getClass().getSimpleName()
-        + "on: " + params().member()));
-        return f;
+        return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
     }
 
     boolean validate(HashedCertifiedBlock hb);

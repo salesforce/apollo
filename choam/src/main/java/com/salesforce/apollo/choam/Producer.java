@@ -24,6 +24,7 @@ import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
 import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.SubmitResult;
+import com.salesfoce.apollo.choam.proto.SubmitResult.Result;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
@@ -74,9 +75,6 @@ public class Producer {
         @Override
         public void checkAssembly() {
             ds.validationsOnly();
-            if (ds.getRemaining() > 0) {
-                log.info("Assembling with: {} dropped batches on: {}", ds.getRemaining(), params().member());
-            }
             if (assembled.get()) {
                 assembled();
             }
@@ -126,11 +124,11 @@ public class Producer {
             assembly = new ViewAssembly(nextViewId, view, comms) {
                 @Override
                 public void complete() {
-                    super.complete();
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
                               params().member());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
+                    super.complete();
                 }
             };
             assembly.start();
@@ -200,12 +198,12 @@ public class Producer {
             config.setPid(pid).setnProc((short) view.roster().size());
         }
 
+        config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
                                                   epoch -> newEpoch(epoch));
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
-                                          params().exec(),
-                                          producerMetrics);
+                                          params().exec(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 
@@ -250,14 +248,11 @@ public class Producer {
         if (ds.offer(transaction)) {
             log.trace("Successful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                       params().member());
-            return SubmitResult.newBuilder().setSuccess(true).setStatus("OK").build();
+            return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         } else {
             log.trace("Unsuccessful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
                       params().member());
-            return SubmitResult.newBuilder()
-                               .setSuccess(false)
-                               .setStatus("Transaction buffer full on: " + params().member().getId())
-                               .build();
+            return SubmitResult.newBuilder().setResult(Result.BUFFER_FULL).build();
         }
     }
 

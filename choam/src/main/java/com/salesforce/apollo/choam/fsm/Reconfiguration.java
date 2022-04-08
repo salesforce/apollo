@@ -36,17 +36,9 @@ public interface Reconfiguration {
         default Transitions nextEpoch(int epoch) {
             throw fsm().invalidTransitionOn();
         }
-
-        default Transitions reconfigureBlock() {
-            throw fsm().invalidTransitionOn();
-        }
     }
 
     void certify();
-
-    default void certifyBlock() {
-        // do nothing
-    }
 
     void complete();
 
@@ -57,8 +49,4 @@ public interface Reconfiguration {
     void gather();
 
     void nominate();
-
-    default void produceBlock() {
-        // do nothing
-    }
 }
