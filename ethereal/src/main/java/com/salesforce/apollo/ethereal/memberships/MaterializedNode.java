@@ -15,17 +15,17 @@ import com.salesforce.apollo.ethereal.PreUnit;
 
 public class MaterializedNode implements Node {
     private enum State {
-        INITIAL;
+        INITIAL, FAILED;
     }
 
-    private final List<MaterializedNode>   children       = new ArrayList<>();
-    private volatile boolean   failed         = false;
+    private final List<MaterializedNode> children       = new ArrayList<>();
+    private volatile boolean             failed         = false;
     @SuppressWarnings("unused")
-    private final Digest       hash;
-    private volatile int       missingParents = 0;
-    private volatile PreUnit_s pu;
-    private State              state          = State.INITIAL;
-    private volatile int       waitingParents = 0;
+    private final Digest                 hash;
+    private volatile int                 missingParents = 0;
+    private volatile PreUnit_s           pu;
+    private State                        state          = State.INITIAL;
+    private volatile int                 waitingParents = 0;
 
     public MaterializedNode(Digest hash, PreUnit_s pu) {
         this.hash = hash;
@@ -33,15 +33,18 @@ public class MaterializedNode implements Node {
     }
 
     public void fail() {
+        state = State.FAILED;
         failed = true;
         pu = null;
         children.clear();
     }
 
+    @Override
     public boolean failed() {
         return failed;
     }
 
+    @Override
     public PreUnit_s getPu() {
         return pu;
     }
