@@ -38,7 +38,9 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -77,7 +79,7 @@ public class RbcGossiper {
                 return;
             }
             log.debug("gossip update with {} on: {}", from, member);
-            RbcGossiper.this.update(request.getUpdate());
+            RbcGossiper.this.updateFrom(request.getUpdate());
         }
     }
 
@@ -94,7 +96,7 @@ public class RbcGossiper {
     private final AtomicInteger                                   round    = new AtomicInteger();
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started  = new AtomicBoolean();
-    private final Map<Digest, PreUnit_s>                          units    = new ConcurrentHashMap<>();
+    private final Map<Digest, Node>                               units    = new ConcurrentHashMap<>();
 
     public RbcGossiper(Context<Member> context, SigningMember member, Config config, Router communications,
                        Executor exec, EtherealMetrics m) {
@@ -144,6 +146,25 @@ public class RbcGossiper {
         if (current != null) {
             current.cancel(true);
         }
+    }
+
+    public void submit(Unit unit) {
+
+    }
+
+    public void updateFrom(Update update) {
+        update.getMissingList().forEach(u -> {
+            final var signature = JohnHancock.from(u.getSignature());
+            updateUnit(signature.toDigest(config.digestAlgorithm()), u);
+        });
+        update.getMissingCommitsList().forEach(c -> {
+            final var signature = JohnHancock.from(c.getSignature());
+            updateCommit(signature.toDigest(config.digestAlgorithm()), c);
+        });
+        update.getMissingPreVotesList().forEach(pv -> {
+            final var signature = JohnHancock.from(pv.getSignature());
+            updatePreVote(signature.toDigest(config.digestAlgorithm()), pv);
+        });
     }
 
     private Update gossip(Have have) {
@@ -236,11 +257,27 @@ public class RbcGossiper {
         return biff.toBff();
     }
 
+    private void missingCommits(BloomFilter<Digest> have, Update.Builder builder) {
+        commits.entrySet().forEach(e -> {
+            if (!have.contains(e.getKey())) {
+                builder.addMissingCommits(e.getValue());
+            }
+        });
+    }
+
     private Biff havePreVotes() {
         var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
         * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
         preVotes.keySet().forEach(h -> biff.add(h));
         return biff.toBff();
+    }
+
+    private void missingPreVotes(BloomFilter<Object> have, Builder builder) {
+        preVotes.entrySet().forEach(e -> {
+            if (!have.contains(e.getKey())) {
+                builder.addMissingPreVotes(e.getValue());
+            }
+        });
     }
 
     private Biff haveUnits() {
@@ -249,6 +286,12 @@ public class RbcGossiper {
                                          config.fpr());
         units.keySet().forEach(h -> biff.add(h));
         return biff.toBff();
+    }
+
+    private void missingUnits(BloomFilter<Object> have, Builder builder) {
+        units.entrySet().forEach(e -> {
+            e.getValue().missing(pu -> builder.addMissing(pu));
+        });
     }
 
     private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
@@ -261,9 +304,9 @@ public class RbcGossiper {
     }
 
     private void update(Have have, final Builder builder) {
-        updateCommits(BloomFilter.from(have.getHaveCommits()), builder);
-        updatePreVotes(BloomFilter.from(have.getHavePreVotes()), builder);
-        updateUnits(BloomFilter.from(have.getHaveUnits()), builder);
+        missingCommits(BloomFilter.from(have.getHaveCommits()), builder);
+        missingPreVotes(BloomFilter.from(have.getHavePreVotes()), builder);
+        missingUnits(BloomFilter.from(have.getHaveUnits()), builder);
     }
 
     private Update update(Update update) {
@@ -272,27 +315,15 @@ public class RbcGossiper {
         return builder.build();
     }
 
-    private void updateCommits(BloomFilter<Digest> have, Update.Builder builder) {
-        commits.entrySet().forEach(e -> {
-            if (!have.contains(e.getKey())) {
-                builder.addMissingCommits(e.getValue());
-            }
-        });
+    private void updateCommit(Digest digest, SignedCommit c) {
+        commits.computeIfAbsent(digest, h -> c);
     }
 
-    private void updatePreVotes(BloomFilter<Object> have, Builder builder) {
-        preVotes.entrySet().forEach(e -> {
-            if (!have.contains(e.getKey())) {
-                builder.addMissingPreVotes(e.getValue());
-            }
-        });
+    private void updatePreVote(Digest digest, SignedPreVote pv) {
+        preVotes.computeIfAbsent(digest, h -> pv);
     }
 
-    private void updateUnits(BloomFilter<Object> have, Builder builder) {
-        units.entrySet().forEach(e -> {
-            if (!have.contains(e.getKey())) {
-                builder.addMissing(e.getValue());
-            }
-        });
+    private void updateUnit(Digest digest, PreUnit_s u) {
+        units.computeIfAbsent(digest, h -> new MaterializedNode(digest, u));
     }
 }
