@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 import static com.salesforce.apollo.ethereal.SlottedUnits.newSlottedUnits;
 
@@ -236,6 +237,17 @@ public interface Dag {
                 units.entrySet().forEach(e -> {
                     if (!have.contains(e.getKey())) {
                         missing.add(e.getValue().toPreUnit_s());
+                    }
+                });
+            });
+        }
+
+        @Override
+        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing) {
+            read(() -> {
+                units.entrySet().forEach(e -> {
+                    if (!have.contains(e.getKey())) {
+                        missing.computeIfAbsent(e.getKey(), h -> e.getValue().toPreUnit_s());
                     }
                 });
             });
@@ -571,6 +583,8 @@ public interface Dag {
     DagInfo maxView();
 
     void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
+
+    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing);
 
     short nProc();
 

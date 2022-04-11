@@ -43,7 +43,7 @@ import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
 import com.salesforce.apollo.ethereal.creator.CreatorTest;
 import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
-import com.salesforce.apollo.ethereal.memberships.EtherealMetricsImpl;
+import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;

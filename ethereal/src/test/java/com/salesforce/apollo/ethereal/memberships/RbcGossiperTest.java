@@ -16,10 +16,10 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.comm.LocalRouter;
-import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -45,9 +45,11 @@ public class RbcGossiperTest {
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         List<RbcGossiper> gossipers = new ArrayList<>();
         for (short i = 0; i < members.size(); i++) {
-            Router comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
-            gossipers.add(new RbcGossiper(context, members.get(i), builder.setSigner(members.get(i)).setPid(i).build(),
-                                          comm, exec, null));
+            var config = builder.setSigner(members.get(i)).setPid(i).build();
+            var dag = new DagImpl(config, 0);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
+            gossipers.add(new RbcGossiper(context, members.get(i), new RbcAdder(dag, config), config, comm, exec,
+                                          null));
         }
     }
 }

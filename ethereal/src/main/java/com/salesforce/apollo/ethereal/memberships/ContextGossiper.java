@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
-import static com.salesforce.apollo.ethereal.memberships.GossiperClient.getCreate;
+import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -30,6 +30,10 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Ethereal.Controller;
+import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
+import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
+import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
+import com.salesforce.apollo.ethereal.memberships.comm.GossiperService;
 import com.salesforce.apollo.ethereal.GossipService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
