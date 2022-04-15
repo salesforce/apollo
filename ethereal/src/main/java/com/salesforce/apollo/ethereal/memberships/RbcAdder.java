@@ -9,13 +9,10 @@ package com.salesforce.apollo.ethereal.memberships;
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -25,6 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.SignedCommit;
+import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
+import com.salesfoce.apollo.ethereal.proto.Update.Builder;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
@@ -38,44 +38,165 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  *
  */
 public class RbcAdder {
+    public interface ChRbc {
+
+        void commit(SignedCommit commit);
+
+        void prevote(SignedPreVote preVote);
+
+    }
+
+    /**
+     * State progression:
+     * 
+     * PROPOSED -> PREVOTED -> WAITING_FOR_PARENTS -> PARENTS_OUT ->
+     *
+     */
+    public enum State {
+        COMMITTED, FAILED, OUTPUT, PARENTS_OUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS;
+    }
 
     private static final Logger log = LoggerFactory.getLogger(RbcAdder.class);
 
-    private final Map<Digest, Set<Short>>         commits     = new HashMap<>();
+    private final Map<Digest, Set<Short>>         commits         = new TreeMap<>();
     private final Config                          conf;
     private final Dag                             dag;
-    private final Set<Digest>                     failed      = new TreeSet<>();
-    private final Map<Long, List<WaitingPreUnit>> missing     = new HashMap<>();
-    private final Map<Digest, Set<Short>>         preVotes    = new HashMap<>();
-    private final PriorityQueue<Unit>             ready;
-    @SuppressWarnings("unused")
-    private volatile int                          round       = 0;
-    private final Map<Digest, WaitingPreUnit>     waiting     = new HashMap<>();
-    private final Map<Long, WaitingPreUnit>       waitingById = new HashMap<>();
+    private final Set<Digest>                     failed          = new TreeSet<>();
+    private int                                   maxSize;
+    private final Map<Long, List<WaitingPreUnit>> missing         = new TreeMap<>();
+    private final Map<Digest, Set<Short>>         preVotes        = new TreeMap<>();
+    private volatile int                          round           = 0;
+    private final int                             threshold;
+    private final Map<Digest, WaitingPreUnit>     waiting         = new TreeMap<>();
+    private final Map<Long, WaitingPreUnit>       waitingById     = new TreeMap<>();
+    private final Map<Digest, WaitingPreUnit>     waitingForRound = new TreeMap<>();
 
-    public RbcAdder(Dag dag, Config conf) {
+    public RbcAdder(Dag dag, Config conf, int threshold) {
         this.dag = dag;
         this.conf = conf;
-        ready = new PriorityQueue<>(new Comparator<>() {
-
-            @Override
-            public int compare(Unit u1, Unit u2) {
-                // Topologically sorted
-                var comp = Integer.compare(u1.epoch(), u2.epoch());
-                if (comp < 0 || comp > 0) {
-                    return comp;
-                }
-                comp = Integer.compare(u1.height(), u2.height());
-                if (comp < 0 || comp > 0) {
-                    return comp;
-                }
-                return Short.compare(u1.creator(), u2.creator());
-
-            }
-        });
+        this.threshold = threshold;
     }
 
-    public void add(Digest digest, PreUnit_s u) {
+    public void close() {
+        log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
+    }
+
+    /**
+     * A commit was received
+     * 
+     * @param digest - the digest of the unit
+     * @param member - the index of the member
+     * @param chRbc  - the comm endpoint to issue further messages
+     */
+    public void commit(Digest digest, short member, ChRbc chRbc) {
+        if (failed.contains(digest)) {
+            return;
+        }
+        final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!committed.add(member)) {
+            return;
+        }
+        if (committed.size() <= threshold) {
+            return;
+        }
+        var wpu = waiting.get(digest);
+
+        // Check for existing proposal
+        if (wpu == null) {
+            return;
+        }
+
+        switch (wpu.state()) {
+        case PREVOTED:
+            if (committed.size() > threshold) {
+                commit(wpu, chRbc);
+            }
+            // intentional fall through
+        case COMMITTED:
+            if (committed.size() > 2 * threshold) {
+                wpu.setState(State.OUTPUT);
+                output(wpu, chRbc);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    public Config config() {
+        return conf;
+    }
+
+    public void have(DigestBloomFilter biff) {
+        waiting.keySet().forEach(d -> biff.add(d));
+        dag.have(biff);
+    }
+
+    /**
+     * Update the gossip builder with the missing units filtered by the supplied
+     * bloom filter indicating units already known
+     */
+    public void missing(BloomFilter<Digest> have, Builder builder) {
+        var pus = new TreeMap<Digest, PreUnit_s>();
+        dag.missing(have, pus);
+        waiting.entrySet()
+               .stream()
+               .filter(e -> !have.contains(e.getKey()))
+               .filter(e -> failed.contains(e.getKey()))
+               .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
+        pus.values().forEach(pu -> builder.addMissing(pu));
+    }
+
+    /**
+     * A preVote was received
+     * 
+     * @param digest - the digest of the unit
+     * @param member - the index of the member
+     * @param chRbc  - the comm endpoint to issue further messages
+     */
+    public void preVote(Digest digest, short member, ChRbc chRbc) {
+        if (failed.contains(digest)) {
+            return;
+        }
+        final Set<Short> prepared = preVotes.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!prepared.add(member)) {
+            return;
+        }
+        // We only care if the # of prevotes is >= 2*f + 1
+        if (prepared.size() <= 2 * threshold) {
+            return;
+        }
+        // We only care if we've gotten the proposal
+        var wpu = waiting.get(digest);
+        if (wpu == null) {
+            return;
+        }
+
+        if (wpu.state() == State.PREVOTED) {
+            waitingById.put(wpu.id(), wpu);
+            checkParents(wpu);
+            checkIfMissing(wpu);
+            if (wpu.parentsOutput()) { // optimization
+                commit(wpu, chRbc);
+            } else {
+                wpu.setState(State.WAITING_FOR_PARENTS);
+            }
+        }
+    }
+
+    public void produce(Unit u, ChRbc chRbc) {
+        round = u.height();
+        advance(chRbc);
+    }
+
+    /**
+     * A unit has been proposed.
+     * 
+     * @param digest - the digest identifying the unit
+     * @param u      - the serialized preUnit
+     * @param chRbc  - the comm endpoint to issue further messages
+     */
+    public void propose(Digest digest, PreUnit_s u, ChRbc chRbc) {
         if (failed.contains(digest)) {
             log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
             return;
@@ -84,9 +205,14 @@ public class RbcAdder {
             log.trace("Duplicate unit: {} on: {}", digest, conf.logLabel());
             return;
         }
-        var alreadyInDag = dag.get(digest);
-        if (alreadyInDag != null) {
+        if (dag.contains(digest)) {
             log.trace("Duplicate unit: {} on: {}", digest, conf.logLabel());
+            return;
+        }
+        if (u.toByteString().size() > maxSize) {
+            failed.add(digest);
+            log.debug("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
+                      conf.logLabel());
             return;
         }
         var preunit = PreUnit.from(u, conf.digestAlgorithm());
@@ -105,78 +231,27 @@ public class RbcAdder {
                       conf.logLabel());
             return;
         }
-        addToWaiting(preunit);
-    }
-
-    public void close() {
-        log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
-    }
-
-    public void commit(Digest unit, short member) {
-        if (failed.contains(unit)) {
-            return;
-        }
-        if (commits.computeIfAbsent(unit, h -> new HashSet<>()).add(member)) {
-            // check commits
+        final var wpu = new WaitingPreUnit(preunit, u);
+        waiting.put(digest, wpu);
+        if (round >= preunit.height()) {
+            prevote(wpu, chRbc);
+        } else {
+            waitingForRound.put(digest, wpu);
         }
     }
 
-    public void have(DigestBloomFilter biff) {
-        waiting.keySet().forEach(d -> biff.add(d));
-        dag.have(biff);
-    }
-
-    public Collection<PreUnit_s> missing(BloomFilter<Digest> have) {
-        var pus = new TreeMap<Digest, PreUnit_s>();
-        dag.missing(have, pus);
-        waiting.entrySet()
-               .stream()
-               .filter(e -> !have.contains(e.getKey()))
-               .filter(e -> failed.contains(e.getKey()))
-               .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
-        return pus.values();
-    }
-
-    public void preVote(Digest unit, short member) {
-        if (failed.contains(unit)) {
-            return;
+    // Advance the state of the RBC by one round
+    private void advance(ChRbc chRbc) {
+        var iterator = waitingForRound.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var e = iterator.next();
+            if (e.getValue().height() < round) {
+                assert e.getValue().state() == State.PROPOSED;
+                e.getValue().setState(State.PREVOTED);
+                iterator.remove();
+                prevote(e.getValue(), chRbc);
+            }
         }
-        if (preVotes.computeIfAbsent(unit, h -> new HashSet<>()).add(member)) {
-            // check preVotes
-        }
-    }
-
-    public void produce(Unit u) {
-        round = u.height();
-        advance();
-    }
-
-    // addPreunit as a waitingPreunit to the buffer zone.
-    private void addToWaiting(PreUnit pu) {
-        if (waiting.containsKey(pu.hash())) {
-            log.trace("Already waiting unit: {} on: {}", pu, conf.logLabel());
-            return;
-        }
-        var id = pu.id();
-        if (waitingById.get(id) != null) {
-            throw new IllegalStateException("Fork in the road on: " + conf.logLabel()); // fork! TODO
-        }
-        var wp = new WaitingPreUnit(pu);
-        waiting.put(pu.hash(), wp);
-        waitingById.put(id, wp);
-        checkParents(wp);
-        checkIfMissing(wp);
-        if (wp.missingParents() > 0) {
-            log.trace("missing parents: {} for: {} on: {}", wp.missingParents(), wp, conf.logLabel());
-            return;
-        }
-        log.trace("Unit now waiting: {} on: {}", pu, conf.logLabel());
-        sendIfReady(wp);
-    }
-
-    private void advance() {
-        // TODO Auto-generated method stub
-
     }
 
     /**
@@ -225,52 +300,74 @@ public class RbcAdder {
         return maxHeights;
     }
 
-    private void handleInvalidControlHash(PreUnit witness, Unit[] parents) {
-        log.debug("Invalid control hash witness: {} parents: {} on: {}", witness, parents, conf.logLabel());
-        var ids = new ArrayList<Long>();
-        short pid = 0;
-        for (var height : witness.view().heights()) {
-            ids.add(PreUnit.id(height, pid++, witness.epoch()));
+    private SignedCommit commit(WaitingPreUnit wpu) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    private void commit(WaitingPreUnit wpu, ChRbc chRbc) {
+        wpu.setState(State.COMMITTED);
+        chRbc.commit(commit(wpu));
+        commit(wpu.hash(), conf.pid(), chRbc);
+    }
+
+    private boolean decodeParents(WaitingPreUnit wp) {
+        var decoded = dag.decodeParents(wp.pu());
+        if (decoded.inError()) {
+            removeFailed(wp);
+            return false;
+        }
+        var parents = decoded.parents();
+        var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> e).toList();
+        Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
+        if (!calculated.equals(wp.pu().view().controlHash())) {
+            removeFailed(wp);
+            log.debug("Invalid control hash witness: {} parents: {} on: {}", wp, parents, conf.logLabel());
+            return false;
+        }
+        var freeUnit = dag.build(wp.pu(), parents);
+
+        var err = dag.check(freeUnit);
+        if (err != null) {
+            removeFailed(wp);
+            log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.logLabel());
+        }
+        wp.setDecoded(freeUnit);
+        return true;
+    }
+
+    private void output(WaitingPreUnit wpu, ChRbc chRbc) {
+        if (!decodeParents(wpu)) {
+            removeFailed(wpu);
+            return;
+        }
+        wpu.setState(State.OUTPUT);
+
+        log.trace("Inserting unit: {} on: {}", wpu.decoded(), conf.logLabel());
+
+        dag.insert(wpu.decoded());
+
+        remove(wpu);
+
+        for (var ch : wpu.children()) {
+            ch.decWaiting();
+            if (wpu.state() == State.WAITING_FOR_PARENTS && wpu.parentsOutput()) {
+                if (preVotes.getOrDefault(wpu.hash(), Collections.emptySet()).size() > 2 * threshold + 1) {
+                    commit(wpu, chRbc);
+                }
+            }
         }
     }
 
-    // Ye Jesu Nute
-    // The waiting pre unit is ready to be added to ye DAG, may fail if parents
-    // don't check out
-    private void handleReady(WaitingPreUnit wp) {
-        log.debug("Handle ready: {} on: {}", wp, conf.logLabel());
-        try {
-            // 1. Decode Parents
-            var decoded = dag.decodeParents(wp.pu());
-            var parents = decoded.parents();
-            if (decoded.inError()) {
-                wp.fail();
-                return;
-            }
-            var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> e).toList();
-            Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
-            if (!calculated.equals(wp.pu().view().controlHash())) {
-                wp.fail();
-                handleInvalidControlHash(wp.pu(), parents);
-                return;
-            }
+    private void prevote(WaitingPreUnit wpu, ChRbc chRbc) {
+        wpu.setState(State.PREVOTED);
+        chRbc.prevote(preVote(wpu.hash(), wpu.serialized()));
+        preVote(wpu.hash(), conf.pid(), chRbc);
+    }
 
-            // 2. Build Unit
-            var freeUnit = dag.build(wp.pu(), parents);
-
-            // 3. Check
-            var err = dag.check(freeUnit);
-            if (err != null) {
-                wp.fail();
-                log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.logLabel());
-            } else {
-                // 4. Enqueue
-                ready.add(freeUnit);
-                log.debug("Enqueued: {} on: {}", freeUnit, conf.logLabel());
-            }
-        } finally {
-            remove(wp);
-        }
+    private SignedPreVote preVote(Digest digest, PreUnit_s u) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     /**
@@ -282,41 +379,23 @@ public class RbcAdder {
         log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.logLabel());
     }
 
-    /** remove waitingPreunit from the buffer zone and notify its children. */
-    private void remove(WaitingPreUnit wp) {
-        if (wp.failed()) {
-            removeFailed(wp);
-        } else {
-            waiting.remove(wp.hash());
-            waitingById.remove(wp.id());
-            for (var ch : wp.children()) {
-                ch.decWaiting();
-                sendIfReady(ch);
-            }
-        }
+    private void remove(WaitingPreUnit wpu) {
+        preVotes.remove(wpu.hash());
+        commits.remove(wpu.hash());
+        waiting.remove(wpu.hash());
+        waitingById.remove(wpu.id());
     }
 
     /**
-     * removeFailed removes from the buffer zone a ready preunit which we failed to
-     * add, together with all its descendants.
+     * removeFailed removes from the buffer zone the preunit which we failed to add,
+     * together with all its descendants.
      */
     private void removeFailed(WaitingPreUnit wp) {
+        wp.setState(State.FAILED);
         failed.add(wp.hash());
-        waiting.remove(wp.hash());
-        waitingById.remove(wp.id());
+        remove(wp);
         for (var ch : wp.children()) {
             removeFailed(ch);
-        }
-    }
-
-    private void sendIfReady(WaitingPreUnit ch) {
-        if (ch.parentsOutput()) {
-            log.trace("Sending unit for processing: {} on: {}", ch.pu(), conf.logLabel());
-            try {
-                handleReady(ch);
-            } catch (Throwable t) {
-                log.error("Unable to handle: {} on: {}", ch.pu(), conf.logLabel(), t);
-            }
         }
     }
 }

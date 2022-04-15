@@ -39,17 +39,21 @@ public class RbcGossiperTest {
         List<SigningMember> members = IntStream.range(0, 4)
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
                                                .toList();
+        List<LocalRouter> comms = new ArrayList<>();
         members.forEach(m -> context.activate(m));
         var builder = Config.deterministic()
                             .setnProc((short) members.size())
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         List<RbcGossiper> gossipers = new ArrayList<>();
         for (short i = 0; i < members.size(); i++) {
-            var config = builder.setSigner(members.get(i)).setPid(i).build();
-            var dag = new DagImpl(config, 0);
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
-            gossipers.add(new RbcGossiper(context, members.get(i), new RbcAdder(dag, config), config, comm, exec,
-                                          null));
+            comms.add(comm);
+            gossipers.add(new RbcGossiper(context, members.get(i),
+                                          new RbcAdder(new DagImpl(builder.setSigner(members.get(i)).setPid(i).build(),
+                                                                   0),
+                                                       builder.setSigner(members.get(i)).setPid(i).build(),
+                                                       context.toleranceLevel()),
+                                          comm, exec, null));
         }
     }
 }

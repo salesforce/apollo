@@ -40,6 +40,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.memberships.RbcAdder.ChRbc;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
@@ -55,10 +56,13 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 /**
+ * Handles the gossip propigation of proposals, commits and preVotes from this
+ * node, as well as the notification of the adder of such from other nodes.
+ * 
  * @author hal.hildebrand
  *
  */
-public class RbcGossiper {
+public class RbcGossiper implements ChRbc {
 
     /**
      * The Service implementing the 3 phase gossip
@@ -91,11 +95,11 @@ public class RbcGossiper {
         }
     }
 
-    private static final Logger                                   log      = LoggerFactory.getLogger(RbcGossiper.class);
+    private static final Logger log = LoggerFactory.getLogger(RbcGossiper.class);
+
     private final RbcAdder                                        adder;
     private final CommonCommunications<Gossiper, GossiperService> comm;
     private final Map<Digest, SignedCommit>                       commits  = new HashMap<>();
-    private final Config                                          config;
     private final Context<Member>                                 context;
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
@@ -105,17 +109,28 @@ public class RbcGossiper {
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started  = new AtomicBoolean();
 
-    public RbcGossiper(Context<Member> context, SigningMember member, RbcAdder adder, Config config,
-                       Router communications, Executor exec, EtherealMetrics m) {
+    public RbcGossiper(Context<Member> context, SigningMember member, RbcAdder adder, Router communications,
+                       Executor exec, EtherealMetrics m) {
         this.adder = adder;
         this.context = context;
         this.member = member;
         this.metrics = m;
-        this.config = config;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<Gossiper>(context, member, this.comm, exec);
+    }
+
+    @Override
+    public void commit(SignedCommit sc) {
+        Digest digest = null;
+        commits.put(digest, sc);
+    }
+
+    @Override
+    public void prevote(SignedPreVote spv) {
+        Digest digest = null;
+        preVotes.put(digest, spv);
     }
 
     /**
@@ -153,11 +168,17 @@ public class RbcGossiper {
         }
     }
 
-    private SignedCommit commit(SignedCommit c) {
+    private SignedCommit committed(SignedCommit c) {
         if (!validate(c)) {
             return null;
         }
+        final var commit = c.getCommit();
+        adder.commit(Digest.from(commit.getHash()), (short) commit.getSource(), this);
         return c;
+    }
+
+    private Config config() {
+        return adder.config();
     }
 
     private Gossip gossip() {
@@ -267,6 +288,7 @@ public class RbcGossiper {
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
+        final var config = config();
         var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
         * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
         commits.keySet().forEach(h -> biff.add(h));
@@ -277,6 +299,7 @@ public class RbcGossiper {
      * Answer the bloom filter with the preVotes the receiver has
      */
     private Biff havePreVotes() {
+        final var config = config();
         var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
         * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
         preVotes.keySet().forEach(h -> biff.add(h));
@@ -287,6 +310,7 @@ public class RbcGossiper {
      * Answer the bloom filter with the units the receiver has
      */
     private Biff haveUnits() {
+        final var config = config();
         var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
                                          config.epochLength() * config.numberOfEpochs() * config.nProc() * 2,
                                          config.fpr());
@@ -306,11 +330,13 @@ public class RbcGossiper {
                      (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
     }
 
-    private SignedPreVote preVote(SignedPreVote pv) {
-        if (!validate(pv)) {
+    private SignedPreVote preVote(SignedPreVote spv) {
+        if (!validate(spv)) {
             return null;
         }
-        return pv;
+        final var pv = spv.getVote();
+        adder.preVote(Digest.from(pv.getHash()), (short) pv.getSource(), this);
+        return spv;
     }
 
     private void read(Runnable r) {
@@ -350,9 +376,7 @@ public class RbcGossiper {
             }
         });
         final BloomFilter<Digest> pubf = BloomFilter.from(have.getHaveUnits());
-        adder.missing(pubf).forEach(pu -> {
-            builder.addMissing(pu);
-        });
+        adder.missing(pubf, builder);
     }
 
     /**
@@ -372,15 +396,17 @@ public class RbcGossiper {
     private void updateFrom(Update update) {
         update.getMissingList().forEach(u -> {
             final var signature = JohnHancock.from(u.getSignature());
-            adder.add(signature.toDigest(config.digestAlgorithm()), u);
+            final var digest = signature.toDigest(config().digestAlgorithm());
+            adder.propose(digest, u, this);
         });
         update.getMissingCommitsList().forEach(c -> {
             final var signature = JohnHancock.from(c.getSignature());
-            commits.computeIfAbsent(signature.toDigest(config.digestAlgorithm()), h -> commit(c));
+            final var digest = signature.toDigest(config().digestAlgorithm());
+            commits.computeIfAbsent(digest, h -> committed(c));
         });
         update.getMissingPreVotesList().forEach(pv -> {
             final var signature = JohnHancock.from(pv.getSignature());
-            preVotes.computeIfAbsent(signature.toDigest(config.digestAlgorithm()), h -> preVote(pv));
+            preVotes.computeIfAbsent(signature.toDigest(config().digestAlgorithm()), h -> preVote(pv));
         });
     }
 

@@ -12,22 +12,27 @@ import java.util.List;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.Unit;
+import com.salesforce.apollo.ethereal.memberships.RbcAdder.State;
 
-class WaitingPreUnit {
+public class WaitingPreUnit {
+
     private final List<WaitingPreUnit> children       = new ArrayList<>();
-    private volatile boolean           failed         = false;
+    private volatile Unit              decoded;
     private volatile int               missingParents = 0;
     private final PreUnit              pu;
     private final PreUnit_s            serialized;
+    private volatile State             state;
     private volatile int               waitingParents = 0;
 
-    WaitingPreUnit(PreUnit pu) {
+    public WaitingPreUnit(PreUnit pu) {
         this(pu, pu.toPreUnit_s());
     }
 
-    WaitingPreUnit(PreUnit pu, PreUnit_s serialized) {
+    public WaitingPreUnit(PreUnit pu, PreUnit_s serialized) {
         this.pu = pu;
         this.serialized = serialized;
+        state = State.PROPOSED;
     }
 
     public void addChild(WaitingPreUnit wp) {
@@ -52,6 +57,10 @@ class WaitingPreUnit {
         missingParents = m - 1;
     }
 
+    public Unit decoded() {
+        return decoded;
+    }
+
     public void decWaiting() {
         final var w = waitingParents;
         waitingParents = w - 1;
@@ -61,16 +70,12 @@ class WaitingPreUnit {
         return pu.epoch();
     }
 
-    public void fail() {
-        failed = true;
-    }
-
-    public boolean failed() {
-        return failed;
-    }
-
     public Digest hash() {
         return pu.hash();
+    }
+
+    public int height() {
+        return pu.height();
     }
 
     public Long id() {
@@ -103,6 +108,18 @@ class WaitingPreUnit {
 
     public PreUnit_s serialized() {
         return serialized;
+    }
+
+    public void setDecoded(Unit decoded) {
+        this.decoded = decoded;
+    }
+
+    public void setState(State state) {
+        this.state = state;
+    }
+
+    public State state() {
+        return state;
     }
 
     @Override

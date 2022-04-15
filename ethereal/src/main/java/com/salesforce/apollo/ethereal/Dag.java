@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import static com.salesforce.apollo.ethereal.Dag.minimalQuorum;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 import static com.salesforce.apollo.ethereal.SlottedUnits.newSlottedUnits;
 
@@ -90,6 +89,11 @@ public interface Dag {
                 }
             }
             return null;
+        }
+
+        @Override
+        public boolean contains(Digest digest) {
+            return read(() -> units.containsKey(digest));
         }
 
         @Override
@@ -177,7 +181,7 @@ public interface Dag {
 
         @Override
         public boolean isQuorum(short cardinality) {
-            return cardinality >= minimalQuorum(cardinality, config.bias());
+            return cardinality >= Dag.minimalQuorum(cardinality, config.bias());
         }
 
         @Override
@@ -553,6 +557,8 @@ public interface Dag {
     Unit build(PreUnit base, Unit[] parents);
 
     Correctness check(Unit u);
+
+    boolean contains(Digest digest);
 
     /** return a slce of parents of the specified unit if control hash matches */
     Decoded decodeParents(PreUnit unit);

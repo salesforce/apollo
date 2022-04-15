@@ -46,13 +46,13 @@ message ContextUpdate {
 message PreVote {
     int64 unit = 1;
     utils.Digeste hash = 2;
-    utils.Digeste source = 3;
+    int32 source = 3;
 }
 
 message Commit {
     int64 unit = 1;
     utils.Digeste hash = 2;
-    utils.Digeste source = 3;
+    int32 source = 3;
 }
 
 message SignedPreVote {
