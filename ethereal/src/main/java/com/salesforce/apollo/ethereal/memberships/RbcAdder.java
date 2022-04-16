@@ -114,6 +114,9 @@ public class RbcAdder {
         if (failed.contains(digest)) {
             return;
         }
+        if (dag.contains(digest)) {
+            return; // no need
+        }
         final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
         if (!committed.add(member)) {
             return;
@@ -179,6 +182,9 @@ public class RbcAdder {
     public void preVote(Digest digest, short member, ChRbc chRbc) {
         if (failed.contains(digest)) {
             return;
+        }
+        if (dag.contains(digest)) {
+            return; // no need
         }
         final Set<Short> prepared = preVotes.computeIfAbsent(digest, h -> new HashSet<>());
         if (!prepared.add(member)) {
@@ -400,6 +406,7 @@ public class RbcAdder {
         preVotes.remove(wpu.hash());
         commits.remove(wpu.hash());
         waiting.remove(wpu.hash());
+        waitingForRound.remove(wpu.hash());
         waitingById.remove(wpu.id());
     }
 
