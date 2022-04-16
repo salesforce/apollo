@@ -35,7 +35,7 @@ public class DagReader {
     public static DagAdder readDag(InputStream is, DagFactory df) {
         @SuppressWarnings("resource")
         Scanner scanner = new Scanner(is);
-        short n = (short) scanner.nextShort();
+        short n = scanner.nextShort();
         scanner.nextLine();
         DagAdder da = df.createDag(n);
         var preUnitHashes = new HashMap<String, Digest>();
@@ -83,7 +83,7 @@ public class DagReader {
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
                                 ByteString.copyFromUtf8(" "), rsData, DigestAlgorithm.DEFAULT);
             var errors = da.adder().addPreunits(Collections.singletonList(pu));
-            log.info("insert: {}", pu);
+            log.debug("insert: {}", pu);
             if (errors != null) {
                 log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
             } else {
@@ -102,7 +102,7 @@ public class DagReader {
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
                                                DigestAlgorithm algo, Signer signer) {
         byte[] salt = {};
-        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt );
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt);
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
                            rsData, signature, salt);
     }

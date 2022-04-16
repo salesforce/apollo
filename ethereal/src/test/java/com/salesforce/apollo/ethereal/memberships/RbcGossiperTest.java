@@ -32,7 +32,7 @@ import com.salesforce.apollo.utils.Utils;
 public class RbcGossiperTest {
 
     @Test
-    public void smokin() {
+    public void multiple() {
         String prefix = UUID.randomUUID().toString();
         Executor exec = Executors.newFixedThreadPool(2);
         var context = Context.newBuilder().setCardinality(10).build();
@@ -48,12 +48,10 @@ public class RbcGossiperTest {
         for (short i = 0; i < members.size(); i++) {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comms.add(comm);
+            final var config = builder.setSigner(members.get(i)).setPid(i).build();
             gossipers.add(new RbcGossiper(context, members.get(i),
-                                          new RbcAdder(new DagImpl(builder.setSigner(members.get(i)).setPid(i).build(),
-                                                                   0),
-                                                       builder.setSigner(members.get(i)).setPid(i).build(),
-                                                       context.toleranceLevel()),
-                                          comm, exec, null));
+                                          new RbcAdder(new DagImpl(config, 0), config, context.toleranceLevel()), comm,
+                                          exec, null));
         }
     }
 }

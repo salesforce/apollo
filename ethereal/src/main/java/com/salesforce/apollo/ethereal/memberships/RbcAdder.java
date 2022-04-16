@@ -21,11 +21,14 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.salesfoce.apollo.ethereal.proto.Commit;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
+import com.salesfoce.apollo.ethereal.proto.PreVote;
 import com.salesfoce.apollo.ethereal.proto.SignedCommit;
 import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
 import com.salesfoce.apollo.ethereal.proto.Update.Builder;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.PreUnit;
@@ -58,18 +61,37 @@ public class RbcAdder {
 
     private static final Logger log = LoggerFactory.getLogger(RbcAdder.class);
 
-    private final Map<Digest, Set<Short>>         commits         = new TreeMap<>();
+    public static SignedCommit commit(final Long id, final Digest hash, final short pid, Signer signer) {
+        final var commit = Commit.newBuilder().setUnit(id).setSource(pid).setHash(hash.toDigeste()).build();
+        signer.sign(commit.toByteString());
+        return SignedCommit.newBuilder()
+                           .setCommit(commit)
+                           .setSignature(signer.sign(commit.toByteString()).toSig())
+                           .build();
+    }
+
+    public static SignedPreVote prevote(final Long id, final Digest hash, final short pid, Signer signer) {
+        final var prevote = PreVote.newBuilder().setUnit(id).setSource(pid).setHash(hash.toDigeste()).build();
+        signer.sign(prevote.toByteString());
+        return SignedPreVote.newBuilder()
+                            .setVote(prevote)
+                            .setSignature(signer.sign(prevote.toByteString()).toSig())
+                            .build();
+    }
+
+    private final Map<Digest, Set<Short>>         commits     = new TreeMap<>();
     private final Config                          conf;
     private final Dag                             dag;
-    private final Set<Digest>                     failed          = new TreeSet<>();
-    private int                                   maxSize;
-    private final Map<Long, List<WaitingPreUnit>> missing         = new TreeMap<>();
-    private final Map<Digest, Set<Short>>         preVotes        = new TreeMap<>();
-    private volatile int                          round           = 0;
+    private final Set<Digest>                     failed      = new TreeSet<>();
+    private int                                   maxSize     = 100 * 1024 * 1024;
+    private final Map<Long, List<WaitingPreUnit>> missing     = new TreeMap<>();
+    private final Map<Digest, Set<Short>>         preVotes    = new TreeMap<>();
+    private volatile int                          round       = 0;
     private final int                             threshold;
-    private final Map<Digest, WaitingPreUnit>     waiting         = new TreeMap<>();
-    private final Map<Long, WaitingPreUnit>       waitingById     = new TreeMap<>();
-    private final Map<Digest, WaitingPreUnit>     waitingForRound = new TreeMap<>();
+    private final Map<Digest, WaitingPreUnit>     waiting     = new TreeMap<>();
+    private final Map<Long, WaitingPreUnit>       waitingById = new TreeMap<>();
+
+    private final Map<Digest, WaitingPreUnit> waitingForRound = new TreeMap<>();
 
     public RbcAdder(Dag dag, Config conf, int threshold) {
         this.dag = dag;
@@ -186,6 +208,11 @@ public class RbcAdder {
 
     public void produce(Unit u, ChRbc chRbc) {
         round = u.height();
+        final var wpu = new WaitingPreUnit(u.toPreUnit(), u.toPreUnit_s());
+        waiting.put(wpu.hash(), wpu);
+        if (round == 0) { // dealing
+            prevote(wpu, chRbc);
+        }
         advance(chRbc);
     }
 
@@ -300,14 +327,9 @@ public class RbcAdder {
         return maxHeights;
     }
 
-    private SignedCommit commit(WaitingPreUnit wpu) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
     private void commit(WaitingPreUnit wpu, ChRbc chRbc) {
         wpu.setState(State.COMMITTED);
-        chRbc.commit(commit(wpu));
+        chRbc.commit(commit(wpu.id(), wpu.hash(), config().pid(), config().signer()));
         commit(wpu.hash(), conf.pid(), chRbc);
     }
 
@@ -361,13 +383,8 @@ public class RbcAdder {
 
     private void prevote(WaitingPreUnit wpu, ChRbc chRbc) {
         wpu.setState(State.PREVOTED);
-        chRbc.prevote(preVote(wpu.hash(), wpu.serialized()));
+        chRbc.prevote(prevote(wpu.id(), wpu.hash(), conf.pid(), conf.signer()));
         preVote(wpu.hash(), conf.pid(), chRbc);
-    }
-
-    private SignedPreVote preVote(Digest digest, PreUnit_s u) {
-        // TODO Auto-generated method stub
-        return null;
     }
 
     /**
