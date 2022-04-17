@@ -21,7 +21,7 @@ public class BlockDate extends Date {
     }
 
     public BlockDate(long date) {
-        super(date); 
+        super(date);
     }
 
     @SuppressWarnings("deprecation")

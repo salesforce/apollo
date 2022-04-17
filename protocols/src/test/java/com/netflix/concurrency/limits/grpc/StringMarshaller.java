@@ -12,7 +12,7 @@ import io.grpc.MethodDescriptor.Marshaller;
 
 public final class StringMarshaller implements Marshaller<String> {
     public static final StringMarshaller INSTANCE = new StringMarshaller();
-    
+
     @Override
     public InputStream stream(String value) {
         return new ByteArrayInputStream(value.getBytes(Charsets.UTF_8));

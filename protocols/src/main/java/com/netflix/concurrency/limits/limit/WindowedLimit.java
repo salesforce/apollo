@@ -26,12 +26,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class WindowedLimit implements Limit {
-    private static final long DEFAULT_MIN_WINDOW_TIME = TimeUnit.SECONDS.toNanos(1);
-    private static final long DEFAULT_MAX_WINDOW_TIME = TimeUnit.SECONDS.toNanos(1);
+    private static final long DEFAULT_MIN_WINDOW_TIME   = TimeUnit.SECONDS.toNanos(1);
+    private static final long DEFAULT_MAX_WINDOW_TIME   = TimeUnit.SECONDS.toNanos(1);
     private static final long DEFAULT_MIN_RTT_THRESHOLD = TimeUnit.MICROSECONDS.toNanos(100);
 
     /**
-     * Minimum observed samples to filter out sample windows with not enough significant samples
+     * Minimum observed samples to filter out sample windows with not enough
+     * significant samples
      */
     private static final int DEFAULT_WINDOW_SIZE = 10;
 
@@ -40,10 +41,10 @@ public class WindowedLimit implements Limit {
     }
 
     public static class Builder {
-        private long maxWindowTime = DEFAULT_MAX_WINDOW_TIME;
-        private long minWindowTime = DEFAULT_MIN_WINDOW_TIME;
-        private int windowSize = DEFAULT_WINDOW_SIZE;
-        private long minRttThreshold = DEFAULT_MIN_RTT_THRESHOLD;
+        private long                maxWindowTime       = DEFAULT_MAX_WINDOW_TIME;
+        private long                minWindowTime       = DEFAULT_MIN_WINDOW_TIME;
+        private int                 windowSize          = DEFAULT_WINDOW_SIZE;
+        private long                minRttThreshold     = DEFAULT_MIN_RTT_THRESHOLD;
         private SampleWindowFactory sampleWindowFactory = AverageSampleWindowFactory.create();
 
         /**
@@ -142,10 +143,12 @@ public class WindowedLimit implements Limit {
                 // Double check under the lock
                 if (endTime > nextUpdateTime) {
                     SampleWindow current = sample.getAndSet(sampleWindowFactory.newInstance());
-                    nextUpdateTime = endTime + Math.min(Math.max(current.getCandidateRttNanos() * 2, minWindowTime), maxWindowTime);
+                    nextUpdateTime = endTime
+                    + Math.min(Math.max(current.getCandidateRttNanos() * 2, minWindowTime), maxWindowTime);
 
                     if (isWindowReady(current)) {
-                        delegate.onSample(startTime, current.getTrackedRttNanos(), current.getMaxInFlight(), current.didDrop());
+                        delegate.onSample(startTime, current.getTrackedRttNanos(), current.getMaxInFlight(),
+                                          current.didDrop());
                     }
                 }
             }

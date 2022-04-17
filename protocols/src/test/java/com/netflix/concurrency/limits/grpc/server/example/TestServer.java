@@ -160,7 +160,8 @@ public class TestServer {
                                                                                                         .build(),
                                                                                  ConcurrencyLimitServerInterceptor.newBuilder(builder.limiter)
                                                                                                                   .build()))
-                                        .build().start();
+                                        .build()
+                                        .start();
     }
 
     public int getPort() {

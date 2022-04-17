@@ -41,13 +41,10 @@ public class ShardedOracle extends AbstractOracle {
     @Override
     public CompletableFuture<Void> add(Assertion assertion) {
         var call = mutator.call("call delphinius.addAssertion(?, ?, ?, ?, ?, ?, ?, ?) ",
-                                assertion.subject().namespace().name(),
-                                assertion.subject().name(), 
-                                assertion.subject().relation().namespace().name(), 
-                                assertion.subject().relation().name(),
-                                assertion.object().namespace().name(),
-                                assertion.object().name(),
-                                assertion.object().relation().namespace().name(),
+                                assertion.subject().namespace().name(), assertion.subject().name(),
+                                assertion.subject().relation().namespace().name(),
+                                assertion.subject().relation().name(), assertion.object().namespace().name(),
+                                assertion.object().name(), assertion.object().relation().namespace().name(),
                                 assertion.object().relation().name());
         try {
             return mutator.execute(exec, call, timeout, scheduler).thenApply(r -> null);

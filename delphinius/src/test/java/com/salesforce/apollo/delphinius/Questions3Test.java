@@ -37,8 +37,8 @@ public class Questions3Test {
 
         var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (
-        Liquibase liquibase = new Liquibase("delphinius/initialize.xml", new ClassLoaderResourceAccessor(), database)) {
+        try (Liquibase liquibase = new Liquibase("delphinius/initialize.xml", new ClassLoaderResourceAccessor(),
+                                                 database)) {
             liquibase.update((String) null);
         }
         connection = new JdbcConnection(url, new Properties(), "", "", false);

@@ -30,24 +30,24 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * {@link Executor} which uses a {@link Limiter} to determine the size of the thread pool.
- * Any {@link Runnable} executed once the limit has been reached will block the calling
- * thread until the limit is released.
+ * {@link Executor} which uses a {@link Limiter} to determine the size of the
+ * thread pool. Any {@link Runnable} executed once the limit has been reached
+ * will block the calling thread until the limit is released.
  * 
  * Operations submitted to this executor should be homogeneous and have similar
- * long term latency characteristics.  RTT samples will only be taken from successful 
- * operations.  The {@link Runnable} should throw a {@link UncheckedTimeoutException} if
- * a request timed out or some external limit was reached.  All other exceptions will be
- * ignored.
+ * long term latency characteristics. RTT samples will only be taken from
+ * successful operations. The {@link Runnable} should throw a
+ * {@link UncheckedTimeoutException} if a request timed out or some external
+ * limit was reached. All other exceptions will be ignored.
  */
 public final class BlockingAdaptiveExecutor implements Executor {
     public static class Builder {
         private static AtomicInteger idCounter = new AtomicInteger();
 
         private MetricRegistry metricRegistry = EmptyMetricRegistry.INSTANCE;
-        private Executor executor;
-        private Limiter<Void> limiter;
-        private String name;
+        private Executor       executor;
+        private Limiter<Void>  limiter;
+        private String         name;
 
         public Builder metricRegistry(MetricRegistry metricRegistry) {
             this.metricRegistry = metricRegistry;
@@ -87,9 +87,9 @@ public final class BlockingAdaptiveExecutor implements Executor {
 
             if (limiter == null) {
                 limiter = SimpleLimiter.newBuilder()
-                        .metricRegistry(metricRegistry)
-                        .limit(AIMDLimit.newBuilder().build())
-                        .build();
+                                       .metricRegistry(metricRegistry)
+                                       .limit(AIMDLimit.newBuilder().build())
+                                       .build();
             }
 
             return new BlockingAdaptiveExecutor(this);
@@ -101,7 +101,7 @@ public final class BlockingAdaptiveExecutor implements Executor {
     }
 
     private final Limiter<Void> limiter;
-    private final Executor executor;
+    private final Executor      executor;
 
     private BlockingAdaptiveExecutor(Builder builder) {
         this.limiter = builder.limiter;
@@ -133,8 +133,10 @@ public final class BlockingAdaptiveExecutor implements Executor {
                     // TODO: Remove support for RejectedExecutionException here.
                     listener.onDropped();
                 } catch (Exception e) {
-                    // We have no idea what caused the exception.  It could be an NPE thrown immediately on the client
-                    // or some remote call failure.  The only sane thing to do here is just ignore this request
+                    // We have no idea what caused the exception. It could be an NPE thrown
+                    // immediately on the client
+                    // or some remote call failure. The only sane thing to do here is just ignore
+                    // this request
                     listener.onIgnore();
                 }
             });

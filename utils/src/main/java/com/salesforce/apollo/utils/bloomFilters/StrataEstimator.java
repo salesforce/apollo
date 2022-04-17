@@ -104,7 +104,7 @@ public abstract class StrataEstimator<T> {
         int count = 0;
         for (int i = ibfs.length - 1; i >= -1; i--) {
             if (i < 0)
-                return count * (int) Math.pow(2, i + 1); 
+                return count * (int) Math.pow(2, i + 1);
             @SuppressWarnings("unchecked")
             Decode<T> decResult = ibfs[i].subtract(ibfs2[i]).decode();
             if (decResult == null)

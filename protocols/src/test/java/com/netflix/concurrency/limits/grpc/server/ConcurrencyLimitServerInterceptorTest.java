@@ -73,7 +73,8 @@ public class ConcurrencyLimitServerInterceptorTest {
                                                                                                        .build(),
                                                                                 ConcurrencyLimitServerInterceptor.newBuilder(limiter)
                                                                                                                  .build()))
-                                       .build().start();
+                                       .build()
+                                       .start();
 
             channel = NettyChannelBuilder.forAddress("localhost", server.getPort()).usePlaintext().build();
         } catch (IOException e) {

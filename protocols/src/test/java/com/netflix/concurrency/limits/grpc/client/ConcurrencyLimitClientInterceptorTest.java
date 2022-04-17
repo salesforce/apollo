@@ -48,12 +48,15 @@ public class ConcurrencyLimitClientInterceptorTest {
                                                                                             observer.onCompleted();
                                                                                         }))
                                                                              .build())
-                                          .build().start();
+                                          .build()
+                                          .start();
 
         Limiter<GrpcClientRequestContext> limiter = new GrpcClientLimiterBuilder().blockOnLimit(true).build();
 
-        Channel channel = NettyChannelBuilder.forTarget("localhost:" + server.getPort()).usePlaintext()
-                                             .intercept(new ConcurrencyLimitClientInterceptor(limiter)).build();
+        Channel channel = NettyChannelBuilder.forTarget("localhost:" + server.getPort())
+                                             .usePlaintext()
+                                             .intercept(new ConcurrencyLimitClientInterceptor(limiter))
+                                             .build();
 
         AtomicLong counter = new AtomicLong();
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {

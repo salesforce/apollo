@@ -24,7 +24,7 @@ import com.chiralbehaviors.tron.examples.simpleProtocol.SimpleFsm;
  * 
  */
 public enum SimpleServer implements SimpleFsm {
-    ACCEPTED, AWAIT_MESSAGE, PROCESS_MESSAGE, SESSION_ESTABLISHED, ;
+    ACCEPTED, AWAIT_MESSAGE, PROCESS_MESSAGE, SESSION_ESTABLISHED,;
 
     @Override
     public SimpleFsm accepted(BufferHandler buffer) {

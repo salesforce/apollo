@@ -16,7 +16,7 @@ import com.google.protobuf.Message;
  *
  */
 public interface DataSource {
-    class BlockingDataSourceQueue implements DataSource{
+    class BlockingDataSourceQueue implements DataSource {
         private final BlockingQueue<ByteString> queue;
 
         public BlockingDataSourceQueue(BlockingQueue<ByteString> queue) {
@@ -24,21 +24,22 @@ public interface DataSource {
         }
 
         @Override
-        public ByteString getData() { 
+        public ByteString getData() {
             try {
                 return queue.take();
             } catch (InterruptedException e) {
                 return null;
             }
         }
-        
+
         public boolean offer(Message message) {
             return offer(message.toByteString());
         }
-        
+
         public boolean offer(ByteString message) {
-            return queue.offer(message );
+            return queue.offer(message);
         }
     }
+
     ByteString getData();
 }

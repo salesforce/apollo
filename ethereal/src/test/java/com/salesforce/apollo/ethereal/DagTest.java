@@ -129,8 +129,7 @@ public class DagTest {
     @Test
     public void floorsOnSingleUwithTwoParents() throws Exception {
         DagAdder d = null;
-        try (
-        FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var units = collectUnits(d.dag());
@@ -146,8 +145,7 @@ public class DagTest {
     @Test
     public void lackOfSymmetryOfAbove() throws Exception {
         DagAdder d = null;
-        try (
-        FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/single_unit_with_two_parents.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var units = collectUnits(d.dag());

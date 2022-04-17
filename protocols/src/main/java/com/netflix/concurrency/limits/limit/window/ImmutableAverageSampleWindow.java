@@ -18,12 +18,12 @@ package com.netflix.concurrency.limits.limit.window;
 import java.util.concurrent.TimeUnit;
 
 class ImmutableAverageSampleWindow implements SampleWindow {
-    private final long minRtt;
-    private final long sum;
-    private final int maxInFlight;
-    private final int sampleCount;
+    private final long    minRtt;
+    private final long    sum;
+    private final int     maxInFlight;
+    private final int     sampleCount;
     private final boolean didDrop;
-    
+
     ImmutableAverageSampleWindow() {
         this.minRtt = Long.MAX_VALUE;
         this.sum = 0;
@@ -42,13 +42,8 @@ class ImmutableAverageSampleWindow implements SampleWindow {
 
     @Override
     public ImmutableAverageSampleWindow addSample(long rtt, int inflight, boolean didDrop) {
-        return new ImmutableAverageSampleWindow(
-                Math.min(rtt, minRtt),
-                sum + rtt,
-                Math.max(inflight, this.maxInFlight),
-                sampleCount + 1,
-                this.didDrop || didDrop
-        );
+        return new ImmutableAverageSampleWindow(Math.min(rtt, minRtt), sum + rtt, Math.max(inflight, this.maxInFlight),
+                                                sampleCount + 1, this.didDrop || didDrop);
     }
 
     @Override
@@ -78,11 +73,8 @@ class ImmutableAverageSampleWindow implements SampleWindow {
 
     @Override
     public String toString() {
-        return "ImmutableAverageSampleWindow ["
-                + "minRtt=" + TimeUnit.NANOSECONDS.toMicros(minRtt) / 1000.0
-                + ", avgRtt=" + TimeUnit.NANOSECONDS.toMicros(getTrackedRttNanos()) / 1000.0
-                + ", maxInFlight=" + maxInFlight
-                + ", sampleCount=" + sampleCount
-                + ", didDrop=" + didDrop + "]";
+        return "ImmutableAverageSampleWindow [" + "minRtt=" + TimeUnit.NANOSECONDS.toMicros(minRtt) / 1000.0
+        + ", avgRtt=" + TimeUnit.NANOSECONDS.toMicros(getTrackedRttNanos()) / 1000.0 + ", maxInFlight=" + maxInFlight
+        + ", sampleCount=" + sampleCount + ", didDrop=" + didDrop + "]";
     }
 }

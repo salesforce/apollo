@@ -20,12 +20,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLongArray;
 
 class ImmutablePercentileSampleWindow implements SampleWindow {
-    private final long minRtt;
-    private final int maxInFlight;
-    private final boolean didDrop;
+    private final long            minRtt;
+    private final int             maxInFlight;
+    private final boolean         didDrop;
     private final AtomicLongArray observedRtts;
-    private final int sampleCount;
-    private final double percentile;
+    private final int             sampleCount;
+    private final double          percentile;
 
     ImmutablePercentileSampleWindow(double percentile, int windowSize) {
         this.minRtt = Long.MAX_VALUE;
@@ -36,14 +36,8 @@ class ImmutablePercentileSampleWindow implements SampleWindow {
         this.percentile = percentile;
     }
 
-    private ImmutablePercentileSampleWindow(
-            long minRtt,
-            int maxInFlight,
-            boolean didDrop,
-            AtomicLongArray observedRtts,
-            int sampleCount,
-            double percentile
-    ) {
+    private ImmutablePercentileSampleWindow(long minRtt, int maxInFlight, boolean didDrop, AtomicLongArray observedRtts,
+                                            int sampleCount, double percentile) {
         this.minRtt = minRtt;
         this.maxInFlight = maxInFlight;
         this.didDrop = didDrop;
@@ -58,14 +52,8 @@ class ImmutablePercentileSampleWindow implements SampleWindow {
             return this;
         }
         observedRtts.set(sampleCount, rtt);
-        return new ImmutablePercentileSampleWindow(
-                Math.min(minRtt, rtt),
-                Math.max(inflight, this.maxInFlight),
-                this.didDrop || didDrop,
-                observedRtts,
-                sampleCount + 1,
-                percentile
-        );
+        return new ImmutablePercentileSampleWindow(Math.min(minRtt, rtt), Math.max(inflight, this.maxInFlight),
+                                                   this.didDrop || didDrop, observedRtts, sampleCount + 1, percentile);
     }
 
     @Override
@@ -106,11 +94,8 @@ class ImmutablePercentileSampleWindow implements SampleWindow {
 
     @Override
     public String toString() {
-        return "ImmutablePercentileSampleWindow ["
-                + "minRtt=" + TimeUnit.NANOSECONDS.toMicros(minRtt) / 1000.0
-                + ", p" + percentile + " rtt=" + TimeUnit.NANOSECONDS.toMicros(getTrackedRttNanos()) / 1000.0
-                + ", maxInFlight=" + maxInFlight
-                + ", sampleCount=" + sampleCount
-                + ", didDrop=" + didDrop + "]";
+        return "ImmutablePercentileSampleWindow [" + "minRtt=" + TimeUnit.NANOSECONDS.toMicros(minRtt) / 1000.0 + ", p"
+        + percentile + " rtt=" + TimeUnit.NANOSECONDS.toMicros(getTrackedRttNanos()) / 1000.0 + ", maxInFlight="
+        + maxInFlight + ", sampleCount=" + sampleCount + ", didDrop=" + didDrop + "]";
     }
 }

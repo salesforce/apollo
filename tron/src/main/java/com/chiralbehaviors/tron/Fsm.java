@@ -55,8 +55,8 @@ public final class Fsm<Context, Transitions> {
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             if (this.method != null) {
-                throw new IllegalStateException(
-                        String.format("Pop transition '%s' has already been established", method.toGenericString()));
+                throw new IllegalStateException(String.format("Pop transition '%s' has already been established",
+                                                              method.toGenericString()));
             }
             this.method = method;
             this.args = args;
@@ -85,9 +85,8 @@ public final class Fsm<Context, Transitions> {
                                                                              ClassLoader transitionsCL,
                                                                              Enum<?> initialState, boolean sync) {
         if (!transitions.isAssignableFrom(initialState.getClass())) {
-            throw new IllegalArgumentException(
-                    String.format("Supplied initial state '%s' does not implement the transitions interface '%s'",
-                                  initialState, transitions));
+            throw new IllegalArgumentException(String.format("Supplied initial state '%s' does not implement the transitions interface '%s'",
+                                                             initialState, transitions));
         }
         Fsm<Context, Transitions> fsm = new Fsm<>(fsmContext, sync, transitions, transitionsCL);
         @SuppressWarnings("unchecked")
@@ -249,9 +248,8 @@ public final class Fsm<Context, Transitions> {
             throw new IllegalStateException(String.format("[%s] Cannot pop after pushing", name));
         }
         if (stack.size() == 0) {
-            throw new IllegalStateException(
-                    String.format("[%s] State stack is empty, current state: %s, transition: %s", name,
-                                  prettyPrint(current), transition));
+            throw new IllegalStateException(String.format("[%s] State stack is empty, current state: %s, transition: %s",
+                                                          name, prettyPrint(current), transition));
         }
         pendingPop = true;
         popTransition = new PendingTransition();
@@ -458,7 +456,7 @@ public final class Fsm<Context, Transitions> {
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
                 throw new IllegalStateException(String.format("Unable to invoke transition %s,%s", prettyPrint(current),
                                                               prettyPrint(stateTransition)),
-                        e);
+                                                e);
             }
         }
         if (log.isTraceEnabled()) {
@@ -469,7 +467,7 @@ public final class Fsm<Context, Transitions> {
         } catch (IllegalAccessException | IllegalArgumentException e) {
             throw new IllegalStateException(String.format("Unable to invoke transition %s.%s", prettyPrint(current),
                                                           prettyPrint(stateTransition)),
-                    e.getCause());
+                                            e.getCause());
         } catch (InvocationTargetException e) {
             if (e.getTargetException() instanceof InvalidTransition) {
                 if (log.isTraceEnabled()) {
@@ -483,7 +481,7 @@ public final class Fsm<Context, Transitions> {
             }
             throw new IllegalStateException(String.format("[%s] Unable to invoke transition %s.%s", name,
                                                           prettyPrint(current), prettyPrint(stateTransition)),
-                    e.getTargetException());
+                                            e.getTargetException());
         }
     }
 
@@ -540,9 +538,8 @@ public final class Fsm<Context, Transitions> {
             // First we try declared methods on the state
             stateTransition = current.getClass().getMethod(t.getName(), t.getParameterTypes());
         } catch (NoSuchMethodException | SecurityException e1) {
-            throw new IllegalStateException(
-                    String.format("Inconcievable!  The state %s does not implement the transition %s",
-                                  prettyPrint(current), prettyPrint(t)));
+            throw new IllegalStateException(String.format("Inconcievable!  The state %s does not implement the transition %s",
+                                                          prettyPrint(current), prettyPrint(t)));
         }
         stateTransition.setAccessible(true);
         return stateTransition;
@@ -600,7 +597,7 @@ public final class Fsm<Context, Transitions> {
 
     private String prettyPrint(State<Context, Transitions> state) {
         return prettyPrint(state.transitions) + " [" + state.context == null ? "<>: " + getContext()
-                : state.context + "]";
+                                                                             : state.context + "]";
     }
 
     private String prettyPrint(Method transition) {

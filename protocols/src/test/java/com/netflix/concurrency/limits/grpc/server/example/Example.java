@@ -16,29 +16,27 @@ public class Example {
 
         // Create a server
         final TestServer server = TestServer.newBuilder()
-            .concurrency(2)
-            .lognormal(20, 1, TimeUnit.MINUTES)
-            .limiter(
-                new GrpcServerLimiterBuilder()
-                        .limit(WindowedLimit.newBuilder()
-                                .minWindowTime(1, TimeUnit.SECONDS)
-                                .windowSize(10)
-                                .build(limit))
-                .build()
-                )
-            .build();
+                                            .concurrency(2)
+                                            .lognormal(20, 1, TimeUnit.MINUTES)
+                                            .limiter(new GrpcServerLimiterBuilder().limit(WindowedLimit.newBuilder()
+                                                                                                       .minWindowTime(1,
+                                                                                                                      TimeUnit.SECONDS)
+                                                                                                       .windowSize(10)
+                                                                                                       .build(limit))
+                                                                                   .build())
+                                            .build();
 
         final LatencyCollector latency = new LatencyCollector();
 
         final Driver driver = Driver.newBuilder()
-            .exponentialRps(50,  100, TimeUnit.SECONDS)
-            .exponentialRps(90,  100, TimeUnit.SECONDS)
-            .exponentialRps(200, 100, TimeUnit.SECONDS)
-            .exponentialRps(100, 100, TimeUnit.SECONDS)
-            .latencyAccumulator(latency)
-            .runtime(1, TimeUnit.HOURS)
-            .port(server.getPort())
-            .build();
+                                    .exponentialRps(50, 100, TimeUnit.SECONDS)
+                                    .exponentialRps(90, 100, TimeUnit.SECONDS)
+                                    .exponentialRps(200, 100, TimeUnit.SECONDS)
+                                    .exponentialRps(100, 100, TimeUnit.SECONDS)
+                                    .latencyAccumulator(latency)
+                                    .runtime(1, TimeUnit.HOURS)
+                                    .port(server.getPort())
+                                    .build();
 
         // Report progress
         final AtomicInteger counter = new AtomicInteger(0);
@@ -46,19 +44,16 @@ public class Example {
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
             try {
                 System.out.println(MessageFormat.format("{0,number,#}, {1,number,#}, {2,number,#}, {3,number,#}, {4,number,#}, {5,number,#}, {6,number,#}",
-                        counter.incrementAndGet(),
-                        limit.getLimit(),
-                        driver.getAndResetSuccessCount(),
-                        driver.getAndResetDropCount(),
-                        TimeUnit.NANOSECONDS.toMillis(latency.getAndReset()),
-                        limit.getLastRtt(TimeUnit.MILLISECONDS),
-                        limit.getRttNoLoad(TimeUnit.MILLISECONDS)
-                ));
+                                                        counter.incrementAndGet(), limit.getLimit(),
+                                                        driver.getAndResetSuccessCount(), driver.getAndResetDropCount(),
+                                                        TimeUnit.NANOSECONDS.toMillis(latency.getAndReset()),
+                                                        limit.getLastRtt(TimeUnit.MILLISECONDS),
+                                                        limit.getRttNoLoad(TimeUnit.MILLISECONDS)));
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }, 1, 1, TimeUnit.SECONDS);
-        
+
         // Create a client
         driver.run();
     }

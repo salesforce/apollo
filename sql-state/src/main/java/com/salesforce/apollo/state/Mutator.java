@@ -97,7 +97,8 @@ public class Mutator {
         @SuppressWarnings("unchecked")
         public CompletableFuture<List<?>> submit(Executor exec, Duration timeout,
                                                  ScheduledExecutorService scheduler) throws InvalidTransaction {
-            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout, scheduler);
+            CompletableFuture<?> submit = session.submit(Txn.newBuilder().setBatched(build()).build(), timeout,
+                                                         scheduler);
             return (CompletableFuture<List<?>>) submit;
         }
     }

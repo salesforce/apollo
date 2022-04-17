@@ -180,7 +180,7 @@ abstract public class UniKERL implements KERL {
     public static byte[] compress(byte[] input) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (GZIPOutputStream gzos = new GZIPOutputStream(baos);
-        ByteArrayInputStream bais = new ByteArrayInputStream(input);) {
+             ByteArrayInputStream bais = new ByteArrayInputStream(input);) {
             bais.transferTo(gzos);
             gzos.finish();
             gzos.flush();
@@ -194,7 +194,7 @@ abstract public class UniKERL implements KERL {
     public static byte[] decompress(byte[] input) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ByteArrayInputStream bais = new ByteArrayInputStream(input);
-        GZIPInputStream gis = new GZIPInputStream(bais);) {
+             GZIPInputStream gis = new GZIPInputStream(bais);) {
             gis.transferTo(baos);
             baos.flush();
         } catch (IOException e) {

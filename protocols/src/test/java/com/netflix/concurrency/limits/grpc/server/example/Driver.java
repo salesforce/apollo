@@ -130,7 +130,8 @@ public class Driver {
         metadata.put(ID_HEADER, builder.id);
 
         this.channel = ClientInterceptors.intercept(NettyChannelBuilder.forTarget("localhost:" + builder.port)
-                                                                       .usePlaintext().build(),
+                                                                       .usePlaintext()
+                                                                       .build(),
                                                     MetadataUtils.newAttachHeadersInterceptor(metadata));
     }
 

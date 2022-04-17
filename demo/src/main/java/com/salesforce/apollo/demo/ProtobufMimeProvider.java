@@ -33,12 +33,11 @@ import com.google.protobuf.Message;
 @Provider
 @Consumes("application/x-protobuf")
 @Produces("application/x-protobuf")
- 
+
 public class ProtobufMimeProvider implements MessageBodyWriter<Message>, MessageBodyReader<Message> {
-    //MessageBodyWriter Implementation
+    // MessageBodyWriter Implementation
     @Override
-    public long getSize(Message message, Class<?> arg1, Type arg2, Annotation[] arg3,
-            MediaType arg4) {
+    public long getSize(Message message, Class<?> arg1, Type arg2, Annotation[] arg3, MediaType arg4) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
             message.writeTo(baos);
@@ -47,25 +46,22 @@ public class ProtobufMimeProvider implements MessageBodyWriter<Message>, Message
         }
         return baos.size();
     }
- 
-    //MessageBodyReader Implementation
+
+    // MessageBodyReader Implementation
     @Override
-    public boolean isReadable(Class<?> arg0, Type arg1, Annotation[] arg2,
-            MediaType arg3) {
+    public boolean isReadable(Class<?> arg0, Type arg1, Annotation[] arg2, MediaType arg3) {
         return Message.class.isAssignableFrom(arg0);
     }
- 
+
     @Override
-    public boolean isWriteable(Class<?> arg0, Type arg1, Annotation[] arg2,
-            MediaType arg3) {
+    public boolean isWriteable(Class<?> arg0, Type arg1, Annotation[] arg2, MediaType arg3) {
         return Message.class.isAssignableFrom(arg0);
     }
-     
-     
+
     @Override
-    public Message readFrom(Class<Message> arg0, Type arg1, Annotation[] arg2,
-            MediaType arg3, MultivaluedMap<String, String> arg4,
-            InputStream istream) throws IOException, WebApplicationException {
+    public Message readFrom(Class<Message> arg0, Type arg1, Annotation[] arg2, MediaType arg3,
+                            MultivaluedMap<String, String> arg4,
+                            InputStream istream) throws IOException, WebApplicationException {
         try {
             Method builderMethod = arg0.getMethod("newBuilder");
             GeneratedMessage.Builder<?> builder = (GeneratedMessage.Builder<?>) builderMethod.invoke(arg0);
@@ -74,10 +70,11 @@ public class ProtobufMimeProvider implements MessageBodyWriter<Message>, Message
             throw new WebApplicationException(e);
         }
     }
+
     @Override
-    public void writeTo(Message message, Class<?> arg1, Type arg2, Annotation[] arg3,
-            MediaType arg4, MultivaluedMap<String, Object> arg5,
-            OutputStream ostream) throws IOException, WebApplicationException {
+    public void writeTo(Message message, Class<?> arg1, Type arg2, Annotation[] arg3, MediaType arg4,
+                        MultivaluedMap<String, Object> arg5,
+                        OutputStream ostream) throws IOException, WebApplicationException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         message.writeTo(baos);
         ostream.write(baos.toByteArray());

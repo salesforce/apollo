@@ -31,7 +31,6 @@ public class TlsInterceptor implements ServerInterceptor {
         if (sslSession == null) {
             return next.startCall(call, headers);
         }
-        return Contexts.interceptCall(Context.current().withValue(sslSessionContext, sslSession), call, headers,
-                                      next);
+        return Contexts.interceptCall(Context.current().withValue(sslSessionContext, sslSession), call, headers, next);
     }
 }

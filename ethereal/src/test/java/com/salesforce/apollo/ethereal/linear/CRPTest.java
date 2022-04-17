@@ -252,8 +252,7 @@ public class CRPTest {
             d1 = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         DagAdder d2 = null;
-        try (
-        FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing_but_not_all.txt"))) {
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing_but_not_all.txt"))) {
             d2 = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();

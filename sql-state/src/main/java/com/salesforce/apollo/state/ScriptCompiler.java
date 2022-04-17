@@ -266,8 +266,8 @@ public class ScriptCompiler {
     Class<?> javaxToolsJavac(String packageName, String className, String source) {
         String fullClassName = packageName == null ? className : packageName + "." + className;
         StringWriter writer = new StringWriter();
-        try (JavaFileManager fileManager = new ClassFileManager(
-                JAVA_COMPILER.getStandardFileManager(null, null, null))) {
+        try (JavaFileManager fileManager = new ClassFileManager(JAVA_COMPILER.getStandardFileManager(null, null,
+                                                                                                     null))) {
             ArrayList<JavaFileObject> compilationUnits = new ArrayList<>();
             compilationUnits.add(new StringJavaFileObject(fullClassName, source));
             // cannot concurrently compile

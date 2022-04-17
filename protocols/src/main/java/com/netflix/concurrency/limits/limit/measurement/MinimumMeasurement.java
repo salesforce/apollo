@@ -19,7 +19,7 @@ import java.util.function.Function;
 
 public class MinimumMeasurement implements Measurement {
     private Double value = 0.0;
-    
+
     @Override
     public Number add(Number sample) {
         if (value == 0.0 || sample.doubleValue() < value) {
@@ -40,6 +40,6 @@ public class MinimumMeasurement implements Measurement {
 
     @Override
     public void update(Function<Number, Number> operation) {
-        
+
     }
 }

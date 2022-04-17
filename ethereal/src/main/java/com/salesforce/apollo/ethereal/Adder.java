@@ -257,10 +257,7 @@ public interface Adder {
                     wp.failed = true;
                     return;
                 }
-                var digests = Stream.of(parents)
-                                    .map(e -> e == null ? (Digest) null : e.hash())
-                                    .map(e -> e)
-                                    .toList();
+                var digests = Stream.of(parents).map(e -> e == null ? (Digest) null : e.hash()).map(e -> e).toList();
                 Digest calculated = Digest.combine(conf.digestAlgorithm(), digests.toArray(new Digest[digests.size()]));
                 if (!calculated.equals(wp.pu.view().controlHash())) {
                     wp.failed = true;
