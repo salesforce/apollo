@@ -196,14 +196,9 @@ public class RbcAdderTest {
         verify(chRbc, times(4)).prevote(isA(SignedPreVote.class));
 
         adder.preVote(prime.hash(), (short) 1, chRbc);
-        verify(chRbc, times(0)).commit(isA(SignedCommit.class));
-        adder.preVote(prime.hash(), (short) 2, chRbc);
         verify(chRbc, times(1)).commit(isA(SignedCommit.class));
-
-        assertNull(dag.get(prime.hash()));
-
+        adder.preVote(prime.hash(), (short) 2, chRbc);
         adder.commit(prime.hash(), (short) 1, chRbc);
-        assertNull(dag.get(prime.hash()));
         verify(chRbc, times(1)).commit(isA(SignedCommit.class));
         adder.commit(prime.hash(), (short) 2, chRbc);
         verify(chRbc, times(1)).commit(isA(SignedCommit.class));

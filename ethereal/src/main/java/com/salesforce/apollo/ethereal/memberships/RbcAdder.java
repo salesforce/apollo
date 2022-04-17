@@ -213,10 +213,12 @@ public class RbcAdder {
     }
 
     public void produce(Unit u, ChRbc chRbc) {
+        assert u.creator() == config().pid();
         round = u.height();
+        dag.insert(u);
         final var wpu = new WaitingPreUnit(u.toPreUnit(), u.toPreUnit_s());
-        waiting.put(wpu.hash(), wpu);
         prevote(wpu, chRbc);
+        commit(wpu, chRbc);
         advance(chRbc);
     }
 
