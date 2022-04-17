@@ -63,7 +63,7 @@ public class ChRbcGossiper {
                           member, from, request.getRing(), predecessor);
                 return Update.getDefaultInstance();
             }
-            final var update = processor.gossip(request.getHaves());
+            final var update = processor.gossip(request);
             log.trace("GossipService received from: {} missing: {} on: {}", from, update.getMissingCount(), member);
             return update;
         }

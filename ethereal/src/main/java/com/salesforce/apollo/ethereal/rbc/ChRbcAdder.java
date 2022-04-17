@@ -76,12 +76,12 @@ public class ChRbcAdder {
         }
 
         /**
-         * Answer the Update from the receiver's state, based on the suppled Have
+         * Answer the Update from the receiver's state, based on the suppled Gossip
          */
         @Override
-        public Update gossip(Have have) {
+        public Update gossip(Gossip gossip) {
             final var builder = Update.newBuilder().setHaves(have());
-            ChRbcAdder.this.update(have, builder);
+            ChRbcAdder.this.update(gossip.getHaves(), builder);
             return builder.build();
         }
 
@@ -194,23 +194,6 @@ public class ChRbcAdder {
         } finally {
             lock.unlock();
         }
-    }
-
-    public void have(DigestBloomFilter biff) {
-        lock.lock();
-        try {
-            waiting.keySet().forEach(d -> biff.add(d));
-        } finally {
-            lock.unlock();
-        }
-        dag.have(biff);
-    }
-
-    public Biff haveUnits() {
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
-                                         conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
-        have(biff);
-        return biff.toBff();
     }
 
     public Processor processor() {
@@ -392,6 +375,16 @@ public class ChRbcAdder {
                    .build();
     }
 
+    private void have(DigestBloomFilter biff) {
+        lock.lock();
+        try {
+            waiting.keySet().forEach(d -> biff.add(d));
+        } finally {
+            lock.unlock();
+        }
+        dag.have(biff);
+    }
+
     /**
      * Answer the bloom filter with the commits the receiver has
      */
@@ -411,6 +404,13 @@ public class ChRbcAdder {
         var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
         * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
         signedPrevotes.keySet().forEach(h -> biff.add(h));
+        return biff.toBff();
+    }
+
+    private Biff haveUnits() {
+        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                         conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        have(biff);
         return biff.toBff();
     }
 

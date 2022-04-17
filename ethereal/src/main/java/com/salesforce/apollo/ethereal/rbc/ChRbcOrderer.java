@@ -26,6 +26,9 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
+import com.salesfoce.apollo.ethereal.proto.Gossip;
+import com.salesfoce.apollo.ethereal.proto.Update;
+import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
@@ -48,6 +51,7 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
  *
  */
 public class ChRbcOrderer {
+
     private record epoch(int id, Dag dag, ChRbcAdder adder, ExtenderService extender, RandomSource rs,
                          AtomicBoolean more) {
 
@@ -81,8 +85,8 @@ public class ChRbcOrderer {
     private final AtomicReference<epoch> previous = new AtomicReference<>();
     private final RandomSourceFactory    rsf;
     private final AtomicBoolean          started  = new AtomicBoolean();
-    private final Consumer<List<Unit>>   toPreblock;
     private final int                    threshold;
+    private final Consumer<List<Unit>>   toPreblock;
 
     public ChRbcOrderer(Config conf, int threshold, DataSource ds, Consumer<List<Unit>> toPreblock,
                         Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
@@ -112,6 +116,30 @@ public class ChRbcOrderer {
 
     public Config getConfig() {
         return config;
+    }
+
+    public Processor processor() {
+        return new Processor() {
+            @Override
+            public Gossip gossip(Digest context, int ring) {
+                return currentProcessor().gossip(context, ring);
+            }
+
+            @Override
+            public Update gossip(Gossip gossip) {
+                return currentProcessor().gossip(gossip);
+            }
+
+            @Override
+            public Update update(Update update) {
+                return currentProcessor().update(update);
+            }
+
+            @Override
+            public void updateFrom(Update update) {
+                currentProcessor().updateFrom(update);
+            }
+        };
     }
 
     public void start() {
@@ -167,6 +195,14 @@ public class ChRbcOrderer {
         });
         return new epoch(epoch, dg, new ChRbcAdder(dg, 1024 * 1024, config, threshold), ext, rs,
                          new AtomicBoolean(true));
+    }
+
+    private Processor currentProcessor() {
+        epoch c = current.get();
+        if (c == null) {
+            throw new IllegalStateException("No current epoch on: " + config.logLabel());
+        }
+        return c.adder.processor();
     }
 
     private void finishEpoch(int epoch) {

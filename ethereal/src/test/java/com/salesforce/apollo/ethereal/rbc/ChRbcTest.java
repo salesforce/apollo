@@ -82,7 +82,7 @@ public class ChRbcTest {
         gossipers.forEach(e -> e.start(duration, scheduler));
 
         var maxLevel = units.get((short) 0).size();
-        System.out.println("Level: 0");
+        System.out.println("Dealing");
         for (var pid : units.keySet()) {
             adders.get(pid).produce(units.get(pid).get(0).get(0));
         }

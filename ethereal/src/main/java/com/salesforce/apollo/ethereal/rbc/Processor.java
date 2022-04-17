@@ -1,19 +1,10 @@
 package com.salesforce.apollo.ethereal.rbc;
 
 import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Have;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
 
 public interface Processor {
-
-    /**
-     * Final phase; update the commit, prevote and unit state from the supplied
-     * update
-     * 
-     * @param update - the Update from our partner
-     */
-    void updateFrom(Update update);
 
     /**
      * First phase request. Answer the gossip for the current state of the receiver
@@ -28,11 +19,11 @@ public interface Processor {
      * First phase reply. Answer the Update from the receiver's state, based on the
      * suppled Have
      * 
-     * @param have - the state contained by the partner
+     * @param gossip - the state contained by the partner
      * @return the Update based on the current state of the receiver and the have
      *         state of the partner
      */
-    Update gossip(Have have);
+    Update gossip(Gossip gossip);
 
     /**
      * Second phase, update the receiver state from the supplied update. Return an
@@ -43,4 +34,12 @@ public interface Processor {
      *         of the supplied update
      */
     Update update(Update update);
+
+    /**
+     * Final phase; update the commit, prevote and unit state from the supplied
+     * update
+     * 
+     * @param update - the Update from our partner
+     */
+    void updateFrom(Update update);
 }
