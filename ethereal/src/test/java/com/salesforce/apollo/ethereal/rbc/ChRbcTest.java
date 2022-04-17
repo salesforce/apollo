@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.memberships;
+package com.salesforce.apollo.ethereal.rbc;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +41,7 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class RbcGossiperTest {
+public class ChRbcTest {
 
     @Test
     public void multiple() throws Exception {
@@ -64,14 +64,16 @@ public class RbcGossiperTest {
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         List<ChRbcGossiper> gossipers = new ArrayList<>();
         List<ChRbcAdder> adders = new ArrayList<>();
+        int maxSize = 1024 * 1024;
+
         for (var i = 0; i < members.size(); i++) {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comms.add(comm);
             comm.setMember(members.get(i));
             final var config = builder.setSigner(members.get(i)).setPid((short) i).build();
-            ChRbcAdder adder = new ChRbcAdder(new DagImpl(config, 0), config, context.toleranceLevel());
+            ChRbcAdder adder = new ChRbcAdder(new DagImpl(config, 0), maxSize, config, context.toleranceLevel());
             adders.add(adder);
-            gossipers.add(new ChRbcGossiper(context, members.get(i), adder, comm, exec, null));
+            gossipers.add(new ChRbcGossiper(context, members.get(i), adder.processor(), comm, exec, null));
         }
 
         comms.forEach(lr -> lr.start());
@@ -82,13 +84,13 @@ public class RbcGossiperTest {
         var maxLevel = units.get((short) 0).size();
         System.out.println("Level: 0");
         for (var pid : units.keySet()) {
-            adders.get(pid).produce(units.get(pid).get(0).get(0), gossipers.get(pid));
+            adders.get(pid).produce(units.get(pid).get(0).get(0));
         }
         try {
             for (var level = 1; level < maxLevel; level++) {
                 System.out.println("Level: " + level);
                 for (var pid : units.keySet()) {
-                    adders.get(pid).produce(units.get(pid).get(level).get(0), gossipers.get(pid));
+                    adders.get(pid).produce(units.get(pid).get(level).get(0));
                 }
                 for (var pid : units.keySet()) {
                     System.out.println("   pid: " + pid);

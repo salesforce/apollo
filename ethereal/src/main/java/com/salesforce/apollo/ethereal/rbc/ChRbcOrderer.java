@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal;
+package com.salesforce.apollo.ethereal.rbc;
 
 import static com.salesforce.apollo.ethereal.Dag.newDag;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,19 +26,19 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.AdderImpl;
-import com.salesforce.apollo.ethereal.Adder.Correctness;
+import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag;
+import com.salesforce.apollo.ethereal.DataSource;
+import com.salesforce.apollo.ethereal.PreUnit;
+import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
+import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.creator.Creator;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -49,20 +47,16 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  * @author hal.hildebrand
  *
  */
-public class Orderer {
-    private record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs, AtomicBoolean more) {
+public class ChRbcOrderer {
+    private record epoch(int id, Dag dag, ChRbcAdder adder, ExtenderService extender, RandomSource rs,
+                         AtomicBoolean more) {
 
-        private void close() {
+        public void close() {
             adder.close();
             more.set(false);
         }
 
-        private void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
-            dag.missing(have, missing);
-            adder.missing(have, missing);
-        }
-
-        private void noMoreUnits() {
+        public void noMoreUnits() {
             more.set(false);
         }
     }
@@ -74,7 +68,7 @@ public class Orderer {
         }
     }
 
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(Orderer.class);
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(ChRbcOrderer.class);
 
     private final Config                 config;
     private final Creator                creator;
@@ -88,9 +82,11 @@ public class Orderer {
     private final RandomSourceFactory    rsf;
     private final AtomicBoolean          started  = new AtomicBoolean();
     private final Consumer<List<Unit>>   toPreblock;
+    private final int                    threshold;
 
-    public Orderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Integer> newEpochAction,
-                   RandomSourceFactory rsf) {
+    public ChRbcOrderer(Config conf, int threshold, DataSource ds, Consumer<List<Unit>> toPreblock,
+                        Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
+        this.threshold = threshold;
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
@@ -114,74 +110,8 @@ public class Orderer {
         });
     }
 
-    /**
-     * Asynchronously sends preunits received from other committee members to their
-     * corresponding epochs. It assumes preunits are ordered by ascending epochID
-     * and, within each epoch, they are topologically sorted.
-     */
-    public void addPreunits(List<PreUnit> pus) {
-        if (!started.get()) {
-            return;
-        }
-        try {
-            executor.execute(() -> {
-                if (!started.get()) {
-                    return;
-                }
-                currentThread = Thread.currentThread();
-                List<PreUnit> preunits = pus;
-                final Lock lock = mx.writeLock();
-                lock.lock();
-                try {
-                    log.debug("Adding: {} on: {}", preunits, config.logLabel());
-                    var errors = new HashMap<Digest, Correctness>();
-                    while (preunits.size() > 0) {
-                        var epoch = preunits.get(0).epoch();
-                        var end = 0;
-                        while (end < preunits.size() && preunits.get(end).epoch() == epoch) {
-                            end++;
-                        }
-                        epoch ep = retrieveEpoch(preunits.get(0));
-                        if (ep != null) {
-                            errors.putAll(ep.adder().addPreunits(preunits.subList(0, end)));
-                        } else {
-                            log.debug("No epoch for: {} on: {}", preunits, config.logLabel());
-                        }
-                        preunits = preunits.subList(end, preunits.size());
-                    }
-                } finally {
-                    currentThread = null;
-                    lock.unlock();
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            // ignored
-        }
-    }
-
     public Config getConfig() {
         return config;
-    }
-
-    public Update.Builder missing(BloomFilter<Digest> have) {
-        List<PreUnit_s> missing = new ArrayList<>();
-        epoch p;
-        epoch c;
-        final var lock = mx.readLock();
-        lock.lock();
-        try {
-            p = previous.get();
-            c = current.get();
-        } finally {
-            lock.unlock();
-        }
-        if (p != null) {
-            p.missing(have, missing);
-        }
-        if (c != null) {
-            c.missing(have, missing);
-        }
-        return Update.newBuilder().addAllMissing(missing);
     }
 
     public void start() {
@@ -235,7 +165,8 @@ public class Orderer {
                 // ignored
             }
         });
-        return new epoch(epoch, dg, new AdderImpl(dg, config), ext, rs, new AtomicBoolean(true));
+        return new epoch(epoch, dg, new ChRbcAdder(dg, 1024 * 1024, config, threshold), ext, rs,
+                         new AtomicBoolean(true));
     }
 
     private void finishEpoch(int epoch) {
@@ -350,6 +281,7 @@ public class Orderer {
      * retrieveEpoch returns an epoch for the given preunit. If the preunit comes
      * from a future epoch, it is checked for new epoch proof.
      */
+    @SuppressWarnings("unused")
     private epoch retrieveEpoch(PreUnit pu) {
         var epochId = pu.epoch();
         var e = getEpoch(epochId);

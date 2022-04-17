@@ -4,14 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.memberships;
+package com.salesforce.apollo.ethereal.rbc;
 
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,20 +24,11 @@ import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.ethereal.proto.ContextUpdate;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
-import com.salesfoce.apollo.ethereal.proto.Have;
-import com.salesfoce.apollo.ethereal.proto.SignedCommit;
-import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
 import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesfoce.apollo.ethereal.proto.Update.Builder;
-import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.ChRbc;
-import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.Signed;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
@@ -48,8 +37,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.utils.Utils;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -61,7 +48,7 @@ import io.grpc.StatusRuntimeException;
  * @author hal.hildebrand
  *
  */
-public class ChRbcGossiper implements ChRbc {
+public class ChRbcGossiper {
 
     /**
      * The Service implementing the 3 phase gossip
@@ -76,7 +63,7 @@ public class ChRbcGossiper implements ChRbc {
                           member, from, request.getRing(), predecessor);
                 return Update.getDefaultInstance();
             }
-            final var update = ChRbcGossiper.this.gossip(request.getHaves());
+            final var update = processor.gossip(request.getHaves());
             log.trace("GossipService received from: {} missing: {} on: {}", from, update.getMissingCount(), member);
             return update;
         }
@@ -90,26 +77,24 @@ public class ChRbcGossiper implements ChRbc {
                 return;
             }
             log.trace("gossip update with {} on: {}", from, member);
-            ChRbcGossiper.this.updateFrom(request.getUpdate());
+            processor.updateFrom(request.getUpdate());
         }
     }
 
     private static final Logger log = LoggerFactory.getLogger(ChRbcGossiper.class);
 
-    private final ChRbcAdder                                        adder;
+    private final Processor                                       processor;
     private final CommonCommunications<Gossiper, GossiperService> comm;
-    private final Map<Digest, SignedCommit>                       commits  = new ConcurrentHashMap<>();
     private final Context<Member>                                 context;
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
-    private final Map<Digest, SignedPreVote>                      preVotes = new ConcurrentHashMap<>();
     private final RingCommunications<Gossiper>                    ring;
     private volatile ScheduledFuture<?>                           scheduled;
-    private final AtomicBoolean                                   started  = new AtomicBoolean();
+    private final AtomicBoolean                                   started = new AtomicBoolean();
 
-    public ChRbcGossiper(Context<Member> context, SigningMember member, ChRbcAdder adder, Router communications,
-                       Executor exec, EtherealMetrics m) {
-        this.adder = adder;
+    public ChRbcGossiper(Context<Member> context, SigningMember member, Processor processor, Router communications,
+                         Executor exec, EtherealMetrics m) {
+        this.processor = processor;
         this.context = context;
         this.member = member;
         this.metrics = m;
@@ -117,16 +102,6 @@ public class ChRbcGossiper implements ChRbc {
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<Gossiper>(context, member, this.comm, exec);
-    }
-
-    @Override
-    public void commit(Signed<SignedCommit> sc) {
-        commits.put(sc.hash(), sc.signed());
-    }
-
-    @Override
-    public void prevote(Signed<SignedPreVote> spv) {
-        preVotes.put(spv.hash(), spv.signed());
     }
 
     /**
@@ -164,23 +139,6 @@ public class ChRbcGossiper implements ChRbc {
         }
     }
 
-    private Config config() {
-        return adder.config();
-    }
-
-    private Gossip gossip(int ring) {
-        return Gossip.newBuilder().setRing(ring).setContext(context.getId().toDigeste()).setHaves(have()).build();
-    }
-
-    /**
-     * Answer the Update from the receiver's state, based on the suppled Have
-     */
-    private Update gossip(Have have) {
-        final var builder = Update.newBuilder().setHaves(have());
-        update(have, builder);
-        return builder.build();
-    }
-
     /**
      * Perform the first phase of the gossip. Send our partner the Have state of the
      * receiver
@@ -191,7 +149,7 @@ public class ChRbcGossiper implements ChRbc {
         }
         log.trace("gossiping[{}] with {} ring: {} on {}", context.getId(), link.getMember(), ring, member);
         try {
-            return link.gossip(gossip(ring));
+            return link.gossip(processor.gossip(context.getId(), ring));
         } catch (StatusRuntimeException e) {
             log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(), member,
                       ring, link.getMember(), e);
@@ -244,7 +202,7 @@ public class ChRbcGossiper implements ChRbc {
             link.update(ContextUpdate.newBuilder()
                                      .setContext(context.getId().toDigeste())
                                      .setRing(ring)
-                                     .setUpdate(update(update))
+                                     .setUpdate(processor.update(update))
                                      .build());
         } finally {
             if (timer != null) {
@@ -258,51 +216,6 @@ public class ChRbcGossiper implements ChRbc {
     }
 
     /**
-     * Answer the Have state of the receiver
-     */
-    private Have have() {
-        return Have.newBuilder()
-                   .setHaveCommits(haveCommits())
-                   .setHavePreVotes(havePreVotes())
-                   .setHaveUnits(haveUnits())
-                   .build();
-    }
-
-    /**
-     * Answer the bloom filter with the commits the receiver has
-     */
-    private Biff haveCommits() {
-        final var config = config();
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
-        * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
-        commits.keySet().forEach(h -> biff.add(h));
-        return biff.toBff();
-    }
-
-    /**
-     * Answer the bloom filter with the preVotes the receiver has
-     */
-    private Biff havePreVotes() {
-        final var config = config();
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
-        * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
-        preVotes.keySet().forEach(h -> biff.add(h));
-        return biff.toBff();
-    }
-
-    /**
-     * Answer the bloom filter with the units the receiver has
-     */
-    private Biff haveUnits() {
-        final var config = config();
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
-                                         config.epochLength() * config.numberOfEpochs() * config.nProc() * 2,
-                                         config.fpr());
-        adder.have(biff);
-        return biff.toBff();
-    }
-
-    /**
      * Perform one round of gossip
      */
     private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
@@ -312,80 +225,5 @@ public class ChRbcGossiper implements ChRbc {
         var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
         ring.execute((link, ring) -> gossipRound(link, ring),
                      (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
-    }
-
-    /**
-     * Provide the missing state from the receiver based on the supplied haves
-     */
-    private void update(Have have, final Builder builder) {
-        final var cbf = BloomFilter.from(have.getHaveCommits());
-        commits.entrySet().forEach(e -> {
-            if (!cbf.contains(e.getKey())) {
-                builder.addMissingCommits(e.getValue());
-            }
-        });
-        final var pbf = BloomFilter.from(have.getHavePreVotes());
-        preVotes.entrySet().forEach(e1 -> {
-            if (!pbf.contains(e1.getKey())) {
-                builder.addMissingPreVotes(e1.getValue());
-            }
-        });
-        final BloomFilter<Digest> pubf = BloomFilter.from(have.getHaveUnits());
-        adder.missing(pubf, builder);
-    }
-
-    /**
-     * Update the receiver state from the supplied update. Return an update based on
-     * the current state and the haves of the supplied update
-     */
-    private Update update(Update update) {
-        final var builder = Update.newBuilder();
-        update(update.getHaves(), builder);
-        updateFrom(update);
-        return builder.setHaves(have()).build();
-    }
-
-    /**
-     * Update the commit, prevote and unit state from the supplied update
-     */
-    private void updateFrom(Update update) {
-        update.getMissingList().forEach(u -> {
-            final var signature = JohnHancock.from(u.getSignature());
-            final var digest = signature.toDigest(config().digestAlgorithm());
-            adder.propose(digest, u, this);
-        });
-        update.getMissingCommitsList().forEach(c -> {
-            final var signature = JohnHancock.from(c.getSignature());
-            final var digest = signature.toDigest(config().digestAlgorithm());
-            var validated = new AtomicBoolean();
-            commits.computeIfAbsent(digest, h -> {
-                validated.set(validate(c));
-                return validated.get() ? c : null;
-            });
-            if (validated.get()) {
-                adder.commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource(), this);
-            }
-        });
-        update.getMissingPreVotesList().forEach(pv -> {
-            final var signature = JohnHancock.from(pv.getSignature());
-            var validated = new AtomicBoolean();
-            preVotes.computeIfAbsent(signature.toDigest(config().digestAlgorithm()), h -> {
-                validated.set(validate(pv));
-                return validated.get() ? pv : null;
-            });
-            if (validated.get()) {
-                adder.preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource(), this);
-            }
-        });
-    }
-
-    private boolean validate(SignedCommit c) {
-        // TODO Auto-generated method stub
-        return true;
-    }
-
-    private boolean validate(SignedPreVote pv) {
-        // TODO Auto-generated method stub
-        return true;
     }
 }
