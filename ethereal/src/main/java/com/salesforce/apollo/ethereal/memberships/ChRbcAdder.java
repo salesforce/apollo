@@ -45,7 +45,7 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
  * @author hal.hildebrand
  *
  */
-public class RbcAdder {
+public class ChRbcAdder {
     public interface ChRbc {
 
         void commit(Signed<SignedCommit> signed);
@@ -57,16 +57,18 @@ public class RbcAdder {
     /**
      * State progression:
      * 
-     * PROPOSED -> PREVOTED -> WAITING_FOR_PARENTS -> PARENTS_OUT ->
+     * PROPOSED -> PREVOTED -> WAITING_FOR_PARENTS -> PREVOTED -> COMMITTED
+     * 
+     * FAILED can occur at each state transition
      *
      */
     public enum State {
-        COMMITTED, FAILED, OUTPUT, PARENTS_OUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS;
+        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS;
     }
 
     public record Signed<T> (Digest hash, T signed) {}
 
-    private static final Logger log = LoggerFactory.getLogger(RbcAdder.class);
+    private static final Logger log = LoggerFactory.getLogger(ChRbcAdder.class);
 
     public static Signed<SignedCommit> commit(final Long id, final Digest hash, final short pid, Signer signer,
                                               DigestAlgorithm algo) {
@@ -92,15 +94,15 @@ public class RbcAdder {
     private final Set<Digest>                     failed          = new ConcurrentSkipListSet<>();
     private final ReentrantLock                   lock            = new ReentrantLock();
     private int                                   maxSize         = 100 * 1024 * 1024;
-    private final Map<Long, List<WaitingPreUnit>> missing         = new ConcurrentSkipListMap<>();
+    private final Map<Long, List<Waiting>> missing         = new ConcurrentSkipListMap<>();
     private final Map<Digest, Set<Short>>         preVotes        = new ConcurrentSkipListMap<>();
     private volatile int                          round           = 0;
     private final int                             threshold;
-    private final Map<Digest, WaitingPreUnit>     waiting         = new ConcurrentSkipListMap<>();
-    private final Map<Long, WaitingPreUnit>       waitingById     = new ConcurrentSkipListMap<>();
-    private final Map<Digest, WaitingPreUnit>     waitingForRound = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Waiting>     waiting         = new ConcurrentSkipListMap<>();
+    private final Map<Long, Waiting>       waitingById     = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Waiting>     waitingForRound = new ConcurrentSkipListMap<>();
 
-    public RbcAdder(Dag dag, Config conf, int threshold) {
+    public ChRbcAdder(Dag dag, Config conf, int threshold) {
         this.dag = dag;
         this.conf = conf;
         this.threshold = threshold;
@@ -266,7 +268,7 @@ public class RbcAdder {
             log.trace("Producing unit: {} on: {}", u, conf.logLabel());
             round = u.height();
             dag.insert(u);
-            final var wpu = new WaitingPreUnit(u.toPreUnit(), u.toPreUnit_s());
+            final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
             prevote(wpu, chRbc);
             commit(wpu, chRbc);
             advance(chRbc);
@@ -319,7 +321,7 @@ public class RbcAdder {
                           preunit.epoch(), conf.logLabel());
                 return;
             }
-            final var wpu = new WaitingPreUnit(preunit, u);
+            final var wpu = new Waiting(preunit, u);
             waiting.put(digest, wpu);
             if (preunit.height() == 0 || round > preunit.height()) {
                 prevote(wpu, chRbc);
@@ -349,7 +351,7 @@ public class RbcAdder {
      * checkIfMissing sets the children() attribute of a newly created
      * waitingPreunit, depending on if it was missing
      */
-    private void checkIfMissing(WaitingPreUnit wp) {
+    private void checkIfMissing(Waiting wp) {
         log.trace("Checking if missing: {} on: {}", wp, conf.logLabel());
         var neededBy = missing.get(wp.id());
         if (neededBy != null) {
@@ -370,7 +372,7 @@ public class RbcAdder {
      * which are waiting, and which are missing. Sets values of waitingParents() and
      * missingParents accordingly. Additionally, returns maximal heights of dag.
      */
-    private int[] checkParents(WaitingPreUnit wp) {
+    private int[] checkParents(Waiting wp) {
         var epoch = wp.epoch();
         var maxHeights = dag.maxView().heights();
         var heights = wp.pu().view().heights();
@@ -391,13 +393,13 @@ public class RbcAdder {
         return maxHeights;
     }
 
-    private void commit(WaitingPreUnit wpu, ChRbc chRbc) {
+    private void commit(Waiting wpu, ChRbc chRbc) {
         wpu.setState(State.COMMITTED);
         chRbc.commit(commit(wpu.id(), wpu.hash(), config().pid(), config().signer(), conf.digestAlgorithm()));
         commit(wpu.hash(), conf.pid(), chRbc);
     }
 
-    private boolean decodeParents(WaitingPreUnit wp) {
+    private boolean decodeParents(Waiting wp) {
         var decoded = dag.decodeParents(wp.pu());
         if (decoded.inError()) {
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
@@ -424,7 +426,7 @@ public class RbcAdder {
         return true;
     }
 
-    private void output(WaitingPreUnit wpu, ChRbc chRbc) {
+    private void output(Waiting wpu, ChRbc chRbc) {
         boolean valid = wpu.height() == 0 || wpu.height() < round;
         assert valid : wpu + " is not < " + round;
         if (!decodeParents(wpu)) {
@@ -448,7 +450,7 @@ public class RbcAdder {
         }
     }
 
-    private void prevote(WaitingPreUnit wpu, ChRbc chRbc) {
+    private void prevote(Waiting wpu, ChRbc chRbc) {
         wpu.setState(State.PREVOTED);
         chRbc.prevote(prevote(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm()));
         preVote(wpu.hash(), conf.pid(), chRbc);
@@ -458,12 +460,12 @@ public class RbcAdder {
      * registerMissing registers the fact that the given WaitingPreUnit needs an
      * unknown unit with the given id.
      */
-    private void registerMissing(long id, WaitingPreUnit wp) {
+    private void registerMissing(long id, Waiting wp) {
         missing.computeIfAbsent(id, i -> new ArrayList<>()).add(wp);
         log.trace("missing parent: {} for: {} on: {}", PreUnit.decode(id), wp, conf.logLabel());
     }
 
-    private void remove(WaitingPreUnit wpu) {
+    private void remove(Waiting wpu) {
         preVotes.remove(wpu.hash());
         commits.remove(wpu.hash());
         waiting.remove(wpu.hash());
@@ -475,7 +477,7 @@ public class RbcAdder {
      * removeFailed removes from the buffer zone the preunit which we failed to add,
      * together with all its descendants.
      */
-    private void removeFailed(WaitingPreUnit wp) {
+    private void removeFailed(Waiting wp) {
         wp.setState(State.FAILED);
         log.warn("Failed: {} on: {}", wp, conf.logLabel());
         failed.add(wp.hash());

@@ -34,7 +34,6 @@ import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Adder.AdderImpl;
 import com.salesforce.apollo.ethereal.Adder.Correctness;
-import com.salesforce.apollo.ethereal.Dag.DagInfo;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.creator.Creator;
 import com.salesforce.apollo.ethereal.creator.Creator.RsData;
@@ -173,73 +172,8 @@ public class Orderer {
         }
     }
 
-    /**
-     * Returns all units present in the orderer that are newer than units described
-     * by the given DagInfo. This includes all units from the epoch given by the
-     * DagInfo above provided heights as well as ALL units from newer epochs.
-     */
-    public List<Unit> delta(DagInfo[] info) {
-        final Lock lock = mx.readLock();
-        lock.lock();
-        try {
-            List<Unit> result = new ArrayList<>();
-            final epoch c = current.get();
-            Consumer<DagInfo> deltaResolver = dagInfo -> {
-                if (dagInfo == null) {
-                    return;
-                }
-                final epoch p = previous.get();
-                if (p != null && dagInfo.epoch() == p.id()) {
-                    result.addAll(p.unitsAbove(dagInfo.heights()));
-                }
-                if (c != null && dagInfo.epoch() == c.id()) {
-                    result.addAll(c.unitsAbove(dagInfo.heights()));
-                }
-            };
-            deltaResolver.accept(info[0]);
-            deltaResolver.accept(info[1]);
-            if (c != null) {
-                if (info[0] != null && info[0].epoch() < c.id && info[1] != null && info[1].epoch() < c.id()) {
-                    result.addAll(c.allUnits());
-                }
-            }
-            return result;
-        } finally {
-            lock.unlock();
-        }
-    }
-
     public Config getConfig() {
         return config;
-    }
-
-    /** GetInfo returns DagInfo of the dag from the most recent epoch. */
-    public DagInfo[] getInfo() {
-        final Lock lock = mx.readLock();
-        lock.lock();
-        try {
-            var result = new DagInfo[2];
-            final epoch p = previous.get();
-            if (p != null && !p.wantsMoreUnits()) {
-                result[0] = p.dag.maxView();
-            }
-            final epoch c = current.get();
-            if (c != null && !c.wantsMoreUnits()) {
-                result[1] = c.dag().maxView();
-            }
-            return result;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /** MaxUnits returns maximal units per process from the chosen epoch. */
-    public SlottedUnits maxUnits(int epoch) {
-        var ep = getEpoch(epoch);
-        if (ep != null) {
-            return ep.epoch.dag.maximalUnitsPerProcess();
-        }
-        return null;
     }
 
     public Update.Builder missing(BloomFilter<Digest> have) {
@@ -284,57 +218,6 @@ public class Orderer {
             current.get().close();
         }
         log.trace("Orderer stopped on: {}", config.logLabel());
-    }
-
-    /**
-     * UnitsByHash allows to access units present in the orderer using their hashes.
-     * The length of the returned slice is equal to the number of argument hashes.
-     * For non-present units the returned slice contains nil on the corresponding
-     * position.
-     */
-    public List<Unit> unitsByHash(List<Digest> ids) {
-        List<Unit> result;
-        final Lock lock = mx.readLock();
-        lock.lock();
-        try {
-            final epoch c = current.get();
-            result = c != null ? c.dag.get(ids) : new ArrayList<>();
-            final epoch p = previous.get();
-            if (p != null) {
-                for (int i = 0; i < result.size(); i++) {
-                    if (result.get(i) != null) {
-                        result.set(i, p.dag.get(ids.get(i)));
-                    }
-                }
-            }
-        } finally {
-            lock.unlock();
-        }
-        return result;
-    }
-
-    /**
-     * UnitsByID allows to access units present in the orderer using their ids. The
-     * returned slice contains only existing units (no nil entries for non-present
-     * units) and can contain multiple units with the same id (forks). Because of
-     * that the length of the result can be different than the number of arguments.
-     */
-    public List<Unit> unitsByID(List<Long> ids) {
-        var result = new ArrayList<Unit>();
-        final Lock lock = mx.readLock();
-        lock.lock();
-        try {
-            for (var id : ids) {
-                var epoch = PreUnit.decode(id).epoch();
-                epochWithNewer ep = getEpoch(epoch);
-                if (ep != null) {
-                    result.addAll(ep.epoch.dag().get(id));
-                }
-            }
-            return result;
-        } finally {
-            lock.unlock();
-        }
     }
 
     private epoch createEpoch(int epoch) {

@@ -13,11 +13,11 @@ import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.memberships.RbcAdder.State;
+import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.State;
 
-public class WaitingPreUnit {
+public class Waiting {
 
-    private final List<WaitingPreUnit> children       = new ArrayList<>();
+    private final List<Waiting> children       = new ArrayList<>();
     private volatile Unit              decoded;
     private volatile int               missingParents = 0;
     private final PreUnit              pu;
@@ -25,25 +25,25 @@ public class WaitingPreUnit {
     private volatile State             state;
     private volatile int               waitingParents = 0;
 
-    public WaitingPreUnit(PreUnit pu) {
+    public Waiting(PreUnit pu) {
         this(pu, pu.toPreUnit_s());
     }
 
-    public WaitingPreUnit(PreUnit pu, PreUnit_s serialized) {
+    public Waiting(PreUnit pu, PreUnit_s serialized) {
         this.pu = pu;
         this.serialized = serialized;
         state = State.PROPOSED;
     }
 
-    public void addChild(WaitingPreUnit wp) {
+    public void addChild(Waiting wp) {
         children.add(wp);
     }
 
-    public List<WaitingPreUnit> children() {
+    public List<Waiting> children() {
         return children;
     }
 
-    public void clearAndAdd(List<WaitingPreUnit> c) {
+    public void clearAndAdd(List<Waiting> c) {
         children.clear();
         children.addAll(c);
     }

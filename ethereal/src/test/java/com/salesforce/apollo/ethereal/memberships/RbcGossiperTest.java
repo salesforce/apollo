@@ -62,16 +62,16 @@ public class RbcGossiperTest {
         var builder = Config.deterministic()
                             .setnProc((short) members.size())
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        List<RbcGossiper> gossipers = new ArrayList<>();
-        List<RbcAdder> adders = new ArrayList<>();
+        List<ChRbcGossiper> gossipers = new ArrayList<>();
+        List<ChRbcAdder> adders = new ArrayList<>();
         for (var i = 0; i < members.size(); i++) {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comms.add(comm);
             comm.setMember(members.get(i));
             final var config = builder.setSigner(members.get(i)).setPid((short) i).build();
-            RbcAdder adder = new RbcAdder(new DagImpl(config, 0), config, context.toleranceLevel());
+            ChRbcAdder adder = new ChRbcAdder(new DagImpl(config, 0), config, context.toleranceLevel());
             adders.add(adder);
-            gossipers.add(new RbcGossiper(context, members.get(i), adder, comm, exec, null));
+            gossipers.add(new ChRbcGossiper(context, members.get(i), adder, comm, exec, null));
         }
 
         comms.forEach(lr -> lr.start());

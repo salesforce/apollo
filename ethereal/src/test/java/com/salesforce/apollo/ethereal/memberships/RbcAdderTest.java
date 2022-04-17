@@ -32,8 +32,8 @@ import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.DagReader;
 import com.salesforce.apollo.ethereal.DagTest;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.memberships.RbcAdder.ChRbc;
-import com.salesforce.apollo.ethereal.memberships.RbcAdder.Signed;
+import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.ChRbc;
+import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.Signed;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -66,7 +66,7 @@ public class RbcAdderTest {
                                  .build();
         final var dag = new DagImpl(config, 0);
 
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+        var adder = new ChRbcAdder(dag, config, context.toleranceLevel());
 
         var chRbc = mock(ChRbc.class);
 
@@ -178,7 +178,7 @@ public class RbcAdderTest {
                                  .build();
         final var dag = new DagImpl(config, 0);
 
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+        var adder = new ChRbcAdder(dag, config, context.toleranceLevel());
 
         var chRbc = mock(ChRbc.class);
 
@@ -228,7 +228,7 @@ public class RbcAdderTest {
                                  .build();
         final var dag = new DagImpl(config, 0);
 
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+        var adder = new ChRbcAdder(dag, config, context.toleranceLevel());
 
         var chRbc = mock(ChRbc.class);
 
@@ -285,7 +285,7 @@ public class RbcAdderTest {
                                  .build();
         final var dag = new DagImpl(config, 0);
 
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+        var adder = new ChRbcAdder(dag, config, context.toleranceLevel());
 
         var chRbc = mock(ChRbc.class);
 
@@ -350,7 +350,7 @@ public class RbcAdderTest {
                                  .build();
         final var dag = new DagImpl(config, 0);
 
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+        var adder = new ChRbcAdder(dag, config, context.toleranceLevel());
 
         var chRbc = mock(ChRbc.class);
 
@@ -389,7 +389,7 @@ public class RbcAdderTest {
         assertNotNull(dag.contains(units.get((short) 0).get(4).get(0).hash()));
     }
 
-    private void round(int round, HashMap<Short, Map<Integer, List<Unit>>> units, RbcAdder adder, ChRbc chRbc) {
+    private void round(int round, HashMap<Short, Map<Integer, List<Unit>>> units, ChRbcAdder adder, ChRbc chRbc) {
         var u = units.get((short) 0).get(round).get(0);
         adder.produce(u, chRbc);
         adder.preVote(u.hash(), (short) 1, chRbc);

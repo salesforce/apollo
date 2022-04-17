@@ -38,8 +38,8 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.memberships.RbcAdder.ChRbc;
-import com.salesforce.apollo.ethereal.memberships.RbcAdder.Signed;
+import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.ChRbc;
+import com.salesforce.apollo.ethereal.memberships.ChRbcAdder.Signed;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
@@ -61,7 +61,7 @@ import io.grpc.StatusRuntimeException;
  * @author hal.hildebrand
  *
  */
-public class RbcGossiper implements ChRbc {
+public class ChRbcGossiper implements ChRbc {
 
     /**
      * The Service implementing the 3 phase gossip
@@ -76,7 +76,7 @@ public class RbcGossiper implements ChRbc {
                           member, from, request.getRing(), predecessor);
                 return Update.getDefaultInstance();
             }
-            final var update = RbcGossiper.this.gossip(request.getHaves());
+            final var update = ChRbcGossiper.this.gossip(request.getHaves());
             log.trace("GossipService received from: {} missing: {} on: {}", from, update.getMissingCount(), member);
             return update;
         }
@@ -90,13 +90,13 @@ public class RbcGossiper implements ChRbc {
                 return;
             }
             log.trace("gossip update with {} on: {}", from, member);
-            RbcGossiper.this.updateFrom(request.getUpdate());
+            ChRbcGossiper.this.updateFrom(request.getUpdate());
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(RbcGossiper.class);
+    private static final Logger log = LoggerFactory.getLogger(ChRbcGossiper.class);
 
-    private final RbcAdder                                        adder;
+    private final ChRbcAdder                                        adder;
     private final CommonCommunications<Gossiper, GossiperService> comm;
     private final Map<Digest, SignedCommit>                       commits  = new ConcurrentHashMap<>();
     private final Context<Member>                                 context;
@@ -107,7 +107,7 @@ public class RbcGossiper implements ChRbc {
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started  = new AtomicBoolean();
 
-    public RbcGossiper(Context<Member> context, SigningMember member, RbcAdder adder, Router communications,
+    public ChRbcGossiper(Context<Member> context, SigningMember member, ChRbcAdder adder, Router communications,
                        Executor exec, EtherealMetrics m) {
         this.adder = adder;
         this.context = context;
