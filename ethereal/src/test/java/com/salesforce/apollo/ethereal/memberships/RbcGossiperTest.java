@@ -6,11 +6,19 @@
  */
 package com.salesforce.apollo.ethereal.memberships;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
@@ -20,6 +28,10 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
+import com.salesforce.apollo.ethereal.DagFactory;
+import com.salesforce.apollo.ethereal.DagReader;
+import com.salesforce.apollo.ethereal.DagTest;
+import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -32,12 +44,18 @@ import com.salesforce.apollo.utils.Utils;
 public class RbcGossiperTest {
 
     @Test
-    public void multiple() {
+    public void multiple() throws Exception {
+        HashMap<Short, Map<Integer, List<Unit>>> units;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
+            var dag = DagReader.readDag(fis, new DagFactory.TestDagFactory()).dag();
+            units = DagTest.collectUnits(dag);
+        }
+
         String prefix = UUID.randomUUID().toString();
         Executor exec = Executors.newFixedThreadPool(2);
         var context = Context.newBuilder().setCardinality(10).build();
         List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
                                                .toList();
         List<LocalRouter> comms = new ArrayList<>();
         members.forEach(m -> context.activate(m));
@@ -45,13 +63,51 @@ public class RbcGossiperTest {
                             .setnProc((short) members.size())
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         List<RbcGossiper> gossipers = new ArrayList<>();
-        for (short i = 0; i < members.size(); i++) {
+        List<RbcAdder> adders = new ArrayList<>();
+        for (var i = 0; i < members.size(); i++) {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
             comms.add(comm);
-            final var config = builder.setSigner(members.get(i)).setPid(i).build();
-            gossipers.add(new RbcGossiper(context, members.get(i),
-                                          new RbcAdder(new DagImpl(config, 0), config, context.toleranceLevel()), comm,
-                                          exec, null));
+            comm.setMember(members.get(i));
+            final var config = builder.setSigner(members.get(i)).setPid((short) i).build();
+            RbcAdder adder = new RbcAdder(new DagImpl(config, 0), config, context.toleranceLevel());
+            adders.add(adder);
+            gossipers.add(new RbcGossiper(context, members.get(i), adder, comm, exec, null));
+        }
+
+        comms.forEach(lr -> lr.start());
+        Duration duration = Duration.ofMillis(10);
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        gossipers.forEach(e -> e.start(duration, scheduler));
+
+        var maxLevel = units.get((short) 0).size();
+        System.out.println("Level: 0");
+        for (var pid : units.keySet()) {
+            adders.get(pid).produce(units.get(pid).get(0).get(0), gossipers.get(pid));
+        }
+        try {
+            for (var level = 1; level < maxLevel; level++) {
+                System.out.println("Level: " + level);
+                for (var pid : units.keySet()) {
+                    adders.get(pid).produce(units.get(pid).get(level).get(0), gossipers.get(pid));
+                }
+                for (var pid : units.keySet()) {
+                    System.out.println("   pid: " + pid);
+                    Unit u = units.get(pid).get(level - 1).get(0);
+                    assertTrue(Utils.waitForCondition(5_000,
+                                                      () -> adders.stream()
+                                                                  .map(a -> a.getDag())
+                                                                  .map(d -> d.contains(u.hash()))
+                                                                  .allMatch(b -> b)),
+                               "Failed at level: " + level);
+                }
+            }
+        } finally {
+            gossipers.forEach(g -> g.stop());
+            comms.forEach(lr -> lr.close());
+            System.out.println("=== DUMP ===");
+            adders.stream().map(a -> a.dump()).forEach(dump -> {
+                System.out.println(dump);
+            });
         }
     }
 }

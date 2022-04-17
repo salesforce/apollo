@@ -93,7 +93,8 @@ public class WaitingPreUnit {
     }
 
     public int missingParents() {
-        return missingParents;
+        final var current = missingParents;
+        return current;
     }
 
     public boolean parentsOutput() {
@@ -119,11 +120,12 @@ public class WaitingPreUnit {
     }
 
     public State state() {
-        return state;
+        final var current = state;
+        return current;
     }
 
     @Override
     public String toString() {
-        return "wpu[" + pu.shortString() + "]";
+        return "wpu:" + state + ":[" + pu.shortString() + "]";
     }
 }

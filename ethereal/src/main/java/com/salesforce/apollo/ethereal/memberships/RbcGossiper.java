@@ -9,17 +9,15 @@ package com.salesforce.apollo.ethereal.memberships;
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +39,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.memberships.RbcAdder.ChRbc;
+import com.salesforce.apollo.ethereal.memberships.RbcAdder.Signed;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
@@ -90,8 +89,8 @@ public class RbcGossiper implements ChRbc {
                           member, from, request.getRing(), predecessor);
                 return;
             }
-            log.debug("gossip update with {} on: {}", from, member);
-            write(() -> RbcGossiper.this.updateFrom(request.getUpdate()));
+            log.trace("gossip update with {} on: {}", from, member);
+            RbcGossiper.this.updateFrom(request.getUpdate());
         }
     }
 
@@ -99,12 +98,11 @@ public class RbcGossiper implements ChRbc {
 
     private final RbcAdder                                        adder;
     private final CommonCommunications<Gossiper, GossiperService> comm;
-    private final Map<Digest, SignedCommit>                       commits  = new HashMap<>();
+    private final Map<Digest, SignedCommit>                       commits  = new ConcurrentHashMap<>();
     private final Context<Member>                                 context;
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
-    private final ReentrantReadWriteLock                          mx       = new ReentrantReadWriteLock();
-    private final Map<Digest, SignedPreVote>                      preVotes = new HashMap<>();
+    private final Map<Digest, SignedPreVote>                      preVotes = new ConcurrentHashMap<>();
     private final RingCommunications<Gossiper>                    ring;
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started  = new AtomicBoolean();
@@ -122,15 +120,13 @@ public class RbcGossiper implements ChRbc {
     }
 
     @Override
-    public void commit(SignedCommit sc) {
-        Digest digest = null;
-        commits.put(digest, sc);
+    public void commit(Signed<SignedCommit> sc) {
+        commits.put(sc.hash(), sc.signed());
     }
 
     @Override
-    public void prevote(SignedPreVote spv) {
-        Digest digest = null;
-        preVotes.put(digest, spv);
+    public void prevote(Signed<SignedPreVote> spv) {
+        preVotes.put(spv.hash(), spv.signed());
     }
 
     /**
@@ -168,32 +164,20 @@ public class RbcGossiper implements ChRbc {
         }
     }
 
-    private SignedCommit committed(SignedCommit c) {
-        if (!validate(c)) {
-            return null;
-        }
-        final var commit = c.getCommit();
-        adder.commit(Digest.from(commit.getHash()), (short) commit.getSource(), this);
-        return c;
-    }
-
     private Config config() {
         return adder.config();
     }
 
-    private Gossip gossip() {
-        return read(() -> Gossip.newBuilder().setContext(context.getId().toDigeste()).setHaves(have()).build());
+    private Gossip gossip(int ring) {
+        return Gossip.newBuilder().setRing(ring).setContext(context.getId().toDigeste()).setHaves(have()).build();
     }
 
     /**
      * Answer the Update from the receiver's state, based on the suppled Have
      */
     private Update gossip(Have have) {
-        final var builder = Update.newBuilder();
-        read(() -> {
-            builder.setHaves(have());
-            update(have, builder);
-        });
+        final var builder = Update.newBuilder().setHaves(have());
+        update(have, builder);
         return builder.build();
     }
 
@@ -205,9 +189,9 @@ public class RbcGossiper implements ChRbc {
         if (!started.get()) {
             return null;
         }
-        log.debug("gossiping[{}] with {} ring: {} on {}", context.getId(), link.getMember(), ring, member);
+        log.trace("gossiping[{}] with {} ring: {} on {}", context.getId(), link.getMember(), ring, member);
         try {
-            return link.gossip(gossip());
+            return link.gossip(gossip(ring));
         } catch (StatusRuntimeException e) {
             log.debug("gossiping[{}] failed with: {} with {} ring: {} on {}", context.getId(), e.getMessage(), member,
                       ring, link.getMember(), e);
@@ -256,7 +240,7 @@ public class RbcGossiper implements ChRbc {
                 log.warn("error gossiping with {} on: {}", link.getMember(), member, cause);
                 return;
             }
-            log.debug("gossip update with {} on: {}", link.getMember(), member);
+            log.trace("gossip update with {} on: {}", link.getMember(), member);
             link.update(ContextUpdate.newBuilder()
                                      .setContext(context.getId().toDigeste())
                                      .setRing(ring)
@@ -330,35 +314,6 @@ public class RbcGossiper implements ChRbc {
                      (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
     }
 
-    private SignedPreVote preVote(SignedPreVote spv) {
-        if (!validate(spv)) {
-            return null;
-        }
-        final var pv = spv.getVote();
-        adder.preVote(Digest.from(pv.getHash()), (short) pv.getSource(), this);
-        return spv;
-    }
-
-    private void read(Runnable r) {
-        final var read = mx.readLock();
-        read.lock();
-        try {
-            r.run();
-        } finally {
-            read.unlock();
-        }
-    }
-
-    private <T> T read(Supplier<T> s) {
-        final var read = mx.readLock();
-        read.lock();
-        try {
-            return s.get();
-        } finally {
-            read.unlock();
-        }
-    }
-
     /**
      * Provide the missing state from the receiver based on the supplied haves
      */
@@ -385,8 +340,8 @@ public class RbcGossiper implements ChRbc {
      */
     private Update update(Update update) {
         final var builder = Update.newBuilder();
-        read(() -> update(update.getHaves(), builder));
-        write(() -> updateFrom(update));
+        update(update.getHaves(), builder);
+        updateFrom(update);
         return builder.setHaves(have()).build();
     }
 
@@ -402,11 +357,25 @@ public class RbcGossiper implements ChRbc {
         update.getMissingCommitsList().forEach(c -> {
             final var signature = JohnHancock.from(c.getSignature());
             final var digest = signature.toDigest(config().digestAlgorithm());
-            commits.computeIfAbsent(digest, h -> committed(c));
+            var validated = new AtomicBoolean();
+            commits.computeIfAbsent(digest, h -> {
+                validated.set(validate(c));
+                return validated.get() ? c : null;
+            });
+            if (validated.get()) {
+                adder.commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource(), this);
+            }
         });
         update.getMissingPreVotesList().forEach(pv -> {
             final var signature = JohnHancock.from(pv.getSignature());
-            preVotes.computeIfAbsent(signature.toDigest(config().digestAlgorithm()), h -> preVote(pv));
+            var validated = new AtomicBoolean();
+            preVotes.computeIfAbsent(signature.toDigest(config().digestAlgorithm()), h -> {
+                validated.set(validate(pv));
+                return validated.get() ? pv : null;
+            });
+            if (validated.get()) {
+                adder.preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource(), this);
+            }
         });
     }
 
@@ -418,15 +387,5 @@ public class RbcGossiper implements ChRbc {
     private boolean validate(SignedPreVote pv) {
         // TODO Auto-generated method stub
         return true;
-    }
-
-    private void write(Runnable r) {
-        final var write = mx.writeLock();
-        write.lock();
-        try {
-            r.run();
-        } finally {
-            write.unlock();
-        }
     }
 }

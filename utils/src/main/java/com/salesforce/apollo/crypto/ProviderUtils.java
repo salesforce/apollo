@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The generic sacrifice to the JCE provider gods
@@ -16,8 +18,10 @@ import org.bouncycastle.tls.crypto.impl.jcajce.JcaTlsCryptoProvider;
  */
 public class ProviderUtils {
 
-    static final String PROVIDER_NAME_BC     = BouncyCastleProvider.PROVIDER_NAME;
-    static final String PROVIDER_NAME_BCJSSE = BouncyCastleJsseProvider.PROVIDER_NAME;
+    private static final Logger log = LoggerFactory.getLogger(ProviderUtils.class);
+
+    private static final String PROVIDER_NAME_BC     = BouncyCastleProvider.PROVIDER_NAME;
+    private static final String PROVIDER_NAME_BCJSSE = BouncyCastleJsseProvider.PROVIDER_NAME;
 
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
     private static Provider            PROVIDER_BC;
@@ -164,8 +168,19 @@ public class ProviderUtils {
             return;
         }
         setupHighPriority(false);
+        StringBuffer buff = new StringBuffer();
+        int max = 0;
         for (Provider p : Security.getProviders()) {
-            System.out.println(p);
+            max = Math.max(max, p.getName().length());
         }
+
+        for (Provider p : Security.getProviders()) {
+            buff.append('\n').append("    ").append(p.getName());
+            for (int i = 0; i < max - p.getName().length(); i++) {
+                buff.append(' ');
+            }
+            buff.append(" version: ").append(p.getVersionStr());
+        }
+        log.warn("JCE Providers:" + buff.toString());
     }
 }

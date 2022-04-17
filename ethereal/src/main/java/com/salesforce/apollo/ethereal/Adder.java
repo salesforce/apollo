@@ -335,7 +335,7 @@ public interface Adder {
         }
     }
 
-    enum Correctness {
+    public enum Correctness {
         ABIGUOUS_PARENTS, COMPLIANCE_ERROR, CORRECT, DATA_ERROR, DUPLICATE_PRE_UNIT, DUPLICATE_UNIT, UNKNOWN_PARENTS;
     }
 
