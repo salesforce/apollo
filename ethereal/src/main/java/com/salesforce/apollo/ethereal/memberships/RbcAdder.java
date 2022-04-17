@@ -216,9 +216,7 @@ public class RbcAdder {
         round = u.height();
         final var wpu = new WaitingPreUnit(u.toPreUnit(), u.toPreUnit_s());
         waiting.put(wpu.hash(), wpu);
-        if (round == 0) { // dealing
-            prevote(wpu, chRbc);
-        }
+        prevote(wpu, chRbc);
         advance(chRbc);
     }
 

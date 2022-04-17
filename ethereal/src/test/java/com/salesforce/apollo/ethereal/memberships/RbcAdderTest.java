@@ -45,74 +45,6 @@ import com.salesforce.apollo.utils.Utils;
 public class RbcAdderTest {
 
     @Test
-    public void round1() throws Exception {
-        DagAdder d = null;
-        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
-            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
-        }
-        var units = DagTest.collectUnits(d.dag());
-
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
-        final var dag = new DagImpl(config, 0);
-
-        var adder = new RbcAdder(dag, config, context.toleranceLevel());
-
-        var chRbc = mock(ChRbc.class);
-
-        dealing(units, adder, chRbc, units.get((short) 0).get(0).get(0));
-
-        var u = units.get((short) 1).get(0).get(0);
-        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
-
-        adder.preVote(u.hash(), (short) 1, chRbc);
-        adder.preVote(u.hash(), (short) 2, chRbc);
-
-        adder.commit(u.hash(), (short) 1, chRbc);
-        assertNull(dag.get(u.hash()));
-
-        adder.commit(u.hash(), (short) 2, chRbc);
-
-        assertNotNull(dag.get(u.hash()));
-
-        u = units.get((short) 2).get(0).get(0);
-        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
-
-        adder.preVote(u.hash(), (short) 1, chRbc);
-        adder.preVote(u.hash(), (short) 3, chRbc);
-
-        adder.commit(u.hash(), (short) 1, chRbc);
-        adder.commit(u.hash(), (short) 2, chRbc);
-        adder.commit(u.hash(), (short) 3, chRbc);
-
-        u = units.get((short) 3).get(0).get(0);
-        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
-
-        adder.preVote(u.hash(), (short) 1, chRbc);
-        adder.preVote(u.hash(), (short) 2, chRbc);
-
-        adder.commit(u.hash(), (short) 1, chRbc);
-        adder.commit(u.hash(), (short) 2, chRbc);
-        adder.commit(u.hash(), (short) 3, chRbc);
-
-        verify(chRbc, times(4)).commit(isA(SignedCommit.class));
-        verify(chRbc, times(4)).prevote(isA(SignedPreVote.class));
-
-        adder.commit(u.hash(), (short) 1, chRbc);
-        adder.commit(u.hash(), (short) 2, chRbc);
-        assertNotNull(dag.get(u.hash()));
-    }
-
-    @Test
     public void dealingAllPids() throws Exception {
         DagAdder d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
@@ -137,12 +69,20 @@ public class RbcAdderTest {
 
         var chRbc = mock(ChRbc.class);
 
-        dealing(units, adder, chRbc, units.get((short) 0).get(0).get(0));
+        // PID 0
+        var u = units.get((short) 0).get(0).get(0);
+        adder.produce(u, chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+
         verify(chRbc, times(1)).commit(isA(SignedCommit.class));
-        verify(chRbc, times(2)).prevote(isA(SignedPreVote.class));
+        verify(chRbc, times(1)).prevote(isA(SignedPreVote.class));
 
         // PID 1
-        var u = units.get((short) 1).get(0).get(0);
+        u = units.get((short) 1).get(0).get(0);
         adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
         verify(chRbc, times(2)).prevote(isA(SignedPreVote.class));
         verify(chRbc, times(1)).commit(isA(SignedCommit.class));
@@ -271,17 +211,289 @@ public class RbcAdderTest {
         assertNotNull(dag.get(prime.hash()));
     }
 
-    private void dealing(HashMap<Short, Map<Integer, List<Unit>>> units, RbcAdder adder, ChRbc chRbc, Unit test) {
-        var u = test;
+    @Test
+    public void round1() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = DagTest.collectUnits(d.dag());
+
+        var context = Context.newBuilder().setCardinality(10).build();
+        List<SigningMember> members = IntStream.range(0, 4)
+                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                                               .toList();
+        members.forEach(m -> context.activate(m));
+        final var config = Config.deterministic()
+                                 .setnProc((short) members.size())
+                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
+                                 .setSigner(members.get(0))
+                                 .setPid((short) 0)
+                                 .build();
+        final var dag = new DagImpl(config, 0);
+
+        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+
+        var chRbc = mock(ChRbc.class);
+
+        round(0, units, adder, chRbc);
+        verify(chRbc, times(4)).prevote(isA(SignedPreVote.class));
+        verify(chRbc, times(4)).prevote(isA(SignedPreVote.class));
+
+        var u = units.get((short) 0).get(1).get(0);
+
         adder.produce(u, chRbc);
-        u = units.get((short) 1).get(0).get(0);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        verify(chRbc, times(5)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(5)).prevote(isA(SignedPreVote.class));
+
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 1).get(1).get(0);
         adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
-        adder.preVote(test.hash(), (short) 1, chRbc);
-        adder.preVote(test.hash(), (short) 2, chRbc);
-        adder.preVote(test.hash(), (short) 3, chRbc);
-        adder.commit(test.hash(), (short) 1, chRbc);
-        adder.commit(test.hash(), (short) 2, chRbc);
-        adder.preVote(test.hash(), (short) 3, chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        assertNull(dag.get(u.hash()));
+
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        verify(chRbc, times(6)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(6)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 2).get(1).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(7)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(7)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 3).get(1).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(8)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(8)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
     }
 
+    @Test
+    public void round2() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = DagTest.collectUnits(d.dag());
+
+        var context = Context.newBuilder().setCardinality(10).build();
+        List<SigningMember> members = IntStream.range(0, 4)
+                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                                               .toList();
+        members.forEach(m -> context.activate(m));
+        final var config = Config.deterministic()
+                                 .setnProc((short) members.size())
+                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
+                                 .setSigner(members.get(0))
+                                 .setPid((short) 0)
+                                 .build();
+        final var dag = new DagImpl(config, 0);
+
+        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+
+        var chRbc = mock(ChRbc.class);
+
+        round(0, units, adder, chRbc);
+        round(1, units, adder, chRbc);
+
+        var u = units.get((short) 0).get(2).get(0);
+
+        adder.produce(u, chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        u = units.get((short) 1).get(2).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        assertNull(dag.get(u.hash()));
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        verify(chRbc, times(10)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(10)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 2).get(2).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(11)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(11)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 3).get(2).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(12)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(12)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+    }
+
+    @Test
+    public void round3() throws Exception {
+        DagAdder d = null;
+        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
+            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
+        }
+        var units = DagTest.collectUnits(d.dag());
+
+        var context = Context.newBuilder().setCardinality(10).build();
+        List<SigningMember> members = IntStream.range(0, 4)
+                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                                               .toList();
+        members.forEach(m -> context.activate(m));
+        final var config = Config.deterministic()
+                                 .setnProc((short) members.size())
+                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
+                                 .setSigner(members.get(0))
+                                 .setPid((short) 0)
+                                 .build();
+        final var dag = new DagImpl(config, 0);
+
+        var adder = new RbcAdder(dag, config, context.toleranceLevel());
+
+        var chRbc = mock(ChRbc.class);
+
+        round(0, units, adder, chRbc);
+        round(1, units, adder, chRbc);
+        round(2, units, adder, chRbc);
+
+        var u = units.get((short) 0).get(3).get(0);
+
+        adder.produce(u, chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        u = units.get((short) 1).get(3).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        assertNull(dag.get(u.hash()));
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        verify(chRbc, times(14)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(14)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 2).get(3).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(15)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(15)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+
+        u = units.get((short) 3).get(3).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        verify(chRbc, times(16)).commit(isA(SignedCommit.class));
+        verify(chRbc, times(16)).prevote(isA(SignedPreVote.class));
+        assertNotNull(dag.get(u.hash()));
+    }
+
+    private void round(int round, HashMap<Short, Map<Integer, List<Unit>>> units, RbcAdder adder, ChRbc chRbc) {
+        var u = units.get((short) 0).get(round).get(0);
+        adder.produce(u, chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        u = units.get((short) 1).get(round).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+
+        u = units.get((short) 2).get(round).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 3, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+
+        u = units.get((short) 3).get(round).get(0);
+        adder.propose(u.hash(), u.toPreUnit_s(), chRbc);
+        adder.preVote(u.hash(), (short) 1, chRbc);
+        adder.preVote(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 1, chRbc);
+        adder.commit(u.hash(), (short) 2, chRbc);
+        adder.commit(u.hash(), (short) 3, chRbc);
+    }
 }
