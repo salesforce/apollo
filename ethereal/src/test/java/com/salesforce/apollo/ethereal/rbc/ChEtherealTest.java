@@ -57,12 +57,13 @@ public class ChEtherealTest {
     @Test
     public void context() throws Exception {
 
-        final var gossipPeriod = Duration.ofMillis(10);
+        final var gossipPeriod = Duration.ofMillis(100);
 
         var registry = new MetricRegistry();
 
         short nProc = 4;
-        CountDownLatch finished = new CountDownLatch(nProc);
+        final var count = Dag.minimalTrusted(nProc) + 1;
+        CountDownLatch finished = new CountDownLatch(count);
 
         List<ChRbcEthereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -132,14 +133,14 @@ public class ChEtherealTest {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
             gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
-            finished.await(30, TimeUnit.SECONDS);
+            finished.await(120, TimeUnit.SECONDS);
         } finally {
             comms.forEach(e -> e.close());
             gossipers.forEach(e -> e.stop());
             controllers.forEach(e -> e.stop());
         }
         final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
-        assertFalse(first.isEmpty(), "No process produced 87 blocks");
+        assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
         int success = 0;

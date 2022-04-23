@@ -9,7 +9,6 @@ package com.salesforce.apollo.ethereal.rbc;
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +16,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -90,7 +88,7 @@ public class ChRbcAdder {
     private final Config                     conf;
     private final Dag                        dag;
     private final int                        epoch;
-    private final Set<Digest>                failed          = new ConcurrentSkipListSet<>();
+    private final Set<Digest>                failed;
     private final ReentrantLock              lock            = new ReentrantLock();
     private final int                        maxSize;
     private final Map<Long, List<Waiting>>   missing         = new ConcurrentSkipListMap<>();
@@ -103,16 +101,24 @@ public class ChRbcAdder {
     private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
 
-    public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, int threshold) {
+    public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, int threshold, Set<Digest> failed) {
         this.epoch = epoch;
         this.dag = dag;
         this.conf = conf;
+        this.failed = failed;
         this.threshold = threshold;
         this.maxSize = maxSize;
     }
 
     public void close() {
         log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
+        waiting.clear();
+        waitingById.clear();
+        waitingForRound.clear();
+        signedCommits.clear();
+        signedPrevotes.clear();
+        prevotes.clear();
+        missing.clear();
     }
 
     public String dump() {
@@ -131,17 +137,13 @@ public class ChRbcAdder {
         }
     }
 
-    /**
-     * Answer the Update from the receiver's state, based on the suppled Gossip
-     */
-    public Missing gossip(Missing missing) {
-        assert missing.getEpoch() == epoch : "Gossip from incorrect epoch: " + missing.getEpoch() + " expected: "
-        + epoch + " on: " + conf.logLabel();
-
-        log.trace("Receiving gossip epoch: {} on: {}", epoch, conf.logLabel());
-        final var builder = Missing.newBuilder().setHaves(have());
-        ChRbcAdder.this.update(missing.getHaves(), builder);
-        return builder.build();
+    public Have have() {
+        return Have.newBuilder()
+                   .setEpoch(epoch)
+                   .setHaveCommits(haveCommits())
+                   .setHavePreVotes(havePreVotes())
+                   .setHaveUnits(haveUnits())
+                   .build();
     }
 
     public void produce(Unit u) {
@@ -171,23 +173,17 @@ public class ChRbcAdder {
     /**
      * Provide the missing state from the receiver state from the supplied update.
      * 
-     * @param haves        - the have state of the partner
-     * @param currentEpoch - the current epoch of the orderer
+     * @param haves - the have state of the partner
      * 
      * @return Missing based on the current state and the haves of the receiver
      */
-    public Missing updateFor(Have haves, int currentEpoch) {
-        assert haves.getEpoch() == epoch : "Update from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
+    public Missing updateFor(Have haves) {
+        assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
         final var builder = Missing.newBuilder();
         builder.setEpoch(epoch);
         ChRbcAdder.this.update(haves, builder);
-        if (epoch == currentEpoch) {
-            builder.setHaves(have());
-        } else {
-            builder.setHaves(Have.newBuilder().setEpoch(epoch).build());
-        }
-        return builder.build();
+        return builder.setHaves(have()).build();
     }
 
     /**
@@ -402,15 +398,6 @@ public class ChRbcAdder {
         return true;
     }
 
-    public Have have() {
-        return Have.newBuilder()
-                   .setEpoch(epoch)
-                   .setHaveCommits(haveCommits())
-                   .setHavePreVotes(havePreVotes())
-                   .setHaveUnits(haveUnits())
-                   .build();
-    }
-
     private void have(DigestBloomFilter biff) {
         lock.lock();
         try {
@@ -486,9 +473,7 @@ public class ChRbcAdder {
         for (var ch : wpu.children()) {
             ch.decWaiting();
             if (ch.state() == State.WAITING_FOR_PARENTS && ch.parentsOutput()) {
-                if (prevotes.getOrDefault(ch.hash(), Collections.emptySet()).size() > 2 * threshold + 1) {
-                    commit(ch);
-                }
+                commit(wpu);
             }
         }
     }
@@ -530,7 +515,8 @@ public class ChRbcAdder {
                 return;
             }
 
-            if (wpu.state() == State.PREVOTED) {
+            switch (wpu.state()) {
+            case PREVOTED:
                 waitingById.put(wpu.id(), wpu);
                 checkParents(wpu);
                 checkIfMissing(wpu);
@@ -539,6 +525,14 @@ public class ChRbcAdder {
                 } else {
                     wpu.setState(State.WAITING_FOR_PARENTS);
                 }
+                break;
+            case WAITING_FOR_PARENTS:
+                if (wpu.parentsOutput()) {
+                    commit(wpu);
+                }
+                break;
+            default:
+                break;
             }
         } finally {
             lock.unlock();
@@ -561,7 +555,6 @@ public class ChRbcAdder {
             }
             var wpu = waiting.get(digest);
             if (wpu != null) {
-                log.trace("proposed duplicate unit: {} on: {}", wpu, conf.logLabel());
                 return;
             }
             final var existing = dag.get(digest);

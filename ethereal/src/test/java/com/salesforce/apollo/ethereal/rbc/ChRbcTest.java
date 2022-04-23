@@ -23,10 +23,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.IntStream;
+
+import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Update;
@@ -51,7 +54,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChRbcTest {
 
-//    @Test
+    @Test
     public void multiple() throws Exception {
         HashMap<Short, Map<Integer, List<Unit>>> units;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
@@ -79,7 +82,8 @@ public class ChRbcTest {
             comms.add(comm);
             comm.setMember(members.get(i));
             final var config = builder.setSigner(members.get(i)).setPid((short) i).build();
-            ChRbcAdder adder = new ChRbcAdder(0, new DagImpl(config, 0), maxSize, config, context.toleranceLevel());
+            ChRbcAdder adder = new ChRbcAdder(0, new DagImpl(config, 0), maxSize, config, context.toleranceLevel(),
+                                              new ConcurrentSkipListSet<>());
             adders.add(adder);
             gossipers.add(new ChRbcGossiper(context, members.get(i), new Processor() {
 
@@ -93,13 +97,13 @@ public class ChRbcTest {
                     var builder = Update.newBuilder();
                     final var missing = update.getMissings(0);
                     adder.updateFrom(missing);
-                    builder.addMissings(adder.updateFor(missing.getHaves(), 0));
+                    builder.addMissings(adder.updateFor(missing.getHaves()));
                     return builder.build();
                 }
 
                 @Override
                 public Update gossip(Gossip gossip) {
-                    return Update.newBuilder().addMissings(adder.updateFor(gossip.getHaves(), 0)).build();
+                    return Update.newBuilder().addMissings(adder.updateFor(gossip.getHavesList().get(0))).build();
                 }
 
                 @Override
@@ -107,7 +111,7 @@ public class ChRbcTest {
                     return Gossip.newBuilder()
                                  .setContext(context.toDigeste())
                                  .setRing(ring)
-                                 .setHaves(adder.have())
+                                 .addHaves(adder.have())
                                  .build();
                 }
             }, comm, exec, null));

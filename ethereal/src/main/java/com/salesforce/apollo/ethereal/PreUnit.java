@@ -132,7 +132,8 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "freeUnit[" + creator() + ":" + level() + "(" + height() + ")" + ":" + epoch() + "]";
+            return "freeUnit[" + creator() + ":" + level() + (height() != level() ? "(" + height() + ")" : "") + ":"
+            + epoch() + "]";
         }
 
         @Override

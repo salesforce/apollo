@@ -58,6 +58,28 @@ public class ChRbcCreator {
 
     private static final Logger log = LoggerFactory.getLogger(ChRbcCreator.class);
 
+    /**
+     * MakeConsistent ensures that the set of parents follows "parent consistency
+     * rule". Modifies the provided unit slice in place. Parent consistency rule
+     * means that unit's i-th parent cannot be lower (in a level sense) than i-th
+     * parent of any other of that units parents. In other words, units seen from U
+     * "directly" (as parents) cannot be below the ones seen "indirectly" (as
+     * parents of parents).
+     */
+    private static void makeConsistent(Unit[] parents) {
+        for (int i = 0; i < parents.length; i++) {
+            for (int j = 0; j < parents.length; j++) {
+                if (parents[j] == null) {
+                    continue;
+                }
+                Unit u = parents[j].parents()[i];
+                if (parents[i] == null || (u != null && u.level() > parents[i].level())) {
+                    parents[i] = u;
+                }
+            }
+        }
+    }
+
     private final Unit[]                               candidates;
     private final Config                               conf;
     private final DataSource                           ds;
@@ -73,7 +95,8 @@ public class ChRbcCreator {
     private final int                                  quorum;
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
-    private final BlockingQueue<Unit>                  unitBelt;
+
+    private final BlockingQueue<Unit> unitBelt;
 
     public ChRbcCreator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
                         Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -91,17 +114,15 @@ public class ChRbcCreator {
         this.unitBelt = new PriorityBlockingQueue<>(config.nProc(), new Comparator<Unit>() {
             @Override
             public int compare(Unit a, Unit b) {
-                // start with height
-                var hCmp = Integer.compare(a.height(), b.height());
-                if (hCmp != 0) {
-                    return hCmp;
+                var comp = Integer.compare(a.epoch(), b.epoch());
+                if (comp != 0) {
+                    return comp;
                 }
-                // next PID
-                var pCmp = Short.compare(a.creator(), b.creator());
-                if (pCmp != 0) {
-                    return pCmp;
+                comp = Integer.compare(a.height(), b.height());
+                if (comp != 0) {
+                    return comp;
                 }
-                return 0;
+                return Short.compare(a.creator(), b.creator());
             }
         });
     }
@@ -133,16 +154,29 @@ public class ChRbcCreator {
     }
 
     private built buildParents() {
-        var l = candidates[conf.pid()].level() + 1;
-        final Unit[] parents = getParents();
-        final var count = count(parents);
-        if (count >= quorum) {
-            log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
-            return new built(parents, l);
+        if (conf.canSkipLevel()) {
+            final Unit[] parents = getParents();
+            final var count = count(parents);
+            if (count >= quorum) {
+                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
+                return new built(parents, level.get());
+            } else {
+                log.trace("Parents (skip level) not ready: {} current: {} required: {} on: {}", parents, count, quorum,
+                          conf.logLabel());
+                return null;
+            }
         } else {
-            log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
-                      conf.logLabel());
-            return null;
+            var l = candidates[conf.pid()].level() + 1;
+            final Unit[] parents = getParentsForLevel(l);
+            final var count = count(parents);
+            if (count >= quorum) {
+                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
+                return new built(parents, l);
+            } else {
+                log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
+                          conf.logLabel());
+                return null;
+            }
         }
     }
 
@@ -242,6 +276,24 @@ public class ChRbcCreator {
         for (int i = 0; i < result.length; i++) {
             result[i] = candidates[i];
         }
+        return result;
+    }
+
+    /**
+     * getParentsForLevel returns a set of candidates such that their level is at
+     * most level-1.
+     */
+    private Unit[] getParentsForLevel(int level) {
+        var result = new Unit[conf.nProc()];
+        for (int i = 0; i < candidates.length; i++) {
+            Unit u = candidates[i];
+            for (; u != null && u.level() >= level; u = u.predecessor())
+                ;
+            if (u != null && u.level() == level - 1) {
+                result[u.creator()] = u;
+            }
+        }
+        makeConsistent(result);
         return result;
     }
 
