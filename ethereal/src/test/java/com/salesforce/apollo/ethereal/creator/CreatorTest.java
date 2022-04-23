@@ -263,7 +263,7 @@ public class CreatorTest {
         assertNotNull(createdUnit);
         assertEquals(maxLevel + 1, createdUnit.level());
         assertEquals(0, createdUnit.creator());
-        assertEquals(1, createdUnit.height());
+        assertEquals(1, createdUnit.height(), "expected 1, found: " + createdUnit.height());
 
         unitBelt.close();
         assertEquals(0, unitBelt.size());

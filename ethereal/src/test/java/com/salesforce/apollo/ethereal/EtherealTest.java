@@ -10,9 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -56,20 +54,6 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class EtherealTest {
-
-    private static class SimpleDataSource implements DataSource {
-        final Deque<ByteString> dataStack = new ArrayDeque<>();
-
-        @Override
-        public ByteString getData() {
-            try {
-                Thread.sleep(Utils.bitStreamEntropy().nextLong(100));
-            } catch (InterruptedException e) {
-            }
-            return dataStack.pollFirst();
-        }
-
-    }
 
     static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
         var t = PreUnit.decode(id);

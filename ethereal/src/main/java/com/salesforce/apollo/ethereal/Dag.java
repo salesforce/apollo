@@ -97,6 +97,19 @@ public interface Dag {
         }
 
         @Override
+        public boolean contains(long id) {
+            return read(() -> {
+                var decoded = decode(id);
+                if (decoded.epoch() != epoch) {
+                    return null;
+                }
+                var fiber = heightUnits.getFiber(decoded.height());
+
+                return fiber == null ? false : !fiber.get(decoded.creator()).isEmpty();
+            });
+        }
+
+        @Override
         public Decoded decodeParents(PreUnit pu) {
             return read(() -> {
                 var u = get(pu.hash());
@@ -154,8 +167,12 @@ public interface Dag {
         }
 
         @Override
-        public void have(DigestBloomFilter biff) {
-            units.keySet().forEach(d -> biff.add(d));
+        public void have(DigestBloomFilter biff, int epoch) {
+            units.entrySet()
+                 .stream()
+                 .filter(e -> e.getValue().epoch() == epoch)
+                 .map(e -> e.getKey())
+                 .forEach(d -> biff.add(d));
         }
 
         @Override
@@ -395,7 +412,7 @@ public interface Dag {
             final Lock lock = mx.readLock();
             lock.lock();
             try {
-                return content.get(value);
+                return value < 0 || value >= content.size() ? null : content.get(value);
             } finally {
                 lock.unlock();
             }
@@ -560,6 +577,8 @@ public interface Dag {
 
     boolean contains(Digest digest);
 
+    boolean contains(long parentID);
+
     /** return a slce of parents of the specified unit if control hash matches */
     Decoded decodeParents(PreUnit unit);
 
@@ -571,7 +590,7 @@ public interface Dag {
 
     List<Unit> get(long id);
 
-    void have(DigestBloomFilter biff);
+    void have(DigestBloomFilter biff, int epoch);
 
     void insert(Unit u);
 

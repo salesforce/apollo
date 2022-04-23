@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, salesforce.com, inc.
+ * Copyright (c) 2022, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -8,7 +8,6 @@ package com.salesforce.apollo.ethereal.rbc;
 
 import static com.salesforce.apollo.ethereal.Dag.newDag;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +26,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 
 import com.salesfoce.apollo.ethereal.proto.Gossip;
+import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
@@ -36,12 +36,11 @@ import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.creator.Creator;
-import com.salesforce.apollo.ethereal.creator.Creator.RsData;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.ethereal.rbc.ChRbcCreator.RsData;
 
 /**
  * Orderer orders ordered orders into ordered order. The Jesus Nut of the
@@ -75,7 +74,7 @@ public class ChRbcOrderer {
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(ChRbcOrderer.class);
 
     private final Config                 config;
-    private final Creator                creator;
+    private final ChRbcCreator           creator;
     private final AtomicReference<epoch> current  = new AtomicReference<>();
     private volatile Thread              currentThread;
     private final ExecutorService        executor;
@@ -89,14 +88,14 @@ public class ChRbcOrderer {
     private final Consumer<List<Unit>>   toPreblock;
 
     public ChRbcOrderer(Config conf, int threshold, DataSource ds, Consumer<List<Unit>> toPreblock,
-                        Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
+                        Consumer<Integer> newEpochAction, RandomSourceFactory rsf, Consumer<Processor> gossiper) {
         this.threshold = threshold;
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.newEpochAction = newEpochAction;
         this.rsf = rsf;
-        creator = new Creator(config, ds, u -> {
+        creator = new ChRbcCreator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
             final Lock lock = mx.writeLock();
             lock.lock();
@@ -112,54 +111,32 @@ public class ChRbcOrderer {
             t.setDaemon(true);
             return t;
         });
-    }
-
-    public Config getConfig() {
-        return config;
-    }
-
-    public Processor processor() {
-        return new Processor() {
-            @Override
-            public Gossip gossip(Digest context, int ring) {
-                return currentProcessor().gossip(context, ring);
-            }
-
-            @Override
-            public Update gossip(Gossip gossip) {
-                return currentProcessor().gossip(gossip);
-            }
-
-            @Override
-            public Update update(Update update) {
-                return currentProcessor().update(update);
-            }
-
-            @Override
-            public void updateFrom(Update update) {
-                currentProcessor().updateFrom(update);
-            }
-        };
+        gossiper.accept(processor());
     }
 
     public void start() {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
         newEpoch(0);
         creator.start();
-        started.set(true);
     }
 
     public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
         log.trace("Stopping Orderer on: {}", config.logLabel());
-        started.set(false);
+        creator.stop();
         executor.shutdownNow();
         final var c = currentThread;
         if (c != null) {
             c.interrupt();
         }
-        if (previous.get() != null) {
+        if (previous.get() != null && previous.get() != null) {
             previous.get().close();
         }
-        if (current != null) {
+        if (current != null && current.get() != null) {
             current.get().close();
         }
         log.trace("Orderer stopped on: {}", config.logLabel());
@@ -183,7 +160,7 @@ public class ChRbcOrderer {
                         ext.chooseNextTimingUnits();
                         // don't put our own units on the unit belt, creator already knows about them.
                         if (u.creator() != config.pid()) {
-                            creator.consume(Collections.singletonList(u), lastTiming);
+                            creator.accept(u);
                         }
                     } finally {
                         currentThread = null;
@@ -193,16 +170,43 @@ public class ChRbcOrderer {
                 // ignored
             }
         });
-        return new epoch(epoch, dg, new ChRbcAdder(dg, 1024 * 1024, config, threshold), ext, rs,
+        return new epoch(epoch, dg, new ChRbcAdder(epoch, dg, 1024 * 1024, config, threshold), ext, rs,
                          new AtomicBoolean(true));
     }
 
-    private Processor currentProcessor() {
-        epoch c = current.get();
-        if (c == null) {
-            throw new IllegalStateException("No current epoch on: " + config.logLabel());
+    private void drain() {
+        try {
+            executor.execute(() -> {
+                if (!started.get()) {
+                    return;
+                }
+                currentThread = Thread.currentThread();
+                try {
+                    creator.drain();
+                } catch (Throwable e) {
+                    log.error("Error draining", e);
+                } finally {
+                    currentThread = null;
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // ignored
         }
-        return c.adder.processor();
+    }
+
+    private epoch epochFor(int epoch) {
+        final epoch c = current.get();
+        if (c == null || epoch > c.id) {
+            return null;
+        }
+        if (epoch == c.id()) {
+            return c;
+        }
+        final epoch p = previous.get();
+        if (epoch == p.id()) {
+            return p;
+        }
+        return null;
     }
 
     private void finishEpoch(int epoch) {
@@ -221,7 +225,7 @@ public class ChRbcOrderer {
             return new epochWithNewer(c, false);
         }
         final epoch p = previous.get();
-        if (epoch == p.id()) {
+        if (p != null && epoch == p.id()) {
             return new epochWithNewer(p, false);
         }
         return new epochWithNewer(null, false);
@@ -264,14 +268,10 @@ public class ChRbcOrderer {
             log.warn("Invalid unit creator: {} on: {}", unit.creator(), config.logLabel());
             return;
         }
-        var rslt = getEpoch(unit.epoch());
-        epoch ep = rslt.epoch;
-        if (rslt.newer) {
-            ep = newEpoch(unit.epoch());
-        }
+        var ep = retrieveEpoch(unit);
         if (ep != null) {
-            ep.dag.insert(unit);
-            log.debug("Inserted: {} on: {}", unit, config.logLabel());
+            ep.adder().produce(unit);
+            log.debug("Produced: {} on: {}", unit, config.logLabel());
         } else {
             log.trace("Unable to retrieve epic for Unit creator: {} epoch: {} height: {} level: {} on: {}",
                       unit.creator(), unit.epoch(), unit.height(), unit.level(), config.logLabel());
@@ -285,27 +285,32 @@ public class ChRbcOrderer {
     private epoch newEpoch(int epoch) {
         final Lock lock = mx.writeLock();
         lock.lock();
+        log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
         try {
+
             final epoch c = current.get();
+            if (c != null && epoch == c.id()) {
+                return c;
+            }
+            epoch p = previous.get();
+            if (p != null && epoch == p.id()) {
+                return p;
+            }
+
             if (c == null || epoch > c.id()) {
-                final epoch p = previous.get();
-                if (p != null) {
-                    p.close();
+                final epoch prev = previous.get();
+                if (prev != null) {
+                    prev.close();
                 }
                 previous.set(c);
+
                 epoch newEpoch = createEpoch(epoch);
                 current.set(newEpoch);
+
                 if (newEpochAction != null) {
                     newEpochAction.accept(epoch);
                 }
                 return newEpoch;
-            }
-            if (epoch == c.id()) {
-                return c;
-            }
-            epoch p = previous.get();
-            if (epoch == p.id()) {
-                return p;
             }
             return null;
         } finally {
@@ -313,11 +318,85 @@ public class ChRbcOrderer {
         }
     }
 
+    private Processor processor() {
+        return new Processor() {
+            @Override
+            public Gossip gossip(Digest context, int ring) {
+                var builder = Gossip.newBuilder().setContext(context.toDigeste()).setRing(ring);
+                var c = current.get();
+                if (c != null) {
+                    final var have = c.adder().have();
+                    assert have.getEpoch() == c.id();
+                    builder.setHaves(have);
+                }
+                return builder.build();
+            }
+
+            @Override
+            public Update gossip(Gossip gossip) {
+                var builder = Update.newBuilder();
+                var have = gossip.getHaves();
+                var epoch = epochFor(have.getEpoch());
+                final var c = current.get();
+                int cE = c == null ? -1 : c.id();
+                if (epoch != null) {
+                    assert epoch.id() == have.getEpoch() : "Incorrect epoch: " + have.getEpoch() + " expected: "
+                    + epoch.id() + " on: " + config.logLabel();
+                    final var missings = epoch.adder().updateFor(have, cE);
+
+                    assert epoch.id() == missings.getEpoch() : "Incorrect epoch: " + missings.getEpoch() + " expected: "
+                    + epoch.id() + " on: " + config.logLabel();
+
+                    assert epoch.id() == missings.getHaves().getEpoch() : "Incorrect epoch: "
+                    + missings.getHaves().getEpoch() + " expected: " + epoch.id() + " on: " + config.logLabel();
+
+                    builder.addMissings(missings);
+                }
+                drain();
+                return builder.build();
+            }
+
+            @Override
+            public Update update(Update update) {
+                var builder = Update.newBuilder();
+                int cE = current.get().id();
+                update.getMissingsList().forEach(missing -> {
+                    if (missing.equals(Missing.getDefaultInstance())) {
+                        return;
+                    }
+                    var epoch = epochFor(missing.getEpoch());
+                    if (epoch != null) {
+                        final var adder = epoch.adder();
+                        adder.updateFrom(missing);
+                        final var haves = missing.getHaves();
+                        assert haves.getEpoch() == epoch.id() : "Incorrect epoch: " + haves.getEpoch() + " expected: "
+                        + epoch.id() + " on: " + config.logLabel();
+                        builder.addMissings(adder.updateFor(haves, cE));
+                    }
+                });
+
+                return builder.build();
+            }
+
+            @Override
+            public void updateFrom(Update update) {
+                update.getMissingsList().forEach(missing -> {
+                    if (missing.equals(Missing.getDefaultInstance())) {
+                        return;
+                    }
+                    var epoch = epochFor(missing.getEpoch());
+                    if (epoch != null) {
+                        epoch.adder().updateFrom(missing);
+                    }
+                });
+            }
+        };
+    }
+
     /**
      * retrieveEpoch returns an epoch for the given preunit. If the preunit comes
      * from a future epoch, it is checked for new epoch proof.
      */
-    @SuppressWarnings("unused")
     private epoch retrieveEpoch(PreUnit pu) {
         var epochId = pu.epoch();
         var e = getEpoch(epochId);

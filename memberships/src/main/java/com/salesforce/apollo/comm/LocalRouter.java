@@ -165,12 +165,14 @@ public class LocalRouter extends Router {
 
     @Override
     public void close() {
-        server.shutdown();
-        try {
-            server.awaitTermination();
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
-                                            e);
+        if (server != null) {
+            server.shutdown();
+            try {
+                server.awaitTermination();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException("Unknown server state as we've been interrupted in the process of shutdown",
+                                                e);
+            }
         }
         super.close();
         serverMembers.remove(member.getId());

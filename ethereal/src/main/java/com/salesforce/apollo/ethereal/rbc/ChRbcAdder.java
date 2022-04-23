@@ -26,14 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.Commit;
-import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Have;
+import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesfoce.apollo.ethereal.proto.PreVote;
 import com.salesfoce.apollo.ethereal.proto.SignedCommit;
 import com.salesfoce.apollo.ethereal.proto.SignedPreVote;
-import com.salesfoce.apollo.ethereal.proto.Update;
-import com.salesfoce.apollo.ethereal.proto.Update.Builder;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -68,71 +66,6 @@ public class ChRbcAdder {
 
     public record Signed<T> (Digest hash, T signed) {}
 
-    private class Gossiper implements Processor {
-
-        @Override
-        public Gossip gossip(Digest context, int ring) {
-            return Gossip.newBuilder().setRing(ring).setContext(context.toDigeste()).setHaves(have()).build();
-        }
-
-        /**
-         * Answer the Update from the receiver's state, based on the suppled Gossip
-         */
-        @Override
-        public Update gossip(Gossip gossip) {
-            final var builder = Update.newBuilder().setHaves(have());
-            ChRbcAdder.this.update(gossip.getHaves(), builder);
-            return builder.build();
-        }
-
-        /**
-         * Update the receiver state from the supplied update. Return an update based on
-         * the current state and the haves of the supplied update
-         */
-        @Override
-        public Update update(Update update) {
-            final var builder = Update.newBuilder();
-            ChRbcAdder.this.update(update.getHaves(), builder);
-            updateFrom(update);
-            return builder.setHaves(have()).build();
-        }
-
-        /**
-         * Update the commit, prevote and unit state from the supplied update
-         */
-        @Override
-        public void updateFrom(Update update) {
-            update.getMissingList().forEach(u -> {
-                final var signature = JohnHancock.from(u.getSignature());
-                final var digest = signature.toDigest(conf.digestAlgorithm());
-                propose(digest, u);
-            });
-            update.getMissingCommitsList().forEach(c -> {
-                final var signature = JohnHancock.from(c.getSignature());
-                final var digest = signature.toDigest(conf.digestAlgorithm());
-                var validated = new AtomicBoolean();
-                signedCommits.computeIfAbsent(digest, h -> {
-                    validated.set(validate(c));
-                    return validated.get() ? c : null;
-                });
-                if (validated.get()) {
-                    commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
-                }
-            });
-            update.getMissingPreVotesList().forEach(pv -> {
-                final var signature = JohnHancock.from(pv.getSignature());
-                var validated = new AtomicBoolean();
-                signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
-                    validated.set(validate(pv));
-                    return validated.get() ? pv : null;
-                });
-                if (validated.get()) {
-                    preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
-                }
-            });
-        }
-    }
-
     private static final Logger log = LoggerFactory.getLogger(ChRbcAdder.class);
 
     public static Signed<SignedCommit> commit(final Long id, final Digest hash, final short pid, Signer signer,
@@ -156,6 +89,7 @@ public class ChRbcAdder {
     private final Map<Digest, Set<Short>>    commits         = new ConcurrentSkipListMap<>();
     private final Config                     conf;
     private final Dag                        dag;
+    private final int                        epoch;
     private final Set<Digest>                failed          = new ConcurrentSkipListSet<>();
     private final ReentrantLock              lock            = new ReentrantLock();
     private final int                        maxSize;
@@ -169,7 +103,8 @@ public class ChRbcAdder {
     private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
 
-    public ChRbcAdder(Dag dag, int maxSize, Config conf, int threshold) {
+    public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, int threshold) {
+        this.epoch = epoch;
         this.dag = dag;
         this.conf = conf;
         this.threshold = threshold;
@@ -196,11 +131,27 @@ public class ChRbcAdder {
         }
     }
 
-    public Processor processor() {
-        return new Gossiper();
+    /**
+     * Answer the Update from the receiver's state, based on the suppled Gossip
+     */
+    public Missing gossip(Missing missing) {
+        assert missing.getEpoch() == epoch : "Gossip from incorrect epoch: " + missing.getEpoch() + " expected: "
+        + epoch + " on: " + conf.logLabel();
+
+        log.trace("Receiving gossip epoch: {} on: {}", epoch, conf.logLabel());
+        final var builder = Missing.newBuilder().setHaves(have());
+        ChRbcAdder.this.update(missing.getHaves(), builder);
+        return builder.build();
     }
 
     public void produce(Unit u) {
+        if (u.epoch() != epoch) {
+            throw new IllegalStateException("incorrect epoch: " + u + " only accepting: " + epoch);
+        }
+        if (dag.contains(u.hash())) {
+            log.trace("Produced duplicated unit: {} on: {}", u, conf.logLabel());
+            return;
+        }
         lock.lock();
         try {
             assert u.creator() == conf.pid();
@@ -208,12 +159,91 @@ public class ChRbcAdder {
             round = u.height();
             dag.insert(u);
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
+            checkIfMissing(wpu);
             prevote(wpu);
             commit(wpu);
             advance();
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Provide the missing state from the receiver state from the supplied update.
+     * 
+     * @param haves        - the have state of the partner
+     * @param currentEpoch - the current epoch of the orderer
+     * 
+     * @return Missing based on the current state and the haves of the receiver
+     */
+    public Missing updateFor(Have haves, int currentEpoch) {
+        assert haves.getEpoch() == epoch : "Update from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
+        + " on: " + conf.logLabel();
+        final var builder = Missing.newBuilder();
+        builder.setEpoch(epoch);
+        ChRbcAdder.this.update(haves, builder);
+        if (epoch == currentEpoch) {
+            builder.setHaves(have());
+        } else {
+            builder.setHaves(Have.newBuilder().setEpoch(epoch).build());
+        }
+        return builder.build();
+    }
+
+    /**
+     * Update the commit, prevote and unit state from the supplied update
+     */
+    public void updateFrom(Missing update) {
+        assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
+        + " on: " + conf.logLabel();
+        update.getPrevotesList().forEach(pv -> {
+            final var hash = Digest.from(pv.getVote().getHash());
+            if (failed.contains(hash)) {
+                return;
+            }
+            final var signature = JohnHancock.from(pv.getSignature());
+            var validated = new AtomicBoolean();
+            signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
+                validated.set(validate(pv));
+                if (validated.get()) {
+                    return pv;
+                } else {
+                    removeFailed(hash);
+                    return null;
+                }
+            });
+            if (validated.get()) {
+                preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
+            }
+        });
+        update.getCommitsList().forEach(c -> {
+            final var hash = Digest.from(c.getCommit().getHash());
+            if (failed.contains(hash)) {
+                return;
+            }
+            final var signature = JohnHancock.from(c.getSignature());
+            final var digest = signature.toDigest(conf.digestAlgorithm());
+            var validated = new AtomicBoolean();
+            signedCommits.computeIfAbsent(digest, h -> {
+                validated.set(validate(c));
+                if (validated.get()) {
+                    return c;
+                } else {
+                    removeFailed(hash);
+                    return null;
+                }
+            });
+            if (validated.get()) {
+                commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
+            }
+        });
+        update.getUnitsList().forEach(u -> {
+            final var signature = JohnHancock.from(u.getSignature());
+            final var digest = signature.toDigest(conf.digestAlgorithm());
+            if (!failed.contains(digest)) {
+                propose(digest, u);
+            }
+        });
     }
 
     /**
@@ -230,11 +260,13 @@ public class ChRbcAdder {
         var iterator = waitingForRound.entrySet().iterator();
         while (iterator.hasNext()) {
             var e = iterator.next();
-            if (e.getValue().height() < round) {
+            if (e.getValue().height() - 1 <= round) {
                 assert e.getValue().state() == State.PROPOSED : "expected PROPOSED, found: " + e.getValue() + " on: "
                 + conf.logLabel();
                 iterator.remove();
                 prevote(e.getValue());
+            } else {
+                log.trace("Waiting for round unit: {} on: {}", e.getValue(), conf.logLabel());
             }
         }
     }
@@ -277,8 +309,10 @@ public class ChRbcAdder {
                     wp.incWaiting();
                     par.addChild(wp);
                 } else {
-                    wp.incMissing();
-                    registerMissing(parentID, wp);
+                    if (!dag.contains(parentID)) {
+                        wp.incMissing();
+                        registerMissing(parentID, wp);
+                    }
                 }
             }
         }
@@ -338,6 +372,7 @@ public class ChRbcAdder {
         Signed<SignedCommit> sc = commit(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
         signedCommits.put(sc.hash(), sc.signed());
         commit(wpu.hash(), conf.pid());
+        log.trace("Committing unit: {} on: {}", wpu, conf.logLabel());
     }
 
     private boolean decodeParents(Waiting wp) {
@@ -367,8 +402,9 @@ public class ChRbcAdder {
         return true;
     }
 
-    private Have have() {
+    public Have have() {
         return Have.newBuilder()
+                   .setEpoch(epoch)
                    .setHaveCommits(haveCommits())
                    .setHavePreVotes(havePreVotes())
                    .setHaveUnits(haveUnits())
@@ -379,10 +415,10 @@ public class ChRbcAdder {
         lock.lock();
         try {
             waiting.keySet().forEach(d -> biff.add(d));
+            dag.have(biff, epoch);
         } finally {
             lock.unlock();
         }
-        dag.have(biff);
     }
 
     /**
@@ -390,8 +426,8 @@ public class ChRbcAdder {
      */
     private Biff haveCommits() {
         final var config = conf;
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
-        * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
+        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength() * config.nProc() * 2,
+                                         config.fpr());
         signedCommits.keySet().forEach(h -> biff.add(h));
         return biff.toBff();
     }
@@ -401,8 +437,8 @@ public class ChRbcAdder {
      */
     private Biff havePreVotes() {
         final var config = conf;
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength()
-        * config.numberOfEpochs() * config.nProc() * config.nProc() * 2, config.fpr());
+        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength() * config.nProc() * 2,
+                                         config.fpr());
         signedPrevotes.keySet().forEach(h -> biff.add(h));
         return biff.toBff();
     }
@@ -418,7 +454,7 @@ public class ChRbcAdder {
      * Update the gossip builder with the missing units filtered by the supplied
      * bloom filter indicating units already known
      */
-    private void missing(BloomFilter<Digest> have, Builder builder) {
+    private void missing(BloomFilter<Digest> have, Missing.Builder builder) {
         lock.lock();
         try {
             var pus = new TreeMap<Digest, PreUnit_s>();
@@ -428,31 +464,30 @@ public class ChRbcAdder {
                    .filter(e -> !have.contains(e.getKey()))
                    .filter(e -> failed.contains(e.getKey()))
                    .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
-            pus.values().forEach(pu -> builder.addMissing(pu));
+            pus.values().forEach(pu -> builder.addUnits(pu));
         } finally {
             lock.unlock();
         }
     }
 
     private void output(Waiting wpu) {
-        boolean valid = wpu.height() == 0 || wpu.height() < round;
-        assert valid : wpu + " is not < " + round;
+        boolean valid = wpu.height() == 0 || wpu.height() - 1 <= round;
+        assert valid : wpu + " is not <= " + round;
         if (!decodeParents(wpu)) {
             return;
         }
         wpu.setState(State.OUTPUT);
+        remove(wpu);
 
         log.trace("Inserting unit: {} on: {}", wpu.decoded(), conf.logLabel());
 
         dag.insert(wpu.decoded());
 
-        remove(wpu);
-
         for (var ch : wpu.children()) {
             ch.decWaiting();
-            if (wpu.state() == State.WAITING_FOR_PARENTS && wpu.parentsOutput()) {
-                if (prevotes.getOrDefault(wpu.hash(), Collections.emptySet()).size() > 2 * threshold + 1) {
-                    commit(wpu);
+            if (ch.state() == State.WAITING_FOR_PARENTS && ch.parentsOutput()) {
+                if (prevotes.getOrDefault(ch.hash(), Collections.emptySet()).size() > 2 * threshold + 1) {
+                    commit(ch);
                 }
             }
         }
@@ -463,6 +498,7 @@ public class ChRbcAdder {
         Signed<SignedPreVote> spv = prevote(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
         signedPrevotes.put(spv.hash(), spv.signed());
         preVote(wpu.hash(), conf.pid());
+        log.trace("Prevoting unit: {} on: {}", wpu, conf.logLabel());
     }
 
     /**
@@ -498,7 +534,7 @@ public class ChRbcAdder {
                 waitingById.put(wpu.id(), wpu);
                 checkParents(wpu);
                 checkIfMissing(wpu);
-                if (wpu.parentsOutput()) { // optimization
+                if (wpu.parentsOutput()) {
                     commit(wpu);
                 } else {
                     wpu.setState(State.WAITING_FOR_PARENTS);
@@ -523,12 +559,14 @@ public class ChRbcAdder {
                 log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
                 return;
             }
-            if (waiting.containsKey(digest)) {
-                log.trace("Duplicate unit: {} on: {}", digest, conf.logLabel());
+            var wpu = waiting.get(digest);
+            if (wpu != null) {
+                log.trace("proposed duplicate unit: {} on: {}", wpu, conf.logLabel());
                 return;
             }
-            if (dag.contains(digest)) {
-                log.trace("Duplicate unit: {} on: {}", digest, conf.logLabel());
+            final var existing = dag.get(digest);
+            if (existing != null) {
+//                log.trace("proposed already output unit: {} on: {}", existing, conf.logLabel());
                 return;
             }
             if (u.toByteString().size() > maxSize) {
@@ -537,12 +575,15 @@ public class ChRbcAdder {
                           conf.logLabel());
                 return;
             }
-            var preunit = PreUnit.from(u, conf.digestAlgorithm());
-
-            if (preunit.creator() == conf.pid()) {
-                log.debug("Self created: {} on: {}", preunit, conf.logLabel());
+            final var decoded = PreUnit.decode(u.getId());
+            if (decoded.creator() == conf.pid()) {
                 return;
             }
+            if (decoded.epoch() != epoch) {
+                throw new IllegalStateException("incorrect epoch: " + decoded.epoch() + " only accepting: " + epoch);
+            }
+            var preunit = PreUnit.from(u, conf.digestAlgorithm());
+
             if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
                 failed.add(digest);
                 log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
@@ -553,9 +594,9 @@ public class ChRbcAdder {
                           preunit.epoch(), conf.logLabel());
                 return;
             }
-            final var wpu = new Waiting(preunit, u);
+            wpu = new Waiting(preunit, u);
             waiting.put(digest, wpu);
-            if (preunit.height() == 0 || round > preunit.height()) {
+            if (preunit.height() == 0 || preunit.height() - 1 <= round) {
                 prevote(wpu);
             } else {
                 waitingForRound.put(digest, wpu);
@@ -586,6 +627,17 @@ public class ChRbcAdder {
      * removeFailed removes from the buffer zone the preunit which we failed to add,
      * together with all its descendants.
      */
+    private void removeFailed(Digest hash) {
+        var wp = waiting.remove(hash);
+        if (wp != null) {
+            removeFailed(wp);
+        } else {
+            prevotes.remove(hash);
+            commits.remove(hash);
+            waiting.remove(hash);
+        }
+    }
+
     private void removeFailed(Waiting wp) {
         wp.setState(State.FAILED);
         log.warn("Failed: {} on: {}", wp, conf.logLabel());
@@ -599,17 +651,17 @@ public class ChRbcAdder {
     /**
      * Provide the missing state from the receiver based on the supplied haves
      */
-    private void update(Have have, Update.Builder builder) {
+    private void update(Have have, Missing.Builder builder) {
         final var cbf = BloomFilter.from(have.getHaveCommits());
         signedCommits.entrySet().forEach(e -> {
             if (!cbf.contains(e.getKey())) {
-                builder.addMissingCommits(e.getValue());
+                builder.addCommits(e.getValue());
             }
         });
         final var pbf = BloomFilter.from(have.getHavePreVotes());
         signedPrevotes.entrySet().forEach(e1 -> {
             if (!pbf.contains(e1.getKey())) {
-                builder.addMissingPreVotes(e1.getValue());
+                builder.addPrevotes(e1.getValue());
             }
         });
         final BloomFilter<Digest> pubf = BloomFilter.from(have.getHaveUnits());

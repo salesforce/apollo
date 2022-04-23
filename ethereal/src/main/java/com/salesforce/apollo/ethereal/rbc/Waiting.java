@@ -15,15 +15,20 @@ import com.salesforce.apollo.ethereal.PreUnit;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.rbc.ChRbcAdder.State;
 
+/**
+ * 
+ * @author hal.hildebrand
+ *
+ */
 public class Waiting {
 
     private final List<Waiting> children       = new ArrayList<>();
-    private volatile Unit              decoded;
-    private volatile int               missingParents = 0;
-    private final PreUnit              pu;
-    private final PreUnit_s            serialized;
-    private volatile State             state;
-    private volatile int               waitingParents = 0;
+    private volatile Unit       decoded;
+    private volatile int        missingParents = 0;
+    private final PreUnit       pu;
+    private final PreUnit_s     serialized;
+    private volatile State      state;
+    private volatile int        waitingParents = 0;
 
     public Waiting(PreUnit pu) {
         this(pu, pu.toPreUnit_s());
@@ -126,6 +131,6 @@ public class Waiting {
 
     @Override
     public String toString() {
-        return "wpu:" + state + ":[" + pu.shortString() + "]";
+        return "wpu:" + state() + ":[" + pu.shortString() + "]";
     }
 }

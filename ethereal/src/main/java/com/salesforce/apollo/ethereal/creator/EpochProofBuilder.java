@@ -82,7 +82,7 @@ public interface EpochProofBuilder {
         }
     }
 
-    record epochProofImpl(Config conf, int epoch, sharesDB shares) implements EpochProofBuilder {
+    public record epochProofImpl(Config conf, int epoch, sharesDB shares) implements EpochProofBuilder {
 
         /**
          * extracts threshold signature shares from finishing units. If there are enough

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, salesforce.com, inc.
+ * Copyright (c) 2022, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
@@ -196,6 +196,9 @@ public class ChRbcGossiper {
                     }
                 }
                 log.warn("error gossiping with {} on: {}", link.getMember(), member, cause);
+                return;
+            }
+            if (update.equals(Update.getDefaultInstance())) {
                 return;
             }
             log.trace("gossip update with {} on: {}", link.getMember(), member);

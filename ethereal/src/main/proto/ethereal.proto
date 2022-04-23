@@ -19,24 +19,28 @@ message Gossip {
     int32 ring = 2;
     utils.Biff have = 3;
     Have haves = 4;
-    int32 epoch = 5;
 }
 
 message Have {
-    utils.Biff haveUnits = 1;
-    utils.Biff havePreVotes = 2;
-    utils.Biff haveCommits = 3;
+    int32 epoch = 1;
+    utils.Biff haveUnits = 2;
+    utils.Biff havePreVotes = 3;
+    utils.Biff haveCommits = 4;
+}
+
+message Missing {
+    int32 epoch = 1;
+    repeated PreUnit_s units = 2;
+    repeated SignedPreVote prevotes = 3;
+    repeated SignedCommit commits = 4;
+    Have haves = 5;
 }
 
 message Update {
     repeated PreUnit_s missing = 1;
     repeated PreUnit_s waiting = 2;
     utils.Biff have = 3;
-    
-    repeated SignedPreVote missingPreVotes = 4;
-    repeated SignedCommit missingCommits = 5;
-    Have haves = 6;
-    int32 epoch = 7;
+    repeated Missing missings = 4;
 }
 
 message ContextUpdate {
