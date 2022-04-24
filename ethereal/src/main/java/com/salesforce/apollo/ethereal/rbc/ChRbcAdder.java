@@ -101,6 +101,10 @@ public class ChRbcAdder {
     private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
 
+    private final List<DigestBloomFilter> prevs = new ArrayList<>();
+    private final List<DigestBloomFilter> cmts  = new ArrayList<>();
+    private final List<DigestBloomFilter> unts  = new ArrayList<>();
+
     public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, int threshold, Set<Digest> failed) {
         this.epoch = epoch;
         this.dag = dag;
@@ -108,6 +112,14 @@ public class ChRbcAdder {
         this.failed = failed;
         this.threshold = threshold;
         this.maxSize = maxSize;
+        for (int i = 0; i < 3; i++) {
+            prevs.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                            conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
+            cmts.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
+            unts.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
+        }
     }
 
     public void close() {
@@ -221,9 +233,11 @@ public class ChRbcAdder {
                 signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
                     validated.set(validate(pv));
                     if (validated.get()) {
+                        for (var pvts : prevs) {
+                            pvts.add(h);
+                        }
                         return pv;
                     } else {
-                        removeFailed(hash);
                         return null;
                     }
                 });
@@ -242,9 +256,11 @@ public class ChRbcAdder {
                 signedCommits.computeIfAbsent(digest, h -> {
                     validated.set(validate(c));
                     if (validated.get()) {
+                        for (var cmt : cmts) {
+                            cmt.add(h);
+                        }
                         return c;
                     } else {
-                        removeFailed(hash);
                         return null;
                     }
                 });
@@ -408,38 +424,22 @@ public class ChRbcAdder {
         return true;
     }
 
-    private void have(DigestBloomFilter biff) {
-        waiting.keySet().forEach(d -> biff.add(d));
-        dag.have(biff, epoch);
-    }
-
     /**
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
-        final var config = conf;
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength() * config.nProc() * 2,
-                                         config.fpr());
-        signedCommits.keySet().forEach(h -> biff.add(h));
-        return biff.toBff();
+        return cmts.get(Utils.bitStreamEntropy().nextInt(cmts.size())).toBff();
     }
 
     /**
      * Answer the bloom filter with the prevotes the receiver has
      */
     private Biff havePreVotes() {
-        final var config = conf;
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), config.epochLength() * config.nProc() * 2,
-                                         config.fpr());
-        signedPrevotes.keySet().forEach(h -> biff.add(h));
-        return biff.toBff();
+        return prevs.get(Utils.bitStreamEntropy().nextInt(prevs.size())).toBff();
     }
 
     private Biff haveUnits() {
-        var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
-                                         conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
-        have(biff);
-        return biff.toBff();
+        return unts.get(Utils.bitStreamEntropy().nextInt(unts.size())).toBff();
     }
 
     /**
@@ -579,8 +579,14 @@ public class ChRbcAdder {
                       conf.logLabel());
             return;
         }
+        for (var unt : unts) {
+            unt.add(digest);
+        }
         wpu = new Waiting(preunit, u);
         waiting.put(digest, wpu);
+        for (var unt : unts) {
+            unt.add(digest);
+        }
         if (preunit.height() == 0 || preunit.height() - 1 <= round) {
             prevote(wpu);
         } else {
@@ -603,21 +609,6 @@ public class ChRbcAdder {
         waiting.remove(wpu.hash());
         waitingForRound.remove(wpu.hash());
         waitingById.remove(wpu.id());
-    }
-
-    /**
-     * removeFailed removes from the buffer zone the preunit which we failed to add,
-     * together with all its descendants.
-     */
-    private void removeFailed(Digest hash) {
-        var wp = waiting.remove(hash);
-        if (wp != null) {
-            removeFailed(wp);
-        } else {
-            prevotes.remove(hash);
-            commits.remove(hash);
-            waiting.remove(hash);
-        }
     }
 
     private void removeFailed(Waiting wp) {

@@ -285,11 +285,11 @@ public class ChRbcOrderer {
             @Override
             public Gossip gossip(Digest context, int ring) {
                 final var builder = Gossip.newBuilder().setContext(context.toDigeste()).setRing(ring);
-                epochs.forEach((id, e) -> {
-                    final var have = e.adder().have();
-                    assert have.getEpoch() == id;
-                    builder.addHaves(have);
-                });
+                final var current = currentEpoch.get();
+                epochs.entrySet()
+                      .stream()
+                      .filter(e -> e.getKey() >= current)
+                      .forEach(e -> builder.addHaves(e.getValue().adder().have()));
                 return builder.build();
             }
 
@@ -304,22 +304,30 @@ public class ChRbcOrderer {
                         builder.addMissings(epoch.adder().updateFor(have));
                     }
                 });
-                epochs.entrySet().stream().filter(e -> !haves.contains(e.getKey())).forEach(e -> {
-                    builder.addMissings(Missing.newBuilder()
-                                               .setEpoch(e.getKey())
-                                               .setHaves(e.getValue().adder().have()));
-                });
+                final var current = currentEpoch.get();
+                epochs.entrySet()
+                      .stream()
+                      .filter(e -> e.getKey() >= current)
+                      .filter(e -> !haves.contains(e.getKey()))
+                      .forEach(e -> {
+                          builder.addMissings(Missing.newBuilder()
+                                                     .setEpoch(e.getKey())
+                                                     .setHaves(e.getValue().adder().have()));
+                      });
                 return builder.build();
             }
 
             @Override
             public Update update(Update update) {
                 final var builder = Update.newBuilder();
+                final var current = currentEpoch.get();
                 update.getMissingsList().forEach(missing -> {
                     var epoch = newEpoch(missing.getEpoch());
                     if (epoch != null) {
                         final var adder = epoch.adder();
-                        adder.updateFrom(missing);
+                        if (epoch.id() >= current) {
+                            adder.updateFrom(missing);
+                        }
                         builder.addMissings(adder.updateFor(missing.getHaves()));
                     }
                 });
@@ -328,10 +336,13 @@ public class ChRbcOrderer {
 
             @Override
             public void updateFrom(Update update) {
+                final var current = currentEpoch.get();
                 update.getMissingsList().forEach(missing -> {
-                    var epoch = newEpoch(missing.getEpoch());
-                    if (epoch != null) {
-                        epoch.adder().updateFrom(missing);
+                    if (missing.getEpoch() >= current) {
+                        var epoch = newEpoch(missing.getEpoch());
+                        if (epoch != null) {
+                            epoch.adder().updateFrom(missing);
+                        }
                     }
                 });
             }

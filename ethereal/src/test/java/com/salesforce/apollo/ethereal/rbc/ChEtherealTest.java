@@ -52,7 +52,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChEtherealTest {
 
-    @Test
+//    @Test
     public void lots() throws Exception {
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
@@ -68,7 +68,7 @@ public class ChEtherealTest {
 
         var registry = new MetricRegistry();
 
-        short nProc = 13;
+        short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
 
         List<ChRbcEthereal> ethereals = new ArrayList<>();
@@ -144,7 +144,7 @@ public class ChEtherealTest {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
             gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
-            finished.await(30, TimeUnit.SECONDS);
+            finished.await(60, TimeUnit.SECONDS);
         } finally {
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
