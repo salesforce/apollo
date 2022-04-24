@@ -52,7 +52,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChEtherealTest {
 
-//    @Test
+    @Test
     public void lots() throws Exception {
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
@@ -68,7 +68,7 @@ public class ChEtherealTest {
 
         var registry = new MetricRegistry();
 
-        short nProc = 4;
+        short nProc = 13;
         CountDownLatch finished = new CountDownLatch(nProc);
 
         List<ChRbcEthereal> ethereals = new ArrayList<>();
@@ -76,7 +76,10 @@ public class ChEtherealTest {
         List<Controller> controllers = new ArrayList<>();
         List<ChRbcGossiper> gossipers = new ArrayList<>();
         List<Router> comms = new ArrayList<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc * 10);
+        var schedN = new AtomicInteger();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc,
+                                                                              r -> new Thread(r, "gossip scheduler"
+                                                                              + schedN.incrementAndGet()));
 
         List<SigningMember> members = IntStream.range(0, nProc)
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
@@ -88,10 +91,12 @@ public class ChEtherealTest {
             context.activate(m);
         }
         var builder = Config.deterministic()
-                            .setFpr(0.0000125)
+                            .setFpr(0.125)
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        var executor = Executors.newFixedThreadPool(nProc);
+        var execN = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(nProc,
+                                                    r -> new Thread(r, "system executor: " + execN.incrementAndGet()));
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
@@ -141,9 +146,13 @@ public class ChEtherealTest {
             gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
             finished.await(30, TimeUnit.SECONDS);
         } finally {
-            comms.forEach(e -> e.close());
-            gossipers.forEach(e -> e.stop());
             controllers.forEach(e -> e.stop());
+            gossipers.forEach(e -> e.stop());
+            comms.forEach(e -> e.close());
+            executor.shutdown();
+            executor.awaitTermination(1, TimeUnit.SECONDS);
+            scheduler.shutdown();
+            scheduler.awaitTermination(1, TimeUnit.SECONDS);
         }
         final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
         assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());

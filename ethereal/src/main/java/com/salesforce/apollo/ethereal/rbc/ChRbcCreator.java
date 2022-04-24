@@ -211,7 +211,7 @@ public class ChRbcCreator {
                 log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
-            log.info("Ignored timing unit from epoch: {} current: {} on: {}", timingUnit.epoch(), e, conf.logLabel());
+            log.trace("Ignored timing unit from epoch: {} current: {} on: {}", timingUnit.epoch(), e, conf.logLabel());
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;

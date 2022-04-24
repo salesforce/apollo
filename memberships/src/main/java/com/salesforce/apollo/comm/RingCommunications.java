@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
@@ -169,16 +170,18 @@ public class RingCommunications<Comm extends Link> {
         if (link == null) {
             handler.handle(Optional.empty(), link, ring);
         } else {
-            exec.execute(() -> {
-                ListenableFuture<T> futureSailor = round.apply(link, ring);
-                if (futureSailor == null) {
-                    handler.handle(Optional.empty(), link, ring);
-                } else {
+            ListenableFuture<T> futureSailor = round.apply(link, ring);
+            if (futureSailor == null) {
+                handler.handle(Optional.empty(), link, ring);
+            } else {
+                try {
                     futureSailor.addListener(Utils.wrapped(() -> {
                         handler.handle(Optional.of(futureSailor), link, ring);
                     }, log), exec);
+                } catch (RejectedExecutionException e) {
+                    // ignore
                 }
-            });
+            }
         }
     }
 

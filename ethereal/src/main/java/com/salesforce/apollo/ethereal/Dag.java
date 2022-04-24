@@ -51,6 +51,10 @@ public interface Dag {
         private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
         private final Map<Digest, Unit>                        units      = new HashMap<>();
 
+        /**
+         * @param config
+         * @param epoch
+         */
         public DagImpl(Config config, int epoch) {
             this.config = config;
             this.epoch = epoch;
@@ -168,11 +172,13 @@ public interface Dag {
 
         @Override
         public void have(DigestBloomFilter biff, int epoch) {
-            units.entrySet()
-                 .stream()
-                 .filter(e -> e.getValue().epoch() == epoch)
-                 .map(e -> e.getKey())
-                 .forEach(d -> biff.add(d));
+            read(() -> {
+                units.entrySet()
+                     .stream()
+                     .filter(e -> e.getValue().epoch() == epoch)
+                     .map(e -> e.getKey())
+                     .forEach(d -> biff.add(d));
+            });
         }
 
         @Override

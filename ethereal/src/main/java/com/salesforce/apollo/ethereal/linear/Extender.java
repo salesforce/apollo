@@ -36,7 +36,6 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
 public class Extender {
     private static Logger log = LoggerFactory.getLogger(Extender.class);
 
-    private final int                               commonVoteDeterministicPrefix;
     private final CommonRandomPermutation           crpIterator;
     private AtomicReference<Unit>                   currentTU = new AtomicReference<>();
     private final Dag                               dag;
@@ -57,7 +56,6 @@ public class Extender {
         zeroVoteRoundForCommonVote = conf.zeroVoteRoundForCommonVote();
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
-        commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
         digestAlgorithm = conf.digestAlgorithm();
         crpIterator = new CommonRandomPermutation(dag, rs, (short) (Dag.minimalTrusted(conf.nProc()) + 1),
                                                   digestAlgorithm);
@@ -100,7 +98,7 @@ public class Extender {
 
         var decided = new AtomicBoolean();
         if (!crpIterator.iterate(level, units, previousTU, uc -> {
-            SuperMajorityDecider decider = getDecider(uc);
+            SuperMajorityDecider decider = getDecider(uc, crpIterator.crpFixedPrefix());
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
                 final List<Unit> ltus = lastTUs.get();
@@ -133,11 +131,10 @@ public class Extender {
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
-    private SuperMajorityDecider getDecider(Unit uc) {
+    private SuperMajorityDecider getDecider(Unit uc, short prefix) {
         return deciders.computeIfAbsent(uc.hash(),
                                         h -> new SuperMajorityDecider(new UnanimousVoter(dag, randomSource, uc,
                                                                                          zeroVoteRoundForCommonVote,
-                                                                                         commonVoteDeterministicPrefix,
-                                                                                         new HashMap<>())));
+                                                                                         prefix, new HashMap<>())));
     }
 }
