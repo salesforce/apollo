@@ -6,12 +6,8 @@
  */
 package com.salesforce.apollo.ethereal.rbc;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -96,8 +92,6 @@ public class ChRbcCreator {
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
 
-    private final BlockingQueue<Unit> unitBelt;
-
     public ChRbcCreator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
                         Function<Integer, EpochProofBuilder> epochProofBuilder) {
         this.conf = config;
@@ -109,89 +103,20 @@ public class ChRbcCreator {
         this.lastTiming = lastTiming;
 
         quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
-
-        // Topologically sorted queue of units waiting to be processed
-        this.unitBelt = new PriorityBlockingQueue<>(config.nProc(), new Comparator<Unit>() {
-            @Override
-            public int compare(Unit a, Unit b) {
-                var comp = Integer.compare(a.epoch(), b.epoch());
-                if (comp != 0) {
-                    return comp;
-                }
-                comp = Integer.compare(a.height(), b.height());
-                if (comp != 0) {
-                    return comp;
-                }
-                return Short.compare(a.creator(), b.creator());
-            }
-        });
     }
 
     /**
-     * Accept a new Unit from ye group
+     * Unit is examined and stored to be used as parents of future units. When there
+     * are enough new parents, a new unit is produced. lastTiming is a channel on
+     * which the last timing unit of each epoch is expected to appear.
      * 
-     * @param u - the new Unit
+     * @param ext
      */
-    public void accept(Unit u) {
-        final var success = unitBelt.add(u); // We're using an unbounded queue assert
-        assert success : "We have violated space/time directives we should not";
-//        consume(Collections.singletonList(u));
-    }
-
-    public void drain() {
-        var units = new ArrayList<Unit>();
-        unitBelt.drainTo(units);
-        if (!units.isEmpty()) {
-            consume(units);
-        }
-    }
-
-    public void start() {
-        newEpoch(epoch.get(), ByteString.EMPTY, -1);
-    }
-
-    public void stop() {
-    }
-
-    private built buildParents() {
-        if (conf.canSkipLevel()) {
-            final Unit[] parents = getParents();
-            final var count = count(parents);
-            if (count >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
-                return new built(parents, level.get());
-            } else {
-                log.trace("Parents (skip level) not ready: {} current: {} required: {} on: {}", parents, count, quorum,
-                          conf.logLabel());
-                return null;
-            }
-        } else {
-            var l = candidates[conf.pid()].level() + 1;
-            final Unit[] parents = getParentsForLevel(l);
-            final var count = count(parents);
-            if (count >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
-                return new built(parents, l);
-            } else {
-                log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
-                          conf.logLabel());
-                return null;
-            }
-        }
-    }
-
-    /**
-     * Units are examined and stored to be used as parents of future units. When
-     * there are enough new parents, a new unit is produced. lastTiming is a channel
-     * on which the last timing unit of each epoch is expected to appear.
-     */
-    private void consume(List<Unit> units) {
-        log.trace("Processing next units: {} on: {}", units.size(), conf.logLabel());
+    public void consume(Unit u) {
+        log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
         mx.lock();
         try {
-            for (Unit u : units) {
-                update(u);
-            }
+            update(u);
             var built = ready();
             if (built == null) {
                 log.trace("Not ready to create unit on: {}", conf.logLabel());
@@ -205,6 +130,27 @@ public class ChRbcCreator {
             log.error("Error in processing units on: {}", conf.logLabel(), e);
         } finally {
             mx.unlock();
+        }
+    }
+
+    public void start() {
+        newEpoch(epoch.get(), ByteString.EMPTY, -1);
+    }
+
+    public void stop() {
+    }
+
+    private built buildParents() {
+        var l = candidates[conf.pid()].level() + 1;
+        final Unit[] parents = getParentsForLevel(l);
+        final var count = count(parents);
+        if (count >= quorum) {
+            log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
+            return new built(parents, l);
+        } else {
+            log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
+                      conf.logLabel());
+            return null;
         }
     }
 
@@ -269,14 +215,6 @@ public class ChRbcCreator {
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
-    }
-
-    private Unit[] getParents() {
-        Unit[] result = new Unit[candidates.length];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = candidates[i];
-        }
-        return result;
     }
 
     /**

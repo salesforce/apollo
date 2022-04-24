@@ -8,7 +8,7 @@
 package com.salesforce.apollo.ethereal.rbc;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,7 +24,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
@@ -34,7 +33,6 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.SimpleDataSource;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
@@ -54,16 +52,24 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChEtherealTest {
 
+//    @Test
+    public void lots() throws Exception {
+        for (int i = 0; i < 100; i++) {
+            System.out.println("Iteration: " + i);
+            context();
+            System.out.println();
+        }
+    }
+
     @Test
     public void context() throws Exception {
 
-        final var gossipPeriod = Duration.ofMillis(100);
+        final var gossipPeriod = Duration.ofMillis(5);
 
         var registry = new MetricRegistry();
 
         short nProc = 4;
-        final var count = Dag.minimalTrusted(nProc) + 1;
-        CountDownLatch finished = new CountDownLatch(count);
+        CountDownLatch finished = new CountDownLatch(nProc);
 
         List<ChRbcEthereal> ethereals = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -133,7 +139,7 @@ public class ChEtherealTest {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
             gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
-            finished.await(120, TimeUnit.SECONDS);
+            finished.await(30, TimeUnit.SECONDS);
         } finally {
             comms.forEach(e -> e.close());
             gossipers.forEach(e -> e.stop());
@@ -143,48 +149,35 @@ public class ChEtherealTest {
         assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
-        int success = 0;
         for (int i = 0; i < nProc; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != 87) {
-                System.out.println("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
-                break;
+                fail("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
             }
             for (int j = 0; j < preblocks.size(); j++) {
                 var a = preblocks.get(j);
                 var b = output.get(j);
                 if (a.data().size() != b.data().size()) {
-                    System.out.println("Mismatch at block: " + j + " process: " + i);
-                    break;
+                    fail("Mismatch at block: " + j + " process: " + i);
                 }
-                boolean s = true;
                 for (int k = 0; k < a.data().size(); k++) {
                     if (!a.data().get(k).equals(b.data().get(k))) {
-                        s = false;
-                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
+                        fail("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
                         + a.data().get(k) + " received: " + b.data().get(k));
-                        break;
                     }
                     outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
                 if (a.randomBytes() != b.randomBytes()) {
-                    System.out.println("Mismatch random bytea at block: " + j + " process: " + i);
-                    break;
-                }
-                if (s) {
-                    success++;
+                    fail("Mismatch random bytea at block: " + j + " process: " + i);
                 }
             }
-            var minQuorum = Dag.minimalQuorum(nProc, builder.getBias());
-            assertTrue(success > minQuorum,
-                       "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
         }
-        System.out.println();
-
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
+//        System.out.println();
+//
+//        ConsoleReporter.forRegistry(registry)
+//                       .convertRatesTo(TimeUnit.SECONDS)
+//                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+//                       .build()
+//                       .report();
     }
 }

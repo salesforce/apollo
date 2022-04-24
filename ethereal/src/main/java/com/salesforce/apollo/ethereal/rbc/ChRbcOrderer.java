@@ -149,6 +149,9 @@ public class ChRbcOrderer {
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
         dg.afterInsert(u -> {
+            ext.chooseNextTimingUnits();
+        });
+        dg.afterInsert(u -> {
             if (!started.get()) {
                 return;
             }
@@ -159,10 +162,9 @@ public class ChRbcOrderer {
                     }
                     currentThread = Thread.currentThread();
                     try {
-                        ext.chooseNextTimingUnits();
                         // don't put our own units on the unit belt, creator already knows about them.
                         if (u.creator() != config.pid()) {
-                            creator.accept(u);
+                            creator.consume(u);
                         }
                     } finally {
                         currentThread = null;
@@ -174,26 +176,6 @@ public class ChRbcOrderer {
         });
         return new epoch(epoch, dg, new ChRbcAdder(epoch, dg, 1024 * 1024, config, threshold, failed), ext, rs,
                          new AtomicBoolean(true));
-    }
-
-    private void drain() {
-        try {
-            executor.execute(() -> {
-                if (!started.get()) {
-                    return;
-                }
-                currentThread = Thread.currentThread();
-                try {
-                    creator.drain();
-                } catch (Throwable e) {
-                    log.error("Error draining", e);
-                } finally {
-                    currentThread = null;
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            // ignored
-        }
     }
 
     private void finishEpoch(int epoch) {
@@ -341,7 +323,6 @@ public class ChRbcOrderer {
                         builder.addMissings(adder.updateFor(missing.getHaves()));
                     }
                 });
-                drain();
                 return builder.build();
             }
 
@@ -353,7 +334,6 @@ public class ChRbcOrderer {
                         epoch.adder().updateFrom(missing);
                     }
                 });
-                drain();
             }
         };
     }

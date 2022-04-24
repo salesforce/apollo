@@ -264,10 +264,10 @@ public interface Dag {
         }
 
         @Override
-        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing) {
+        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch) {
             read(() -> {
                 units.entrySet().forEach(e -> {
-                    if (!have.contains(e.getKey())) {
+                    if (e.getValue().epoch() == epoch && !have.contains(e.getKey())) {
                         missing.computeIfAbsent(e.getKey(), h -> e.getValue().toPreUnit_s());
                     }
                 });
@@ -609,7 +609,7 @@ public interface Dag {
 
     void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
 
-    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing);
+    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch);
 
     short nProc();
 

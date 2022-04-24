@@ -138,12 +138,17 @@ public class ChRbcAdder {
     }
 
     public Have have() {
-        return Have.newBuilder()
-                   .setEpoch(epoch)
-                   .setHaveCommits(haveCommits())
-                   .setHavePreVotes(havePreVotes())
-                   .setHaveUnits(haveUnits())
-                   .build();
+        lock.lock();
+        try {
+            return Have.newBuilder()
+                       .setEpoch(epoch)
+                       .setHaveCommits(haveCommits())
+                       .setHavePreVotes(havePreVotes())
+                       .setHaveUnits(haveUnits())
+                       .build();
+        } finally {
+            lock.unlock();
+        }
     }
 
     public void produce(Unit u) {
@@ -180,10 +185,15 @@ public class ChRbcAdder {
     public Missing updateFor(Have haves) {
         assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        final var builder = Missing.newBuilder();
-        builder.setEpoch(epoch);
-        ChRbcAdder.this.update(haves, builder);
-        return builder.setHaves(have()).build();
+        lock.lock();
+        try {
+            final var builder = Missing.newBuilder();
+            builder.setEpoch(epoch);
+            ChRbcAdder.this.update(haves, builder);
+            return builder.setHaves(have()).build();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -192,54 +202,59 @@ public class ChRbcAdder {
     public void updateFrom(Missing update) {
         assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        update.getPrevotesList().forEach(pv -> {
-            final var hash = Digest.from(pv.getVote().getHash());
-            if (failed.contains(hash)) {
-                return;
-            }
-            final var signature = JohnHancock.from(pv.getSignature());
-            var validated = new AtomicBoolean();
-            signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
-                validated.set(validate(pv));
-                if (validated.get()) {
-                    return pv;
-                } else {
-                    removeFailed(hash);
-                    return null;
+        lock.lock();
+        try {
+            update.getUnitsList().forEach(u -> {
+                final var signature = JohnHancock.from(u.getSignature());
+                final var digest = signature.toDigest(conf.digestAlgorithm());
+                if (!failed.contains(digest)) {
+                    propose(digest, u);
                 }
             });
-            if (validated.get()) {
-                preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
-            }
-        });
-        update.getCommitsList().forEach(c -> {
-            final var hash = Digest.from(c.getCommit().getHash());
-            if (failed.contains(hash)) {
-                return;
-            }
-            final var signature = JohnHancock.from(c.getSignature());
-            final var digest = signature.toDigest(conf.digestAlgorithm());
-            var validated = new AtomicBoolean();
-            signedCommits.computeIfAbsent(digest, h -> {
-                validated.set(validate(c));
+            update.getPrevotesList().forEach(pv -> {
+                final var hash = Digest.from(pv.getVote().getHash());
+                if (failed.contains(hash)) {
+                    return;
+                }
+                final var signature = JohnHancock.from(pv.getSignature());
+                var validated = new AtomicBoolean();
+                signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
+                    validated.set(validate(pv));
+                    if (validated.get()) {
+                        return pv;
+                    } else {
+                        removeFailed(hash);
+                        return null;
+                    }
+                });
                 if (validated.get()) {
-                    return c;
-                } else {
-                    removeFailed(hash);
-                    return null;
+                    preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
                 }
             });
-            if (validated.get()) {
-                commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
-            }
-        });
-        update.getUnitsList().forEach(u -> {
-            final var signature = JohnHancock.from(u.getSignature());
-            final var digest = signature.toDigest(conf.digestAlgorithm());
-            if (!failed.contains(digest)) {
-                propose(digest, u);
-            }
-        });
+            update.getCommitsList().forEach(c -> {
+                final var hash = Digest.from(c.getCommit().getHash());
+                if (failed.contains(hash)) {
+                    return;
+                }
+                final var signature = JohnHancock.from(c.getSignature());
+                final var digest = signature.toDigest(conf.digestAlgorithm());
+                var validated = new AtomicBoolean();
+                signedCommits.computeIfAbsent(digest, h -> {
+                    validated.set(validate(c));
+                    if (validated.get()) {
+                        return c;
+                    } else {
+                        removeFailed(hash);
+                        return null;
+                    }
+                });
+                if (validated.get()) {
+                    commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
+                }
+            });
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -322,44 +337,39 @@ public class ChRbcAdder {
      * @param member - the index of the member
      */
     private void commit(Digest digest, short member) {
-        lock.lock();
-        try {
-            if (failed.contains(digest)) {
-                return;
-            }
-            if (dag.contains(digest)) {
-                return; // no need
-            }
-            final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
-            if (!committed.add(member)) {
-                return;
-            }
-            if (committed.size() <= threshold) {
-                return;
-            }
-            var wpu = waiting.get(digest);
+        if (failed.contains(digest)) {
+            return;
+        }
+        if (dag.contains(digest)) {
+            return; // no need
+        }
+        final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!committed.add(member)) {
+            return;
+        }
+        if (committed.size() <= threshold) {
+            return;
+        }
+        var wpu = waiting.get(digest);
 
-            // Check for existing proposal
-            if (wpu == null) {
-                return;
-            }
+        // Check for existing proposal
+        if (wpu == null) {
+            return;
+        }
 
-            switch (wpu.state()) {
-            case PREVOTED:
-                if (committed.size() > threshold) {
-                    commit(wpu);
-                }
-                // intentional fall through
-            case COMMITTED:
-                if (committed.size() > 2 * threshold) {
-                    output(wpu);
-                }
-                break;
-            default:
-                break;
+        switch (wpu.state()) {
+        case PREVOTED:
+            if (committed.size() > threshold) {
+                commit(wpu);
             }
-        } finally {
-            lock.unlock();
+            // intentional fall through
+        case COMMITTED:
+            if (committed.size() > 2 * threshold) {
+                output(wpu);
+            }
+            break;
+        default:
+            break;
         }
     }
 
@@ -399,13 +409,8 @@ public class ChRbcAdder {
     }
 
     private void have(DigestBloomFilter biff) {
-        lock.lock();
-        try {
-            waiting.keySet().forEach(d -> biff.add(d));
-            dag.have(biff, epoch);
-        } finally {
-            lock.unlock();
-        }
+        waiting.keySet().forEach(d -> biff.add(d));
+        dag.have(biff, epoch);
     }
 
     /**
@@ -442,19 +447,14 @@ public class ChRbcAdder {
      * bloom filter indicating units already known
      */
     private void missing(BloomFilter<Digest> have, Missing.Builder builder) {
-        lock.lock();
-        try {
-            var pus = new TreeMap<Digest, PreUnit_s>();
-            dag.missing(have, pus);
-            waiting.entrySet()
-                   .stream()
-                   .filter(e -> !have.contains(e.getKey()))
-                   .filter(e -> failed.contains(e.getKey()))
-                   .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
-            pus.values().forEach(pu -> builder.addUnits(pu));
-        } finally {
-            lock.unlock();
-        }
+        var pus = new TreeMap<Digest, PreUnit_s>();
+        dag.missing(have, pus, epoch);
+        waiting.entrySet()
+               .stream()
+               .filter(e -> !have.contains(e.getKey()))
+               .filter(e -> failed.contains(e.getKey()))
+               .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
+        pus.values().forEach(pu -> builder.addUnits(pu));
     }
 
     private void output(Waiting wpu) {
@@ -493,49 +493,44 @@ public class ChRbcAdder {
      * @param member - the index of the member
      */
     private void preVote(Digest digest, short member) {
-        lock.lock();
-        try {
-            if (failed.contains(digest)) {
-                return;
-            }
-            if (dag.contains(digest)) {
-                return; // no need
-            }
-            final Set<Short> prepared = prevotes.computeIfAbsent(digest, h -> new HashSet<>());
-            if (!prepared.add(member)) {
-                return;
-            }
-            // We only care if the # of prevotes is >= 2*f + 1
-            if (prepared.size() <= 2 * threshold) {
-                return;
-            }
-            // We only care if we've gotten the proposal
-            var wpu = waiting.get(digest);
-            if (wpu == null) {
-                return;
-            }
+        if (failed.contains(digest)) {
+            return;
+        }
+        if (dag.contains(digest)) {
+            return; // no need
+        }
+        final Set<Short> prepared = prevotes.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!prepared.add(member)) {
+            return;
+        }
+        // We only care if the # of prevotes is >= 2*f + 1
+        if (prepared.size() <= 2 * threshold) {
+            return;
+        }
+        // We only care if we've gotten the proposal
+        var wpu = waiting.get(digest);
+        if (wpu == null) {
+            return;
+        }
 
-            switch (wpu.state()) {
-            case PREVOTED:
-                waitingById.put(wpu.id(), wpu);
-                checkParents(wpu);
-                checkIfMissing(wpu);
-                if (wpu.parentsOutput()) {
-                    commit(wpu);
-                } else {
-                    wpu.setState(State.WAITING_FOR_PARENTS);
-                }
-                break;
-            case WAITING_FOR_PARENTS:
-                if (wpu.parentsOutput()) {
-                    commit(wpu);
-                }
-                break;
-            default:
-                break;
+        switch (wpu.state()) {
+        case PREVOTED:
+            waitingById.put(wpu.id(), wpu);
+            checkParents(wpu);
+            checkIfMissing(wpu);
+            if (wpu.parentsOutput()) {
+                commit(wpu);
+            } else {
+                wpu.setState(State.WAITING_FOR_PARENTS);
             }
-        } finally {
-            lock.unlock();
+            break;
+        case WAITING_FOR_PARENTS:
+            if (wpu.parentsOutput()) {
+                commit(wpu);
+            }
+            break;
+        default:
+            break;
         }
     }
 
@@ -547,55 +542,49 @@ public class ChRbcAdder {
      * @param chRbc  - the comm endpoint to issue further messages
      */
     private void propose(Digest digest, PreUnit_s u) {
-        lock.lock();
-        try {
-            if (failed.contains(digest)) {
-                log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
-                return;
-            }
-            var wpu = waiting.get(digest);
-            if (wpu != null) {
-                return;
-            }
-            final var existing = dag.get(digest);
-            if (existing != null) {
-//                log.trace("proposed already output unit: {} on: {}", existing, conf.logLabel());
-                return;
-            }
-            if (u.toByteString().size() > maxSize) {
-                failed.add(digest);
-                log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
-                          conf.logLabel());
-                return;
-            }
-            final var decoded = PreUnit.decode(u.getId());
-            if (decoded.creator() == conf.pid()) {
-                return;
-            }
-            if (decoded.epoch() != epoch) {
-                throw new IllegalStateException("incorrect epoch: " + decoded.epoch() + " only accepting: " + epoch);
-            }
-            var preunit = PreUnit.from(u, conf.digestAlgorithm());
+        if (failed.contains(digest)) {
+            log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
+            return;
+        }
+        var wpu = waiting.get(digest);
+        if (wpu != null) {
+            return;
+        }
+        final var existing = dag.get(digest);
+        if (existing != null) {
+            return;
+        }
+        if (u.toByteString().size() > maxSize) {
+            failed.add(digest);
+            log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
+                      conf.logLabel());
+            return;
+        }
+        final var decoded = PreUnit.decode(u.getId());
+        if (decoded.creator() == conf.pid()) {
+            return;
+        }
+        if (decoded.epoch() != epoch) {
+            throw new IllegalStateException("incorrect epoch: " + decoded.epoch() + " only accepting: " + epoch);
+        }
+        var preunit = PreUnit.from(u, conf.digestAlgorithm());
 
-            if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
-                failed.add(digest);
-                log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
-                return;
-            }
-            if (preunit.epoch() != dag.epoch()) {
-                log.error("Invalid epoch: {} expected: {}, but received: {} on: {}", preunit, dag.epoch(),
-                          preunit.epoch(), conf.logLabel());
-                return;
-            }
-            wpu = new Waiting(preunit, u);
-            waiting.put(digest, wpu);
-            if (preunit.height() == 0 || preunit.height() - 1 <= round) {
-                prevote(wpu);
-            } else {
-                waitingForRound.put(digest, wpu);
-            }
-        } finally {
-            lock.unlock();
+        if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
+            failed.add(digest);
+            log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
+            return;
+        }
+        if (preunit.epoch() != dag.epoch()) {
+            log.error("Invalid epoch: {} expected: {}, but received: {} on: {}", preunit, dag.epoch(), preunit.epoch(),
+                      conf.logLabel());
+            return;
+        }
+        wpu = new Waiting(preunit, u);
+        waiting.put(digest, wpu);
+        if (preunit.height() == 0 || preunit.height() - 1 <= round) {
+            prevote(wpu);
+        } else {
+            waitingForRound.put(digest, wpu);
         }
     }
 

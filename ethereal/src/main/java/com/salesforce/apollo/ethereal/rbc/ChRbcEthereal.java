@@ -111,7 +111,8 @@ public class ChRbcEthereal {
     private Controller deterministicConsensus(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
                                               Consumer<Integer> newEpochAction, Consumer<Processor> gossiper) {
         Consumer<List<Unit>> makePreblock = units -> {
-            log.trace("Make pre block: {} on: {}", units, config.logLabel());
+            var print = units.stream().map(e -> "[" + e.shortString() + "]").toList();
+            log.trace("Make pre block: {} on: {}", print, config.logLabel());
             PreBlock preBlock = toPreBlock(units);
             var timingUnit = units.get(units.size() - 1);
             var last = false;
@@ -121,11 +122,12 @@ public class ChRbcEthereal {
                 last = true;
             }
             if (preBlock != null) {
-                log.debug("Emitting pre block: {} on: {}", units, config.logLabel());
+
+                log.debug("Emitting pre block: {} on: {}", print, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
-                    log.error("Error consuming pre block: {} on: {}", units, config.logLabel(), t);
+                    log.error("Error consuming pre block: {} on: {}", print, config.logLabel(), t);
                 }
             }
         };

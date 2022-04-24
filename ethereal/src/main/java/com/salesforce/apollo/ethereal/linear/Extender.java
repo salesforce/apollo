@@ -59,7 +59,8 @@ public class Extender {
         orderStartLevel = conf.orderStartLevel();
         commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
         digestAlgorithm = conf.digestAlgorithm();
-        crpIterator = new CommonRandomPermutation(dag, rs, conf.crpFixedPrefix(), digestAlgorithm);
+        crpIterator = new CommonRandomPermutation(dag, rs, (short) (Dag.minimalTrusted(conf.nProc()) + 1),
+                                                  digestAlgorithm);
     }
 
     public TimingRound nextRound() {
@@ -80,8 +81,25 @@ public class Extender {
             return null;
         }
 
+        var units = dag.unitsOnLevel(level);
+        var count = 0;
+        for (short i = 0; i < dag.nProc(); i++) {
+            final var atPid = units.get(i);
+            if (atPid != null && !atPid.isEmpty()) {
+                count++;
+            }
+        }
+        if (count <= Dag.minimalTrusted(dag.nProc())) {
+            log.trace("No round, max dag level: {} level: {} count: {} is less than quorum on: {}", dagMaxLevel, level,
+                      count, dag.pid());
+            return null;
+        } else {
+            log.trace("Round proceeding, max dag level: {} level: {} count: {} on: {}", dagMaxLevel, level, count,
+                      dag.pid());
+        }
+
         var decided = new AtomicBoolean();
-        var randomBytesPresent = crpIterator.iterate(level, previousTU, uc -> {
+        if (!crpIterator.iterate(level, units, previousTU, uc -> {
             SuperMajorityDecider decider = getDecider(uc);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
@@ -100,9 +118,10 @@ public class Extender {
                 return false;
             }
             return true;
-        });
-        if (!randomBytesPresent) {
-            log.trace("Missing random bytes");
+        })) {
+            log.trace("No round, max dag level: {} level: {} count: {} could not match permutation on: {}", dagMaxLevel,
+                      level, count, dag.pid());
+            return null;
         }
         if (!decided.get()) {
             log.trace("Nothing decided");
@@ -110,7 +129,7 @@ public class Extender {
         }
         final var ctu = currentTU.get();
         final var ltu = lastTUs.get();
-        log.trace("Timing round: {} last: {} on: {}", ctu, ltu, dag.pid());
+        log.trace("Timing round: {} last: {} count: {} dag mxLvl: {} on: {}", ctu, ltu, count, dagMaxLevel, dag.pid());
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
