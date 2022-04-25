@@ -85,7 +85,7 @@ public class CRPTest {
         Dag dag = new DagFactory.TestDagFactory().createDag(nProc).dag();
         var rs = new RandomSourceMock();
         short crpFixedPrefix = nProc;
-        var crpIt = new CommonRandomPermutation(dag, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(dag, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
@@ -107,7 +107,7 @@ public class CRPTest {
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = nProc;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var perm = new HashMap<Digest, Boolean>();
@@ -130,7 +130,7 @@ public class CRPTest {
         }
         var rs = new DeterministicRandomSource(new HashMap<>());
         short crpFixedPrefix = 4;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
@@ -151,7 +151,7 @@ public class CRPTest {
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = (short) (nProc - 2);
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         checkIfDifferentWithProvidedTimingUnit(d.dag(), crpIt, rs);
@@ -165,7 +165,7 @@ public class CRPTest {
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = 0;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         checkIfSameWithProvidedTimingUnit(d.dag(), crpIt, rs);
@@ -187,7 +187,7 @@ public class CRPTest {
         var rs = new DeterministicRandomSource(rsData);
 
         var crpFixedPrefix = (short) 1;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
@@ -207,7 +207,7 @@ public class CRPTest {
         }
         rs = new DeterministicRandomSource(rsData);
 
-        crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation2 = new ArrayList<Unit>();
@@ -231,7 +231,7 @@ public class CRPTest {
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = 1;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT);
+        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);

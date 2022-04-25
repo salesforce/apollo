@@ -24,7 +24,7 @@ public class SimpleDataSource implements DataSource {
     @Override
     public ByteString getData() {
         try {
-            Thread.sleep(Utils.bitStreamEntropy().nextLong(100));
+            Thread.sleep(Utils.bitStreamEntropy().nextLong(10));
         } catch (InterruptedException e) {
         }
         return dataStack.pollFirst();

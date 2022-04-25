@@ -27,7 +27,7 @@ import com.salesforce.apollo.ethereal.Unit;
  */
 
 public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short crpFixedPrefix,
-                                      DigestAlgorithm digestAlgorithm) {
+                                      DigestAlgorithm digestAlgorithm, String logLabel) {
 
     private static final Logger log = LoggerFactory.getLogger(CommonRandomPermutation.class);
 
@@ -97,7 +97,7 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
         }
 
         Collections.sort(permutation, (a, b) -> a.hash().compareTo(b.hash()));
-        log.trace("permutation for: {} : {}", level, permutation);
+        log.trace("permutation for: {} : {} on: {}", level, permutation, logLabel);
         return permutation;
     }
 

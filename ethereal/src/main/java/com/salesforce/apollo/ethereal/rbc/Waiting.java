@@ -8,6 +8,7 @@ package com.salesforce.apollo.ethereal.rbc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
@@ -22,13 +23,13 @@ import com.salesforce.apollo.ethereal.rbc.ChRbcAdder.State;
  */
 public class Waiting {
 
-    private final List<Waiting> children       = new ArrayList<>();
-    private volatile Unit       decoded;
-    private volatile int        missingParents = 0;
-    private final PreUnit       pu;
-    private final PreUnit_s     serialized;
-    private volatile State      state;
-    private volatile int        waitingParents = 0;
+    private final List<Waiting>    children       = new ArrayList<>();
+    private volatile Unit          decoded;
+    private volatile int           missingParents = 0;
+    private final PreUnit          pu;
+    private final PreUnit_s        serialized;
+    private AtomicReference<State> state          = new AtomicReference<>(State.PROPOSED);
+    private volatile int           waitingParents = 0;
 
     public Waiting(PreUnit pu) {
         this(pu, pu.toPreUnit_s());
@@ -37,7 +38,6 @@ public class Waiting {
     public Waiting(PreUnit pu, PreUnit_s serialized) {
         this.pu = pu;
         this.serialized = serialized;
-        state = State.PROPOSED;
     }
 
     public void addChild(Waiting wp) {
@@ -121,16 +121,21 @@ public class Waiting {
     }
 
     public void setState(State state) {
-        this.state = state;
+        this.state.set(state);
     }
 
     public State state() {
-        final var current = state;
-        return current;
+        return state.get();
     }
 
     @Override
     public String toString() {
-        return "wpu:" + state() + ":[" + pu.shortString() + "]";
+        return hash() + ":" + state() + ":[" + pu.shortString() + "]" + "(" + missingParents + "," + waitingParents
+        + ")";
+    }
+
+    public int waitingParents() {
+        final var current = waitingParents;
+        return current;
     }
 }

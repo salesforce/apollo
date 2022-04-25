@@ -547,6 +547,12 @@ public interface Dag {
         return minimalQuorum;
     }
 
+    static short threshold(short np) {
+        var nProcesses = (double) np;
+        short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0);
+        return minimalTrusted;
+    }
+
     static short minimalTrusted(short np) {
         var nProcesses = (double) np;
         short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0 + 1.0);

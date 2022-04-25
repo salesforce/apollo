@@ -36,8 +36,7 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.SimpleDataSource;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
-import com.salesforce.apollo.ethereal.rbc.ChRbcEthereal.Controller;
-import com.salesforce.apollo.ethereal.rbc.ChRbcEthereal.PreBlock;
+import com.salesforce.apollo.ethereal.rbc.ChRbcOrderer.PreBlock;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -52,7 +51,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChEtherealTest {
 
-//    @Test
+    @Test
     public void lots() throws Exception {
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
@@ -71,9 +70,8 @@ public class ChEtherealTest {
         short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
 
-        List<ChRbcEthereal> ethereals = new ArrayList<>();
+        List<ChRbcOrderer> controllers = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
-        List<Controller> controllers = new ArrayList<>();
         List<ChRbcGossiper> gossipers = new ArrayList<>();
         List<Router> comms = new ArrayList<>();
         var schedN = new AtomicInteger();
@@ -91,7 +89,7 @@ public class ChEtherealTest {
             context.activate(m);
         }
         var builder = Config.deterministic()
-                            .setFpr(0.125)
+                            .setFpr(0.000125)
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
         var execN = new AtomicInteger();
@@ -106,14 +104,13 @@ public class ChEtherealTest {
         var level = new AtomicInteger();
         final var prefix = UUID.randomUUID().toString();
         for (short i = 0; i < nProc; i++) {
-            var e = new ChRbcEthereal();
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
             comms.add(com);
             final var member = members.get(i);
-            var controller = e.deterministic(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
+            var controller = new ChRbcOrderer(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
                 if (pid == 0) {
                     System.out.println("block: " + level.incrementAndGet());
                 }
@@ -129,7 +126,6 @@ public class ChEtherealTest {
                 var gossiper = new ChRbcGossiper(context, member, processor, com, executor, metrics);
                 gossipers.add(gossiper);
             });
-            ethereals.add(e);
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 5000; d++) {

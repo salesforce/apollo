@@ -8,6 +8,7 @@ package com.salesforce.apollo.ethereal.rbc;
 
 import static com.salesforce.apollo.ethereal.Dag.newDag;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,10 +25,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 
+import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.Update;
@@ -43,6 +46,7 @@ import com.salesforce.apollo.ethereal.creator.EpochProofBuilder;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.ethereal.random.beacon.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.rbc.ChRbcCreator.RsData;
 
 /**
@@ -53,6 +57,8 @@ import com.salesforce.apollo.ethereal.rbc.ChRbcCreator.RsData;
  *
  */
 public class ChRbcOrderer {
+
+    public record PreBlock(List<ByteString> data, byte[] randomBytes) {}
 
     private record epoch(int id, Dag dag, ChRbcAdder adder, ExtenderService extender, RandomSource rs,
                          AtomicBoolean more) {
@@ -76,24 +82,73 @@ public class ChRbcOrderer {
 
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(ChRbcOrderer.class);
 
-    private final Config               config;
-    private final ChRbcCreator         creator;
-    private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
-    private volatile Thread            currentThread;
-    private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
-    private final ExecutorService      executor;
-    private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
-    private final Queue<Unit>          lastTiming;
-    private final ReadWriteLock        mx           = new ReentrantReadWriteLock();
-    private final Consumer<Integer>    newEpochAction;
-    private final RandomSourceFactory  rsf;
-    private final AtomicBoolean        started      = new AtomicBoolean();
-    private final int                  threshold;
+    /**
+     * return a preblock from a slice of units containing a timing round. It assumes
+     * that the timing unit is the last unit in the slice, and that random source
+     * data of the timing unit starts with random bytes from the previous level.
+     */
+    public static PreBlock toPreBlock(List<Unit> round) {
+        var data = new ArrayList<ByteString>();
+        for (Unit u : round) {
+            if (!u.dealing()) {// data in dealing units doesn't come from users, these are new epoch proofs
+                data.add(u.data());
+            }
+        }
+        var randomBytes = round.get(round.size() - 1).randomSourceData();
+        return data.isEmpty() ? null : new PreBlock(data, randomBytes);
+    }
+
+    private static Consumer<List<Unit>> blocker(BiConsumer<PreBlock, Boolean> blocker, Config config) {
+        return units -> {
+            var print = units.stream().map(e -> "[" + e.shortString() + "]").toList();
+            log.trace("Make pre block: {} on: {}", print, config.logLabel());
+            PreBlock preBlock = toPreBlock(units);
+            var timingUnit = units.get(units.size() - 1);
+            var last = false;
+            if (timingUnit.level() == config.lastLevel() && timingUnit.epoch() == config.numberOfEpochs() - 1) {
+                log.debug("Closing at last level: {} at epoch: {} on: {}", timingUnit.level(), timingUnit.epoch(),
+                          config.logLabel());
+                last = true;
+            }
+            if (preBlock != null) {
+
+                log.debug("Emitting pre block: {} on: {}", print, config.logLabel());
+                try {
+                    blocker.accept(preBlock, last);
+                } catch (Throwable t) {
+                    log.error("Error consuming pre block: {} on: {}", print, config.logLabel(), t);
+                }
+            }
+        };
+    }
+
+    private final Config              config;
+    private final ChRbcCreator        creator;
+    private final AtomicInteger       currentEpoch = new AtomicInteger(-1);
+    private volatile Thread           currentThread;
+    private final Map<Integer, epoch> epochs       = new ConcurrentHashMap<>();
+    private final ExecutorService     executor;
+    private Set<Digest>               failed       = new ConcurrentSkipListSet<>();
+    private final Queue<Unit>         lastTiming;
+    private final ReadWriteLock       mx           = new ReentrantReadWriteLock();
+    private final Consumer<Integer>   newEpochAction;
+    private final RandomSourceFactory rsf;
+    private final AtomicBoolean       started      = new AtomicBoolean();
+
     private final Consumer<List<Unit>> toPreblock;
 
-    public ChRbcOrderer(Config conf, int threshold, DataSource ds, Consumer<List<Unit>> toPreblock,
+    public ChRbcOrderer(Config config, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
+                        Consumer<Integer> newEpochAction, Consumer<Processor> gossiper) {
+        this(config, ds, blocker, newEpochAction, new DsrFactory(config.digestAlgorithm()), gossiper);
+    }
+
+    public ChRbcOrderer(Config conf, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
                         Consumer<Integer> newEpochAction, RandomSourceFactory rsf, Consumer<Processor> gossiper) {
-        this.threshold = threshold;
+        this(conf, ds, blocker(blocker, conf), newEpochAction, rsf, gossiper);
+    }
+
+    public ChRbcOrderer(Config conf, DataSource ds, Consumer<List<Unit>> toPreblock, Consumer<Integer> newEpochAction,
+                        RandomSourceFactory rsf, Consumer<Processor> gossiper) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
@@ -149,9 +204,6 @@ public class ChRbcOrderer {
         RandomSource rs = rsf.newRandomSource(dg);
         ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
         dg.afterInsert(u -> {
-            ext.chooseNextTimingUnits();
-        });
-        dg.afterInsert(u -> {
             if (!started.get()) {
                 return;
             }
@@ -162,6 +214,7 @@ public class ChRbcOrderer {
                     }
                     currentThread = Thread.currentThread();
                     try {
+                        ext.chooseNextTimingUnits();
                         // don't put our own units on the unit belt, creator already knows about them.
                         if (u.creator() != config.pid()) {
                             creator.consume(u);
@@ -174,7 +227,7 @@ public class ChRbcOrderer {
                 // ignored
             }
         });
-        return new epoch(epoch, dg, new ChRbcAdder(epoch, dg, 1024 * 1024, config, threshold, failed), ext, rs,
+        return new epoch(epoch, dg, new ChRbcAdder(epoch, dg, 1024 * 1024, config, failed), ext, rs,
                          new AtomicBoolean(true));
     }
 

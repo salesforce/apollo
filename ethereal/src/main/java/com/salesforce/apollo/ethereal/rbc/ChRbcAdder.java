@@ -51,15 +51,14 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 public class ChRbcAdder {
 
     /**
-     * State progression:
-     * 
-     * PROPOSED -> WAITING_FOR_PARENTS -> PREVOTED -> COMMITTED -> OUTPUT
+     * PROPOSED -> WAITING_ON_ROUND -> PREVOTED -> WAITING_FOR_PARENTS -> COMMITTED
+     * -> OUTPUT
      * 
      * FAILED can occur at each state transition
      *
      */
     public enum State {
-        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS;
+        COMMITTED, FAILED, OUTPUT, PREVOTED, PROPOSED, WAITING_FOR_PARENTS, WAITING_ON_ROUND;
     }
 
     public record Signed<T> (Digest hash, T signed) {}
@@ -84,6 +83,7 @@ public class ChRbcAdder {
                             SignedPreVote.newBuilder().setVote(prevote).setSignature(signature.toSig()).build());
     }
 
+    private final List<DigestBloomFilter>    cmts            = new ArrayList<>();
     private final Map<Digest, Set<Short>>    commits         = new ConcurrentSkipListMap<>();
     private final Config                     conf;
     private final Dag                        dag;
@@ -93,24 +93,22 @@ public class ChRbcAdder {
     private final int                        maxSize;
     private final Map<Long, List<Waiting>>   missing         = new ConcurrentSkipListMap<>();
     private final Map<Digest, Set<Short>>    prevotes        = new ConcurrentSkipListMap<>();
+    private final List<DigestBloomFilter>    prevs           = new ArrayList<>();
     private volatile int                     round           = 0;
     private final Map<Digest, SignedCommit>  signedCommits   = new ConcurrentHashMap<>();
     private final Map<Digest, SignedPreVote> signedPrevotes  = new ConcurrentHashMap<>();
     private final int                        threshold;
+    private final List<DigestBloomFilter>    unts            = new ArrayList<>();
     private final Map<Digest, Waiting>       waiting         = new ConcurrentSkipListMap<>();
     private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
 
-    private final List<DigestBloomFilter> prevs = new ArrayList<>();
-    private final List<DigestBloomFilter> cmts  = new ArrayList<>();
-    private final List<DigestBloomFilter> unts  = new ArrayList<>();
-
-    public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, int threshold, Set<Digest> failed) {
+    public ChRbcAdder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
         this.epoch = epoch;
         this.dag = dag;
         this.conf = conf;
         this.failed = failed;
-        this.threshold = threshold;
+        this.threshold = Dag.threshold(conf.nProc());
         this.maxSize = maxSize;
         for (int i = 0; i < 3; i++) {
             prevs.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
@@ -174,13 +172,17 @@ public class ChRbcAdder {
         lock.lock();
         try {
             assert u.creator() == conf.pid();
-            log.trace("Producing unit: {} on: {}", u, conf.logLabel());
             round = u.height();
-            dag.insert(u);
+            log.trace("Producing unit: {} on: {}", u, conf.logLabel());
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
+            for (var unt : unts) {
+                unt.add(wpu.hash());
+            }
             checkIfMissing(wpu);
+            checkParents(wpu);
             prevote(wpu);
             commit(wpu);
+            output(wpu);
             advance();
         } finally {
             lock.unlock();
@@ -220,6 +222,7 @@ public class ChRbcAdder {
                 final var signature = JohnHancock.from(u.getSignature());
                 final var digest = signature.toDigest(conf.digestAlgorithm());
                 if (!failed.contains(digest)) {
+                    log.trace("propose: {} : {} on: {}", digest, PreUnit.decode(u.getId()), conf.logLabel());
                     propose(digest, u);
                 }
             });
@@ -242,7 +245,7 @@ public class ChRbcAdder {
                     }
                 });
                 if (validated.get()) {
-                    preVote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
+                    prevote(Digest.from(pv.getVote().getHash()), (short) pv.getVote().getSource());
                 }
             });
             update.getCommitsList().forEach(c -> {
@@ -274,12 +277,191 @@ public class ChRbcAdder {
     }
 
     /**
-     * exposed for testing
+     * A commit was received
      * 
-     * @return the DAG for this adder
+     * @param digest - the digest of the unit
+     * @param member - the index of the member
      */
+    void commit(Digest digest, short member) {
+        if (failed.contains(digest)) {
+            return;
+        }
+        if (dag.contains(digest)) {
+            return; // already output
+        }
+        final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!committed.add(member)) {
+            log.trace("Already committed: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
+            return;
+        }
+        log.trace("Committed: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
+
+        if (committed.size() <= threshold) {
+            return;
+        }
+        var wpu = waiting.get(digest);
+
+        // Check for existing proposal
+        if (wpu == null) {
+            log.trace("Committed, but no proposal: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
+            return;
+        }
+
+        switch (wpu.state()) {
+        case PREVOTED:
+            if (committed.size() > threshold) {
+                log.trace("Committing: {} on: {}", wpu, conf.logLabel());
+                commit(wpu);
+            }
+            break;
+        case COMMITTED:
+            if (committed.size() > 2 * threshold) {
+                log.trace("Outputting: {} on: {}", wpu, conf.logLabel());
+                output(wpu);
+            }
+            break;
+        default:
+            log.trace("No commit action: {} count: {} on: {}", wpu, committed.size(), conf.logLabel());
+            break;
+        }
+    }
+
+    Map<Digest, Set<Short>> getCommits() {
+        return commits;
+    }
+
     Dag getDag() {
         return dag;
+    }
+
+    Map<Long, List<Waiting>> getMissing() {
+        return missing;
+    }
+
+    Map<Digest, Set<Short>> getPrevotes() {
+        return prevotes;
+    }
+
+    Map<Digest, SignedCommit> getSignedCommits() {
+        return signedCommits;
+    }
+
+    Map<Digest, SignedPreVote> getSignedPrevotes() {
+        return signedPrevotes;
+    }
+
+    /**
+     * A preVote was received
+     * 
+     * @param digest - the digest of the unit
+     * @param member - the index of the member
+     */
+    void prevote(Digest digest, short member) {
+        if (failed.contains(digest)) {
+            return;
+        }
+        if (dag.contains(digest)) {
+            return; // already output
+        }
+        final Set<Short> prepared = prevotes.computeIfAbsent(digest, h -> new HashSet<>());
+        if (!prepared.add(member)) {
+            return;
+        }
+        log.trace("Prevoted: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
+
+        // We only care if the # of prevotes is >= 2*f + 1
+        if (prepared.size() <= 2 * threshold) {
+            return;
+        }
+        // We only care if we've gotten the proposal
+        var wpu = waiting.get(digest);
+        if (wpu == null) {
+            log.trace("Prevoted, but no proposal: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
+            return;
+        }
+
+        switch (wpu.state()) {
+        case PREVOTED:
+            waitingById.put(wpu.id(), wpu);
+            checkParents(wpu);
+            checkIfMissing(wpu);
+            if (wpu.parentsOutput()) {
+                commit(wpu);
+            } else {
+                wpu.setState(State.WAITING_FOR_PARENTS);
+                log.trace("Waiting for parents: {} on: {}", wpu, conf.logLabel());
+            }
+            break;
+        case WAITING_FOR_PARENTS:
+            if (wpu.parentsOutput()) {
+                commit(wpu);
+            }
+            break;
+        default:
+            log.trace("No prevote action: {} prevote count: {} on: {}", wpu, prepared.size(), conf.logLabel());
+            break;
+        }
+    }
+
+    /**
+     * A unit has been proposed.
+     * 
+     * @param digest - the digest identifying the unit
+     * @param u      - the serialized preUnit
+     * @param chRbc  - the comm endpoint to issue further messages
+     */
+    void propose(Digest digest, PreUnit_s u) {
+        if (failed.contains(digest)) {
+            log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
+            return;
+        }
+        var wpu = waiting.get(digest);
+        if (wpu != null) {
+            return;
+        }
+        final var existing = dag.get(digest);
+        if (existing != null) {
+            return;
+        }
+        if (u.toByteString().size() > maxSize) {
+            failed.add(digest);
+            log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
+                      conf.logLabel());
+            return;
+        }
+        final var decoded = PreUnit.decode(u.getId());
+        if (decoded.creator() == conf.pid()) {
+            return;
+        }
+        if (decoded.epoch() != epoch) {
+            log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, maxSize, decoded,
+                      conf.logLabel());
+        }
+        var preunit = PreUnit.from(u, conf.digestAlgorithm());
+
+        if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
+            failed.add(digest);
+            log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
+            return;
+        }
+        for (var unt : unts) {
+            unt.add(digest);
+        }
+        wpu = new Waiting(preunit, u);
+        waiting.put(digest, wpu);
+        for (var unt : unts) {
+            unt.add(digest);
+        }
+
+        if (preunit.height() - 1 > round) {
+            wpu.setState(State.WAITING_ON_ROUND);
+            log.trace("Proposed, waiting: {} current round: {} on: {}", wpu, round, conf.logLabel());
+            waitingForRound.put(digest, wpu);
+            return;
+        }
+
+        log.trace("Proposed: {} on: {}", wpu, conf.logLabel());
+        prevote(wpu);
     }
 
     // Advance the state of the RBC by one round
@@ -288,12 +470,11 @@ public class ChRbcAdder {
         while (iterator.hasNext()) {
             var e = iterator.next();
             if (e.getValue().height() - 1 <= round) {
-                assert e.getValue().state() == State.PROPOSED : "expected PROPOSED, found: " + e.getValue() + " on: "
-                + conf.logLabel();
                 iterator.remove();
+                log.trace("Advanced: {} clearing round: {} on: {}", e.getValue(), round, conf.logLabel());
                 prevote(e.getValue());
             } else {
-                log.trace("Waiting for round unit: {} on: {}", e.getValue(), conf.logLabel());
+                log.trace("Waiting for round: {} current: {} on: {}", e.getValue(), round, conf.logLabel());
             }
         }
     }
@@ -335,6 +516,7 @@ public class ChRbcAdder {
                 if (par != null) {
                     wp.incWaiting();
                     par.addChild(wp);
+                    log.trace("Waiting: {} for parent: {} on: {}", wp, par, conf.logLabel());
                 } else {
                     if (!dag.contains(parentID)) {
                         wp.incMissing();
@@ -346,55 +528,12 @@ public class ChRbcAdder {
         return maxHeights;
     }
 
-    /**
-     * A commit was received
-     * 
-     * @param digest - the digest of the unit
-     * @param member - the index of the member
-     */
-    private void commit(Digest digest, short member) {
-        if (failed.contains(digest)) {
-            return;
-        }
-        if (dag.contains(digest)) {
-            return; // no need
-        }
-        final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
-        if (!committed.add(member)) {
-            return;
-        }
-        if (committed.size() <= threshold) {
-            return;
-        }
-        var wpu = waiting.get(digest);
-
-        // Check for existing proposal
-        if (wpu == null) {
-            return;
-        }
-
-        switch (wpu.state()) {
-        case PREVOTED:
-            if (committed.size() > threshold) {
-                commit(wpu);
-            }
-            // intentional fall through
-        case COMMITTED:
-            if (committed.size() > 2 * threshold) {
-                output(wpu);
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
     private void commit(Waiting wpu) {
         wpu.setState(State.COMMITTED);
         Signed<SignedCommit> sc = commit(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
         signedCommits.put(sc.hash(), sc.signed());
-        commit(wpu.hash(), conf.pid());
         log.trace("Committing unit: {} on: {}", wpu, conf.logLabel());
+        commit(wpu.hash(), conf.pid());
     }
 
     private boolean decodeParents(Waiting wp) {
@@ -452,7 +591,7 @@ public class ChRbcAdder {
         waiting.entrySet()
                .stream()
                .filter(e -> !have.contains(e.getKey()))
-               .filter(e -> failed.contains(e.getKey()))
+               .filter(e -> !failed.contains(e.getKey()))
                .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
         pus.values().forEach(pu -> builder.addUnits(pu));
     }
@@ -473,7 +612,11 @@ public class ChRbcAdder {
         for (var ch : wpu.children()) {
             ch.decWaiting();
             if (ch.state() == State.WAITING_FOR_PARENTS && ch.parentsOutput()) {
+                log.trace("Parents output, committing: {} parent: {} on: {}", ch, wpu, conf.logLabel());
+                wpu.setState(State.COMMITTED);
                 commit(wpu);
+            } else {
+                log.trace("Continuing to wait for remaining parents: {} on: {}", ch, conf.logLabel());
             }
         }
     }
@@ -482,116 +625,8 @@ public class ChRbcAdder {
         wpu.setState(State.PREVOTED);
         Signed<SignedPreVote> spv = prevote(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
         signedPrevotes.put(spv.hash(), spv.signed());
-        preVote(wpu.hash(), conf.pid());
         log.trace("Prevoting unit: {} on: {}", wpu, conf.logLabel());
-    }
-
-    /**
-     * A preVote was received
-     * 
-     * @param digest - the digest of the unit
-     * @param member - the index of the member
-     */
-    private void preVote(Digest digest, short member) {
-        if (failed.contains(digest)) {
-            return;
-        }
-        if (dag.contains(digest)) {
-            return; // no need
-        }
-        final Set<Short> prepared = prevotes.computeIfAbsent(digest, h -> new HashSet<>());
-        if (!prepared.add(member)) {
-            return;
-        }
-        // We only care if the # of prevotes is >= 2*f + 1
-        if (prepared.size() <= 2 * threshold) {
-            return;
-        }
-        // We only care if we've gotten the proposal
-        var wpu = waiting.get(digest);
-        if (wpu == null) {
-            return;
-        }
-
-        switch (wpu.state()) {
-        case PREVOTED:
-            waitingById.put(wpu.id(), wpu);
-            checkParents(wpu);
-            checkIfMissing(wpu);
-            if (wpu.parentsOutput()) {
-                commit(wpu);
-            } else {
-                wpu.setState(State.WAITING_FOR_PARENTS);
-            }
-            break;
-        case WAITING_FOR_PARENTS:
-            if (wpu.parentsOutput()) {
-                commit(wpu);
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
-    /**
-     * A unit has been proposed.
-     * 
-     * @param digest - the digest identifying the unit
-     * @param u      - the serialized preUnit
-     * @param chRbc  - the comm endpoint to issue further messages
-     */
-    private void propose(Digest digest, PreUnit_s u) {
-        if (failed.contains(digest)) {
-            log.trace("Failed preunit: {} on: {}", digest, conf.logLabel());
-            return;
-        }
-        var wpu = waiting.get(digest);
-        if (wpu != null) {
-            return;
-        }
-        final var existing = dag.get(digest);
-        if (existing != null) {
-            return;
-        }
-        if (u.toByteString().size() > maxSize) {
-            failed.add(digest);
-            log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
-                      conf.logLabel());
-            return;
-        }
-        final var decoded = PreUnit.decode(u.getId());
-        if (decoded.creator() == conf.pid()) {
-            return;
-        }
-        if (decoded.epoch() != epoch) {
-            throw new IllegalStateException("incorrect epoch: " + decoded.epoch() + " only accepting: " + epoch);
-        }
-        var preunit = PreUnit.from(u, conf.digestAlgorithm());
-
-        if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
-            failed.add(digest);
-            log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
-            return;
-        }
-        if (preunit.epoch() != dag.epoch()) {
-            log.error("Invalid epoch: {} expected: {}, but received: {} on: {}", preunit, dag.epoch(), preunit.epoch(),
-                      conf.logLabel());
-            return;
-        }
-        for (var unt : unts) {
-            unt.add(digest);
-        }
-        wpu = new Waiting(preunit, u);
-        waiting.put(digest, wpu);
-        for (var unt : unts) {
-            unt.add(digest);
-        }
-        if (preunit.height() == 0 || preunit.height() - 1 <= round) {
-            prevote(wpu);
-        } else {
-            waitingForRound.put(digest, wpu);
-        }
+        prevote(wpu.hash(), conf.pid());
     }
 
     /**
