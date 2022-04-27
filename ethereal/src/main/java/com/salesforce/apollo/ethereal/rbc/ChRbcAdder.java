@@ -290,16 +290,17 @@ public class ChRbcAdder {
             return; // already output
         }
         final Set<Short> committed = commits.computeIfAbsent(digest, h -> new HashSet<>());
+        var wpu = waiting.get(digest);
+
         if (!committed.add(member)) {
-            log.trace("Already committed: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
+            log.trace("Already committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
             return;
         }
-        log.trace("Committed: {} count: {} on: {}", digest, committed.size(), conf.logLabel());
+        log.trace("Committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
 
         if (committed.size() <= threshold) {
             return;
         }
-        var wpu = waiting.get(digest);
 
         // Check for existing proposal
         if (wpu == null) {
@@ -350,6 +351,18 @@ public class ChRbcAdder {
         return signedPrevotes;
     }
 
+    Map<Digest, Waiting> getWaiting() {
+        return waiting;
+    }
+
+    Map<Long, Waiting> getWaitingById() {
+        return waitingById;
+    }
+
+    Map<Digest, Waiting> getWaitingForRound() {
+        return waitingForRound;
+    }
+
     /**
      * A preVote was received
      * 
@@ -367,14 +380,14 @@ public class ChRbcAdder {
         if (!prepared.add(member)) {
             return;
         }
-        log.trace("Prevoted: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
+        var wpu = waiting.get(digest);
+        log.trace("Prevoted: {} wpu: {} count: {} on: {}", digest, wpu, prepared.size(), conf.logLabel());
 
         // We only care if the # of prevotes is >= 2*f + 1
         if (prepared.size() <= 2 * threshold) {
             return;
         }
         // We only care if we've gotten the proposal
-        var wpu = waiting.get(digest);
         if (wpu == null) {
             log.trace("Prevoted, but no proposal: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
             return;
@@ -529,16 +542,36 @@ public class ChRbcAdder {
     }
 
     private void commit(Waiting wpu) {
-        wpu.setState(State.COMMITTED);
-        Signed<SignedCommit> sc = commit(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
-        signedCommits.put(sc.hash(), sc.signed());
-        log.trace("Committing unit: {} on: {}", wpu, conf.logLabel());
-        commit(wpu.hash(), conf.pid());
+        try {
+            wpu.setState(State.COMMITTED);
+            Signed<SignedCommit> sc = commit(wpu.id(), wpu.hash(), conf.pid(), conf.signer(), conf.digestAlgorithm());
+            signedCommits.put(sc.hash(), sc.signed());
+            log.trace("Committing unit: {} on: {}", wpu, conf.logLabel());
+            commit(wpu.hash(), conf.pid());
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean decodeParents(Waiting wp) {
         var decoded = dag.decodeParents(wp.pu());
         if (decoded.inError()) {
+            switch (decoded.classification()) {
+            case CORRECT:
+                return true;
+            case DUPLICATE_PRE_UNIT:
+            case DUPLICATE_UNIT:
+            case UNKNOWN_PARENTS:
+                return false;
+            case ABIGUOUS_PARENTS:
+            case COMPLIANCE_ERROR:
+            case DATA_ERROR:
+                removeFailed(wp);
+                return false;
+            default:
+                break;
+            }
+            ;
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
                 removeFailed(wp);
             }
@@ -614,7 +647,7 @@ public class ChRbcAdder {
             if (ch.state() == State.WAITING_FOR_PARENTS && ch.parentsOutput()) {
                 log.trace("Parents output, committing: {} parent: {} on: {}", ch, wpu, conf.logLabel());
                 wpu.setState(State.COMMITTED);
-                commit(wpu);
+                commit(ch);
             } else {
                 log.trace("Continuing to wait for remaining parents: {} on: {}", ch, conf.logLabel());
             }

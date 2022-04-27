@@ -31,6 +31,7 @@ import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.DagReader;
 import com.salesforce.apollo.ethereal.DagTest;
 import com.salesforce.apollo.ethereal.Unit;
+import com.salesforce.apollo.ethereal.rbc.ChRbcAdder.State;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -42,6 +43,8 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class RbcAdderTest {
 
+    private Config                                   config;
+    private List<SigningMember>                      members;
     private HashMap<Short, Map<Integer, List<Unit>>> units;
 
     @BeforeEach
@@ -51,27 +54,27 @@ public class RbcAdderTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         units = DagTest.collectUnits(d.dag());
+        var context = Context.newBuilder().setCardinality(10).build();
+        members = IntStream.range(0, 4)
+                           .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                           .toList();
+        members.forEach(m -> context.activate(m));
+        config = Config.deterministic()
+                       .setnProc((short) members.size())
+                       .setVerifiers(members.toArray(new Verifier[members.size()]))
+                       .setSigner(members.get(0))
+                       .setPid((short) 0)
+                       .build();
     }
 
     @Test
     public void dealingAllPids() throws Exception {
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
         final var dag = new DagImpl(config, 0);
 
         var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         // PID 0
-        var u = units.get((short) 0).get(0).get(0);
+        var u = unit(0, 0);
         adder.produce(u);
         adder.prevote(u.hash(), (short) 1);
         adder.prevote(u.hash(), (short) 2);
@@ -83,7 +86,7 @@ public class RbcAdderTest {
         assertEquals(0, adder.getCommits().size());
 
         // PID 1
-        u = units.get((short) 1).get(0).get(0);
+        u = unit(1, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(1, adder.getPrevotes().size());
@@ -114,7 +117,7 @@ public class RbcAdderTest {
         assertNotNull(dag.get(u.hash()));
 
         // PID 2
-        u = units.get((short) 2).get(0).get(0);
+        u = unit(2, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(1, adder.getPrevotes().size());
@@ -144,7 +147,7 @@ public class RbcAdderTest {
         assertEquals(0, adder.getCommits().size());
 
         // PID 3
-        u = units.get((short) 3).get(0).get(0);
+        u = unit(3, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(1, adder.getPrevotes().size());
@@ -181,43 +184,32 @@ public class RbcAdderTest {
 
     @Test
     public void dealingPid0() throws Exception {
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
         final var dag = new DagImpl(config, 0);
 
         var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
-        var prime = units.get((short) 0).get(0).get(0);
+        var prime = unit(0, 0);
         var u = prime;
         adder.produce(u);
 
         assertEquals(0, adder.getPrevotes().size());
         assertEquals(0, adder.getCommits().size());
 
-        u = units.get((short) 1).get(0).get(0);
+        u = unit(1, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(1, adder.getPrevotes().size());
         assertEquals(0, adder.getCommits().size());
         assertEquals(1, adder.getPrevotes().get(u.hash()).size());
 
-        u = units.get((short) 2).get(0).get(0);
+        u = unit(2, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(2, adder.getPrevotes().size());
         assertEquals(0, adder.getCommits().size());
         assertEquals(1, adder.getPrevotes().get(u.hash()).size());
 
-        u = units.get((short) 3).get(0).get(0);
+        u = unit(3, 0);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         assertEquals(3, adder.getPrevotes().size());
@@ -244,141 +236,125 @@ public class RbcAdderTest {
     }
 
     @Test
-    public void round1() throws Exception {
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
-        final var dag = new DagImpl(config, 0);
-
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-
-        round(0, units, adder);
-
-        assertEquals(0, adder.getPrevotes().size());
-        assertEquals(0, adder.getCommits().size());
-
-        round(1, units, adder);
-
-        assertEquals(0, adder.getPrevotes().size());
-        assertEquals(0, adder.getCommits().size());
-
-        // Dealing units output to DAG
-        for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(0).get(0).hash()));
-        }
-
-        // Round 1 units output to DAG
-        for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(1).get(0).hash()));
-        }
-    }
-
-    @Test
-    public void round2() throws Exception {
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
-        final var dag = new DagImpl(config, 0);
-
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-
-        round(0, units, adder);
-
-        assertEquals(0, adder.getPrevotes().size());
-        assertEquals(0, adder.getCommits().size());
-
-        round(1, units, adder);
-
-        assertEquals(0, adder.getPrevotes().size());
-        assertEquals(0, adder.getCommits().size());
-
-        round(1, units, adder);
-
-        assertEquals(0, adder.getPrevotes().size());
-        assertEquals(0, adder.getCommits().size());
-
-        // Dealing units output to DAG
-        for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(0).get(0).hash()));
-        }
-
-        // Round 1 units output to DAG
-        for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(1).get(0).hash()));
-        }
-
-        // Round 2 units output to DAG
-        for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(2).get(0).hash()));
-        }
-    }
-
-    @Test
     public void round3() throws Exception {
-        var context = Context.newBuilder().setCardinality(10).build();
-        List<SigningMember> members = IntStream.range(0, 4)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
-                                               .toList();
-        members.forEach(m -> context.activate(m));
-        final var config = Config.deterministic()
-                                 .setnProc((short) members.size())
-                                 .setVerifiers(members.toArray(new Verifier[members.size()]))
-                                 .setSigner(members.get(0))
-                                 .setPid((short) 0)
-                                 .build();
         final var dag = new DagImpl(config, 0);
-
         var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
-        round(0, units, adder);
-        round(1, units, adder);
-        round(2, units, adder);
-
-        round(3, units, adder);
+        round(0, adder);
+        round(1, adder);
+        round(2, adder);
+        round(3, adder);
 
         assertEquals(0, adder.getPrevotes().size());
         assertEquals(0, adder.getCommits().size());
 
         // Dealing units output to DAG
         for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(0).get(0).hash()));
+            assertNotNull(dag.contains(unit(pid, 0).hash()));
         }
 
         // Round 1 units output to DAG
         for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(1).get(0).hash()));
+            assertNotNull(dag.contains(unit(pid, 1).hash()));
         }
 
         // Round 2 units output to DAG
         for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(2).get(0).hash()));
+            assertNotNull(dag.contains(unit(pid, 2).hash()));
         }
 
         // Round 3 units output to DAG
         for (short pid = 0; pid < members.size(); pid++) {
-            assertNotNull(dag.contains(units.get(pid).get(3).get(0).hash()));
+            assertNotNull(dag.contains(unit(pid, 3).hash()));
         }
     }
 
+    @Test
+    public void waitingForParents() {
+        final var dag = new DagImpl(config, 0);
+        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
+        round(0, adder);
+
+        // Units from 0, 2, 3 at level 1 proposed. Unit 1 from 0 is added to the DAG, as
+        // produced
+
+        adder.produce(unit(0, 1));
+
+        var u = unit(2, 1);
+        adder.propose(u.hash(), u.toPreUnit_s());
+
+        u = unit(3, 1);
+        adder.propose(u.hash(), u.toPreUnit_s());
+
+        assertEquals(0, adder.getWaitingForRound().size());
+        assertEquals(2, adder.getWaiting().size());
+
+        var waiting = adder.getWaiting().get(unit(2, 1).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(3, 1).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        // Add units from level 2 from all PIDS
+
+        adder.produce(unit(0, 2));
+
+        u = unit(1, 2);
+        adder.propose(u.hash(), u.toPreUnit_s());
+
+        u = unit(2, 2);
+        adder.propose(u.hash(), u.toPreUnit_s());
+
+        u = unit(3, 2);
+        adder.propose(u.hash(), u.toPreUnit_s());
+
+        assertEquals(0, adder.getWaitingForRound().size());
+        assertEquals(5, adder.getWaiting().size());
+
+        waiting = adder.getWaiting().get(unit(1, 2).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(2, 2).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(3, 2).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        adder.prevote(unit(2, 2).hash(), (short) 1);
+        adder.prevote(unit(2, 2).hash(), (short) 2);
+
+        waiting = adder.getWaiting().get(unit(2, 2).hash());
+        assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
+
+        adder.prevote(unit(3, 2).hash(), (short) 1);
+        adder.prevote(unit(3, 2).hash(), (short) 2);
+
+        waiting = adder.getWaiting().get(unit(3, 2).hash());
+        assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
+
+        adder.prevote(unit(2, 1).hash(), (short) 1);
+        adder.prevote(unit(2, 1).hash(), (short) 2);
+
+        waiting = adder.getWaiting().get(unit(2, 1).hash());
+        assertEquals(State.COMMITTED, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(1, 2).hash());
+        assertEquals(State.PREVOTED, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(2, 2).hash());
+        assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
+
+        waiting = adder.getWaiting().get(unit(3, 2).hash());
+        assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
+    }
+
+    private Unit unit(int pid, int level) {
+        return units.get((short) pid).get(level).get(0);
+    }
+
     // All PIDs should be output
-    private void round(int round, HashMap<Short, Map<Integer, List<Unit>>> units, ChRbcAdder adder) {
-        var u = units.get((short) 0).get(round).get(0);
+    private void round(int round, ChRbcAdder adder) {
+        var u = unit(0, round);
         adder.produce(u);
 
         adder.prevote(u.hash(), (short) 1);
@@ -386,7 +362,7 @@ public class RbcAdderTest {
         adder.commit(u.hash(), (short) 1);
         adder.commit(u.hash(), (short) 2);
 
-        u = units.get((short) 1).get(round).get(0);
+        u = unit(1, round);
         adder.propose(u.hash(), u.toPreUnit_s());
 
         adder.prevote(u.hash(), (short) 1);
@@ -394,7 +370,7 @@ public class RbcAdderTest {
         adder.commit(u.hash(), (short) 1);
         adder.commit(u.hash(), (short) 2);
 
-        u = units.get((short) 2).get(round).get(0);
+        u = unit(2, round);
         adder.propose(u.hash(), u.toPreUnit_s());
         adder.prevote(u.hash(), (short) 1);
         adder.prevote(u.hash(), (short) 3);
@@ -402,7 +378,7 @@ public class RbcAdderTest {
         adder.commit(u.hash(), (short) 2);
         adder.commit(u.hash(), (short) 3);
 
-        u = units.get((short) 3).get(round).get(0);
+        u = unit(3, round);
         adder.propose(u.hash(), u.toPreUnit_s());
         adder.prevote(u.hash(), (short) 1);
         adder.prevote(u.hash(), (short) 2);

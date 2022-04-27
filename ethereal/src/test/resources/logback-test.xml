@@ -15,6 +15,9 @@
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
+    <logger name="com.salesforce.apollo.ethereal.DagReader" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

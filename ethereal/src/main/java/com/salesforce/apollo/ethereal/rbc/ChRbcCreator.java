@@ -121,10 +121,10 @@ public class ChRbcCreator {
             if (built == null) {
                 log.trace("Not ready to create unit on: {}", conf.logLabel());
             }
-            while (built != null) {
+            if (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
                 createUnit(built.parents, built.level, getData(built.level));
-                built = ready();
+//                built = ready();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);

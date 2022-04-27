@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -51,7 +52,7 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class ChEtherealTest {
 
-    @Test
+//    @Test
     public void lots() throws Exception {
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
@@ -92,21 +93,23 @@ public class ChEtherealTest {
                             .setFpr(0.000125)
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        var execN = new AtomicInteger();
-        var executor = Executors.newFixedThreadPool(nProc,
-                                                    r -> new Thread(r, "system executor: " + execN.incrementAndGet()));
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
+        List<ExecutorService> executors = new ArrayList<>();
         var level = new AtomicInteger();
         final var prefix = UUID.randomUUID().toString();
         for (short i = 0; i < nProc; i++) {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
+            var execN = new AtomicInteger();
+            var executor = Executors.newFixedThreadPool(2, r -> new Thread(r, "system executor: "
+            + execN.incrementAndGet() + " for: " + pid));
+            executors.add(executor);
             var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
             comms.add(com);
             final var member = members.get(i);
@@ -145,8 +148,13 @@ public class ChEtherealTest {
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
             comms.forEach(e -> e.close());
-            executor.shutdown();
-            executor.awaitTermination(1, TimeUnit.SECONDS);
+            executors.forEach(executor -> {
+                executor.shutdown();
+                try {
+                    executor.awaitTermination(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e1) {
+                }
+            });
             scheduler.shutdown();
             scheduler.awaitTermination(1, TimeUnit.SECONDS);
         }
