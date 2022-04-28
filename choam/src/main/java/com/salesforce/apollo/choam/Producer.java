@@ -40,9 +40,8 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Config.Builder;
 import com.salesforce.apollo.ethereal.Ethereal;
-import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
+import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Member;
 
 /**
@@ -148,8 +147,8 @@ public class Producer {
     private final AtomicBoolean                     assembled     = new AtomicBoolean();
     private volatile ViewAssembly                   assembly;
     private final CommonCommunications<Terminal, ?> comms;
-    private final Controller                        controller;
-    private final ContextGossiper                   coordinator;
+    private final Ethereal                          controller;
+    private final ChRbcGossip                       coordinator;
     private final AtomicBoolean                     draining      = new AtomicBoolean();
     private final TxDataSource                      ds;
     private final int                               lastEpoch;
@@ -199,11 +198,15 @@ public class Producer {
         }
 
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
-        controller = new Ethereal().deterministic(config.build(), ds, (preblock, last) -> create(preblock, last),
-                                                  epoch -> newEpoch(epoch));
+        var holder = new AtomicReference<ChRbcGossip>();
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
-        coordinator = new ContextGossiper(controller, view.context(), params().member(), params().communications(),
-                                          params().exec(), producerMetrics);
+        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + 1024, ds,
+                                  (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch), processor -> {
+                                      holder.set(new ChRbcGossip(view.context(), params().member(), processor,
+                                                                 params().communications(), params().exec(),
+                                                                 producerMetrics));
+                                  });
+        coordinator = holder.get();
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 

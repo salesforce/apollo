@@ -28,7 +28,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DagFactory;
-import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.DagReader;
 import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
@@ -82,7 +81,7 @@ public class CRPTest {
     @Test
     public void emptyDagProvidesNoUnits() throws Exception {
         short nProc = 4;
-        Dag dag = new DagFactory.TestDagFactory().createDag(nProc).dag();
+        Dag dag = new DagFactory.TestDagFactory().createDag(nProc);
         var rs = new RandomSourceMock();
         short crpFixedPrefix = nProc;
         var crpIt = new CommonRandomPermutation(dag, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
@@ -101,18 +100,18 @@ public class CRPTest {
     @Test
     public void enoughUnitsReturnAllUnits() throws Exception {
         short nProc = 4;
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = nProc;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var perm = new HashMap<Digest, Boolean>();
         var called = new AtomicInteger();
-        var result = crpIt.iterate(0, d.dag().unitsOnLevel(0), null, u -> {
+        var result = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             perm.put(u.hash(), true);
             called.incrementAndGet();
             return true;
@@ -124,17 +123,17 @@ public class CRPTest {
 
     @Test
     public void missingRandomBytesButDeterministicProvided() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new DeterministicRandomSource(new HashMap<>());
         short crpFixedPrefix = 4;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
-        var ok = crpIt.iterate(0, d.dag().unitsOnLevel(0), null, u -> {
+        var ok = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             permutation.add(u);
             return true;
         });
@@ -145,35 +144,35 @@ public class CRPTest {
     @Test
     public void returnDifferentPermutations() throws Exception {
         short nProc = 4;
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = (short) (nProc - 2);
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
-        checkIfDifferentWithProvidedTimingUnit(d.dag(), crpIt, rs);
+        checkIfDifferentWithProvidedTimingUnit(d, crpIt, rs);
     }
 
     @Test
     public void returnSamePermutations() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = 0;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
-        checkIfSameWithProvidedTimingUnit(d.dag(), crpIt, rs);
+        checkIfSameWithProvidedTimingUnit(d, crpIt, rs);
     }
 
 //    @Test
     public void useDifferentRSproducesDifferentPermutations() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
@@ -187,12 +186,12 @@ public class CRPTest {
         var rs = new DeterministicRandomSource(rsData);
 
         var crpFixedPrefix = (short) 1;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
         var perm = new HashMap<Digest, Boolean>();
-        crpIt.iterate(0, d.dag().unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             permutation.add(u);
             perm.put(u.hash(), true);
             return true;
@@ -207,12 +206,12 @@ public class CRPTest {
         }
         rs = new DeterministicRandomSource(rsData);
 
-        crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation2 = new ArrayList<Unit>();
         var perm2 = new HashMap<Digest, Boolean>();
-        crpIt.iterate(0, d.dag().unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             permutation2.add(u);
             perm2.put(u.hash(), true);
             return true;
@@ -225,17 +224,17 @@ public class CRPTest {
 
     @Test
     public void useRandomSourceToDeterminePermutation() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         short crpFixedPrefix = 1;
-        var crpIt = new CommonRandomPermutation(d.dag(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d, rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
-        var result = crpIt.iterate(0, d.dag().unitsOnLevel(0), null, u -> {
+        var result = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             called.set(true);
             return true;
         });

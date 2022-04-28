@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.rbc;
+package com.salesforce.apollo.ethereal;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,9 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.rbc.ChRbcAdder.State;
+import com.salesforce.apollo.ethereal.Adder.State;
 
 /**
  * 

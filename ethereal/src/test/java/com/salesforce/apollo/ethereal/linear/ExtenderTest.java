@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DagFactory;
-import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
 import com.salesforce.apollo.ethereal.DagReader;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.linear.CRPTest.RandomSourceMock;
@@ -35,37 +35,37 @@ public class ExtenderTest {
 
     @Test
     public void emptyDagOnLevel0NextRoundReturnsNullNextRound() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/empty.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d.dag(), rs, cnf);
+        var ordering = new Extender(d, rs, cnf);
         assertNull(ordering.nextRound());
     }
 
     @Test
     public void onlyDealingOnLevel0NextRoundReturnsNullNextRound() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d.dag(), rs, cnf);
+        var ordering = new Extender(d, rs, cnf);
         assertNull(ordering.nextRound());
     }
 
     @Test
     public void onVeryRegularDagDecideUpTo7thLevel() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d.dag(), rs, cnf);
+        var ordering = new Extender(d, rs, cnf);
 
         for (int level = 0; level < 7; level++) {
             assertNotNull(ordering.nextRound(), "failed at level:  " + level);
@@ -75,13 +75,13 @@ public class ExtenderTest {
 
     @Test
     public void veryRegularDagTimingRounds() throws Exception {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
-        var ordering = new Extender(d.dag(), rs, cnf);
+        var ordering = new Extender(d, rs, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();
         for (int level = 0; level < 7; level++) {

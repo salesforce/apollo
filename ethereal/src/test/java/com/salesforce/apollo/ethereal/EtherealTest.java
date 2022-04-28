@@ -1,13 +1,14 @@
 /*
- * Copyright (c) 2021, salesforce.com, inc.
+ * Copyright (c) 2022, salesforce.com, inc.
  * All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+
 package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -23,24 +25,16 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
-import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
-import com.salesfoce.apollo.ethereal.proto.ByteMessage;
+import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.crypto.Verifier.DefaultVerifier;
-import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.PreUnit.preUnit;
-import com.salesforce.apollo.ethereal.creator.CreatorTest;
-import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
+import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetricsImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
@@ -50,35 +44,39 @@ import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.utils.Utils;
 
 /**
+ * 
  * @author hal.hildebrand
  *
  */
 public class EtherealTest {
 
-    static PreUnit newPreUnit(long id, Crown crown, ByteString data, byte[] rsData, DigestAlgorithm algo) {
-        var t = PreUnit.decode(id);
-        if (t.height() != crown.heights()[t.creator()] + 1) {
-            throw new IllegalStateException("Inconsistent height information in preUnit id and crown");
+//    @Test
+    public void lots() throws Exception {
+        for (int i = 0; i < 100; i++) {
+            System.out.println("Iteration: " + i);
+            context();
+            System.out.println();
         }
-        byte[] salt = {};
-        JohnHancock signature = PreUnit.sign(CreatorTest.DEFAULT_SIGNER, id, crown, data, rsData, salt);
-        return new preUnit(t.creator(), t.epoch(), t.height(), signature.toDigest(algo), crown, data, rsData, signature,
-                           salt);
     }
 
     @Test
     public void context() throws Exception {
+
+        final var gossipPeriod = Duration.ofMillis(5);
+
         var registry = new MetricRegistry();
 
-        short nProc = 31;
+        short nProc = 4;
         CountDownLatch finished = new CountDownLatch(nProc);
 
-        List<Ethereal> ethereals = new ArrayList<>();
+        List<Ethereal> controllers = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
-        List<Controller> controllers = new ArrayList<>();
-        List<ContextGossiper> gossipers = new ArrayList<>();
+        List<ChRbcGossip> gossipers = new ArrayList<>();
         List<Router> comms = new ArrayList<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc * 10);
+        var schedN = new AtomicInteger();
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc,
+                                                                              r -> new Thread(r, "gossip scheduler"
+                                                                              + schedN.incrementAndGet()));
 
         List<SigningMember> members = IntStream.range(0, nProc)
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
@@ -90,36 +88,48 @@ public class EtherealTest {
             context.activate(m);
         }
         var builder = Config.deterministic()
+                            .setFpr(0.000125)
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
-        var executor = Executors.newFixedThreadPool(nProc);
 
         List<List<PreBlock>> produced = new ArrayList<>();
         for (int i = 0; i < nProc; i++) {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
+        List<ExecutorService> executors = new ArrayList<>();
         var level = new AtomicInteger();
         final var prefix = UUID.randomUUID().toString();
+        int maxSize = 1024 * 1024;
         for (short i = 0; i < nProc; i++) {
-            var e = new Ethereal();
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            var controller = e.deterministic(builder.setSigner(members.get(i)).setPid(pid).build(), ds, (pb, last) -> {
-                if (pid == 0) {
-                    System.out.println("block: " + level.incrementAndGet());
-                }
-                output.add(pb);
-                if (last) {
-                    finished.countDown();
-                }
-            }, ep -> {
-                if (pid == 0) {
-                    System.out.println("new epoch: " + ep);
-                }
-            });
-            ethereals.add(e);
+            var execN = new AtomicInteger();
+            var executor = Executors.newFixedThreadPool(2, r -> new Thread(r, "system executor: "
+            + execN.incrementAndGet() + " for: " + pid));
+            executors.add(executor);
+            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
+            comms.add(com);
+            final var member = members.get(i);
+            var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
+                                          (pb, last) -> {
+                                              if (pid == 0) {
+                                                  System.out.println("block: " + level.incrementAndGet());
+                                              }
+                                              output.add(pb);
+                                              if (last) {
+                                                  finished.countDown();
+                                              }
+                                          }, ep -> {
+                                              if (pid == 0) {
+                                                  System.out.println("new epoch: " + ep);
+                                              }
+                                          }, processor -> {
+                                              var gossiper = new ChRbcGossip(context, member, processor, com, executor,
+                                                                             metrics);
+                                              gossipers.add(gossiper);
+                                          });
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 5000; d++) {
@@ -128,174 +138,60 @@ public class EtherealTest {
                                             .build()
                                             .toByteString());
             }
-            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
-            comms.add(com);
             com.setMember(members.get(i));
-            gossipers.add(new ContextGossiper(controller, context, members.get(i), com, executor, metrics));
         }
         try {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
-            gossipers.forEach(e -> e.start(Duration.ofMillis(5), scheduler));
+            gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
             finished.await(60, TimeUnit.SECONDS);
         } finally {
-            comms.forEach(e -> e.close());
-            gossipers.forEach(e -> e.stop());
             controllers.forEach(e -> e.stop());
+            gossipers.forEach(e -> e.stop());
+            comms.forEach(e -> e.close());
+            executors.forEach(executor -> {
+                executor.shutdown();
+                try {
+                    executor.awaitTermination(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e1) {
+                }
+            });
+            scheduler.shutdown();
+            scheduler.awaitTermination(1, TimeUnit.SECONDS);
         }
         final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
-        assertFalse(first.isEmpty(), "No process produced 87 blocks");
+        assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
-        int success = 0;
         for (int i = 0; i < nProc; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != 87) {
-                System.out.println("Did not get all expected blocks on: " + i);
-                break;
+                fail("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
             }
             for (int j = 0; j < preblocks.size(); j++) {
                 var a = preblocks.get(j);
                 var b = output.get(j);
                 if (a.data().size() != b.data().size()) {
-                    System.out.println("Mismatch at block: " + j + " process: " + i);
-                    break;
+                    fail("Mismatch at block: " + j + " process: " + i);
                 }
-                boolean s = true;
                 for (int k = 0; k < a.data().size(); k++) {
                     if (!a.data().get(k).equals(b.data().get(k))) {
-                        s = false;
-                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
+                        fail("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
                         + a.data().get(k) + " received: " + b.data().get(k));
-                        break;
                     }
                     outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
                 if (a.randomBytes() != b.randomBytes()) {
-                    System.out.println("Mismatch random bytea at block: " + j + " process: " + i);
-                    break;
-                }
-                if (s) {
-                    success++;
+                    fail("Mismatch random bytea at block: " + j + " process: " + i);
                 }
             }
-            var minQuorum = Dag.minimalQuorum(nProc, builder.getBias());
-            assertTrue(success > minQuorum,
-                       "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
         }
-        System.out.println();
-
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
-    }
-
-    @Test
-    public void fourWay() throws Exception {
-
-        short nProc = 4;
-        CountDownLatch finished = new CountDownLatch(nProc);
-
-        List<Ethereal> ethereals = new ArrayList<>();
-        List<DataSource> dataSources = new ArrayList<>();
-        List<Controller> controllers = new ArrayList<>();
-        final var cpks = IntStream.range(0, nProc).mapToObj(i -> Utils.getMember(i)).toList();
-        final var verifiers = cpks.stream()
-                                  .map(c -> (Verifier) new DefaultVerifier(c.getX509Certificate().getPublicKey()))
-                                  .toList();
-        var builder = Config.deterministic()
-                            .setnProc(nProc)
-                            .setVerifiers(verifiers.toArray(new Verifier[verifiers.size()]));
-
-        List<List<PreBlock>> produced = new ArrayList<>();
-        for (int i = 0; i < nProc; i++) {
-            produced.add(new CopyOnWriteArrayList<>());
-        }
-
-        for (short i = 0; i < nProc; i++) {
-            var e = new Ethereal();
-            var ds = new SimpleDataSource();
-            final short pid = i;
-            final AtomicInteger round = new AtomicInteger();
-            List<PreBlock> output = produced.get(pid);
-            builder.setSigner(new SignerImpl(cpks.get(i).getPrivateKey()));
-            var controller = e.deterministic(builder.setSigner(new SignerImpl(SignatureAlgorithm.DEFAULT.generateKeyPair()
-                                                                                                        .getPrivate()))
-                                                    .setPid(pid)
-                                                    .build(),
-                                             ds, (pb, last) -> {
-                                                 if (pid == 0) {
-                                                     System.out.println("Output: " + round.incrementAndGet());
-                                                 }
-                                                 output.add(pb);
-                                                 if (last) {
-                                                     finished.countDown();
-                                                 }
-                                             }, ep -> {
-                                                 if (pid == 0) {
-                                                     System.out.println("new epoch: " + ep);
-                                                 }
-                                             });
-            ethereals.add(e);
-            dataSources.add(ds);
-            controllers.add(controller);
-            for (int d = 0; d < 500; d++) {
-                ds.dataStack.add(ByteMessage.newBuilder()
-                                            .setContents(ByteString.copyFromUtf8("pid: " + pid + " data: " + d))
-                                            .build()
-                                            .toByteString());
-            }
-        }
-        TestGossiper gossiper = new TestGossiper(controllers.stream().map(c -> c.orderer()).toList());
-
-        try {
-            controllers.forEach(e -> e.start());
-            gossiper.start(Duration.ofMillis(5));
-            finished.await(300, TimeUnit.SECONDS);
-        } finally {
-            gossiper.close();
-            controllers.forEach(e -> e.stop());
-        }
-        List<PreBlock> preblocks = produced.get(0);
-        List<String> outputOrder = new ArrayList<>();
-
-        int success = 0;
-        for (int i = 0; i < nProc; i++) {
-            final List<PreBlock> output = produced.get(i);
-            if (output.size() != 87) {
-                System.out.println("Did not get all expected blocks on: " + i);
-                break;
-            }
-            for (int j = 0; j < preblocks.size(); j++) {
-                var a = preblocks.get(j);
-                var b = output.get(j);
-                if (a.data().size() != b.data().size()) {
-                    System.out.println("Mismatch at block: " + j + " process: " + i);
-                    break;
-                }
-                boolean s = true;
-                for (int k = 0; k < a.data().size(); k++) {
-                    if (!a.data().get(k).equals(b.data().get(k))) {
-                        s = false;
-                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
-                        + a.data().get(k) + " received: " + b.data().get(k));
-                        break;
-                    }
-                    outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
-                }
-                if (a.randomBytes() != b.randomBytes()) {
-                    System.out.println("Mismatch random bytea at block: " + j + " process: " + i);
-                    break;
-                }
-                if (s) {
-                    success++;
-                }
-            }
-            var minQuorum = Dag.minimalQuorum(nProc, builder.getBias());
-            assertTrue(success > minQuorum,
-                       "Did not have a majority of processes aggree: " + success + " need: " + minQuorum);
-        }
+//        System.out.println();
+//
+//        ConsoleReporter.forRegistry(registry)
+//                       .convertRatesTo(TimeUnit.SECONDS)
+//                       .convertDurationsTo(TimeUnit.MILLISECONDS)
+//                       .build()
+//                       .report();
     }
 }

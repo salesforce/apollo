@@ -4,8 +4,7 @@
     <!-- Stop output INFO at start -->
     <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
 
-    <appender name="STDOUT"
-        class="ch.qos.logback.core.ConsoleAppender">
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <Pattern>
                 %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
@@ -14,87 +13,71 @@
         </encoder>
     </appender>
 
-    <logger name="org.jooq.Constants" level="warn"
-        additivity="false">
+    <logger name="org.jooq.Constants" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="info"
-        additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-	<logger name="h2database" level="TRACE">
-	    <appender-ref ref="STDOUT" />
-	</logger>
-    
-    <logger name="liquibase" level="warn"
-        additivity="false">
+    <logger name="h2database" level="TRACE">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>  
-
-    <logger name="com.salesforce.apollo.ethereal.memberships.ContextGossiper" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>  
-
-    <logger name="com.salesforce.apollo.state" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>  
-
-    <logger name="com.salesforce.apollo.choam" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger> 
-    
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger> 
-    
-    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger> 
-
-    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info"
-        additivity="false">
+    <logger name="liquibase" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info"
-        additivity="false">
+    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Producer" level="info"
-        additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>  
-
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn"
-        additivity="false">
+    <logger name="com.salesforce.apollo.ethereal.memberships.ContextGossiper" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="info"
-        additivity="false">
+    <logger name="com.salesforce.apollo.state" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.state" level="INFO"
-        additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    
-    <logger name="com.salesforce.apollo.comm" level="warn"
-        additivity="false">
+
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.state" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.comm" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

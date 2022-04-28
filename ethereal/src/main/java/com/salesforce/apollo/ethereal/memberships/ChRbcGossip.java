@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.rbc;
+package com.salesforce.apollo.ethereal.memberships;
 
 import static com.salesforce.apollo.ethereal.memberships.comm.GossiperClient.getCreate;
 
@@ -29,6 +29,7 @@ import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.ethereal.Processor;
 import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.ethereal.memberships.comm.Gossiper;
 import com.salesforce.apollo.ethereal.memberships.comm.GossiperServer;
@@ -48,7 +49,7 @@ import io.grpc.StatusRuntimeException;
  * @author hal.hildebrand
  *
  */
-public class ChRbcGossiper {
+public class ChRbcGossip {
 
     /**
      * The Service implementing the 3 phase gossip
@@ -81,19 +82,19 @@ public class ChRbcGossiper {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(ChRbcGossiper.class);
+    private static final Logger log = LoggerFactory.getLogger(ChRbcGossip.class);
 
-    private final Processor                                       processor;
     private final CommonCommunications<Gossiper, GossiperService> comm;
     private final Context<Member>                                 context;
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
+    private final Processor                                       processor;
     private final RingCommunications<Gossiper>                    ring;
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started = new AtomicBoolean();
 
-    public ChRbcGossiper(Context<Member> context, SigningMember member, Processor processor, Router communications,
-                         Executor exec, EtherealMetrics m) {
+    public ChRbcGossip(Context<Member> context, SigningMember member, Processor processor, Router communications,
+                       Executor exec, EtherealMetrics m) {
         this.processor = processor;
         this.context = context;
         this.member = member;
@@ -102,6 +103,10 @@ public class ChRbcGossiper {
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<Gossiper>(context, member, this.comm, exec);
+    }
+
+    public Context<Member> getContext() {
+        return context;
     }
 
     /**

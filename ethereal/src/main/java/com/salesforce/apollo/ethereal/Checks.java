@@ -10,8 +10,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 
-import com.salesforce.apollo.ethereal.Adder.Correctness;
-
 /**
  * @author hal.hildebrand
  *

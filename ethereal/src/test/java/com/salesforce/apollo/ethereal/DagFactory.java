@@ -6,16 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
-import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Dag.Decoded;
-import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
-
 /**
  * @author hal.hildebrand
  *
@@ -24,7 +14,7 @@ public interface DagFactory {
     public class DefaultChecksFactory implements DagFactory {
 
         @Override
-        public DagAdder createDag(short nProc) {
+        public Dag createDag(short nProc) {
             var cnf = Config.Builder.empty().setnProc(nProc).build();
             var dag = Dag.newDag(cnf, 0);
             dag.addCheck(Checks.basicCorrectness());
@@ -32,59 +22,7 @@ public interface DagFactory {
             dag.addCheck(Checks.noSelfForkingEvidence());
             dag.addCheck(Checks.forkerMuting());
 
-            return new DagAdder(dag, new DagFactory.TestAdder(dag));
-        }
-    }
-
-    class TestAdder implements Adder {
-        private final Dag dag;
-
-        public TestAdder(Dag dag) {
-            this.dag = dag;
-        }
-
-        @Override
-        public Map<Digest, Correctness> addPreunits(List<PreUnit> preunits) {
-            var errors = new HashMap<Digest, Correctness>();
-            var hashes = new ArrayList<Digest>();
-            var failed = new ArrayList<Boolean>();
-            for (var pu : preunits) {
-                failed.add(false);
-                hashes.add(pu.hash());
-            }
-
-            for (int i = 0; i < preunits.size(); i++) {
-                var pu = preunits.get(i);
-                if (pu.epoch() != dag.epoch()) {
-                    errors.put(pu.hash(), Correctness.DATA_ERROR);
-                    failed.set(i, true);
-                    continue;
-                }
-                var alreadyInDag = dag.get(pu.hash());
-                if (alreadyInDag != null) {
-                    errors.put(pu.hash(), Correctness.DUPLICATE_UNIT);
-                    failed.set(i, true);
-                    continue;
-                }
-                Decoded decodedParents = dag.decodeParents(pu);
-                if (decodedParents.inError()) {
-                    errors.put(pu.hash(), decodedParents.classification());
-                    failed.set(i, true);
-                    continue;
-                }
-                Unit[] parents = decodedParents.parents();
-                var freeUnit = dag.build(pu, parents);
-                dag.insert(freeUnit);
-            }
-            return errors.isEmpty() ? null : errors;
-        }
-
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public void missing(BloomFilter<Digest> have, List<PreUnit_s> missing) {
+            return dag;
         }
     }
 
@@ -101,14 +39,11 @@ public interface DagFactory {
         }
 
         @Override
-        public DagAdder createDag(short nProc) {
+        public Dag createDag(short nProc) {
             var cnf = Config.Builder.empty().setnProc(nProc).build();
-            var dag = Dag.newDag(cnf, initialEpoch);
-            return new DagAdder(dag, new DagFactory.TestAdder(dag));
+            return Dag.newDag(cnf, initialEpoch);
         }
     }
 
-    record DagAdder(Dag dag, Adder adder) {}
-
-    DagAdder createDag(short nProc);
+    Dag createDag(short nProc);
 }

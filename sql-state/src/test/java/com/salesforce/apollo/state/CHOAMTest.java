@@ -175,9 +175,9 @@ public class CHOAMTest {
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(3);
+        final Duration timeout = Duration.ofSeconds(4);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 1_000 : 1;
+        final int clientCount = LARGE_TESTS ? 500 : 1;
         final int max = 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.rbc;
+package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,14 +24,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.ethereal.Config;
+import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
-import com.salesforce.apollo.ethereal.DagFactory;
-import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
-import com.salesforce.apollo.ethereal.DagReader;
-import com.salesforce.apollo.ethereal.DagTest;
-import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.rbc.ChRbcAdder.State;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
@@ -49,11 +43,11 @@ public class RbcAdderTest {
 
     @BeforeEach
     public void before() throws IOException, FileNotFoundException {
-        DagAdder d = null;
+        Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        units = DagTest.collectUnits(d.dag());
+        units = DagTest.collectUnits(d);
         var context = Context.newBuilder().setCardinality(10).build();
         members = IntStream.range(0, 4)
                            .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
@@ -71,7 +65,7 @@ public class RbcAdderTest {
     public void dealingAllPids() throws Exception {
         final var dag = new DagImpl(config, 0);
 
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         // PID 0
         var u = unit(0, 0);
@@ -186,7 +180,7 @@ public class RbcAdderTest {
     public void dealingPid0() throws Exception {
         final var dag = new DagImpl(config, 0);
 
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         var prime = unit(0, 0);
         var u = prime;
@@ -238,7 +232,7 @@ public class RbcAdderTest {
     @Test
     public void round3() throws Exception {
         final var dag = new DagImpl(config, 0);
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         round(0, adder);
         round(1, adder);
@@ -272,7 +266,7 @@ public class RbcAdderTest {
     @Test
     public void waitingForParents() {
         final var dag = new DagImpl(config, 0);
-        var adder = new ChRbcAdder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
         round(0, adder);
 
         // Units from 0, 2, 3 at level 1 proposed. Unit 1 from 0 is added to the DAG, as
@@ -353,7 +347,7 @@ public class RbcAdderTest {
     }
 
     // All PIDs should be output
-    private void round(int round, ChRbcAdder adder) {
+    private void round(int round, Adder adder) {
         var u = unit(0, round);
         adder.produce(u);
 

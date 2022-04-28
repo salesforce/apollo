@@ -4,12 +4,10 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.creator;
+package com.salesforce.apollo.ethereal;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,11 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.Dag;
-import com.salesforce.apollo.ethereal.DataSource;
-import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.Unit;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -84,7 +77,7 @@ public class Creator {
     private final AtomicBoolean                        epochDone  = new AtomicBoolean();
     private final AtomicReference<EpochProofBuilder>   epochProof = new AtomicReference<>();
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
-    private final Set<Short>                           frozen     = new HashSet<>();
+    private final Queue<Unit>                          lastTiming;
     private final AtomicInteger                        level      = new AtomicInteger();
     private final AtomicInteger                        maxLvl     = new AtomicInteger();
     private final Lock                                 mx         = new ReentrantLock();
@@ -93,37 +86,39 @@ public class Creator {
     private final RsData                               rsData;
     private final Consumer<Unit>                       send;
 
-    public Creator(Config config, DataSource ds, Consumer<Unit> send, RsData rsData,
-                   Function<Integer, EpochProofBuilder> epochProofBuilder) {
+    public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
+                        Function<Integer, EpochProofBuilder> epochProofBuilder) {
         this.conf = config;
         this.ds = ds;
         this.rsData = rsData;
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
         this.candidates = new Unit[config.nProc()];
+        this.lastTiming = lastTiming;
+
         quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
     }
 
     /**
-     * Units are examined and stored to be used as parents of future units. When
-     * there are enough new parents, a new unit is produced. lastTiming is a channel
-     * on which the last timing unit of each epoch is expected to appear.
+     * Unit is examined and stored to be used as parents of future units. When there
+     * are enough new parents, a new unit is produced. lastTiming is a channel on
+     * which the last timing unit of each epoch is expected to appear.
+     * 
+     * @param ext
      */
-    public void consume(List<Unit> units, Queue<Unit> lastTiming) {
-        log.trace("Processing next units: {} on: {}", units.size(), conf.logLabel());
+    public void consume(Unit u) {
+        log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
         mx.lock();
         try {
-            for (Unit u : units) {
-                update(u);
-            }
+            update(u);
             var built = ready();
             if (built == null) {
                 log.trace("Not ready to create unit on: {}", conf.logLabel());
             }
-            while (built != null) {
+            if (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
-                createUnit(built.parents, built.level, getData(built.level, lastTiming));
-                built = ready();
+                createUnit(built.parents, built.level, getData(built.level));
+//                built = ready();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);
@@ -133,33 +128,23 @@ public class Creator {
     }
 
     public void start() {
-        newEpoch(epoch.get(), ByteString.EMPTY);
+        newEpoch(epoch.get(), ByteString.EMPTY, -1);
+    }
+
+    public void stop() {
     }
 
     private built buildParents() {
-        if (conf.canSkipLevel()) {
-            final Unit[] parents = getParents();
-            final var count = count(parents);
-            if (count >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
-                return new built(parents, level.get());
-            } else {
-                log.trace("Parents (skip level) not ready: {} current: {} required: {} on: {}", parents, count, quorum,
-                          conf.logLabel());
-                return null;
-            }
+        var l = candidates[conf.pid()].level() + 1;
+        final Unit[] parents = getParentsForLevel(l);
+        final var count = count(parents);
+        if (count >= quorum) {
+            log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
+            return new built(parents, l);
         } else {
-            var l = candidates[conf.pid()].level() + 1;
-            final Unit[] parents = getParentsForLevel(l);
-            final var count = count(parents);
-            if (count >= quorum) {
-                log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
-                return new built(parents, l);
-            } else {
-                log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
-                          conf.logLabel());
-                return null;
-            }
+            log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
+                      conf.logLabel());
+            return null;
         }
     }
 
@@ -194,7 +179,7 @@ public class Creator {
      * and id of the last timing unit (obtained from preblockMaker on lastTiming
      * channel)
      **/
-    private ByteString getData(int level, Queue<Unit> lastTiming) {
+    private ByteString getData(int level) {
         if (level < conf.lastLevel()) {
             if (ds != null) {
                 return ds.getData();
@@ -220,20 +205,10 @@ public class Creator {
                 log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
-            log.info("Creator received timing unit from newer epoch: {} that previously encountered: {} on: {}",
-                     timingUnit.epoch(), e, conf.logLabel());
+            log.trace("Ignored timing unit from epoch: {} current: {} on: {}", timingUnit.epoch(), e, conf.logLabel());
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
-    }
-
-    private Unit[] getParents() {
-        Unit[] result = new Unit[candidates.length];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = candidates[i];
-        }
-        makeConsistent(result);
-        return result;
     }
 
     /**
@@ -258,12 +233,12 @@ public class Creator {
      * switches the creator to a chosen epoch, resets candidates and shares and
      * creates a dealing with the provided data.
      **/
-    private void newEpoch(int epoch, ByteString data) {
-        log.trace("Changing epoch to: {} on: {}", epoch, conf.logLabel());
+    private void newEpoch(int epoch, ByteString data, int from) {
+        log.trace("Changing epoch from: {} to: {} on: {}", from, epoch, conf.logLabel());
         this.epoch.set(epoch);
         epochDone.set(false);
 
-        resetEpoch();
+        resetEpoch(epoch);
         epochProof.set(epochProofBuilder.apply(epoch));
         createUnit(new Unit[conf.nProc()], 0, data);
     }
@@ -276,23 +251,26 @@ public class Creator {
      */
     private built ready() {
         final int l = candidates[conf.pid()].level();
-        boolean ready = !epochDone.get() && level.get() > l;
+        final var current = level.get();
+        boolean ready = !epochDone.get() && current > l;
         if (ready) {
-            log.trace("Ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, level.get(), l,
+            log.trace("Ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, current, l,
                       conf.logLabel());
             return buildParents();
         }
         log.trace("Not ready to create epochDone: {} epoch: {} level: {} candidate level: {} on: {}", epochDone,
-                  epoch.get(), level.get(), l, conf.logLabel());
+                  epoch.get(), current, l, conf.logLabel());
         return null;
     }
 
     /**
      * resets the candidates and all related variables to the initial state (a slice
      * with NProc nils). This is useful when switching to a new epoch.
+     * 
+     * @param epoch
      */
-    private void resetEpoch() {
-        log.debug("Resetting epoch on: {}", conf.logLabel());
+    private void resetEpoch(int epoch) {
+        log.debug("Resetting epoch: {} on: {}", epoch, conf.logLabel());
         for (int i = 0; i < candidates.length; i++) {
             candidates[i] = null;
         }
@@ -307,24 +285,20 @@ public class Creator {
      */
     private void update(Unit unit) {
         log.trace("updating: {} on: {}", unit, conf.logLabel());
-        // if the unit is from an older epoch or unit's creator is known to be a forker,
-        // we simply ignore it
+        // if the unit is from an older epoch we simply ignore it
         final int e = epoch.get();
-        if (frozen.contains(unit.creator()) || unit.epoch() < e) {
-            log.debug("Unit: {} rejected frozen: {} current: {} on: {}", unit, frozen.contains(unit.creator()), epoch,
-                      conf.logLabel());
+        if (unit.epoch() < e) {
+            log.debug("Unit: {} from a previous epoch, current epoch: {} on: {}", unit, epoch, conf.logLabel());
             return;
         }
 
-        // If the unit is from a new epoch, switch to that epoch.
-        // Since units appear on the belt in order they were added to the dag,
-        // the first unit from a new epoch is always a dealing unit.
-        if (unit.epoch() > e) {
+        // If the unit is the first epoch from a new epoch, switch to that epoch.
+        if (unit.epoch() > e && unit.height() == 0) {
             if (!epochProof.get().verify(unit)) {
                 log.warn("Unit did not verify epoch, rejected on: {}", conf.logLabel());
                 return;
             }
-            newEpoch(unit.epoch(), unit.data());
+            newEpoch(unit.epoch(), unit.data(), e);
         }
 
         // If this is a finishing unit try to extract threshold signature share from it.
@@ -332,8 +306,8 @@ public class Creator {
         // that the current epoch is finished) switch to a new epoch.
         ByteString ep = epochProof.get().tryBuilding(unit);
         if (ep != null) {
-            log.debug("Advancing epoch to: {} using: {} on: {}", e + 1, unit, conf.logLabel());
-            newEpoch(e + 1, ep);
+            log.debug("Advancing epoch from: {} to: {} using: {} on: {}", e, e + 1, unit, conf.logLabel());
+            newEpoch(e + 1, ep, e);
             return;
         }
         log.trace("No epoch proof generated from: {} on: {}", unit, conf.logLabel());

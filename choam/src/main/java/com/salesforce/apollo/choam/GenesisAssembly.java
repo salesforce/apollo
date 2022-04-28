@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -43,9 +44,8 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.ethereal.Ethereal;
-import com.salesforce.apollo.ethereal.Ethereal.Controller;
 import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
-import com.salesforce.apollo.ethereal.memberships.ContextGossiper;
+import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -66,8 +66,8 @@ public class GenesisAssembly implements Genesis {
     private static final Logger log = LoggerFactory.getLogger(GenesisAssembly.class);
 
     private volatile Thread             blockingThread;
-    private final Controller            controller;
-    private final ContextGossiper       coordinator;
+    private final Ethereal              controller;
+    private final ChRbcGossip           coordinator;
     private volatile OneShot            ds;
     private final ViewMember            genesisMember;
     private final Map<Digest, Member>   nextAssembly;
@@ -110,15 +110,17 @@ public class GenesisAssembly implements Genesis {
         }
         config.setEpochLength(7).setNumberOfEpochs(3);
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
-        controller = new Ethereal().deterministic(config.build(), dataSource(),
-                                                  (preblock, last) -> transitions.process(preblock, last),
-                                                  epoch -> transitions.nextEpoch(epoch));
-
-        coordinator = new ContextGossiper(controller, reContext, params().member(), params().communications(),
-                                          params().exec(),
-                                          params().metrics() == null ? null
-                                                                     : params().metrics().getReconfigureMetrics());
-
+        var holder = new AtomicReference<ChRbcGossip>();
+        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
+                                  (preblock, last) -> transitions.process(preblock, last),
+                                  epoch -> transitions.nextEpoch(epoch), processor -> {
+                                      holder.set(new ChRbcGossip(reContext, params().member(), processor,
+                                                                 params().communications(), params().exec(),
+                                                                 params().metrics() == null ? null
+                                                                                            : params().metrics()
+                                                                                                      .getReconfigureMetrics()));
+                                  });
+        coordinator = holder.get();
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
