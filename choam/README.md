@@ -43,8 +43,7 @@ The CHOAM provides clients the ability to submit transactions that are then caus
 
 ## Finite State Machine Model
 
-CHOAM is driven from a _Finite State Machine_ model using Tron (another module in Apollo).  This manifests in the pattern of a leaf action driver in the form of the _CollaboratorContext_.  This class is used as the _Context_
-of the Tron state machines.  Currently the FSM model has 4 state maps, reprenting the normal operation of the node (Earner), block production (Driven) and the generation of a view (Reconfiguration) and Genesis bootstrapping.  The view reconfiguration logic provides dynamic rotation of view/committee members based on random cuts through the underlying context membership rings.
+CHOAM is driven from a _Finite State Machine_ model using Tron (another module in Apollo).  This manifests in the pattern of a leaf action driver in the form of _contexts_ that provide the leaf actions the Tron state machines.  Currently the FSM model has 4 state maps, reprenting the normal operation of the node (Earner), block production (Driven) and the generation of a view (Reconfiguration) and bootstrapping (Genesis).  The view reconfiguration logic provides dynamic rotation of view/committee members based on random cuts through the underlying context membership rings.  This balances the load across all available members.
 
 ## Messaging
 
