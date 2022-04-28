@@ -22,9 +22,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -121,7 +119,7 @@ public class Ethereal {
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
-    private final ReadWriteLock        mx           = new ReentrantReadWriteLock();
+    private final ReentrantLock        mx           = new ReentrantLock();
     private final Consumer<Integer>    newEpochAction;
     private final RandomSourceFactory  rsf;
     private final AtomicBoolean        started      = new AtomicBoolean();
@@ -147,13 +145,12 @@ public class Ethereal {
         this.rsf = rsf;
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
-            final Lock lock = mx.writeLock();
-            lock.lock();
+            mx.lock();
             try {
                 log.trace("Sending: {} on: {}", u, config.logLabel());
                 insert(u);
             } finally {
-                lock.unlock();
+                mx.unlock();
             }
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
@@ -362,8 +359,7 @@ public class Ethereal {
      * such epoch already exists, returns it.
      */
     private epoch newEpoch(int epoch) {
-        final Lock lock = mx.writeLock();
-        lock.lock();
+        mx.lock();
         try {
             final var currentId = currentEpoch.get();
             final epoch e = epochs.get(epoch);
@@ -388,7 +384,7 @@ public class Ethereal {
             }
             return null;
         } finally {
-            lock.unlock();
+            mx.unlock();
         }
     }
 
