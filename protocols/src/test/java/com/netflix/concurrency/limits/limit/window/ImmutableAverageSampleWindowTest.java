@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 public class ImmutableAverageSampleWindowTest {
-    private final long bigRtt = 5000;
+    private final long bigRtt      = 5000;
     private final long moderateRtt = 500;
-    private final long lowRtt = 10;
+    private final long lowRtt      = 10;
 
     @Test
     public void calculateAverage() {

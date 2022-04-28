@@ -23,9 +23,10 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * {@link Limiter} that blocks the caller when the limit has been reached.  The caller is
- * blocked until the limiter has been released, or a timeout is reached.  This limiter is
- * commonly used in batch clients that use the limiter as a back-pressure mechanism.
+ * {@link Limiter} that blocks the caller when the limit has been reached. The
+ * caller is blocked until the limiter has been released, or a timeout is
+ * reached. This limiter is commonly used in batch clients that use the limiter
+ * as a back-pressure mechanism.
  * 
  * @param <ContextT>
  */
@@ -33,8 +34,10 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
     public static final Duration MAX_TIMEOUT = Duration.ofHours(1);
 
     /**
-     * Wrap a limiter such that acquire will block up to {@link BlockingLimiter#MAX_TIMEOUT} if the limit was reached
-     * instead of return an empty listener immediately
+     * Wrap a limiter such that acquire will block up to
+     * {@link BlockingLimiter#MAX_TIMEOUT} if the limit was reached instead of
+     * return an empty listener immediately
+     * 
      * @param delegate Non-blocking limiter to wrap
      * @return Wrapped limiter
      */
@@ -43,21 +46,23 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
     }
 
     /**
-     * Wrap a limiter such that acquire will block up to a provided timeout if the limit was reached
-     * instead of return an empty listener immediately
+     * Wrap a limiter such that acquire will block up to a provided timeout if the
+     * limit was reached instead of return an empty listener immediately
      *
      * @param delegate Non-blocking limiter to wrap
-     * @param timeout Max amount of time to wait for the wait for the limit to be released.  Cannot exceed {@link BlockingLimiter#MAX_TIMEOUT}
+     * @param timeout  Max amount of time to wait for the wait for the limit to be
+     *                 released. Cannot exceed {@link BlockingLimiter#MAX_TIMEOUT}
      * @return Wrapped limiter
      */
     public static <ContextT> BlockingLimiter<ContextT> wrap(Limiter<ContextT> delegate, Duration timeout) {
-        Preconditions.checkArgument(timeout.compareTo(MAX_TIMEOUT) < 0, "Timeout cannot be greater than " + MAX_TIMEOUT);
+        Preconditions.checkArgument(timeout.compareTo(MAX_TIMEOUT) < 0,
+                                    "Timeout cannot be greater than " + MAX_TIMEOUT);
         return new BlockingLimiter<>(delegate, timeout);
     }
 
     private final Limiter<ContextT> delegate;
-    private final Duration timeout;
-    
+    private final Duration          timeout;
+
     /**
      * Lock used to block and unblock callers as the limit is reached
      */
@@ -67,7 +72,7 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
         this.delegate = limiter;
         this.timeout = timeout;
     }
-    
+
     private Optional<Listener> tryAcquire(ContextT context) {
         final Instant deadline = Instant.now().plus(timeout);
         synchronized (lock) {
@@ -81,7 +86,7 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
                 if (listener.isPresent()) {
                     return listener;
                 }
-                
+
                 // We have reached the limit so block until a token is released
                 try {
                     lock.wait(timeout);
@@ -92,13 +97,13 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
             }
         }
     }
-    
+
     private void unblock() {
         synchronized (lock) {
             lock.notifyAll();
         }
     }
-    
+
     @Override
     public Optional<Listener> acquire(ContextT context) {
         return tryAcquire(context).map(delegate -> new Listener() {
@@ -121,7 +126,7 @@ public final class BlockingLimiter<ContextT> implements Limiter<ContextT> {
             }
         });
     }
-    
+
     @Override
     public String toString() {
         return "BlockingLimiter [" + delegate + "]";

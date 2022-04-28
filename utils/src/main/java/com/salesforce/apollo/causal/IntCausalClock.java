@@ -22,7 +22,6 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Lock lock)
                             implements CausalClock<Integer> {
-     
 
     @Override
     public Integer instant() {
@@ -70,7 +69,9 @@ public record IntCausalClock(BloomClock clock, AtomicInteger sequenceNumber, Loc
 
     @Override
     public StampedClock stamp() {
-        return locked(() -> StampedClock.newBuilder().setInt(sequenceNumber.incrementAndGet()).setClock(clock.toClock())
+        return locked(() -> StampedClock.newBuilder()
+                                        .setInt(sequenceNumber.incrementAndGet())
+                                        .setClock(clock.toClock())
                                         .build(),
                       lock);
     }

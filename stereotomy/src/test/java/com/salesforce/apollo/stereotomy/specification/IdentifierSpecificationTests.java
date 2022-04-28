@@ -42,7 +42,9 @@ public class IdentifierSpecificationTests {
         var spec = IdentifierSpecification.newBuilder()
                                           .setKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(), keyPair2.getPublic()))
-                                          .setSigner(this.signer).setSigningThreshold(1).build();
+                                          .setSigner(this.signer)
+                                          .setSigningThreshold(1)
+                                          .build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -50,9 +52,12 @@ public class IdentifierSpecificationTests {
 
     @Test
     public void testBuilderSigningThresholdUnweighted() {
-        var spec = IdentifierSpecification.newBuilder().addKey(this.keyPair.getPublic()).setSigner(this.signer)
+        var spec = IdentifierSpecification.newBuilder()
+                                          .addKey(this.keyPair.getPublic())
+                                          .setSigner(this.signer)
                                           .setNextKeys(Arrays.asList(keyPair2.getPublic()))
-                                          .setNextSigningThreshold(SigningThreshold.unweighted(1)).build();
+                                          .setNextSigningThreshold(SigningThreshold.unweighted(1))
+                                          .build();
 
         assertTrue(spec.getSigningThreshold() instanceof SigningThreshold.Unweighted);
         assertEquals(1, ((SigningThreshold.Unweighted) spec.getSigningThreshold()).getThreshold());
@@ -65,7 +70,8 @@ public class IdentifierSpecificationTests {
                                           .setNextKeys(Arrays.asList(this.keyPair.getPublic(),
                                                                      this.keyPair2.getPublic()))
                                           .setSigner(this.signer)
-                                          .setSigningThreshold(SigningThreshold.weighted("1", "2")).build();
+                                          .setSigningThreshold(SigningThreshold.weighted("1", "2"))
+                                          .build();
 
         SigningThreshold signingThreshold = spec.getSigningThreshold();
         assertTrue(signingThreshold instanceof SigningThreshold.Weighted);

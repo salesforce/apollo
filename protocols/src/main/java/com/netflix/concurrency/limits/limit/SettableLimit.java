@@ -26,16 +26,16 @@ public class SettableLimit extends AbstractLimit {
     public static SettableLimit startingAt(int limit) {
         return new SettableLimit(limit);
     }
-    
+
     public SettableLimit(int limit) {
         super(limit);
     }
-    
+
     @Override
     protected int _update(long startTime, long rtt, int inflight, boolean didDrop) {
         return getLimit();
     }
-    
+
     public synchronized void setLimit(int limit) {
         super.setLimit(limit);
     }

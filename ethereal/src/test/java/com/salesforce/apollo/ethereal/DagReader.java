@@ -7,7 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import java.io.InputStream;
-import java.util.Collections;
+import java.security.KeyPair;
 import java.util.HashMap;
 import java.util.Scanner;
 
@@ -18,26 +18,34 @@ import com.google.protobuf.ByteString;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.ethereal.DagFactory.DagAdder;
+import com.salesforce.apollo.ethereal.Dag.Decoded;
 import com.salesforce.apollo.ethereal.PreUnit.preUnit;
-import com.salesforce.apollo.ethereal.creator.CreatorTest;
 
 /**
  * @author hal.hildebrand
  *
  */
 public class DagReader {
-    private final static Logger log = LoggerFactory.getLogger(DagReader.class);
+    public static final KeyPair DEFAULT_KEYPAIR;
+
+    public static final Signer DEFAULT_SIGNER;
 
     private final static String KEY_TEMPLATE = "%s-%s-%s";
+    private final static Logger log          = LoggerFactory.getLogger(DagReader.class);
 
-    public static DagAdder readDag(InputStream is, DagFactory df) {
+    static {
+        DEFAULT_KEYPAIR = SignatureAlgorithm.DEFAULT.generateKeyPair();
+        DEFAULT_SIGNER = new Signer.SignerImpl(DEFAULT_KEYPAIR.getPrivate());
+    }
+
+    public static Dag readDag(InputStream is, DagFactory df) {
         @SuppressWarnings("resource")
         Scanner scanner = new Scanner(is);
-        short n = (short) scanner.nextShort();
+        short n = scanner.nextShort();
         scanner.nextLine();
-        DagAdder da = df.createDag(n);
+        Dag dag = df.createDag(n);
         var preUnitHashes = new HashMap<String, Digest>();
         var rsData = new byte[0];
         while (scanner.hasNextLine()) {
@@ -82,27 +90,40 @@ public class DagReader {
             }
             var pu = newPreUnit(puCreator, new Crown(parentsHeights, Digest.combine(DigestAlgorithm.DEFAULT, parents)),
                                 ByteString.copyFromUtf8(" "), rsData, DigestAlgorithm.DEFAULT);
-            var errors = da.adder().addPreunits(Collections.singletonList(pu));
-            log.info("insert: {}", pu);
-            if (errors != null) {
-                log.warn("Error on insert: {} : {}", errors.get(pu.hash()), pu);
-            } else {
-                preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
-            }
+            add(dag, pu);
+            log.debug("insert: {}", pu);
+            preUnitHashes.put(String.format(KEY_TEMPLATE, puCreator, puHeight, puVersion), pu.hash());
         }
-        return da;
+        return dag;
+    }
+
+    public static void add(Dag dag, PreUnit pu) {
+        if (pu.epoch() != dag.epoch()) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DATA_ERROR));
+        }
+        var alreadyInDag = dag.get(pu.hash());
+        if (alreadyInDag != null) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DUPLICATE_UNIT));
+        }
+        Decoded decodedParents = dag.decodeParents(pu);
+        if (decodedParents.inError()) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), decodedParents.classification()));
+        }
+        Unit[] parents = decodedParents.parents();
+        var freeUnit = dag.build(pu, parents);
+        dag.insert(freeUnit);
     }
 
     private static PreUnit newPreUnit(short puCreator, Crown crown, ByteString data, byte[] rsData,
                                       DigestAlgorithm algo) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, algo, CreatorTest.DEFAULT_SIGNER);
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, algo, DEFAULT_SIGNER);
         return newsie;
     }
 
     private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
                                                DigestAlgorithm algo, Signer signer) {
         byte[] salt = {};
-        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt );
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt);
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
                            rsData, signature, salt);
     }

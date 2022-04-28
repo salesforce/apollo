@@ -46,7 +46,7 @@ public class EcDSAOperationsTests {
     @Test
     public void test_EC_SECP256K1_encode() throws GeneralSecurityException {
         var w = new ECPoint(new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0", 16),
-                new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f", 16));
+                            new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f", 16));
         var keyFactory = KeyFactory.getInstance("EC");
         var spec = new ECPublicKeySpec(w, this.parameterSpec);
         var publicKey = (ECPublicKey) keyFactory.generatePublic(spec);
@@ -72,16 +72,17 @@ public class EcDSAOperationsTests {
         assertEquals(this.parameterSpec.getGenerator(), result.getParams().getGenerator());
         assertEquals(this.parameterSpec.getOrder(), result.getParams().getOrder());
 
-        var expectedPoint = new ECPoint(
-                new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0", 16),
-                new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f", 16));
+        var expectedPoint = new ECPoint(new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0",
+                                                       16),
+                                        new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f",
+                                                       16));
         assertEquals(expectedPoint, result.getW());
     }
 
     @Test
     public void test_EC_SECP256K1_encodeDecodeRoundtrip() throws GeneralSecurityException {
         var w = new ECPoint(new BigInteger("c34404f02d7db7382b9ab4c9afd1f6899a8146b694f52b4642d7f083db53c8e0", 16),
-                new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f", 16));
+                            new BigInteger("e17c8a229704c4b0337e84b0fae73d3d4c0870b009ba77a7f000681d3862f88f", 16));
         var spec = new ECPublicKeySpec(w, this.parameterSpec);
         var keyFactory = KeyFactory.getInstance("EC");
         var publicKey = (ECPublicKey) keyFactory.generatePublic(spec);

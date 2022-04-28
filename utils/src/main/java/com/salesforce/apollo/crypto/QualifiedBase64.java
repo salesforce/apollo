@@ -55,9 +55,9 @@ public class QualifiedBase64 {
         case 'A' -> SignatureAlgorithm.ED_25519;
         case 'B' -> SignatureAlgorithm.EC_SECP256K1;
         case '0' -> switch (code.charAt(1)) {
-            case 'A' -> SignatureAlgorithm.EC_SECP256K1;
-            default -> throw new IllegalArgumentException("unknown code: " + code);
-            };
+        case 'A' -> SignatureAlgorithm.EC_SECP256K1;
+        default -> throw new IllegalArgumentException("unknown code: " + code);
+        };
         default -> throw new IllegalArgumentException("unknown code: " + code);
         };
     }

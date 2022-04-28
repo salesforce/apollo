@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesfoce.apollo.ethereal.proto.PreUnit_s;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Adder.Correctness;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -51,6 +50,10 @@ public interface Dag {
         private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
         private final Map<Digest, Unit>                        units      = new HashMap<>();
 
+        /**
+         * @param config
+         * @param epoch
+         */
         public DagImpl(Config config, int epoch) {
             this.config = config;
             this.epoch = epoch;
@@ -89,6 +92,24 @@ public interface Dag {
                 }
             }
             return null;
+        }
+
+        @Override
+        public boolean contains(Digest digest) {
+            return read(() -> units.containsKey(digest));
+        }
+
+        @Override
+        public boolean contains(long id) {
+            return read(() -> {
+                var decoded = decode(id);
+                if (decoded.epoch() != epoch) {
+                    return null;
+                }
+                var fiber = heightUnits.getFiber(decoded.height());
+
+                return fiber == null ? false : !fiber.get(decoded.creator()).isEmpty();
+            });
         }
 
         @Override
@@ -149,8 +170,14 @@ public interface Dag {
         }
 
         @Override
-        public void have(DigestBloomFilter biff) {
-            units.keySet().forEach(d -> biff.add(d));
+        public void have(DigestBloomFilter biff, int epoch) {
+            read(() -> {
+                units.entrySet()
+                     .stream()
+                     .filter(e -> e.getValue().epoch() == epoch)
+                     .map(e -> e.getKey())
+                     .forEach(d -> biff.add(d));
+            });
         }
 
         @Override
@@ -176,7 +203,7 @@ public interface Dag {
 
         @Override
         public boolean isQuorum(short cardinality) {
-            return cardinality >= minimalQuorum(cardinality, config.bias());
+            return cardinality >= Dag.minimalQuorum(cardinality, config.bias());
         }
 
         @Override
@@ -236,6 +263,17 @@ public interface Dag {
                 units.entrySet().forEach(e -> {
                     if (!have.contains(e.getKey())) {
                         missing.add(e.getValue().toPreUnit_s());
+                    }
+                });
+            });
+        }
+
+        @Override
+        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch) {
+            read(() -> {
+                units.entrySet().forEach(e -> {
+                    if (e.getValue().epoch() == epoch && !have.contains(e.getKey())) {
+                        missing.computeIfAbsent(e.getKey(), h -> e.getValue().toPreUnit_s());
                     }
                 });
             });
@@ -379,7 +417,7 @@ public interface Dag {
             final Lock lock = mx.readLock();
             lock.lock();
             try {
-                return content.get(value);
+                return value < 0 || value >= content.size() ? null : content.get(value);
             } finally {
                 lock.unlock();
             }
@@ -508,6 +546,12 @@ public interface Dag {
         return minimalQuorum;
     }
 
+    static short threshold(short np) {
+        var nProcesses = (double) np;
+        short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0);
+        return minimalTrusted;
+    }
+
     static short minimalTrusted(short np) {
         var nProcesses = (double) np;
         short minimalTrusted = (short) ((nProcesses - 1.0) / 3.0 + 1.0);
@@ -542,6 +586,10 @@ public interface Dag {
 
     Correctness check(Unit u);
 
+    boolean contains(Digest digest);
+
+    boolean contains(long parentID);
+
     /** return a slce of parents of the specified unit if control hash matches */
     Decoded decodeParents(PreUnit unit);
 
@@ -553,7 +601,7 @@ public interface Dag {
 
     List<Unit> get(long id);
 
-    void have(DigestBloomFilter biff);
+    void have(DigestBloomFilter biff, int epoch);
 
     void insert(Unit u);
 
@@ -571,6 +619,8 @@ public interface Dag {
     DagInfo maxView();
 
     void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
+
+    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch);
 
     short nProc();
 

@@ -103,9 +103,9 @@ public abstract class AbstractPartitionedLimiter<ContextT> extends AbstractLimit
         }
 
         public Limiter<ContextT> build() {
-            return this.hasPartitions()
-            && !partitionResolvers.isEmpty() ? new AbstractPartitionedLimiter<ContextT>(this) {
-            } : new SimpleLimiter<>(this);
+            return this.hasPartitions() &&
+                   !partitionResolvers.isEmpty() ? new AbstractPartitionedLimiter<ContextT>(this) {
+                   } : new SimpleLimiter<>(this);
         }
     }
 
@@ -187,7 +187,9 @@ public abstract class AbstractPartitionedLimiter<ContextT> extends AbstractLimit
         super(builder);
 
         Preconditions.checkArgument(!builder.partitions.isEmpty(), "No partitions specified");
-        Preconditions.checkArgument(builder.partitions.values().stream().map(Partition::getPercent)
+        Preconditions.checkArgument(builder.partitions.values()
+                                                      .stream()
+                                                      .map(Partition::getPercent)
                                                       .reduce(0.0, Double::sum) <= 1.0,
                                     "Sum of percentages must be <= 1.0");
 

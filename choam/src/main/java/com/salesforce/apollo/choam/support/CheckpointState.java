@@ -42,7 +42,7 @@ public class CheckpointState {
 
     public void assemble(File file) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(file);
-                GZIPInputStream gis = new GZIPInputStream(assembled())) {
+             GZIPInputStream gis = new GZIPInputStream(assembled())) {
             Utils.copy(gis, fos);
             gis.close();
         }

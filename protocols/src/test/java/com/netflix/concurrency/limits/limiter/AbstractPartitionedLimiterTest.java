@@ -34,11 +34,13 @@ public class AbstractPartitionedLimiterTest {
     @Test
     public void limitAllocatedToBins() {
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(FixedLimit.of(10))
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(FixedLimit.of(10))
+                                                                                                                .build();
 
         assertEquals(3, limiter.getPartition("batch").getLimit());
         assertEquals(7, limiter.getPartition("live").getLimit());
@@ -47,15 +49,17 @@ public class AbstractPartitionedLimiterTest {
     @Test
     public void useExcessCapacityUntilTotalLimit() {
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(FixedLimit.of(10))
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(FixedLimit.of(10))
+                                                                                                                .build();
 
         for (int i = 0; i < 10; i++) {
             assertTrue(limiter.acquire("batch").isPresent());
-            assertEquals(i+1, limiter.getPartition("batch").getInflight());
+            assertEquals(i + 1, limiter.getPartition("batch").getInflight());
         }
 
         assertFalse(limiter.acquire("batch").isPresent());
@@ -64,22 +68,24 @@ public class AbstractPartitionedLimiterTest {
     @Test
     public void exceedTotalLimitForUnusedBin() {
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(FixedLimit.of(10))
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(FixedLimit.of(10))
+                                                                                                                .build();
 
         for (int i = 0; i < 10; i++) {
             assertTrue(limiter.acquire("batch").isPresent());
-            assertEquals(i+1, limiter.getPartition("batch").getInflight());
+            assertEquals(i + 1, limiter.getPartition("batch").getInflight());
         }
 
         assertFalse(limiter.acquire("batch").isPresent());
 
         for (int i = 0; i < 7; i++) {
             assertTrue(limiter.acquire("live").isPresent());
-            assertEquals(i+1, limiter.getPartition("live").getInflight());
+            assertEquals(i + 1, limiter.getPartition("live").getInflight());
         }
 
         assertFalse(limiter.acquire("live").isPresent());
@@ -88,22 +94,24 @@ public class AbstractPartitionedLimiterTest {
     @Test
     public void rejectOnceAllLimitsReached() {
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(FixedLimit.of(10))
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(FixedLimit.of(10))
+                                                                                                                .build();
 
         for (int i = 0; i < 3; i++) {
             assertTrue(limiter.acquire("batch").isPresent());
-            assertEquals(i+1, limiter.getPartition("batch").getInflight());
-            assertEquals(i+1, limiter.getInflight());
+            assertEquals(i + 1, limiter.getPartition("batch").getInflight());
+            assertEquals(i + 1, limiter.getInflight());
         }
 
         for (int i = 0; i < 7; i++) {
             assertTrue(limiter.acquire("live").isPresent());
-            assertEquals(i+1, limiter.getPartition("live").getInflight());
-            assertEquals(i+4, limiter.getInflight());
+            assertEquals(i + 1, limiter.getPartition("live").getInflight());
+            assertEquals(i + 4, limiter.getInflight());
         }
 
         assertFalse(limiter.acquire("batch").isPresent());
@@ -113,16 +121,18 @@ public class AbstractPartitionedLimiterTest {
     @Test
     public void releaseLimit() {
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(FixedLimit.of(10))
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(FixedLimit.of(10))
+                                                                                                                .build();
 
         Optional<Limiter.Listener> completion = limiter.acquire("batch");
         for (int i = 1; i < 10; i++) {
             assertTrue(limiter.acquire("batch").isPresent());
-            assertEquals(i+1, limiter.getPartition("batch").getInflight());
+            assertEquals(i + 1, limiter.getPartition("batch").getInflight());
         }
 
         assertEquals(10, limiter.getInflight());
@@ -143,11 +153,13 @@ public class AbstractPartitionedLimiterTest {
         SettableLimit limit = SettableLimit.startingAt(10);
 
         AbstractPartitionedLimiter<String> limiter = (AbstractPartitionedLimiter<String>) TestPartitionedLimiter.newBuilder()
-                .partitionResolver(Function.identity())
-                .partition("batch", 0.3)
-                .partition("live", 0.7)
-                .limit(limit)
-                .build();
+                                                                                                                .partitionResolver(Function.identity())
+                                                                                                                .partition("batch",
+                                                                                                                           0.3)
+                                                                                                                .partition("live",
+                                                                                                                           0.7)
+                                                                                                                .limit(limit)
+                                                                                                                .build();
 
         limit.setLimit(10);
         assertEquals(3, limiter.getPartition("batch").getLimit());

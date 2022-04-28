@@ -18,11 +18,11 @@ package com.netflix.concurrency.limits.limit.measurement;
 import java.util.function.Function;
 
 public class ExpAvgMeasurement implements Measurement {
-    private Double value = 0.0;
-    private Double sum = 0.0;
+    private Double    value = 0.0;
+    private Double    sum   = 0.0;
     private final int window;
     private final int warmupWindow;
-    private int count = 0;
+    private int       count = 0;
 
     public ExpAvgMeasurement(int window, int warmupWindow) {
         this.window = window;
@@ -38,7 +38,7 @@ public class ExpAvgMeasurement implements Measurement {
             value = sum / count;
         } else {
             double factor = factor(window);
-            value = value * (1-factor) + sample.doubleValue() * factor;
+            value = value * (1 - factor) + sample.doubleValue() * factor;
         }
         return value;
     }

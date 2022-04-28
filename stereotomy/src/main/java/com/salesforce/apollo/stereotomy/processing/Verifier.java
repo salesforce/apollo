@@ -28,7 +28,7 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 public interface Verifier {
     static final Logger log = LoggerFactory.getLogger(Verifier.class);
 
-    default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) { 
+    default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
         Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());
         if (lookup.isEmpty()) {
             throw new MissingEstablishmentEventException(event, state.getLastEstablishmentEvent());
@@ -43,16 +43,17 @@ public interface Verifier {
         return filtered.filtered();
     }
 
-    default Map<Integer, JohnHancock> verifyEndorsements(KeyState state, KeyEvent event, Map<Integer, JohnHancock> receipts) {
+    default Map<Integer, JohnHancock> verifyEndorsements(KeyState state, KeyEvent event,
+                                                         Map<Integer, JohnHancock> receipts) {
         var validReceipts = new HashMap<Integer, JohnHancock>();
- 
+
         for (var entry : receipts.entrySet()) {
             var publicKey = state.getWitnesses().get(entry.getKey()).getPublicKey();
 
             var ops = SignatureAlgorithm.lookup(publicKey);
             if (ops.verify(publicKey, entry.getValue(), event.getBytes())) {
                 validReceipts.put(entry.getKey(), entry.getValue());
-            }  
+            }
         }
 
         if (validReceipts.size() < state.getWitnessThreshold()) {
@@ -60,5 +61,5 @@ public interface Verifier {
         }
 
         return validReceipts;
-    } 
+    }
 }

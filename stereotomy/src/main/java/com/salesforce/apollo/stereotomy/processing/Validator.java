@@ -68,7 +68,7 @@ public interface Validator {
             return false;
         }
         for (KeyEvent lee = kel.getKeyEvent(currentState.getLastEstablishmentEvent()).orElse(null); lee != null;
-             lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
+        lee = kel.getKeyEvent(lee.getPrevious()).orElse(null)) {
             var lastEstablishment = (EstablishmentEvent) lee;
             lastEstablishment.getKeys();
 

@@ -31,8 +31,10 @@ public record TimeStampedClockValue(BloomClockValue clock, Instant stamp) implem
 
     @Override
     public StampedClock toStampedClock() {
-        return StampedClock.newBuilder().setClock(clock.toClock())
-                           .setTimestamp(Timestamp.newBuilder().setSeconds(stamp.getEpochSecond())
+        return StampedClock.newBuilder()
+                           .setClock(clock.toClock())
+                           .setTimestamp(Timestamp.newBuilder()
+                                                  .setSeconds(stamp.getEpochSecond())
                                                   .setNanos(stamp.getNano()))
                            .build();
     }

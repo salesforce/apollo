@@ -22,7 +22,7 @@ public class LiquibaseConnection extends DelegatingJdbcConnector {
     }
 
     @Override
-    public void close() throws SQLException { 
+    public void close() throws SQLException {
         // no op
     }
 

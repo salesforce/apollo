@@ -19,7 +19,7 @@ import com.netflix.concurrency.limits.internal.Preconditions;
 
 public class PercentileSampleWindowFactory implements SampleWindowFactory {
     private final double percentile;
-    private final int windowSize;
+    private final int    windowSize;
 
     private PercentileSampleWindowFactory(double percentile, int windowSize) {
         this.percentile = percentile;

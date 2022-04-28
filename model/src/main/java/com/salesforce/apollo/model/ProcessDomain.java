@@ -52,7 +52,7 @@ public class ProcessDomain extends Domain {
 //        var base = Context.<Participant>newBuilder()
 //                          .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
 //                          .build();
-//        foundation = new View(base, new Node(params.member(), null, null), null, null, null);
+//        foundation = new View(base, new Materialized(params.member(), null, null), null, null, null);
         foundation = null;
     }
 

@@ -14,8 +14,8 @@ import com.salesfoce.apollo.ethereal.proto.EpochProof;
 import com.salesfoce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
-import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.DecodedShare;
-import com.salesforce.apollo.ethereal.creator.EpochProofBuilder.Share;
+import com.salesforce.apollo.ethereal.EpochProofBuilder.DecodedShare;
+import com.salesforce.apollo.ethereal.EpochProofBuilder.Share;
 
 /**
  * @author hal.hildebrand

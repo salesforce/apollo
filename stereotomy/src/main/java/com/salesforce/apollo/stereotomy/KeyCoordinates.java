@@ -30,7 +30,9 @@ public class KeyCoordinates {
     private final int              keyIndex;
 
     public KeyCoords toKeyCoords() {
-        return KeyCoords.newBuilder().setEstablishment(establishmentEvent.toEventCoords()).setKeyIndex(keyIndex)
+        return KeyCoords.newBuilder()
+                        .setEstablishment(establishmentEvent.toEventCoords())
+                        .setKeyIndex(keyIndex)
                         .build();
     }
 

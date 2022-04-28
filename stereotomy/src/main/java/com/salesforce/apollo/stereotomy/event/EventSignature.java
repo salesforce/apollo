@@ -23,7 +23,7 @@ public class EventSignature {
     private final Map<Integer, JohnHancock> signatures;
 
     public EventSignature(EventCoordinates event, EventCoordinates keyEstablishmentEvent,
-            Map<Integer, JohnHancock> signatures) {
+                          Map<Integer, JohnHancock> signatures) {
         this.event = event;
         this.keyEstablishmentEvent = keyEstablishmentEvent;
         this.signatures = Map.copyOf(signatures);
@@ -38,8 +38,9 @@ public class EventSignature {
             return false;
         }
         EventSignature other = (EventSignature) obj;
-        return Objects.equals(event, other.event) && Objects.equals(keyEstablishmentEvent, other.keyEstablishmentEvent)
-                && Objects.equals(signatures, other.signatures);
+        return Objects.equals(event, other.event) &&
+               Objects.equals(keyEstablishmentEvent, other.keyEstablishmentEvent) &&
+               Objects.equals(signatures, other.signatures);
     }
 
     public EventCoordinates getEvent() {
@@ -62,7 +63,7 @@ public class EventSignature {
     @Override
     public String toString() {
         return "ImmutableEventSignature [" + "event=" + this.event + ", " + "keyEstablishmentEvent="
-                + this.keyEstablishmentEvent + ", " + "signatures=" + this.signatures + "]";
+        + this.keyEstablishmentEvent + ", " + "signatures=" + this.signatures + "]";
     }
 
 }

@@ -16,7 +16,8 @@
 package com.netflix.concurrency.limits.limit.window;
 
 /**
- * Implementations of this interface are being used to track immutable samples in an AtomicReference
+ * Implementations of this interface are being used to track immutable samples
+ * in an AtomicReference
  *
  * @see com.netflix.concurrency.limits.limit.WindowedLimit
  */

@@ -38,8 +38,7 @@ public class ShardedOracleTest {
 
         emmy.start(Domain.boostrapMigration());
 
-        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout,
-                                                 exec);
+        ShardedOracle oracle = new ShardedOracle(emmy.newConnector(), emmy.getMutator(), scheduler, timeout, exec);
         smoke(oracle);
     }
 

@@ -22,7 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 public abstract class AbstractLimit implements Limit {
-    private volatile int limit;
+    private volatile int                  limit;
     private final List<Consumer<Integer>> listeners = new CopyOnWriteArrayList<>();
 
     protected AbstractLimit(int initialLimit) {
@@ -51,6 +51,5 @@ public abstract class AbstractLimit implements Limit {
     public void notifyOnChange(Consumer<Integer> consumer) {
         this.listeners.add(consumer);
     }
-
 
 }

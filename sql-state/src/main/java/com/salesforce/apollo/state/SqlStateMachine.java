@@ -410,8 +410,8 @@ public class SqlStateMachine {
                 }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
-                FileOutputStream fos = new FileOutputStream(checkpoint);
-                GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
+                     FileOutputStream fos = new FileOutputStream(checkpoint);
+                     GZIPOutputStream gzos = new GZIPOutputStream(fos);) {
 
                     byte[] buffer = new byte[6 * 1024];
                     for (int read = fis.read(buffer); read > 0; read = fis.read(buffer)) {

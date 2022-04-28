@@ -4,12 +4,9 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.random.beacon;
+package com.salesforce.apollo.ethereal;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.ethereal.Dag;
-import com.salesforce.apollo.ethereal.RandomSource;
-import com.salesforce.apollo.ethereal.Unit;
 
 /**
  * @author hal.hildebrand

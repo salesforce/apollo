@@ -20,5 +20,6 @@ import io.grpc.ServerCall;
 
 public interface GrpcServerRequestContext {
     ServerCall<?, ?> getCall();
+
     Metadata getHeaders();
 }

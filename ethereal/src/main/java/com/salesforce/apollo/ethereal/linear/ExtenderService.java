@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal.linear;
 
 import java.util.List;
-import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -34,7 +33,6 @@ public class ExtenderService {
     private final Extender             ordering;
     private final Consumer<List<Unit>> output;
     private final Config               config;
-    private final Semaphore            exclusive = new Semaphore(1);
 
     public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
         ordering = new Extender(dag, rs, config);
@@ -53,19 +51,13 @@ public class ExtenderService {
      * establishes linear order on them. Sends slices of ordered units to output.
      */
     private void timingUnitDecider() {
-        exclusive.acquireUninterruptibly();
-        try {
-            var round = ordering.nextRound();
-            log.trace("Starting timing round: {} on: {}", round, config.logLabel());
-            while (round != null) {
-                log.trace("Producing timing round: {} on: {}", round, config.logLabel());
-                var units = round.orderedUnits(config.digestAlgorithm());
-                log.trace("Output of: {} preBlock: {} on: {}", round, units, config.logLabel());
-                output.accept(units);
-                round = ordering.nextRound();
-            }
-        } finally {
-            exclusive.release();
+        var round = ordering.nextRound();
+        while (round != null) {
+            log.trace("Producing timing round: {} on: {}", round, config.logLabel());
+            var units = round.orderedUnits(config.digestAlgorithm());
+            log.trace("Output of: {} preBlock: {} on: {}", round, units, config.logLabel());
+            output.accept(units);
+            round = ordering.nextRound();
         }
     }
 }

@@ -11,11 +11,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SizeAndAgeBatchingQueue<T> extends AgeBatchingQueue<T> {
 
     class AgeAndSizeBatch extends AgeBatch {
- 
+
         private final AtomicInteger currentBatchSize;
 
-        protected AgeAndSizeBatch( ) {
-            super(); 
+        protected AgeAndSizeBatch() {
+            super();
             currentBatchSize = new AtomicInteger();
         }
 

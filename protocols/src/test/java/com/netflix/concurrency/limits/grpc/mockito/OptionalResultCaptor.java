@@ -21,7 +21,7 @@ public class OptionalResultCaptor<T> implements Answer<Optional<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public Optional<T> answer(InvocationOnMock invocationOnMock) throws Throwable {
-        result = (Optional<T>)invocationOnMock.callRealMethod();
+        result = (Optional<T>) invocationOnMock.callRealMethod();
         if (result.isPresent()) {
             result = result.map(Mockito::spy);
         }

@@ -14,7 +14,6 @@ import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
- 
 
 /**
  * @author hal.hildebrand

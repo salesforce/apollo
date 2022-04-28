@@ -225,7 +225,7 @@ abstract public class BloomFilter<T> {
         default:
             throw new IllegalArgumentException("Invalid type: " + type);
         }
-    } 
+    }
 
     public static <Q> BloomFilter<Q> from(Biff bff) {
         long[] bits = new long[bff.getBitsCount()];

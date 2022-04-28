@@ -25,8 +25,7 @@ public interface TelephoneFsm {
 
     TelephoneFsm depositMoney();
 
-    TelephoneFsm dialingDone(int callType, String areaCode, String exchange,
-                             String local);
+    TelephoneFsm dialingDone(int callType, String areaCode, String exchange, String local);
 
     TelephoneFsm digit(String digit);
 

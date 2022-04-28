@@ -19,17 +19,22 @@ import com.netflix.concurrency.limits.limiter.AbstractPartitionedLimiter;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 
-public class GrpcServerLimiterBuilder extends AbstractPartitionedLimiter.Builder<GrpcServerLimiterBuilder, GrpcServerRequestContext> {
+public class GrpcServerLimiterBuilder extends
+                                      AbstractPartitionedLimiter.Builder<GrpcServerLimiterBuilder, GrpcServerRequestContext> {
     /**
      * Partition the limit by method
+     * 
      * @return Chainable builder
      */
     public GrpcServerLimiterBuilder partitionByMethod() {
-        return partitionResolver((GrpcServerRequestContext context) -> context.getCall().getMethodDescriptor().getFullMethodName());
+        return partitionResolver((GrpcServerRequestContext context) -> context.getCall()
+                                                                              .getMethodDescriptor()
+                                                                              .getFullMethodName());
     }
 
     /**
      * Partition the limit by a request header.
+     * 
      * @return Chainable builder
      */
     public GrpcServerLimiterBuilder partitionByHeader(Metadata.Key<String> header) {
@@ -38,6 +43,7 @@ public class GrpcServerLimiterBuilder extends AbstractPartitionedLimiter.Builder
 
     /**
      * Partition the limit by a request attribute.
+     * 
      * @return Chainable builder
      */
     public GrpcServerLimiterBuilder partitionByAttribute(Attributes.Key<String> attribute) {

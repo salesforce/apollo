@@ -6,18 +6,18 @@
  */
 package com.salesforce.apollo.ethereal.linear;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
 
-import com.salesforce.apollo.crypto.Digest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.RandomSource;
+import com.salesforce.apollo.ethereal.SlottedUnits;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -27,7 +27,9 @@ import com.salesforce.apollo.ethereal.Unit;
  */
 
 public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short crpFixedPrefix,
-                                      DigestAlgorithm digestAlgorithm) {
+                                      DigestAlgorithm digestAlgorithm, String logLabel) {
+
+    private static final Logger log = LoggerFactory.getLogger(CommonRandomPermutation.class);
 
     /**
      * Iterates over all the prime units on a given level in random order. It calls
@@ -51,21 +53,14 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
      * <p>
      * - true otherwise
      */
-    public boolean iterate(int level, Unit previousTU, Function<Unit, Boolean> work) {
+    public boolean iterate(int level, SlottedUnits unitsOnLevel, Unit previousTU, Function<Unit, Boolean> work) {
         var split = splitProcesses(dag.nProc(), crpFixedPrefix, level, previousTU);
 
-        List<Unit> defaultPermutation = defaultPermutation(dag, level, split.prefix);
-        for (var u : defaultPermutation) {
-            if (!work.apply(u)) {
-                return true;
-            }
-        }
-
-        var permutation = randomPermutation(randomSource, dag, level, split.suffix, digestAlgorithm);
-        if (!permutation.ok) {
+        List<Unit> defaultPermutation = defaultPermutation(dag, level, split.prefix, unitsOnLevel);
+        if (defaultPermutation.size() != crpFixedPrefix) {
             return false;
         }
-        for (var u : permutation.units) {
+        for (var u : defaultPermutation) {
             if (!work.apply(u)) {
                 return true;
             }
@@ -95,49 +90,15 @@ public record CommonRandomPermutation(Dag dag, RandomSource randomSource, short 
 
     }
 
-    private List<Unit> defaultPermutation(Dag dag, int level, List<Short> pids) {
+    private List<Unit> defaultPermutation(Dag dag, int level, List<Short> pids, SlottedUnits unitsOnLevel) {
         var permutation = new ArrayList<Unit>();
-
         for (short pid : pids) {
-            permutation.addAll(dag.unitsOnLevel(level).get(pid));
+            permutation.addAll(unitsOnLevel.get(pid));
         }
 
         Collections.sort(permutation, (a, b) -> a.hash().compareTo(b.hash()));
+        log.trace("permutation for: {} : {} on: {}", level, permutation, logLabel);
         return permutation;
-    }
-
-    private record rp(List<Unit> units, boolean ok) {}
-
-    private rp randomPermutation(RandomSource rs, Dag dag, int level, List<Short> pids, DigestAlgorithm algo) {
-        var permutation = new ArrayList<Unit>();
-        var priority = new HashMap<Digest, Digest>();
-
-        var allUnitsOnLevel = dag.unitsOnLevel(level);
-        for (short pid : pids) {
-            var units = allUnitsOnLevel.get(pid);
-            if (units.isEmpty()) {
-                continue;
-            }
-            var randomBytes = rs.randomBytes(pid, level + 5);
-            if (randomBytes == null) {
-                return new rp(Collections.emptyList(), false);
-            }
-
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                baos.write(randomBytes);
-                for (var u : units) {
-                    baos.write(u.hash().getBytes());
-                    priority.put(u.hash(), algo.digest(baos.toByteArray()));
-                }
-            } catch (IOException e) {
-                throw new IllegalStateException("Fatal issue when creating random permutation", e);
-            }
-            permutation.addAll(units);
-        }
-        Collections.sort(permutation, (a, b) -> priority.get(a.hash()).compareTo(priority.get(b.hash())));
-
-        return new rp(permutation, true);
-
     }
 
 }

@@ -58,7 +58,8 @@ public class MigrationAccessor extends AbstractResourceAccessor implements AutoC
     }
 
     protected void addRootPath(Path path) {
-        Scope.getCurrentScope().getLog(getClass())
+        Scope.getCurrentScope()
+             .getLog(getClass())
              .fine("Adding path " + path + " to resourceAccessor " + getClass().getName());
         rootPaths.add(path);
     }
@@ -132,7 +133,8 @@ public class MigrationAccessor extends AbstractResourceAccessor implements AutoC
                             finalRootPath = finalRootPath.getParent();
                         }
                     } else {
-                        Scope.getCurrentScope().getLog(getClass())
+                        Scope.getCurrentScope()
+                             .getLog(getClass())
                              .fine("No relative path " + relativeTo + " in " + rootPath);
                         continue;
                     }
@@ -223,7 +225,8 @@ public class MigrationAccessor extends AbstractResourceAccessor implements AutoC
                     if (relativeTo != null) {
                         basePath = basePath.resolve(relativeTo);
                         if (!Files.exists(basePath)) {
-                            Scope.getCurrentScope().getLog(getClass())
+                            Scope.getCurrentScope()
+                                 .getLog(getClass())
                                  .info("Relative path " + relativeTo + " in " + rootPath + " does not exist");
                             continue;
                         } else if (Files.isRegularFile(basePath)) {
@@ -246,7 +249,8 @@ public class MigrationAccessor extends AbstractResourceAccessor implements AutoC
                 if (relativeTo != null) {
                     basePath = basePath.resolve(relativeTo);
                     if (!Files.exists(basePath)) {
-                        Scope.getCurrentScope().getLog(getClass())
+                        Scope.getCurrentScope()
+                             .getLog(getClass())
                              .info("Relative path " + relativeTo + " in " + rootPath + " does not exist");
                         continue;
                     } else if (Files.isRegularFile(basePath)) {

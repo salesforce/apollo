@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.ethereal.creator;
+package com.salesforce.apollo.ethereal;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -19,10 +19,6 @@ import com.salesfoce.apollo.ethereal.proto.EpochProof.Builder;
 import com.salesfoce.apollo.ethereal.proto.Proof;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.JohnHancock;
-import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.PreUnit;
-import com.salesforce.apollo.ethereal.Unit;
-import com.salesforce.apollo.ethereal.WeakThresholdKey;
 
 /**
  * the epoch proof is a message required to verify if the epoch has finished. It
@@ -82,7 +78,7 @@ public interface EpochProofBuilder {
         }
     }
 
-    record epochProofImpl(Config conf, int epoch, sharesDB shares) implements EpochProofBuilder {
+    public record epochProofImpl(Config conf, int epoch, sharesDB shares) implements EpochProofBuilder {
 
         /**
          * extracts threshold signature shares from finishing units. If there are enough

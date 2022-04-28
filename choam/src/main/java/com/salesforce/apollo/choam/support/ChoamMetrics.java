@@ -8,7 +8,7 @@ package com.salesforce.apollo.choam.support;
 
 import com.codahale.metrics.Timer;
 import com.netflix.concurrency.limits.MetricRegistry;
-import com.salesforce.apollo.ethereal.memberships.EtherealMetrics;
+import com.salesforce.apollo.ethereal.memberships.comm.EtherealMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.protocols.EdpointMetrics;
 

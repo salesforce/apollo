@@ -87,7 +87,7 @@ public enum Merchantile implements Transitions {
     },
     PROTOCOL_FAILURE, RECOVERING {
         @Override
-        public Transitions bootstrap(HashedCertifiedBlock anchor) { 
+        public Transitions bootstrap(HashedCertifiedBlock anchor) {
             context().recover(anchor);
             return BOOTSTRAPPING;
         }

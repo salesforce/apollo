@@ -132,7 +132,8 @@ public interface PreUnit {
 
         @Override
         public String toString() {
-            return "freeUnit[" + creator() + ":" + level() + "(" + height() + ")" + ":" + epoch() + "]";
+            return "freeUnit[" + creator() + ":" + level() + (height() != level() ? "(" + height() + ")" : "") + ":"
+            + epoch() + "]";
         }
 
         @Override
@@ -188,7 +189,9 @@ public interface PreUnit {
 
         @Override
         public PreUnit_s toPreUnit_s() {
-            Builder builder = PreUnit_s.newBuilder().setSignature(signature.toSig()).setId(id())
+            Builder builder = PreUnit_s.newBuilder()
+                                       .setSignature(signature.toSig())
+                                       .setId(id())
                                        .setCrown(crown.toCrown_s());
             if (data != null) {
                 builder.setData(data);

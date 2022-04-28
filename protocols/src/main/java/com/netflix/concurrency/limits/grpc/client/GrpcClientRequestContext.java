@@ -20,5 +20,6 @@ import io.grpc.MethodDescriptor;
 
 public interface GrpcClientRequestContext {
     MethodDescriptor<?, ?> getMethod();
+
     CallOptions getCallOptions();
 }

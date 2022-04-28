@@ -42,7 +42,7 @@ abstract public class EstablishmentEventImpl extends KeyEventImpl implements Est
     @Override
     public Optional<Digest> getNextKeysDigest() {
         return establishment.hasNextKeysDigest() ? Optional.of(digest(establishment.getNextKeysDigest()))
-                : Optional.empty();
+                                                 : Optional.empty();
     }
 
     @Override

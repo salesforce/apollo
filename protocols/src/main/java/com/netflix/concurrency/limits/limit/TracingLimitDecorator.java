@@ -24,17 +24,17 @@ import com.netflix.concurrency.limits.Limit;
 
 public class TracingLimitDecorator implements Limit {
     private final Logger log;
-    private final Limit delegate;
+    private final Limit  delegate;
 
     public static TracingLimitDecorator wrap(Limit delegate, Logger log) {
         return new TracingLimitDecorator(delegate, log);
     }
-    
+
     public TracingLimitDecorator(Limit delegate, Logger log) {
         this.delegate = delegate;
         this.log = log;
     }
-    
+
     @Override
     public int getLimit() {
         return delegate.getLimit();
@@ -42,9 +42,7 @@ public class TracingLimitDecorator implements Limit {
 
     @Override
     public void onSample(long startTime, long rtt, int inflight, boolean didDrop) {
-        log.debug("maxInFlight={} minRtt={} ms",
-                inflight,
-                TimeUnit.NANOSECONDS.toMicros(rtt) / 1000.0);
+        log.debug("maxInFlight={} minRtt={} ms", inflight, TimeUnit.NANOSECONDS.toMicros(rtt) / 1000.0);
         delegate.onSample(startTime, rtt, inflight, didDrop);
     }
 
