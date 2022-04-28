@@ -198,15 +198,11 @@ public class Producer {
         }
 
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
-        var holder = new AtomicReference<ChRbcGossip>();
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + 1024, ds,
-                                  (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch), processor -> {
-                                      holder.set(new ChRbcGossip(view.context(), params().member(), processor,
-                                                                 params().communications(), params().exec(),
-                                                                 producerMetrics));
-                                  });
-        coordinator = holder.get();
+                                  (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch));
+        coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
+                                      params().communications(), params().exec(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
     }
 

@@ -416,7 +416,6 @@ public class Adder {
      * 
      * @param digest - the digest identifying the unit
      * @param u      - the serialized preUnit
-     * @param chRbc  - the comm endpoint to issue further messages
      */
     void propose(Digest digest, PreUnit_s u) {
         if (failed.contains(digest)) {

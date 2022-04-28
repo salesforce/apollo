@@ -131,20 +131,15 @@ public class ViewAssembly implements Reconfiguration {
         config.setPid(pid).setnProc((short) view.roster().size());
         config.setEpochLength(3).setNumberOfEpochs(3);
         config.setLabel("View Recon" + nextViewId + " on: " + params().member().getId());
-        var holder = new AtomicReference<ChRbcGossip>();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> process(preblock, last), epoch -> {
                                       log.trace("Next epoch: {} state: {} on: {}", epoch,
                                                 transitions.fsm().getCurrentState(), params().member().getId());
                                       transitions.nextEpoch(epoch);
-                                  }, processor -> {
-                                      holder.set(new ChRbcGossip(reContext, params().member(), processor,
-                                                                 params().communications(), params().exec(),
-                                                                 params().metrics() == null ? null
-                                                                                            : params().metrics()
-                                                                                                      .getReconfigureMetrics()));
                                   });
-        coordinator = holder.get();
+        coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
+                                      params().exec(),
+                                      params().metrics() == null ? null : params().metrics().getReconfigureMetrics());
 
         log.debug("View Assembly from: {} to: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   nextViewId, reContext.getId(), nextAssembly.keySet(), params().member().getId());

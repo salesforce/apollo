@@ -120,26 +120,25 @@ public class Ethereal {
     private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
+    private final int                  maxSerializedSize;
     private final ReadWriteLock        mx           = new ReentrantReadWriteLock();
     private final Consumer<Integer>    newEpochAction;
     private final RandomSourceFactory  rsf;
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
-    private final int                  maxSerializedSize;
 
     public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                    Consumer<Integer> newEpochAction, Consumer<Processor> gossiper) {
-        this(config, maxSerializedSize, ds, blocker, newEpochAction, new DsrFactory(config.digestAlgorithm()),
-             gossiper);
+                    Consumer<Integer> newEpochAction) {
+        this(config, maxSerializedSize, ds, blocker, newEpochAction, new DsrFactory(config.digestAlgorithm()));
     }
 
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf, Consumer<Processor> gossiper) {
-        this(conf, maxSerializedSize, ds, blocker(blocker, conf), newEpochAction, rsf, gossiper);
+                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
+        this(conf, maxSerializedSize, ds, blocker(blocker, conf), newEpochAction, rsf);
     }
 
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
-                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf, Consumer<Processor> gossiper) {
+                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
@@ -162,7 +161,75 @@ public class Ethereal {
             t.setDaemon(true);
             return t;
         });
-        gossiper.accept(processor());
+    }
+
+    public Processor processor() {
+        return new Processor() {
+            @Override
+            public Gossip gossip(Digest context, int ring) {
+                final var builder = Gossip.newBuilder().setContext(context.toDigeste()).setRing(ring);
+                final var current = currentEpoch.get();
+                epochs.entrySet()
+                      .stream()
+                      .filter(e -> e.getKey() >= current)
+                      .forEach(e -> builder.addHaves(e.getValue().adder().have()));
+                return builder.build();
+            }
+
+            @Override
+            public Update gossip(Gossip gossip) {
+                final var builder = Update.newBuilder();
+                final var haves = new HashSet<Integer>();
+                gossip.getHavesList().forEach(have -> {
+                    var epoch = newEpoch(have.getEpoch());
+                    if (epoch != null) {
+                        haves.add(epoch.id());
+                        builder.addMissings(epoch.adder().updateFor(have));
+                    }
+                });
+                final var current = currentEpoch.get();
+                epochs.entrySet()
+                      .stream()
+                      .filter(e -> e.getKey() >= current)
+                      .filter(e -> !haves.contains(e.getKey()))
+                      .forEach(e -> {
+                          builder.addMissings(Missing.newBuilder()
+                                                     .setEpoch(e.getKey())
+                                                     .setHaves(e.getValue().adder().have()));
+                      });
+                return builder.build();
+            }
+
+            @Override
+            public Update update(Update update) {
+                final var builder = Update.newBuilder();
+                final var current = currentEpoch.get();
+                update.getMissingsList().forEach(missing -> {
+                    var epoch = newEpoch(missing.getEpoch());
+                    if (epoch != null) {
+                        final var adder = epoch.adder();
+                        if (epoch.id() >= current) {
+                            adder.updateFrom(missing);
+                        }
+                        builder.addMissings(adder.updateFor(missing.getHaves()));
+                    }
+                });
+                return builder.build();
+            }
+
+            @Override
+            public void updateFrom(Update update) {
+                final var current = currentEpoch.get();
+                update.getMissingsList().forEach(missing -> {
+                    if (missing.getEpoch() >= current) {
+                        var epoch = newEpoch(missing.getEpoch());
+                        if (epoch != null) {
+                            epoch.adder().updateFrom(missing);
+                        }
+                    }
+                });
+            }
+        };
     }
 
     public void start() {
@@ -323,75 +390,6 @@ public class Ethereal {
         } finally {
             lock.unlock();
         }
-    }
-
-    private Processor processor() {
-        return new Processor() {
-            @Override
-            public Gossip gossip(Digest context, int ring) {
-                final var builder = Gossip.newBuilder().setContext(context.toDigeste()).setRing(ring);
-                final var current = currentEpoch.get();
-                epochs.entrySet()
-                      .stream()
-                      .filter(e -> e.getKey() >= current)
-                      .forEach(e -> builder.addHaves(e.getValue().adder().have()));
-                return builder.build();
-            }
-
-            @Override
-            public Update gossip(Gossip gossip) {
-                final var builder = Update.newBuilder();
-                final var haves = new HashSet<Integer>();
-                gossip.getHavesList().forEach(have -> {
-                    var epoch = newEpoch(have.getEpoch());
-                    if (epoch != null) {
-                        haves.add(epoch.id());
-                        builder.addMissings(epoch.adder().updateFor(have));
-                    }
-                });
-                final var current = currentEpoch.get();
-                epochs.entrySet()
-                      .stream()
-                      .filter(e -> e.getKey() >= current)
-                      .filter(e -> !haves.contains(e.getKey()))
-                      .forEach(e -> {
-                          builder.addMissings(Missing.newBuilder()
-                                                     .setEpoch(e.getKey())
-                                                     .setHaves(e.getValue().adder().have()));
-                      });
-                return builder.build();
-            }
-
-            @Override
-            public Update update(Update update) {
-                final var builder = Update.newBuilder();
-                final var current = currentEpoch.get();
-                update.getMissingsList().forEach(missing -> {
-                    var epoch = newEpoch(missing.getEpoch());
-                    if (epoch != null) {
-                        final var adder = epoch.adder();
-                        if (epoch.id() >= current) {
-                            adder.updateFrom(missing);
-                        }
-                        builder.addMissings(adder.updateFor(missing.getHaves()));
-                    }
-                });
-                return builder.build();
-            }
-
-            @Override
-            public void updateFrom(Update update) {
-                final var current = currentEpoch.get();
-                update.getMissingsList().forEach(missing -> {
-                    if (missing.getEpoch() >= current) {
-                        var epoch = newEpoch(missing.getEpoch());
-                        if (epoch != null) {
-                            epoch.adder().updateFrom(missing);
-                        }
-                    }
-                });
-            }
-        };
     }
 
     /**
