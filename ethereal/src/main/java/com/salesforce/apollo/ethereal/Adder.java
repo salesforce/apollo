@@ -443,18 +443,26 @@ public class Adder {
         if (decoded.epoch() != epoch) {
             log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, maxSize, decoded,
                       conf.logLabel());
+            return;
         }
-        var preunit = PreUnit.from(u, conf.digestAlgorithm());
 
-        if (preunit.creator() >= conf.nProc() || preunit.creator() < 0) {
+        if (decoded.creator() >= conf.nProc() || decoded.creator() < 0) {
             failed.add(digest);
-            log.debug("Invalid creator: {} > {} on: {}", preunit, conf.nProc() - 1, conf.logLabel());
+            log.debug("Invalid creator: {} on: {}", decoded, conf.nProc() - 1, conf.logLabel());
+            return;
+        }
+
+        var preunit = PreUnit.from(u, conf.digestAlgorithm());
+        wpu = new Waiting(preunit, u);
+
+        if (!validateParents(wpu)) {
+            failed.add(digest);
+            log.warn("Invalid parents: {} on: {}", decoded, conf.nProc() - 1, conf.logLabel());
             return;
         }
         for (var unt : unts) {
             unt.add(digest);
         }
-        wpu = new Waiting(preunit, u);
         waiting.put(digest, wpu);
         for (var unt : unts) {
             unt.add(digest);
@@ -711,5 +719,16 @@ public class Adder {
     private boolean validate(SignedPreVote pv) {
         // TODO Auto-generated method stub
         return true;
+    }
+
+    private boolean validateParents(Waiting wp) {
+        var heights = wp.pu().view().heights();
+        int count = 0;
+        for (short creator = 0; creator < heights.length; creator++) {
+            if (heights[creator] == wp.height() - 1) {
+                count++;
+            }
+        }
+        return count > 2 * threshold;
     }
 }

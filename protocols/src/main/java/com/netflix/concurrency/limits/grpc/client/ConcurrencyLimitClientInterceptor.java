@@ -15,8 +15,13 @@
  */
 package com.netflix.concurrency.limits.grpc.client;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.annotation.Nullable;
+
 import com.google.common.base.Preconditions;
 import com.netflix.concurrency.limits.Limiter;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -27,9 +32,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-
-import javax.annotation.Nullable;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * ClientInterceptor that enforces per service and/or per method concurrent
