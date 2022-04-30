@@ -25,6 +25,9 @@
     <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
+    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
     <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

@@ -20,6 +20,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.mvstore.MVStore;
+import org.h2.mvstore.OffHeapStore;
 import org.joou.ULong;
 
 import com.netflix.concurrency.limits.Limiter;
@@ -49,12 +50,13 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
  * @author hal.hildebrand
  *
  */
-public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Parameters combine, Duration gossipDuration,
-                         int maxCheckpointSegments, Duration submitTimeout, Digest genesisViewId,
-                         int checkpointBlockSize, DigestAlgorithm digestAlgorithm, SignatureAlgorithm viewSigAlgorithm,
-                         int synchronizationCycles, Duration synchronizeDuration, int regenerationCycles,
-                         Duration synchronizeTimeout, BootstrapParameters bootstrap, ProducerParameters producer,
-                         MvStoreBuilder mvBuilder, LimiterBuilder txnLimiterBuilder) {
+public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcaster.Parameters combine,
+                         Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
+                         Digest genesisViewId, int checkpointBlockSize, DigestAlgorithm digestAlgorithm,
+                         SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
+                         int regenerationCycles, Duration synchronizeTimeout, Parameters.BootstrapParameters bootstrap,
+                         Parameters.ProducerParameters producer, Parameters.MvStoreBuilder mvBuilder,
+                         Parameters.LimiterBuilder txnLimiterBuilder) {
 
     public int toleranceLevel() {
         final double n = runtime.context.getRingCount();
@@ -70,6 +72,7 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
         private boolean compressHigh         = false;
         private File    fileName             = null;
         private int     keysPerPage          = -1;
+        private boolean offHeap              = false;
         private int     pageSplitSize        = -1;
         private boolean readOnly             = false;
         private boolean recoveryMode         = false;
@@ -116,6 +119,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             if (pageSplitSize > 0) {
                 builder.pageSplitSize(pageSplitSize);
             }
+            if (offHeap) {
+                var offHeap = new OffHeapStore();
+                builder.fileStore(offHeap);
+            }
             return builder.open();
         }
 
@@ -153,6 +160,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public boolean isCompressHigh() {
             return compressHigh;
+        }
+
+        public boolean isOffHeap() {
+            return offHeap;
         }
 
         public boolean isReadOnly() {
@@ -200,6 +211,11 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public MvStoreBuilder setKeysPerPage(int keysPerPage) {
             this.keysPerPage = keysPerPage;
+            return this;
+        }
+
+        public MvStoreBuilder setOffHeap(boolean offHeap) {
+            this.offHeap = offHeap;
             return this;
         }
 
@@ -666,6 +682,10 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return maxCheckpointSegments;
         }
 
+        public MvStoreBuilder getMvBuilder() {
+            return mvBuilder;
+        }
+
         public ProducerParameters getProducer() {
             return producer;
         }
@@ -737,6 +757,11 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
             return this;
         }
 
+        public Builder setMvBuilder(MvStoreBuilder mvBuilder) {
+            this.mvBuilder = mvBuilder;
+            return this;
+        }
+
         public Builder setProducer(ProducerParameters producer) {
             this.producer = producer;
             return this;
@@ -779,15 +804,6 @@ public record Parameters(RuntimeParameters runtime, ReliableBroadcaster.Paramete
 
         public Builder setViewSigAlgorithm(SignatureAlgorithm viewSigAlgorithm) {
             this.viewSigAlgorithm = viewSigAlgorithm;
-            return this;
-        }
-
-        protected MvStoreBuilder getMvBuilder() {
-            return mvBuilder;
-        }
-
-        protected Builder setMvBuilder(MvStoreBuilder mvBuilder) {
-            this.mvBuilder = mvBuilder;
             return this;
         }
     }
