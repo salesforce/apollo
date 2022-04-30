@@ -26,7 +26,6 @@ import java.util.stream.StreamSupport;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
-import org.joou.Unsigned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,10 +59,10 @@ public class Store {
     private final MVMap<ULong, byte[]>                   blocks;
     private final MVMap<ULong, byte[]>                   certifications;
     private final TreeMap<ULong, MVMap<Integer, byte[]>> checkpoints = new TreeMap<>();
+    private final DigestAlgorithm                        digestAlgorithm;
     private final MVMap<ULong, Digest>                   hashes;
     private final MVMap<Digest, ULong>                   hashToHeight;
     private final MVMap<ULong, ULong>                    viewChain;
-    private final DigestAlgorithm                        digestAlgorithm;
 
     public Store(DigestAlgorithm digestAlgorithm, MVStore store) {
         this.digestAlgorithm = digestAlgorithm;
@@ -184,13 +183,21 @@ public class Store {
         return current;
     }
 
-    public void gcFrom(ULong lastCheckpoint) {
-        Iterator<ULong> gcd = blocks.keyIterator(lastCheckpoint.add(1));
+    public void gcFrom(ULong from, ULong to) {
+        log.warn("GC'ing Store from: {} to: {}");
+        Iterator<ULong> gcd = blocks.keyIteratorReverse(from.subtract(1));
+        if (!gcd.hasNext()) {
+            log.warn("Nothing to GC from: {}", from);
+            return;
+        }
         while (gcd.hasNext()) {
             ULong test = gcd.next();
-            if (test.equals(Unsigned.ulong(0)) && !isReconfigure(test) && !isCheckpoint(test)) {
-
+            log.warn("Test: {}", test);
+            if (test.equals(to)) {
+                log.warn("Reached last checkpoint: {}", test);
+                return;
             }
+            delete(test);
         }
     }
 
@@ -389,8 +396,18 @@ public class Store {
         };
     }
 
-    private boolean isCheckpoint(ULong test) {
-        return checkpoints.containsKey(test);
+    private void delete(ULong block) {
+        log.warn("Deleting: {}", block);
+        if (isReconfigure(block)) {
+            log.warn("Retaining reconfiguration: {}", block);
+            return;
+        }
+        transactionally(() -> {
+            blocks.remove(block);
+            certifications.remove(block);
+            var digest = hashes.remove(block);
+            hashToHeight.remove(digest);
+        });
     }
 
     private boolean isReconfigure(ULong next) {

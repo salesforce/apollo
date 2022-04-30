@@ -245,12 +245,8 @@ public class Producer {
 
     public SubmitResult submit(Transaction transaction) {
         if (ds.offer(transaction)) {
-            log.trace("Successful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
-                      params().member());
             return SubmitResult.newBuilder().setResult(Result.PUBLISHED).build();
         } else {
-            log.trace("Unsuccessful submit of txn: {} on: {}", CHOAM.hashOf(transaction, params().digestAlgorithm()),
-                      params().member());
             return SubmitResult.newBuilder().setResult(Result.BUFFER_FULL).build();
         }
     }

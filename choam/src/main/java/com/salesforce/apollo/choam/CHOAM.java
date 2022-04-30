@@ -334,10 +334,10 @@ public class CHOAM {
                     log.debug("No link for: {} for submitting txn on: {}", target.getId(), params.member());
                     return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
                 }
-                if (log.isTraceEnabled()) {
-                    log.trace("Submitting received txn: {} to: {} in: {} on: {}",
-                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
-                }
+//                if (log.isTraceEnabled()) {
+//                    log.trace("Submitting received txn: {} to: {} in: {} on: {}",
+//                              hashOf(transaction, params.digestAlgorithm()), target.getId(), viewId, params.member());
+//                }
                 return link.submit(SubmitTransaction.newBuilder()
                                                     .setContext(params.context().getId().toDigeste())
                                                     .setTransaction(transaction)
@@ -398,8 +398,8 @@ public class CHOAM {
 
         @Override
         public SubmitResult submit(SubmitTransaction request) {
-            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
-                      params().member());
+//            log.trace("Submit txn: {} to producer on: {}", hashOf(request.getTransaction(), params.digestAlgorithm()),
+//                      params().member());
             return producer.submit(request.getTransaction());
         }
     }
@@ -1045,7 +1045,7 @@ public class CHOAM {
     }
 
     private void process() {
-        final HashedBlock h = head.get();
+        final HashedCertifiedBlock h = head.get();
         switch (h.block.getBodyCase()) {
         case ASSEMBLE:
             params.processor().beginBlock(h.height(), h.hash);
@@ -1072,6 +1072,9 @@ public class CHOAM {
             break;
         case CHECKPOINT:
             params.processor().beginBlock(h.height(), h.hash);
+//            var lastCheckpoint = checkpoint.get().height();
+//            checkpoint.set(h);
+//            store.gcFrom(h.height(), lastCheckpoint);
         default:
             break;
         }
@@ -1197,8 +1200,8 @@ public class CHOAM {
             log.debug("No committee to submit txn from: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
         }
-        log.trace("Submiting received txn: {} from: {} on: {}",
-                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
+//        log.trace("Submiting received txn: {} from: {} on: {}",
+//                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member());
         return c.submit(request);
     }
 

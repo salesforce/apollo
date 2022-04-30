@@ -178,7 +178,7 @@ public class Ethereal {
                 final var builder = Update.newBuilder();
                 final var haves = new HashSet<Integer>();
                 gossip.getHavesList().forEach(have -> {
-                    var epoch = newEpoch(have.getEpoch());
+                    var epoch = retreiveEpoch(have.getEpoch());
                     if (epoch != null) {
                         haves.add(epoch.id());
                         builder.addMissings(epoch.adder().updateFor(have));
@@ -202,7 +202,7 @@ public class Ethereal {
                 final var builder = Update.newBuilder();
                 final var current = currentEpoch.get();
                 update.getMissingsList().forEach(missing -> {
-                    var epoch = newEpoch(missing.getEpoch());
+                    var epoch = retreiveEpoch(missing.getEpoch());
                     if (epoch != null) {
                         final var adder = epoch.adder();
                         if (epoch.id() >= current) {
@@ -219,7 +219,7 @@ public class Ethereal {
                 final var current = currentEpoch.get();
                 update.getMissingsList().forEach(missing -> {
                     if (missing.getEpoch() >= current) {
-                        var epoch = newEpoch(missing.getEpoch());
+                        var epoch = retreiveEpoch(missing.getEpoch());
                         if (epoch != null) {
                             epoch.adder().updateFrom(missing);
                         }
@@ -362,23 +362,46 @@ public class Ethereal {
         mx.lock();
         try {
             final var currentId = currentEpoch.get();
-            final epoch e = epochs.get(epoch);
-            if (e != null && epoch == e.id()) {
-                return e;
+            epoch e = epochs.get(epoch);
+            if (e == null && epoch == currentId + 1) {
+                e = createEpoch(epoch);
+                epochs.put(epoch, e);
+                log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
             }
-            if (e == null && epoch > currentId) {
+
+            if (epoch == currentId + 1) {
+                assert e != null;
                 var prev = epochs.remove(currentId - 1);
                 if (prev != null) {
                     prev.close();
                 }
-
-                final var newEpoch = createEpoch(epoch);
-                epochs.put(epoch, newEpoch);
                 currentEpoch.set(epoch);
 
                 if (newEpochAction != null) {
                     newEpochAction.accept(epoch);
                 }
+            }
+            return e;
+        } finally {
+            mx.unlock();
+        }
+    }
+
+    /**
+     * newEpoch creates and returns a new epoch object with the given EpochID. If
+     * such epoch already exists, returns it.
+     */
+    private epoch retreiveEpoch(int epoch) {
+        mx.lock();
+        try {
+            final var currentId = currentEpoch.get();
+            final epoch e = epochs.get(epoch);
+            if (e != null && epoch == e.id()) {
+                return e;
+            }
+            if (e == null && epoch == currentId + 1) {
+                final var newEpoch = createEpoch(epoch);
+                epochs.put(epoch, newEpoch);
                 log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
                 return newEpoch;
             }
