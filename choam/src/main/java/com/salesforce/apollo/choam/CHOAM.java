@@ -115,13 +115,13 @@ public class CHOAM {
 
         Block genesis(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
 
-        Block produce(ULong height, Digest prev, Assemble assemble);
+        Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint);
 
-        Block produce(ULong height, Digest prev, Executions executions);
+        Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint);
 
         void publish(CertifiedBlock cb);
 
-        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous);
+        Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous, HashedBlock checkpoint);
     }
 
     public class Combiner implements Combine {
@@ -382,7 +382,7 @@ public class CHOAM {
                       params.member());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), comm);
+            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm);
             producer.start();
         }
 
@@ -898,23 +898,21 @@ public class CHOAM {
             }
 
             @Override
-            public Block produce(ULong height, Digest prev, Assemble assemble) {
+            public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                final HashedBlock c = checkpoint.get();
                 return Block.newBuilder()
-                            .setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height, c.height(), c.hash,
-                                                   v.height(), v.hash))
+                            .setHeader(buildHeader(params.digestAlgorithm(), assemble, prev, height,
+                                                   checkpoint.height(), checkpoint.hash, v.height(), v.hash))
                             .setAssemble(assemble)
                             .build();
             }
 
             @Override
-            public Block produce(ULong height, Digest prev, Executions executions) {
-                final HashedCertifiedBlock c = checkpoint.get();
+            public Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
                 return Block.newBuilder()
-                            .setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height, c.height(),
-                                                   c.hash, v.height(), v.hash))
+                            .setHeader(buildHeader(params.digestAlgorithm(), executions, prev, height,
+                                                   checkpoint.height(), checkpoint.hash, v.height(), v.hash))
                             .setExecutions(executions)
                             .build();
             }
@@ -926,10 +924,10 @@ public class CHOAM {
             }
 
             @Override
-            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+            public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
+                                     HashedBlock checkpoint) {
                 final HashedCertifiedBlock v = view.get();
-                final HashedCertifiedBlock c = checkpoint.get();
-                return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, c);
+                return CHOAM.reconfigure(nextViewId, joining, previous, params.context(), v, params, checkpoint);
             }
         };
     }
@@ -1047,7 +1045,7 @@ public class CHOAM {
     private void process() {
         final HashedCertifiedBlock h = head.get();
         switch (h.block.getBodyCase()) {
-        case ASSEMBLE:
+        case ASSEMBLE: {
             params.processor().beginBlock(h.height(), h.hash);
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
             log.info("Next view id: {} on: {}", nextViewId.get(), params.member());
@@ -1056,25 +1054,30 @@ public class CHOAM {
                 c.assembled();
             }
             break;
-        case RECONFIGURE:
+        }
+        case RECONFIGURE: {
             params.processor().beginBlock(h.height(), h.hash);
             reconfigure(h.block.getReconfigure());
             break;
-        case GENESIS:
+        }
+        case GENESIS: {
             cancelSynchronization();
             transitions.regenerated();
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
             reconfigure(h.block.getGenesis().getInitialView());
             break;
-        case EXECUTIONS:
+        }
+        case EXECUTIONS: {
             params.processor().beginBlock(h.height(), h.hash);
             execute(h.block.getExecutions().getExecutionsList());
             break;
-        case CHECKPOINT:
+        }
+        case CHECKPOINT: {
             params.processor().beginBlock(h.height(), h.hash);
-//            var lastCheckpoint = checkpoint.get().height();
-//            checkpoint.set(h);
-//            store.gcFrom(h.height(), lastCheckpoint);
+            var lastCheckpoint = checkpoint.get().height();
+            checkpoint.set(h);
+            store.gcFrom(h.height(), lastCheckpoint.add(1));
+        }
         default:
             break;
         }

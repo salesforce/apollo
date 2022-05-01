@@ -61,7 +61,8 @@ public class Producer {
         public void assembled() {
             final var slate = assembly.getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
-                                                  view.reconfigure(slate, nextViewId, previousBlock.get()));
+                                                  view.reconfigure(slate, nextViewId, previousBlock.get(),
+                                                                   checkpoint.get()));
             var validation = view.generateValidation(reconfiguration);
             final var p = new PendingBlock(reconfiguration, new HashMap<>(), new AtomicBoolean());
             pending.put(reconfiguration.hash, p);
@@ -90,6 +91,7 @@ public class Producer {
             }
             var next = new HashedBlock(params().digestAlgorithm(), ckpt);
             previousBlock.set(next);
+            checkpoint.set(next);
             var validation = view.generateValidation(next);
             ds.offer(validation);
             final var p = new PendingBlock(next, new HashMap<>(), new AtomicBoolean());
@@ -97,7 +99,7 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             log.info("Produced checkpoint: {} height: {} for: {} on: {}", next.hash, next.height(), getViewId(),
                      params().member());
-            transitions.lastBlock();
+            transitions.checkpointed();
         }
 
         @Override
@@ -159,12 +161,15 @@ public class Producer {
     private final AtomicBoolean                     started       = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;
+    private final AtomicReference<HashedBlock>      checkpoint    = new AtomicReference<>();
 
-    public Producer(ViewContext view, HashedBlock lastBlock, CommonCommunications<Terminal, ?> comms) {
+    public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
+                    CommonCommunications<Terminal, ?> comms) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
         this.comms = comms;
+        this.checkpoint.set(checkpoint);
 
         final Parameters params = view.params();
         final var producerParams = params.producer();
@@ -277,7 +282,7 @@ public class Producer {
             txns.forEach(e -> builder.addExecutions(e));
 
             var next = new HashedBlock(params().digestAlgorithm(),
-                                       view.produce(lb.height().add(1), lb.hash, builder.build()));
+                                       view.produce(lb.height().add(1), lb.hash, builder.build(), checkpoint.get()));
             previousBlock.set(next);
 
             final var validation = view.generateValidation(next);
@@ -318,7 +323,8 @@ public class Producer {
                                              view.produce(vlb.height().add(1), vlb.hash,
                                                           Assemble.newBuilder()
                                                                   .setNextView(vlb.hash.toDigeste())
-                                                                  .build()));
+                                                                  .build(),
+                                                          checkpoint.get()));
         previousBlock.set(assemble);
         final var validation = view.generateValidation(assemble);
         final var p = new PendingBlock(assemble, new HashMap<>(), new AtomicBoolean());

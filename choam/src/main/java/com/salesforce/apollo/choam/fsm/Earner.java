@@ -50,7 +50,7 @@ public enum Earner implements Driven.Transitions {
         }
 
         @Override
-        public Transitions lastBlock() {
+        public Transitions checkpointed() {
             return SPICE;
         }
     },

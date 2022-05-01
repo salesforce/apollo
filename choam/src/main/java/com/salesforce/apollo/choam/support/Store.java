@@ -184,17 +184,16 @@ public class Store {
     }
 
     public void gcFrom(ULong from, ULong to) {
-        log.warn("GC'ing Store from: {} to: {}");
+        log.debug("GC'ing Store from: {} to: {}", from, to);
         Iterator<ULong> gcd = blocks.keyIteratorReverse(from.subtract(1));
         if (!gcd.hasNext()) {
-            log.warn("Nothing to GC from: {}", from);
+            log.trace("Nothing to GC from: {}", from);
             return;
         }
         while (gcd.hasNext()) {
             ULong test = gcd.next();
-            log.warn("Test: {}", test);
             if (test.equals(to)) {
-                log.warn("Reached last checkpoint: {}", test);
+                log.trace("Reached last checkpoint: {}", test);
                 return;
             }
             delete(test);
@@ -397,21 +396,24 @@ public class Store {
     }
 
     private void delete(ULong block) {
-        log.warn("Deleting: {}", block);
-        if (isReconfigure(block)) {
-            log.warn("Retaining reconfiguration: {}", block);
+        if (viewChain.containsKey(block)) {
+            log.trace("Retaining reconfiguration: {}", block);
             return;
         }
         transactionally(() -> {
-            blocks.remove(block);
+            var bytes = blocks.remove(block);
+            if (bytes != null) {
+                try {
+                    final var b = Block.parseFrom(bytes);
+                    log.trace("Deleting block type: {} height: {}", b.getBodyCase(),
+                              ULong.valueOf(b.getHeader().getHeight()));
+                } catch (InvalidProtocolBufferException e) {
+                }
+            }
             certifications.remove(block);
             var digest = hashes.remove(block);
             hashToHeight.remove(digest);
         });
-    }
-
-    private boolean isReconfigure(ULong next) {
-        return viewChain.containsKey(next);
     }
 
     private void put(Digest hash, Block block) {

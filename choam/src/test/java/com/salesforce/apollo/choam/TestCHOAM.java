@@ -153,7 +153,7 @@ public class TestCHOAM {
             } catch (IOException e1) {
                 fail(e1);
             }
-            params.getMvBuilder().setFileName(fn);
+//            params.getMvBuilder().setFileName(fn);
             return new CHOAM(params.build(runtime.setMember(m)
                                                  .setMetrics(metrics)
                                                  .setCommunications(routers.get(m.getId()))

@@ -30,6 +30,10 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions checkpointed() {
+            throw fsm().invalidTransitionOn();
+        }
+
         default Transitions establish() {
             throw fsm().invalidTransitionOn();
         }
