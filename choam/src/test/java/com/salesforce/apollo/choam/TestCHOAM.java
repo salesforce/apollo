@@ -20,7 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,7 +66,6 @@ public class TestCHOAM {
     protected CompletableFuture<Boolean> checkpointOccurred;
     private Map<Digest, AtomicInteger>   blocks;
     private Map<Digest, CHOAM>           choams;
-    private ExecutorService              exec;
     private List<SigningMember>          members;
     private MetricRegistry               registry;
     private Map<Digest, Router>          routers;
@@ -84,21 +82,15 @@ public class TestCHOAM {
         }
         members = null;
         registry = null;
-        if (exec != null) {
-            exec.shutdown();
-        }
-        exec = null;
     }
 
     @BeforeEach
     public void before() {
-        exec = Executors.newFixedThreadPool(CARDINALITY);
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
         blocks = new ConcurrentHashMap<>();
         Random entropy = new Random();
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var params = Parameters.newBuilder()
                                .setSynchronizationCycles(1)
@@ -127,7 +119,11 @@ public class TestCHOAM {
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              exec, metrics.limitsMetrics());
+                                              Executors.newFixedThreadPool(1,
+                                                                           r -> new Thread(r,
+                                                                                           "Comm Exec[" + m.getId()
+                                                                                           + "]")),
+                                              metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -154,14 +150,20 @@ public class TestCHOAM {
                 fail(e1);
             }
 //            params.getMvBuilder().setFileName(fn);
+            var nExec = new AtomicInteger();
             return new CHOAM(params.build(runtime.setMember(m)
                                                  .setMetrics(metrics)
                                                  .setCommunications(routers.get(m.getId()))
                                                  .setProcessor(processor)
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
-                                                 .setExec(exec)
-                                                 .setScheduler(scheduler)
+                                                 .setExec(Executors.newFixedThreadPool(1, r -> new Thread(r, "Exec["
+                                                 + nExec.incrementAndGet() + ":" + m.getId() + "]")))
+                                                 .setScheduler(Executors.newScheduledThreadPool(1,
+                                                                                                r -> new Thread(r,
+                                                                                                                "Sched["
+                                                                                                                + m.getId()
+                                                                                                                + "]")))
                                                  .build()));
         }));
     }
@@ -178,10 +180,12 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 500 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
+        var cnt = new AtomicInteger();
         choams.values().forEach(c -> {
-            final var txnCompletion = Executors.newFixedThreadPool(2);
-            final var txnExecutor = Executors.newFixedThreadPool(1);
-            final var txScheduler = Executors.newScheduledThreadPool(1);
+            final var txnCompletion = Executors.newFixedThreadPool(2, r -> new Thread(r, "Completion["
+            + cnt.incrementAndGet() + "]"));
+            final var txnExecutor = Executors.newFixedThreadPool(1, r -> new Thread(r, "txn exec"));
+            final var txScheduler = Executors.newScheduledThreadPool(1, r -> new Thread(r, "txn sched"));
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(c.getSession(), txnCompletion, timeout, max, txScheduler,
                                                        countdown, txnExecutor));

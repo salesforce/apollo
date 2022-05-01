@@ -92,6 +92,7 @@ public class ChRbcGossip {
     private final RingCommunications<Gossiper>                    ring;
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started = new AtomicBoolean();
+    private final Executor                                        exec;
 
     public ChRbcGossip(Context<Member> context, SigningMember member, Processor processor, Router communications,
                        Executor exec, EtherealMetrics m) {
@@ -99,6 +100,7 @@ public class ChRbcGossip {
         this.context = context;
         this.member = member;
         this.metrics = m;
+        this.exec = exec;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
@@ -230,8 +232,10 @@ public class ChRbcGossip {
         if (!started.get()) {
             return;
         }
-        var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-        ring.execute((link, ring) -> gossipRound(link, ring),
-                     (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
+        exec.execute(Utils.wrapped(() -> {
+            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+            ring.execute((link, ring) -> gossipRound(link, ring),
+                         (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler, timer));
+        }, log));
     }
 }

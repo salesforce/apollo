@@ -88,7 +88,6 @@ public class CHOAMTest {
     private List<SigningMember>                members;
     private MetricRegistry                     registry;
     private Map<Digest, Router>                routers;
-    private ScheduledExecutorService           scheduler;
     private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
     private Executor                           exec     = Executors.newFixedThreadPool(CARDINALITY);
@@ -106,14 +105,6 @@ public class CHOAMTest {
         updaters.values().forEach(up -> up.close());
         updaters.clear();
         members = null;
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-            scheduler = null;
-        }
-        if (txScheduler != null) {
-            txScheduler.shutdownNow();
-            txScheduler = null;
-        }
         System.out.println();
 
         ConsoleReporter.forRegistry(registry)
@@ -135,7 +126,6 @@ public class CHOAMTest {
         Random entropy = new Random();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
-        scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
@@ -150,7 +140,7 @@ public class CHOAMTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(200);
+                               .setCheckpointBlockSize(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
@@ -162,23 +152,27 @@ public class CHOAMTest {
                            .toList();
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec,
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newSingleThreadExecutor(r -> new Thread(r,
+                                                                                                "Comm[" + m.getId()
+                                                                                                + "]")),
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            return createCHOAM(entropy, params, m, context, metrics, exec);
+            return createCHOAM(entropy, params, m, context, metrics,
+                               Executors.newSingleThreadExecutor(r -> new Thread(r, "Exec[" + m.getId() + "]")));
         }));
     }
 
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(4);
+        final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 500 : 1;
-        final int max = 10;
+        final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
@@ -197,8 +191,8 @@ public class CHOAMTest {
         }
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(120, TimeUnit.SECONDS), "did not finish transactions: " + countdown.getCount()
-        + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
+        assertTrue(countdown.await(LARGE_TESTS ? 600 : 30, TimeUnit.SECONDS), "did not finish transactions: "
+        + countdown.getCount() + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
 
         final ULong target = updaters.values()
                                      .stream()
@@ -266,7 +260,11 @@ public class CHOAMTest {
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(scheduler)
+                                                       .setScheduler(Executors.newScheduledThreadPool(1,
+                                                                                                      r -> new Thread(r,
+                                                                                                                      "Sched["
+                                                                                                                      + m.getId()
+                                                                                                                      + "]")))
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setExec(exec)
