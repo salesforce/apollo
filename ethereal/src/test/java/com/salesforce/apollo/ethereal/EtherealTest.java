@@ -125,11 +125,10 @@ public class EtherealTest {
                                               if (pid == 0) {
                                                   System.out.println("new epoch: " + ep);
                                               }
-                                          }, processor -> {
-                                              var gossiper = new ChRbcGossip(context, member, processor, com, executor,
-                                                                             metrics);
-                                              gossipers.add(gossiper);
                                           });
+
+            var gossiper = new ChRbcGossip(context, member, controller.processor(), com, executor, metrics);
+            gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);
             for (int d = 0; d < 5000; d++) {

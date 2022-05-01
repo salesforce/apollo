@@ -87,7 +87,7 @@ public class Creator {
     private final Consumer<Unit>                       send;
 
     public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
-                        Function<Integer, EpochProofBuilder> epochProofBuilder) {
+                   Function<Integer, EpochProofBuilder> epochProofBuilder) {
         this.conf = config;
         this.ds = ds;
         this.rsData = rsData;
@@ -139,10 +139,10 @@ public class Creator {
         final Unit[] parents = getParentsForLevel(l);
         final var count = count(parents);
         if (count >= quorum) {
-            log.trace("Parents ready: {} on: {}", parents, conf.logLabel());
+            log.trace("Parents ready: {} level: {} on: {}", parents, level, conf.logLabel());
             return new built(parents, l);
         } else {
-            log.trace("Parents not ready: {} current: {} required: {}  on: {}", parents, count, quorum,
+            log.trace("Parents not ready: {} level: {} current: {} required: {}  on: {}", parents, level, count, quorum,
                       conf.logLabel());
             return null;
         }
@@ -226,6 +226,12 @@ public class Creator {
             }
         }
         makeConsistent(result);
+        for (int i = 0; i < result.length; i++) {
+            var u = result[i];
+            if (u != null && u.level() != level - 1) {
+                result[i] = null;
+            }
+        }
         return result;
     }
 

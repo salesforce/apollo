@@ -26,7 +26,6 @@ import java.util.stream.StreamSupport;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
-import org.joou.Unsigned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,10 +59,10 @@ public class Store {
     private final MVMap<ULong, byte[]>                   blocks;
     private final MVMap<ULong, byte[]>                   certifications;
     private final TreeMap<ULong, MVMap<Integer, byte[]>> checkpoints = new TreeMap<>();
+    private final DigestAlgorithm                        digestAlgorithm;
     private final MVMap<ULong, Digest>                   hashes;
     private final MVMap<Digest, ULong>                   hashToHeight;
     private final MVMap<ULong, ULong>                    viewChain;
-    private final DigestAlgorithm                        digestAlgorithm;
 
     public Store(DigestAlgorithm digestAlgorithm, MVStore store) {
         this.digestAlgorithm = digestAlgorithm;
@@ -184,13 +183,20 @@ public class Store {
         return current;
     }
 
-    public void gcFrom(ULong lastCheckpoint) {
-        Iterator<ULong> gcd = blocks.keyIterator(lastCheckpoint.add(1));
+    public void gcFrom(ULong from, ULong to) {
+        log.debug("GC'ing Store from: {} to: {}", from, to);
+        Iterator<ULong> gcd = blocks.keyIteratorReverse(from.subtract(1));
+        if (!gcd.hasNext()) {
+            log.trace("Nothing to GC from: {}", from);
+            return;
+        }
         while (gcd.hasNext()) {
             ULong test = gcd.next();
-            if (test.equals(Unsigned.ulong(0)) && !isReconfigure(test) && !isCheckpoint(test)) {
-
+            if (test.equals(to)) {
+                log.trace("Reached last checkpoint: {}", test);
+                return;
             }
+            delete(test);
         }
     }
 
@@ -389,12 +395,25 @@ public class Store {
         };
     }
 
-    private boolean isCheckpoint(ULong test) {
-        return checkpoints.containsKey(test);
-    }
-
-    private boolean isReconfigure(ULong next) {
-        return viewChain.containsKey(next);
+    private void delete(ULong block) {
+        if (viewChain.containsKey(block)) {
+            log.trace("Retaining reconfiguration: {}", block);
+            return;
+        }
+        transactionally(() -> {
+            var bytes = blocks.remove(block);
+            if (bytes != null) {
+                try {
+                    final var b = Block.parseFrom(bytes);
+                    log.trace("Deleting block type: {} height: {}", b.getBodyCase(),
+                              ULong.valueOf(b.getHeader().getHeight()));
+                } catch (InvalidProtocolBufferException e) {
+                }
+            }
+            certifications.remove(block);
+            var digest = hashes.remove(block);
+            hashToHeight.remove(digest);
+        });
     }
 
     private void put(Digest hash, Block block) {

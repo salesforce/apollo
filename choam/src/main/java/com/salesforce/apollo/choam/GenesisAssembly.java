@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -110,17 +109,12 @@ public class GenesisAssembly implements Genesis {
         }
         config.setEpochLength(7).setNumberOfEpochs(3);
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
-        var holder = new AtomicReference<ChRbcGossip>();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch), processor -> {
-                                      holder.set(new ChRbcGossip(reContext, params().member(), processor,
-                                                                 params().communications(), params().exec(),
-                                                                 params().metrics() == null ? null
-                                                                                            : params().metrics()
-                                                                                                      .getReconfigureMetrics()));
-                                  });
-        coordinator = holder.get();
+                                  epoch -> transitions.nextEpoch(epoch));
+        coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
+                                      params().exec(),
+                                      params().metrics() == null ? null : params().metrics().getReconfigureMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }

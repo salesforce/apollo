@@ -7,8 +7,10 @@
 package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -144,6 +146,14 @@ public class TestCHOAM {
             };
             params.getProducer().ethereal().setSigner(m);
             var runtime = RuntimeParameters.newBuilder();
+            File fn = null;
+            try {
+                fn = File.createTempFile("tst-", ".tstData");
+                fn.deleteOnExit();
+            } catch (IOException e1) {
+                fail(e1);
+            }
+//            params.getMvBuilder().setFileName(fn);
             return new CHOAM(params.build(runtime.setMember(m)
                                                  .setMetrics(metrics)
                                                  .setCommunications(routers.get(m.getId()))
@@ -183,7 +193,7 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(600, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 600 : 60, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: "
             + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {

@@ -132,20 +132,21 @@ public class ViewContext {
         return params;
     }
 
-    public Block produce(ULong l, Digest hash, Assemble assemble) {
-        return blockProducer.produce(l, hash, assemble);
+    public Block produce(ULong l, Digest hash, Assemble assemble, HashedBlock checkpoint) {
+        return blockProducer.produce(l, hash, assemble, checkpoint);
     }
 
-    public Block produce(ULong l, Digest hash, Executions executions) {
-        return blockProducer.produce(l, hash, executions);
+    public Block produce(ULong l, Digest hash, Executions executions, HashedBlock checkpoint) {
+        return blockProducer.produce(l, hash, executions, checkpoint);
     }
 
     public void publish(HashedCertifiedBlock block) {
         blockProducer.publish(block.certifiedBlock);
     }
 
-    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock hashedBlock) {
-        return blockProducer.reconfigure(aggregate, nextViewId, hashedBlock);
+    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock hashedBlock,
+                             HashedBlock checkpoint) {
+        return blockProducer.reconfigure(aggregate, nextViewId, hashedBlock, checkpoint);
     }
 
     public Map<Digest, Short> roster() {

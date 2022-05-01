@@ -155,12 +155,12 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block produce(ULong height, Digest prev, Assemble assemble) {
+                public Block produce(ULong height, Digest prev, Assemble assemble, HashedBlock checkpoint) {
                     return null;
                 }
 
                 @Override
-                public Block produce(ULong height, Digest prev, Executions executions) {
+                public Block produce(ULong height, Digest prev, Executions executions, HashedBlock checkpoint) {
                     return null;
                 }
 
@@ -170,7 +170,8 @@ public class GenesisAssemblyTest {
                 }
 
                 @Override
-                public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous) {
+                public Block reconfigure(Map<Member, Join> joining, Digest nextViewId, HashedBlock previous,
+                                         HashedBlock checkpoint) {
                     return null;
                 }
             };
