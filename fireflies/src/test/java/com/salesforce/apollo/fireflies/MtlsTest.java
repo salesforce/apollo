@@ -22,10 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -44,7 +41,6 @@ import com.salesforce.apollo.comm.EndpointProvider;
 import com.salesforce.apollo.comm.MtlsRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
-import com.salesforce.apollo.comm.ServerConnectionCache.Builder;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.comm.StandardEpProvider;
 import com.salesforce.apollo.comm.grpc.ClientContextSupplier;
@@ -77,11 +73,11 @@ import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
  */
 public class MtlsTest {
     private static final int                                                   CARDINALITY;
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final Map<Digest, CertificateWithPrivateKey>                certs       = new HashMap<>();
     private static final Map<Digest, InetSocketAddress>                        endpoints   = new HashMap<>();
-    private static final boolean                                               LARGE_TESTS = Boolean.getBoolean("large_tests");
     private static final Random                                                entropy     = new Random(0x666);
+    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static final boolean                                               LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
         CARDINALITY = LARGE_TESTS ? 100 : 10;
     }
@@ -126,12 +122,11 @@ public class MtlsTest {
 
     @Test
     public void smoke() throws Exception {
-        MetricRegistry registry = new MetricRegistry();
-        MetricRegistry node0Registry = new MetricRegistry();
+        var registry = new MetricRegistry();
+        var node0Registry = new MetricRegistry();
 
-        List<Identity> seeds = new ArrayList<>();
+        var seeds = new ArrayList<Identity>();
         var members = identities.values().stream().map(identity -> new ControlledIdentifierMember(identity)).toList();
-
         var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
 
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
@@ -141,26 +136,16 @@ public class MtlsTest {
                 seeds.add(id);
             }
         }
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
-        Executor exec = Executors.newCachedThreadPool();
+        var scheduler = Executors.newScheduledThreadPool(members.size());
+        var exec = Executors.newCachedThreadPool();
 
-        Builder builder = ServerConnectionCache.newBuilder().setTarget(2);
-        AtomicBoolean frist = new AtomicBoolean(true);
+        var builder = ServerConnectionCache.newBuilder().setTarget(2);
+        var frist = new AtomicBoolean(true);
         Function<Member, SocketAddress> resolver = m -> {
             var p = (Participant) m;
             return p.getIdentity().endpoint();
         };
-        Function<Member, ClientContextSupplier> clientContextSupplier = m -> {
-            return new ClientContextSupplier() {
-                @Override
-                public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                            Provider provider, String tlsVersion) {
-                    CertificateWithPrivateKey certWithKey = certs.get(m.getId());
-                    return MtlsServer.forClient(clientAuth, alias, certWithKey.getX509Certificate(),
-                                                certWithKey.getPrivateKey(), validator);
-                }
-            };
-        };
+        var clientContextSupplier = clientContextSupplier();
         views = members.stream().map(node -> {
             Context<Participant> context = ctxBuilder.build();
             FireflyMetricsImpl metrics = new FireflyMetricsImpl(context.getId(),
@@ -169,27 +154,14 @@ public class MtlsTest {
                                                          CertificateValidator.NONE, resolver);
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
-            ServerContextSupplier serverContextSupplier = new ServerContextSupplier() {
-                @Override
-                public Digest getMemberId(X509Certificate key) {
-                    return ((SelfAddressingIdentifier) Stereotomy.decode(key).get().identifier()).getDigest();
-                }
-
-                @Override
-                public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator,
-                                            Provider provider, String tlsVersion) {
-                    return MtlsServer.forServer(clientAuth, alias, certWithKey.getX509Certificate(),
-                                                certWithKey.getPrivateKey(), validator);
-                }
-            };
-            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier, Executors.newFixedThreadPool(3),
-                                              clientContextSupplier);
+            MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey),
+                                              Executors.newFixedThreadPool(3), clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
                             DigestAlgorithm.DEFAULT, metrics);
         }).collect(Collectors.toList());
 
-        long then = System.currentTimeMillis();
+        var then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
         views.forEach(view -> view.start(exec, Duration.ofMillis(200), seeds, scheduler));
 
@@ -204,19 +176,17 @@ public class MtlsTest {
         + views.size() + " members");
 
         System.out.println("Checking views for consistency");
-        List<View> invalid = views.stream()
-                                  .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
-                                  .filter(view -> view != null)
-                                  .collect(Collectors.toList());
+        var invalid = views.stream()
+                           .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                           .filter(view -> view != null)
+                           .collect(Collectors.toList());
         assertEquals(0, invalid.size(), invalid.stream().map(view -> {
-            Set<?> difference = Sets.difference(views.stream()
-                                                     .map(v -> v.getNode().getId())
-                                                     .collect(Collectors.toSet()),
-                                                view.getContext()
-                                                    .getActive()
-                                                    .stream()
-                                                    .map(m -> m.getId())
-                                                    .collect(Collectors.toSet()));
+            var difference = Sets.difference(views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()),
+                                             view.getContext()
+                                                 .getActive()
+                                                 .stream()
+                                                 .map(m -> m.getId())
+                                                 .collect(Collectors.toSet()));
             return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
         }).collect(Collectors.toList()).toString());
 
@@ -258,5 +228,35 @@ public class MtlsTest {
                        .convertDurationsTo(TimeUnit.MILLISECONDS)
                        .build()
                        .report();
+    }
+
+    private Function<Member, ClientContextSupplier> clientContextSupplier() {
+        return m -> {
+            return new ClientContextSupplier() {
+                @Override
+                public SslContext forClient(ClientAuth clientAuth, String alias, CertificateValidator validator,
+                                            Provider provider, String tlsVersion) {
+                    CertificateWithPrivateKey certWithKey = certs.get(m.getId());
+                    return MtlsServer.forClient(clientAuth, alias, certWithKey.getX509Certificate(),
+                                                certWithKey.getPrivateKey(), validator);
+                }
+            };
+        };
+    }
+
+    private ServerContextSupplier serverContextSupplier(CertificateWithPrivateKey certWithKey) {
+        return new ServerContextSupplier() {
+            @Override
+            public SslContext forServer(ClientAuth clientAuth, String alias, CertificateValidator validator,
+                                        Provider provider, String tlsVersion) {
+                return MtlsServer.forServer(clientAuth, alias, certWithKey.getX509Certificate(),
+                                            certWithKey.getPrivateKey(), validator);
+            }
+
+            @Override
+            public Digest getMemberId(X509Certificate key) {
+                return ((SelfAddressingIdentifier) Stereotomy.decode(key).get().identifier()).getDigest();
+            }
+        };
     }
 }

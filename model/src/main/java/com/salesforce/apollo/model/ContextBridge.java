@@ -28,7 +28,7 @@ public class ContextBridge implements MembershipListener<Member> {
 
     @Override
     public void active(Member member) {
-        managed.activateIfMember(member);
+        managed.activate(member);
     }
 
     public void deregister(Context overlay) {
@@ -41,7 +41,7 @@ public class ContextBridge implements MembershipListener<Member> {
 
     @Override
     public void offline(Member member) {
-        managed.offlineIfMember(member);
+        managed.offline(member);
     }
 
     public void register(Context context) {
