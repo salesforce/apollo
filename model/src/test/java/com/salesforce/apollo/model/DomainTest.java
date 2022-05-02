@@ -55,93 +55,7 @@ public class DomainTest {
     private static final int    CARDINALITY     = 5;
     private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
-    private final ArrayList<Domain>      domains = new ArrayList<>();
-    private final ArrayList<LocalRouter> routers = new ArrayList<>();
-
-    @AfterEach
-    public void after() {
-        domains.forEach(n -> n.stop());
-        domains.clear();
-        routers.forEach(r -> r.close());
-        routers.clear();
-    }
-
-    @BeforeEach
-    public void before() throws SQLException {
-        final var prefix = UUID.randomUUID().toString();
-        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
-        Utils.clean(checkpointDirBase.toFile());
-        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
-        var params = params();
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
-                                            new SecureRandom());
-
-        var identities = IntStream.range(0, CARDINALITY)
-                                  .parallel()
-                                  .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .map(ci -> {
-                                      @SuppressWarnings("unchecked")
-                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                      return casted;
-                                  })
-                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
-                                                            controlled -> controlled));
-
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
-        var exec = Executors.newCachedThreadPool();
-        var foundation = Foundation.newBuilder();
-        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
-        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        identities.forEach((member, id) -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
-            routers.add(localRouter);
-            var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
-                                           RuntimeParameters.newBuilder()
-                                                            .setFoundation(sealed)
-                                                            .setScheduler(scheduler)
-                                                            .setContext(context)
-                                                            .setExec(exec)
-                                                            .setCommunications(localRouter),
-                                           new InetSocketAddress(0));
-            domains.add(domain);
-            localRouter.setMember(domain.getMember());
-            localRouter.start();
-        });
-
-        domains.forEach(domain -> context.activate(domain.getMember()));
-    }
-
-    @Test
-    public void smoke() throws Exception {
-        domains.forEach(n -> n.start());
-        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
-                   "Domains did not fully activate");
-        var oracle = domains.get(0).getDelphi();
-        oracle.add(new Oracle.Namespace("test")).get();
-        smoke(oracle);
-    }
-
-    private Builder params() {
-        var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
-                               .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setGossipDuration(Duration.ofMillis(10))
-                               .setProducer(ProducerParameters.newBuilder()
-                                                              .setGossipDuration(Duration.ofMillis(20))
-                                                              .setBatchInterval(Duration.ofMillis(100))
-                                                              .setMaxBatchByteSize(1024 * 1024)
-                                                              .setMaxBatchCount(3000)
-                                                              .build())
-                               .setCheckpointBlockSize(200);
-        params.getProducer().ethereal().setNumberOfEpochs(5);
-        return params;
-    }
-
-    private void smoke(Oracle oracle) throws Exception {
+    public static void smoke(Oracle oracle) throws Exception {
         // Namespace
         var ns = Oracle.namespace("my-org");
 
@@ -263,5 +177,92 @@ public class DomainTest {
         // Some deletes
         oracle.delete(abcTechMembers).get();
         oracle.delete(flaggedTechnicianMembers).get();
+    }
+
+    private final ArrayList<Domain> domains = new ArrayList<>();
+
+    private final ArrayList<LocalRouter> routers = new ArrayList<>();
+
+    @AfterEach
+    public void after() {
+        domains.forEach(n -> n.stop());
+        domains.clear();
+        routers.forEach(r -> r.close());
+        routers.clear();
+    }
+
+    @BeforeEach
+    public void before() throws SQLException {
+        final var prefix = UUID.randomUUID().toString();
+        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        Utils.clean(checkpointDirBase.toFile());
+        var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
+        var params = params();
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
+                                            new SecureRandom());
+
+        var identities = IntStream.range(0, CARDINALITY)
+                                  .parallel()
+                                  .mapToObj(i -> stereotomy.newIdentifier().get())
+                                  .map(ci -> {
+                                      @SuppressWarnings("unchecked")
+                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
+                                      return casted;
+                                  })
+                                  .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
+                                                            controlled -> controlled));
+
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
+
+        var exec = Executors.newCachedThreadPool();
+        var foundation = Foundation.newBuilder();
+        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
+        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        final var group = DigestAlgorithm.DEFAULT.getOrigin();
+        identities.forEach((member, id) -> {
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newFixedThreadPool(2), null);
+            routers.add(localRouter);
+            var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
+                                           RuntimeParameters.newBuilder()
+                                                            .setFoundation(sealed)
+                                                            .setScheduler(scheduler)
+                                                            .setContext(context)
+                                                            .setExec(exec)
+                                                            .setCommunications(localRouter),
+                                           new InetSocketAddress(0));
+            domains.add(domain);
+            localRouter.setMember(domain.getMember());
+            localRouter.start();
+        });
+
+        domains.forEach(domain -> context.activate(domain.getMember()));
+    }
+
+    @Test
+    public void smoke() throws Exception {
+        domains.forEach(n -> n.start());
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> domains.stream().filter(d -> !d.active()).count() == 0),
+                   "Domains did not fully activate");
+        var oracle = domains.get(0).getDelphi();
+        oracle.add(new Oracle.Namespace("test")).get();
+        smoke(oracle);
+    }
+
+    private Builder params() {
+        var params = Parameters.newBuilder()
+                               .setSynchronizationCycles(1)
+                               .setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setGenesisViewId(GENESIS_VIEW_ID)
+                               .setGossipDuration(Duration.ofMillis(10))
+                               .setProducer(ProducerParameters.newBuilder()
+                                                              .setGossipDuration(Duration.ofMillis(20))
+                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setMaxBatchByteSize(1024 * 1024)
+                                                              .setMaxBatchCount(3000)
+                                                              .build())
+                               .setCheckpointBlockSize(200);
+        params.getProducer().ethereal().setNumberOfEpochs(5);
+        return params;
     }
 }

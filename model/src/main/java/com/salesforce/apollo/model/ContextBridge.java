@@ -19,16 +19,20 @@ import com.salesforce.apollo.membership.Member;
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class ContextBridge implements MembershipListener<Member> {
 
+    private final Domain  domain;
     private final Context managed;
     private volatile UUID registration;
 
-    public ContextBridge(Context<? extends Member> managed) {
+    public ContextBridge(Context<? extends Member> managed, Domain domain) {
         this.managed = managed;
+        this.domain = domain;
     }
 
     @Override
     public void active(Member member) {
-        managed.activate(member);
+        if (domain.isMember(member)) {
+            managed.activate(member);
+        }
     }
 
     public void deregister(Context overlay) {
@@ -41,7 +45,9 @@ public class ContextBridge implements MembershipListener<Member> {
 
     @Override
     public void offline(Member member) {
-        managed.offline(member);
+        if (domain.isMember(member)) {
+            managed.offline(member);
+        }
     }
 
     public void register(Context context) {

@@ -199,6 +199,10 @@ abstract public class Domain {
         return member;
     }
 
+    public boolean isMember(Member m) {
+        return true; // TODO - HSH
+    }
+
     public void start() {
         choam.start();
     }

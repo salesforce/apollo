@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.model;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
@@ -35,6 +37,7 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
@@ -54,7 +57,6 @@ public class FireFliesTest {
 
     private final List<ProcessDomain>             domains = new ArrayList<>();
     private final Map<ProcessDomain, LocalRouter> routers = new HashMap<>();
-    private final Map<ProcessDomain, View>        views   = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -62,8 +64,6 @@ public class FireFliesTest {
         domains.clear();
         routers.values().forEach(r -> r.close());
         routers.clear();
-        views.values().forEach(v -> v.stop());
-        views.clear();
     }
 
     @BeforeEach
@@ -116,6 +116,7 @@ public class FireFliesTest {
     public void smokin() throws Exception {
         Executor exec = Executors.newCachedThreadPool();
         var scheduler = Executors.newSingleThreadScheduledExecutor();
+        long then = System.currentTimeMillis();
         domains.forEach(n -> n.start());
         domains.forEach(d -> d.getFoundation()
                               .start(exec, Duration.ofMillis(10),
@@ -124,7 +125,27 @@ public class FireFliesTest {
                                                                        n.getMember().getEvent()))
                                             .toList(),
                                      scheduler));
-        Thread.sleep(10_000);
+        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+            return domains.stream()
+                          .filter(d -> d.getFoundation().getContext().getActive().size() != domains.size())
+                          .count() == 0;
+        }));
+        System.out.println();
+        System.out.println("******");
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
+        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
+                   "Domains did not become active");
+        System.out.println("******");
+        System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
+        var oracle = domains.get(0).getDelphi();
+        oracle.add(new Oracle.Namespace("test")).get();
+        DomainTest.smoke(oracle);
     }
 
     private Builder params() {

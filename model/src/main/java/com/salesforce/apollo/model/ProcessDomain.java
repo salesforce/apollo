@@ -44,10 +44,10 @@ import com.salesforce.apollo.stereotomy.services.EventValidation;
 public class ProcessDomain extends Domain {
     private record Managed(SubDomain domain, Context<?> embedded, ContextBridge bridge) {}
 
+    private final ContextBridge        bridge;
     private final View                 foundation;
     @SuppressWarnings("unused")
     private final Map<Digest, Managed> hostedDomains = new ConcurrentHashMap<>();
-    private final ContextBridge        bridge;
 
     public ProcessDomain(Digest group, ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
@@ -59,7 +59,7 @@ public class ProcessDomain extends Domain {
                           .build();
         this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(), 0.0125,
                                    DigestAlgorithm.DEFAULT, null);
-        bridge = new ContextBridge(params.context());
+        bridge = new ContextBridge(params.context(), this);
         bridge.register(foundation.getContext());
     }
 
