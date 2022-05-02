@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.sql.SQLException;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesfoce.apollo.choam.proto.Foundation;
+import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -87,16 +90,22 @@ public class DomainTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
         var exec = Executors.newCachedThreadPool();
+        var foundation = Foundation.newBuilder();
+        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
+        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        final var group = DigestAlgorithm.DEFAULT.getOrigin();
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
-            var domain = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+            var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
+                                                            .setFoundation(sealed)
                                                             .setScheduler(scheduler)
                                                             .setContext(context)
                                                             .setExec(exec)
-                                                            .setCommunications(localRouter));
+                                                            .setCommunications(localRouter),
+                                           new InetSocketAddress(0));
             domains.add(domain);
             localRouter.setMember(domain.getMember());
             localRouter.start();

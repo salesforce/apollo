@@ -16,21 +16,22 @@ import com.salesforce.apollo.membership.Member;
  * @author hal.hildebrand
  *
  */
-public class ContextBridge<T extends Member> implements MembershipListener<T> {
+@SuppressWarnings({ "rawtypes", "unchecked" })
+public class ContextBridge implements MembershipListener<Member> {
 
-    private final Context<T> managed;
-    private volatile UUID    registration;
+    private final Context managed;
+    private volatile UUID registration;
 
-    public ContextBridge(Context<T> managed) {
+    public ContextBridge(Context<? extends Member> managed) {
         this.managed = managed;
     }
 
     @Override
-    public void active(T member) {
+    public void active(Member member) {
         managed.activateIfMember(member);
     }
 
-    public void deregister(Context<T> overlay) {
+    public void deregister(Context overlay) {
         var current = registration;
         if (current != null) {
             overlay.deregister(current);
@@ -39,14 +40,14 @@ public class ContextBridge<T extends Member> implements MembershipListener<T> {
     }
 
     @Override
-    public void offline(T member) {
+    public void offline(Member member) {
         managed.offlineIfMember(member);
     }
 
-    public void register(Context<T> overlay) {
+    public void register(Context context) {
         var current = registration;
         if (current == null) {
-            registration = overlay.register(this);
+            registration = context.register(this);
         }
     }
 }

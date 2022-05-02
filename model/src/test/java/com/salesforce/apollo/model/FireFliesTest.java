@@ -24,6 +24,8 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import com.salesfoce.apollo.choam.proto.Foundation;
+import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -33,16 +35,12 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -89,29 +87,27 @@ public class FireFliesTest {
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        var foundations = new HashMap<Member, Context<Participant>>();
-
+        Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var exec = Executors.newCachedThreadPool();
+        var foundation = Foundation.newBuilder();
+        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
+        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
-            var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+            var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
+                                                          .setFoundation(sealed)
                                                           .setScheduler(scheduler)
                                                           .setContext(context)
                                                           .setExec(exec)
-                                                          .setCommunications(localRouter));
+                                                          .setCommunications(localRouter),
+                                         new InetSocketAddress(0));
             domains.add(node);
-            foundations.put(node.getMember(), foundation);
             routers.put(node, localRouter);
             localRouter.setMember(node.getMember());
             localRouter.start();
-        });
-        domains.forEach(m -> {
-            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), new InetSocketAddress(0),
-                                  EventValidation.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
         });
     }
 
@@ -120,13 +116,13 @@ public class FireFliesTest {
         Executor exec = Executors.newCachedThreadPool();
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         domains.forEach(n -> n.start());
-        views.values()
-             .forEach(v -> v.start(exec, Duration.ofMillis(10),
-                                   domains.stream()
-                                          .map(n -> View.identityFor(0, new InetSocketAddress(0),
-                                                                     n.getMember().getEvent()))
-                                          .toList(),
-                                   scheduler));
+        domains.forEach(d -> d.getFoundation()
+                              .start(exec, Duration.ofMillis(10),
+                                     domains.stream()
+                                            .map(n -> View.identityFor(0, new InetSocketAddress(0),
+                                                                       n.getMember().getEvent()))
+                                            .toList(),
+                                     scheduler));
         Thread.sleep(10_000);
     }
 

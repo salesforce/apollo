@@ -238,7 +238,7 @@ public interface Context<T extends Member> {
     /**
      * Add a collection of members in the offline state
      */
-    void add(Collection<T> members);
+    <Q extends T> void add(Collection<Q> members);
 
     /**
      * Add a member in the offline state
@@ -263,7 +263,7 @@ public interface Context<T extends Member> {
     /**
      * Link the lifecycle of member in receiver context with the foundation
      */
-    UUID dependUpon(Context<T> foundation);
+    <Q extends T> UUID dependUpon(Context<Q> foundation);
 
     /**
      * Deregister the membership listener identified by the supplied UUID
@@ -360,7 +360,7 @@ public interface Context<T extends Member> {
     /**
      * Take the collection of members offline
      */
-    void offline(Collection<T> members);
+    <Q extends T> void offline(Collection<Q> members);
 
     /**
      * Take a member offline
@@ -404,7 +404,7 @@ public interface Context<T extends Member> {
     /**
      * Remove the members from the context
      */
-    void remove(Collection<T> members);
+    <Q extends T> void remove(Collection<Q> members);
 
     /**
      * remove a member from the receiving Context
