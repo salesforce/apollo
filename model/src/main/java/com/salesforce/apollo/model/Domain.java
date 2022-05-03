@@ -127,6 +127,7 @@ abstract public class Domain {
 
     protected final CHOAM                                          choam;
     protected final KERL                                           commonKERL;
+    protected final Connection                                     stateConnection;
     protected final ControlledIdentifier<SelfAddressingIdentifier> identifier;
     protected final ControlledIdentifierMember                     member;
     protected final Mutator                                        mutator;
@@ -162,9 +163,10 @@ abstract public class Domain {
                                                     .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
-        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+        stateConnection = sqlStateMachine.newConnection();
+        this.oracle = new ShardedOracle(stateConnection, mutator, runtimeClone.getScheduler(),
                                         params.getSubmitTimeout(), runtimeClone.getExec());
-        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+        this.commonKERL = new ShardedKERL(stateConnection, mutator, runtimeClone.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(),
                                           runtimeClone.getExec());
     }
@@ -200,7 +202,21 @@ abstract public class Domain {
     }
 
     public boolean isMember(Member m) {
-        return true; // TODO - HSH
+        if (!active()) {
+            return params.runtime()
+                         .foundation()
+                         .getFoundation()
+                         .getMembershipList()
+                         .stream()
+                         .map(d -> Digest.from(d))
+                         .anyMatch(d -> m.getId().equals(d));
+        }
+        final var context = DSL.using(stateConnection, SQLDialect.H2);
+        final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+        return context.fetchExists(context.select(MEMBER.IDENTIFIER)
+                                          .from(MEMBER)
+                                          .join(idTable)
+                                          .on(idTable.PREFIX.eq(m.getId().getBytes())));
     }
 
     public void start() {
