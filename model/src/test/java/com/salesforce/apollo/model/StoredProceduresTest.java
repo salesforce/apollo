@@ -44,7 +44,7 @@ public class StoredProceduresTest {
             digests.add(new SelfAddressingIdentifier(DigestAlgorithm.DEFAULT.random(entropy)).toIdent().toByteArray());
         }
 
-        var call = emmy.getMutator().call("{call apollo_kernel.add_members(?) }", digests);
+        var call = emmy.getMutator().call("{call apollo_kernel.add_members(?, ?) }", digests, "active");
 
         var result = emmy.getMutator().execute(exec, call, timeout, scheduler);
         result.get();
