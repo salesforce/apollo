@@ -81,7 +81,7 @@ abstract public class Domain {
 
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
-    public static void addMembers(Connection connection, List<byte[]> members) {
+    public static void addMembers(Connection connection, List<byte[]> members, String state) {
         var context = DSL.using(connection, SQLDialect.H2);
         for (var m : members) {
             context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
@@ -216,7 +216,8 @@ abstract public class Domain {
         return context.fetchExists(context.select(MEMBER.IDENTIFIER)
                                           .from(MEMBER)
                                           .join(idTable)
-                                          .on(idTable.PREFIX.eq(m.getId().getBytes())));
+                                          .on(idTable.PREFIX.eq(m.getId().getBytes()))
+                                          .and(MEMBER.STATE.eq("active")));
     }
 
     public void start() {
@@ -256,11 +257,12 @@ abstract public class Domain {
     }
 
     private Transaction initalMembership(List<Digest> digests) {
-        var call = mutator.call("{ call apollo_kernel.add_members(?) }",
+        var call = mutator.call("{ call apollo_kernel.add_members(?, ?) }",
                                 digests.stream()
                                        .map(d -> new SelfAddressingIdentifier(d))
                                        .map(id -> id.toIdent().toByteArray())
-                                       .toList());
+                                       .toList(),
+                                "active");
         return transactionOf(Txn.newBuilder().setCall(call).build());
     }
 

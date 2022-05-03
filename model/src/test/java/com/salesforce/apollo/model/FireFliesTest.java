@@ -125,7 +125,7 @@ public class FireFliesTest {
                                                                        n.getMember().getEvent()))
                                             .toList(),
                                      scheduler));
-        assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()
                           .filter(d -> d.getFoundation().getContext().getActive().size() != domains.size())
                           .count() == 0;
@@ -138,6 +138,7 @@ public class FireFliesTest {
         System.out.println();
         assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
                    "Domains did not become active");
+        System.out.println();
         System.out.println("******");
         System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
         + domains.size() + " members");
