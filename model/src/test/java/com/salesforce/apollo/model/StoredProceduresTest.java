@@ -8,6 +8,7 @@ package com.salesforce.apollo.model;
 
 import static com.salesforce.apollo.model.schema.tables.Member.MEMBER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -15,6 +16,8 @@ import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+
+import javax.xml.bind.DatatypeConverter;
 
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -39,12 +42,14 @@ public class StoredProceduresTest {
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 
-        var digests = new ArrayList<byte[]>();
+        var ids = new ArrayList<SelfAddressingIdentifier>();
         for (int i = 0; i < 100; i++) {
-            digests.add(new SelfAddressingIdentifier(DigestAlgorithm.DEFAULT.random(entropy)).toIdent().toByteArray());
+            ids.add(new SelfAddressingIdentifier(DigestAlgorithm.DEFAULT.random(entropy)));
         }
 
-        var call = emmy.getMutator().call("{call apollo_kernel.add_members(?, ?) }", digests, "active");
+        var call = emmy.getMutator()
+                       .call("{call apollo_kernel.add_members(?, ?) }",
+                             ids.stream().map(d -> d.getDigest().getBytes()).toList(), "active");
 
         var result = emmy.getMutator().execute(exec, call, timeout, scheduler);
         result.get();
@@ -53,7 +58,11 @@ public class StoredProceduresTest {
         var context = DSL.using(connector, SQLDialect.H2);
 
         var members = context.selectFrom(MEMBER).fetch();
-        assertEquals(digests.size(), members.size());
-        // TODO, full testing
+        assertEquals(ids.size(), members.size());
+
+        DatatypeConverter.class.toGenericString();
+        for (var digest : ids) {
+            assertTrue(Domain.isActiveMember(context, digest), "Not an active member: " + digest);
+        }
     }
 }

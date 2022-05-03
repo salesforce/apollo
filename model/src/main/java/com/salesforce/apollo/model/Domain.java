@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
@@ -87,7 +88,11 @@ abstract public class Domain {
             context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
             var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
             if (id != null) {
-                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
+                context.insertInto(MEMBER)
+                       .set(MEMBER.IDENTIFIER, id.value1())
+                       .set(MEMBER.STATE, state)
+                       .onConflictDoNothing()
+                       .execute();
             }
         }
     }
@@ -110,6 +115,16 @@ abstract public class Domain {
                   .build();
     }
 
+    public static boolean isActiveMember(DSLContext context, SelfAddressingIdentifier id) {
+        final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+        return context.fetchExists(context.select(MEMBER.IDENTIFIER)
+                                          .from(MEMBER)
+                                          .join(idTable)
+                                          .on(idTable.ID.eq(MEMBER.IDENTIFIER))
+                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes()))
+                                          .and(MEMBER.STATE.eq("active")));
+    }
+
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
         Path dir;
         try {
@@ -127,13 +142,14 @@ abstract public class Domain {
 
     protected final CHOAM                                          choam;
     protected final KERL                                           commonKERL;
-    protected final Connection                                     stateConnection;
     protected final ControlledIdentifier<SelfAddressingIdentifier> identifier;
     protected final ControlledIdentifierMember                     member;
     protected final Mutator                                        mutator;
     protected final Oracle                                         oracle;
     protected final Parameters                                     params;
     protected final SqlStateMachine                                sqlStateMachine;
+
+    protected final Connection stateConnection;
 
     public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
                   Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
@@ -212,12 +228,7 @@ abstract public class Domain {
                          .anyMatch(d -> m.getId().equals(d));
         }
         final var context = DSL.using(stateConnection, SQLDialect.H2);
-        final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-        return context.fetchExists(context.select(MEMBER.IDENTIFIER)
-                                          .from(MEMBER)
-                                          .join(idTable)
-                                          .on(idTable.PREFIX.eq(m.getId().getBytes()))
-                                          .and(MEMBER.STATE.eq("active")));
+        return isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
     }
 
     public void start() {
