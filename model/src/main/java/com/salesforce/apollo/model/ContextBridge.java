@@ -23,7 +23,7 @@ public class ContextBridge implements MembershipListener<Member> {
     private final Context managed;
     private volatile UUID registration;
 
-    public ContextBridge(Context<? extends Member> managed, Domain domain) {
+    public ContextBridge(Context managed, Domain domain) {
         this.managed = managed;
         this.domain = domain;
     }

@@ -27,7 +27,7 @@
         <jackson.version>2.13.2</jackson.version>
         <dropwizard.version>2.0.28</dropwizard.version>
         <h2.version>2.1.210</h2.version>
-        <jooq.version>3.16.5</jooq.version>
+        <jooq.version>3.16.6</jooq.version>
         <bc.version>1.70</bc.version>
         <logback.version>1.2.11</logback.version>
         <grpc.version>1.43.1</grpc.version>
