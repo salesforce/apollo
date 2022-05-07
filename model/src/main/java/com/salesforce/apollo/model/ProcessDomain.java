@@ -60,7 +60,7 @@ public class ProcessDomain extends Domain {
         this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(), 0.0125,
                                    DigestAlgorithm.DEFAULT, null);
         bridge = new ContextBridge(params.context(), this);
-        bridge.register(foundation.getContext());
+        bridge.register(base);
     }
 
     public View getFoundation() {

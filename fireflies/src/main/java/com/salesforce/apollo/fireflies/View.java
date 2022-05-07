@@ -557,35 +557,6 @@ public class View {
         }
 
         /**
-         * Perform one round of monitoring the members assigned to this view. Monitor
-         * the unique set of members who are the live successors of this member on the
-         * rings of this view.
-         */
-        public void monitor() {
-            if (!started.get()) {
-                return;
-            }
-            int ring = lastRing;
-            if (ring < 0) {
-                return;
-            }
-            Participant successor = context.ring(ring)
-                                           .successor(node, m -> context.isActive(m.getId()) && !m.isAccused());
-            if (successor == null) {
-                log.info("No successor to node on ring: {}", ring);
-                return;
-            }
-
-            Fireflies link = linkFor(successor);
-            if (link == null) {
-                log.info("Accusing: {} on: {}", successor.getId(), ring);
-                accuseOn(successor, ring);
-            } else {
-                View.this.monitor(link, ring);
-            }
-        }
-
-        /**
          * The first message in the anti-entropy protocol. Process any digests from the
          * inbound gossip digest. Respond with the Gossip that represents the digests
          * newer or not known in this view, as well as updates from this node based on
@@ -672,9 +643,68 @@ public class View {
         }
 
         /**
+         * The third and final message in the anti-entropy protocol. Process the inbound
+         * update from another member.
+         *
+         * @param ring
+         * @param update
+         * @param from
+         */
+        public void update(int ring, Update update, Digest from) {
+            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
+        }
+
+        /**
+         * Perform one round of monitoring the members assigned to this view. Monitor
+         * the unique set of members who are the live successors of this member on the
+         * rings of this view.
+         */
+        private void monitor() {
+            if (!started.get()) {
+                return;
+            }
+            int ring = lastRing;
+            if (ring < 0) {
+                return;
+            }
+            Participant successor = context.ring(ring)
+                                           .successor(node, m -> context.isActive(m.getId()) && !m.isAccused());
+            if (successor == null) {
+                log.info("No successor to node on ring: {}", ring);
+                return;
+            }
+
+            Fireflies link = linkFor(successor);
+            if (link == null) {
+                log.info("Accusing: {} on: {}", successor.getId(), ring);
+                accuseOn(successor, ring);
+            } else {
+                View.this.monitor(link, ring);
+            }
+        }
+
+        /**
+         * @return the next ClientCommunications in the next ring
+         */
+        private Fireflies nextRing() {
+            Fireflies link = null;
+            int last = lastRing;
+            int current = (last + 1) % context.getRingCount();
+            for (int i = 0; i < context.getRingCount(); i++) {
+                link = linkFor(current);
+                if (link != null) {
+                    break;
+                }
+                current = (current + 1) % context.getRingCount();
+            }
+            lastRing = current;
+            return link;
+        }
+
+        /**
          * stop the view from performing gossip and monitoring rounds
          */
-        public void stop() {
+        private void stop() {
             if (!started.compareAndSet(true, false)) {
                 return;
             }
@@ -689,36 +719,6 @@ public class View {
             context.getActive().forEach(m -> {
                 context.offline(m);
             });
-        }
-
-        /**
-         * The third and final message in the anti-entropy protocol. Process the inbound
-         * update from another member.
-         *
-         * @param ring
-         * @param update
-         * @param from
-         */
-        public void update(int ring, Update update, Digest from) {
-            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
-        }
-
-        /**
-         * @return the next ClientCommunications in the next ring
-         */
-        Fireflies nextRing() {
-            Fireflies link = null;
-            int last = lastRing;
-            int current = (last + 1) % context.getRingCount();
-            for (int i = 0; i < context.getRingCount(); i++) {
-                link = linkFor(current);
-                if (link != null) {
-                    break;
-                }
-                current = (current + 1) % context.getRingCount();
-            }
-            lastRing = current;
-            return link;
         }
     }
 
@@ -823,15 +823,12 @@ public class View {
         log.info("View [{}]", node.getId());
     }
 
+    /**
+     * 
+     * @return the context of the view
+     */
     public Context<Participant> getContext() {
         return context;
-    }
-
-    /**
-     * @return The member that represents this View
-     */
-    public Node getNode() {
-        return node;
     }
 
     /**
@@ -854,13 +851,22 @@ public class View {
     }
 
     /**
+     * Test accessible
+     * 
+     * @return The member that represents this View
+     */
+    Node getNode() {
+        return node;
+    }
+
+    /**
      * Accuse the member on the list of rings. If the member has disabled the ring
      * in its mask, do not issue the accusation
      *
      * @param member
      * @param ring
      */
-    void accuseOn(Participant member, int ring) {
+    private void accuseOn(Participant member, int ring) {
         NoteWrapper n = member.getNote();
         if (n == null) {
             return;
@@ -877,7 +883,7 @@ public class View {
      *
      * @param accusation
      */
-    void add(AccusationWrapper accusation) {
+    private void add(AccusationWrapper accusation) {
         Participant accuser = context.getMember(accusation.getAccuser());
         Participant accused = context.getMember(accusation.getAccused());
         if (accuser == null || accused == null) {
@@ -921,7 +927,7 @@ public class View {
      * @param accuser
      * @param accused
      */
-    void add(AccusationWrapper accusation, Participant accuser, Participant accused) {
+    private void add(AccusationWrapper accusation, Participant accuser, Participant accused) {
         Ring<Participant> ring = context.ring(accusation.getRingNumber());
 
         if (accused.isAccusedOn(ring.getIndex())) {
@@ -956,7 +962,7 @@ public class View {
      * @param identity
      * @return the added member or the real member associated with this identity
      */
-    Participant add(IdentityWrapper identity) {
+    private Participant add(IdentityWrapper identity) {
         Participant member = context.getMember(identity.identifier());
         if (member != null) {
             update(member, identity);
@@ -972,7 +978,7 @@ public class View {
      *
      * @param note
      */
-    boolean add(NoteWrapper note) {
+    private boolean add(NoteWrapper note) {
         log.trace("Adding note {} : {} on: {}", note.getId(), note.getEpoch(), node.getId());
         Participant m = context.getMember(note.getId());
         if (m == null) {
@@ -1019,7 +1025,7 @@ public class View {
      *
      * @param member
      */
-    Participant add(Participant member) {
+    private Participant add(Participant member) {
         Participant previous = context.getMember(member.getId());
         if (previous == null) {
             context.add(member);
@@ -1038,7 +1044,7 @@ public class View {
      *
      * @param seed
      */
-    void addSeed(Participant seed) {
+    private void addSeed(Participant seed) {
         SignedNote seedNote = SignedNote.newBuilder()
                                         .setNote(Note.newBuilder()
                                                      .setId(seed.getId().toDigeste())
@@ -1064,7 +1070,7 @@ public class View {
      *
      * @param m
      */
-    void checkInvalidations(Participant m) {
+    private void checkInvalidations(Participant m) {
         Deque<Participant> check = new ArrayDeque<>();
         check.add(m);
         while (!check.isEmpty()) {
@@ -1082,7 +1088,7 @@ public class View {
     /**
      * @return the digests common for gossip with all neighbors
      */
-    Digests commonDigests() {
+    private Digests commonDigests() {
         long seed = Utils.secureEntropy().nextLong();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
@@ -1091,11 +1097,11 @@ public class View {
                       .build();
     }
 
-    void gc(Participant member) {
+    private void gc(Participant member) {
         context.offline(member);
     }
 
-    BloomFilter<Digest> getAccusationsBff(long seed, double p) {
+    private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
                                                                     context.cardinality() * context.getRingCount(), p);
         context.getActive()
@@ -1106,25 +1112,16 @@ public class View {
         return bff;
     }
 
-    BloomFilter<Digest> getIdentityBff(long seed, double p) {
+    private BloomFilter<Digest> getIdentityBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().map(m -> m.getIdentity()).filter(e -> e != null).forEach(n -> bff.add(n.hash));
         return bff;
     }
 
-    BloomFilter<Digest> getNotesBff(long seed, double p) {
+    private BloomFilter<Digest> getNotesBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
         context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
-    }
-
-    /**
-     * for testing
-     *
-     * @return
-     */
-    Map<Digest, FutureRebutal> getPendingRebutals() {
-        return pendingRebutals;
     }
 
     /**
@@ -1136,7 +1133,7 @@ public class View {
      * @param completion
      * @throws Exception
      */
-    void gossip(int ring, Fireflies link, Runnable completion) {
+    private void gossip(int ring, Fireflies link, Runnable completion) {
         Participant member = (Participant) link.getMember();
         NoteWrapper n = node.getNote();
         if (n == null) {
@@ -1241,7 +1238,7 @@ public class View {
      * @param ring
      * @param check
      */
-    void invalidate(Participant q, Ring<Participant> ring, Deque<Participant> check) {
+    private void invalidate(Participant q, Ring<Participant> ring, Deque<Participant> check) {
         AccusationWrapper qa = q.getAccusation(ring.getIndex());
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());
@@ -1266,7 +1263,7 @@ public class View {
         }
     }
 
-    boolean isEmpty(Update update) {
+    private boolean isEmpty(Update update) {
         return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
     }
 
@@ -1275,7 +1272,7 @@ public class View {
      * @return the communication link for this ring, based on current membership
      *         state
      */
-    Fireflies linkFor(Integer ring) {
+    private Fireflies linkFor(Integer ring) {
         Participant successor = context.ring(ring).successor(node, m -> context.isActive(m));
         if (successor == null) {
             log.debug("No successor to node on ring: {} members: {} on: {}", ring, context.ring(ring).size(),
@@ -1285,10 +1282,20 @@ public class View {
         return linkFor(successor);
     }
 
+    private Fireflies linkFor(Participant m) {
+        try {
+            return comm.apply(m, node);
+        } catch (Throwable e) {
+            log.debug("error opening connection to {}: {} on: {}", m.getId(),
+                      (e.getCause() != null ? e.getCause() : e).getMessage(), node.getId());
+        }
+        return null;
+    }
+
     /**
      * Collect and fail all expired pending future rebutal timers that have come due
      */
-    void maintainTimers() {
+    private void maintainTimers() {
         List<FutureRebutal> expired = new ArrayList<>();
         for (Iterator<FutureRebutal> iterator = scheduledRebutals.iterator(); iterator.hasNext();) {
             FutureRebutal future = iterator.next();
@@ -1318,7 +1325,7 @@ public class View {
      * @param link     - the ClientCommunications link to check
      * @param lastRing - the ring for this link
      */
-    void monitor(Fireflies link, int lastRing) {
+    private void monitor(Fireflies link, int lastRing) {
         try {
             link.ping(context.getId(), 200);
             log.trace("Successful ping from {} to {}", node.getId(), link.getMember().getId());
@@ -1341,7 +1348,7 @@ public class View {
      * @param scheduler
      * @param d
      */
-    void oneRound(Executor exec, Duration d, ScheduledExecutorService scheduler) {
+    private void oneRound(Executor exec, Duration d, ScheduledExecutorService scheduler) {
         Timer.Context timer = metrics != null ? metrics.gossipRoundDuration().time() : null;
         round.incrementAndGet();
         try {
@@ -1385,7 +1392,7 @@ public class View {
      * @param seed
      * @return
      */
-    AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, long seed, double p) {
+    private AccusationGossip processAccusationDigests(BloomFilter<Digest> bff, long seed, double p) {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1400,7 +1407,7 @@ public class View {
         return gossip;
     }
 
-    IdentityGossip processIdentityDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
+    private IdentityGossip processIdentityDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         log.trace("process identity digests on:{}", node.getId());
         IdentityGossip.Builder builder = IdentityGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1428,7 +1435,7 @@ public class View {
      * @param p
      * @param seed
      */
-    NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
+    private NoteGossip processNoteDigests(Digest from, BloomFilter<Digest> bff, long seed, double p) {
         NoteGossip.Builder builder = NoteGossip.newBuilder();
 
         // Add all updates that this view has that aren't reflected in the inbound
@@ -1450,7 +1457,7 @@ public class View {
      *
      * @param gossip
      */
-    void processUpdates(Gossip gossip) {
+    private void processUpdates(Gossip gossip) {
         processUpdates(gossip.getIdentities().getUpdatesList(), gossip.getNotes().getUpdatesList(),
                        gossip.getAccusations().getUpdatesList());
     }
@@ -1462,7 +1469,7 @@ public class View {
      * @param notes
      * @param accusations
      */
-    void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
+    private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
         identities.stream()
                   .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
                   .filter(id -> validation.apply(id.event()))
@@ -1482,137 +1489,12 @@ public class View {
      *
      * @param member
      */
-    void recover(Participant member) {
+    private void recover(Participant member) {
         if (context.activate(member)) {
             log.info("Recovering: {} on: {}", member.getId(), node.getId());
         } else {
             log.trace("Already active: {} on: {}", member.getId(), node.getId());
         }
-    }
-
-    /**
-     * Redirect the member to the successor from this view's perspective
-     *
-     * @param member
-     * @param ring
-     * @param successor
-     * @return the Gossip containing the successor's Identity and Note from this
-     *         view
-     */
-    Gossip redirectTo(Participant member, int ring, Participant successor) {
-        assert member != null;
-        assert successor != null;
-        if (successor.getNote() == null) {
-            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring,
-                      node.getId());
-            return Gossip.getDefaultInstance();
-        }
-
-        var identity = successor.getIdentity();
-        if (identity == null) {
-            log.debug("Cannot redirect from {} to {} on ring: {} as identity is null on: {}", node, successor, ring,
-                      node.getId());
-            return Gossip.getDefaultInstance();
-        }
-
-        log.debug("Redirecting from {} to {} on ring {} on: {}", member, successor, ring, node.getId());
-        return Gossip.newBuilder()
-                     .setRedirect(true)
-                     .setIdentities(IdentityGossip.newBuilder().addUpdates(identity.identity).build())
-                     .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
-                     .setAccusations(AccusationGossip.newBuilder()
-                                                     .addAllUpdates(member.getEncodedAccusations(context.getRingCount())))
-                     .build();
-    }
-
-    /**
-     * Process the gossip response, providing the updates requested by the the other
-     * member and processing the updates provided by the other member
-     *
-     * @param gossip
-     * @return the Update based on the processing of the reply from the other member
-     */
-    Update response(Gossip gossip) {
-        processUpdates(gossip);
-        return updatesForDigests(gossip);
-    }
-
-    /**
-     * Initiate a timer to track the accussed member
-     *
-     * @param m
-     */
-    void startRebutalTimer(Participant m) {
-        pendingRebutals.computeIfAbsent(m.getId(), id -> {
-            FutureRebutal future = new FutureRebutal(m, round.get() + context.timeToLive());
-            scheduledRebutals.add(future);
-            return future;
-        });
-    }
-
-    void stopRebutalTimer(Participant m) {
-        m.clearAccusations();
-        log.info("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node.getId());
-        FutureRebutal pending = pendingRebutals.remove(m.getId());
-        if (pending != null) {
-            scheduledRebutals.remove(pending);
-        }
-    }
-
-    /**
-     * Update the member with a new identity
-     *
-     * @param member
-     * @param identity
-     */
-    void update(Participant member, IdentityWrapper identity) {
-        // TODO Auto-generated method stub
-    }
-
-    /**
-     * Process the gossip reply. Return the gossip with the updates determined from
-     * the inbound digests.
-     *
-     * @param gossip
-     * @return
-     */
-    Update updatesForDigests(Gossip gossip) {
-        Update.Builder builder = Update.newBuilder();
-
-        // certificates
-        BloomFilter<Digest> identityBff = BloomFilter.from(gossip.getIdentities().getBff());
-        context.allMembers()
-               .filter(m -> !identityBff.contains((m.getIdentity().hash)))
-               .map(m -> m.getIdentity())
-               .filter(ec -> ec != null)
-               .forEach(id -> builder.addIdentities(id.identity));
-
-        // notes
-        BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
-        context.allMembers()
-               .filter(m -> m.getNote() != null)
-               .filter(m -> !notesBff.contains(m.getNote().getHash()))
-               .map(m -> m.getNote().getWrapped())
-               .forEach(n -> builder.addNotes(n));
-
-        BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
-        context.getActive()
-               .stream()
-               .flatMap(m -> m.getAccusations())
-               .filter(a -> !accBff.contains(a.getHash()))
-               .forEach(a -> builder.addAccusations(a.getWrapped()));
-
-        return builder.build();
-    }
-
-    private Fireflies linkFor(Participant m) {
-        try {
-            return comm.apply(m, node);
-        } catch (Throwable e) {
-            log.debug("error opening connection to {}: {} on: {}", m.getId(),
-                      (e.getCause() != null ? e.getCause() : e).getMessage(), node.getId());
-        }
-        return null;
     }
 
     private void redirect(Participant member, Gossip gossip, int ring) {
@@ -1649,5 +1531,120 @@ public class View {
         } else {
             log.warn("Redirect identity from {} on ring {} is invalid on: {}", member.getId(), ring, node.getId());
         }
+    }
+
+    /**
+     * Redirect the member to the successor from this view's perspective
+     *
+     * @param member
+     * @param ring
+     * @param successor
+     * @return the Gossip containing the successor's Identity and Note from this
+     *         view
+     */
+    private Gossip redirectTo(Participant member, int ring, Participant successor) {
+        assert member != null;
+        assert successor != null;
+        if (successor.getNote() == null) {
+            log.debug("Cannot redirect from {} to {} on ring: {} as note is null on: {}", node, successor, ring,
+                      node.getId());
+            return Gossip.getDefaultInstance();
+        }
+
+        var identity = successor.getIdentity();
+        if (identity == null) {
+            log.debug("Cannot redirect from {} to {} on ring: {} as identity is null on: {}", node, successor, ring,
+                      node.getId());
+            return Gossip.getDefaultInstance();
+        }
+
+        log.debug("Redirecting from {} to {} on ring {} on: {}", member, successor, ring, node.getId());
+        return Gossip.newBuilder()
+                     .setRedirect(true)
+                     .setIdentities(IdentityGossip.newBuilder().addUpdates(identity.identity).build())
+                     .setNotes(NoteGossip.newBuilder().addUpdates(successor.getNote().getWrapped()).build())
+                     .setAccusations(AccusationGossip.newBuilder()
+                                                     .addAllUpdates(member.getEncodedAccusations(context.getRingCount())))
+                     .build();
+    }
+
+    /**
+     * Process the gossip response, providing the updates requested by the the other
+     * member and processing the updates provided by the other member
+     *
+     * @param gossip
+     * @return the Update based on the processing of the reply from the other member
+     */
+    private Update response(Gossip gossip) {
+        processUpdates(gossip);
+        return updatesForDigests(gossip);
+    }
+
+    /**
+     * Initiate a timer to track the accussed member
+     *
+     * @param m
+     */
+    private void startRebutalTimer(Participant m) {
+        pendingRebutals.computeIfAbsent(m.getId(), id -> {
+            FutureRebutal future = new FutureRebutal(m, round.get() + context.timeToLive());
+            scheduledRebutals.add(future);
+            return future;
+        });
+    }
+
+    private void stopRebutalTimer(Participant m) {
+        m.clearAccusations();
+        log.info("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node.getId());
+        FutureRebutal pending = pendingRebutals.remove(m.getId());
+        if (pending != null) {
+            scheduledRebutals.remove(pending);
+        }
+    }
+
+    /**
+     * Update the member with a new identity
+     *
+     * @param member
+     * @param identity
+     */
+    private void update(Participant member, IdentityWrapper identity) {
+        // TODO Auto-generated method stub
+    }
+
+    /**
+     * Process the gossip reply. Return the gossip with the updates determined from
+     * the inbound digests.
+     *
+     * @param gossip
+     * @return
+     */
+    private Update updatesForDigests(Gossip gossip) {
+        Update.Builder builder = Update.newBuilder();
+
+        // certificates
+        BloomFilter<Digest> identityBff = BloomFilter.from(gossip.getIdentities().getBff());
+        context.allMembers()
+               .filter(m -> !identityBff.contains((m.getIdentity().hash)))
+               .map(m -> m.getIdentity())
+               .filter(ec -> ec != null)
+               .forEach(id -> builder.addIdentities(id.identity));
+
+        // notes
+        BloomFilter<Digest> notesBff = BloomFilter.from(gossip.getNotes().getBff());
+        context.allMembers()
+               .filter(m -> m.getNote() != null)
+               .filter(m -> !notesBff.contains(m.getNote().getHash()))
+               .map(m -> m.getNote().getWrapped())
+               .forEach(n -> builder.addNotes(n));
+
+        BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
+        context.getActive()
+               .stream()
+               .flatMap(m -> m.getAccusations())
+               .filter(a -> !accBff.contains(a.getHash()))
+               .forEach(a -> builder.addAccusations(a.getWrapped()));
+
+        return builder.build();
     }
 }
