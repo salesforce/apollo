@@ -514,7 +514,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public int toleranceLevel() {
-        return (rings.size() - 1) / 2;
+        return (rings.size() - 1) / bias;
     }
 
     @Override
