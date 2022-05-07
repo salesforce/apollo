@@ -170,10 +170,10 @@ public class ViewAssembly implements Reconfiguration {
     public void elect() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.validations.size() > params().toleranceLevel())
+                 .filter(p -> p.validations.size() > params().majority())
                  .sorted(Comparator.comparing(p -> p.member.getId()))
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
-        if (slate.size() > params().toleranceLevel()) {
+        if (slate.size() > params().majority()) {
             log.debug("Electing slate: {} of: {} state: {} on: {}", slate.size(), nextViewId,
                       transitions.fsm().getCurrentState(), params().member());
             transitions.complete();
@@ -320,7 +320,7 @@ public class ViewAssembly implements Reconfiguration {
             retryDelay.accumulateAndGet(Duration.ofMillis(100), (a, b) -> a.plus(b));
         }
 
-        if (count > params().toleranceLevel()) {
+        if (count > params().majority()) {
             if (countDown.decrementAndGet() >= 0) {
                 log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} delay: {} state: {} on: {}",
                           nextViewId, proposals.keySet().stream().toList(), nextAssembly.size(), delay,
@@ -337,7 +337,7 @@ public class ViewAssembly implements Reconfiguration {
         }
 
         log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying: {} state: {} on: {}", nextViewId,
-                  proposals.keySet().stream().toList(), params().toleranceLevel() + 1, delay,
+                  proposals.keySet().stream().toList(), params().majority() + 1, delay,
                   transitions.fsm().getCurrentState(), params().member().getId());
         proceed.set(true);
         params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);

@@ -271,7 +271,7 @@ public class Producer {
                  .map(witness -> validate(witness))
                  .filter(p -> p != null)
                  .filter(p -> !p.published.get())
-                 .filter(p -> p.witnesses.size() > params().toleranceLevel())
+                 .filter(p -> p.witnesses.size() > params().majority())
                  .forEach(p -> publish(p));
 
         HashedBlock lb = previousBlock.get();

@@ -57,8 +57,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.ProducerParameters producer, Parameters.MvStoreBuilder mvBuilder,
                          Parameters.LimiterBuilder txnLimiterBuilder) {
 
-    public int toleranceLevel() {
-        return runtime.context.toleranceLevel();
+    public int majority() {
+        return runtime.context.toleranceLevel() * (runtime.context.getBias() - 1);
     }
 
     public static class MvStoreBuilder {
