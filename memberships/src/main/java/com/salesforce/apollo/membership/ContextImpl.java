@@ -55,7 +55,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         this.id = id;
         this.bias = bias;
         this.cardinality = cardinality;
-        for (int i = 0; i < minMajority(pByz, cardinality, 0.99, bias) * bias + 1; i++) {
+        for (int i = 0; i < minMajority(pByz, cardinality, 0.99999, bias) * bias + 1; i++) {
             rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
         }
     }

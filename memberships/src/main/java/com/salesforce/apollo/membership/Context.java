@@ -159,7 +159,7 @@ public interface Context<T extends Member> {
     static final String RING_HASH_TEMPLATE = "%s-%s-%s";
 
     static int minMajority(double pByz, int cardinality) {
-        return minMajority(pByz, cardinality, 0.99, 2);
+        return minMajority(pByz, cardinality, 0.99999, 2);
     }
 
     static int minMajority(double pByz, int card, double epsilon) {
@@ -197,7 +197,7 @@ public interface Context<T extends Member> {
      *         probability pByz that a monitor is Byzantine.
      */
     static int minMajority(int bias, double pByz, int cardinality) {
-        return minMajority(pByz, cardinality, 0.99, bias);
+        return minMajority(pByz, cardinality, 0.99999, bias);
     }
 
     static <Z extends Member> Builder<Z> newBuilder() {
