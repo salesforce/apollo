@@ -117,14 +117,13 @@ public class FireFliesTest {
         Executor exec = Executors.newCachedThreadPool();
         var scheduler = Executors.newSingleThreadScheduledExecutor();
         long then = System.currentTimeMillis();
-        domains.forEach(n -> n.start());
-        domains.forEach(d -> d.getFoundation()
-                              .start(exec, Duration.ofMillis(10),
-                                     domains.stream()
-                                            .map(n -> View.identityFor(0, new InetSocketAddress(0),
-                                                                       n.getMember().getEvent()))
-                                            .toList(),
-                                     scheduler));
+        final var seeds = domains.stream()
+                                 .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
+                                 .toList()
+                                 .subList(0, CARDINALITY - 2);
+        domains.forEach(d -> {
+            d.getFoundation().start(exec, Duration.ofMillis(10), seeds, scheduler);
+        });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()
                           .filter(d -> d.getFoundation().getContext().getActive().size() != domains.size())
@@ -136,6 +135,7 @@ public class FireFliesTest {
         + domains.size() + " members");
         System.out.println("******");
         System.out.println();
+        domains.forEach(n -> n.start());
         assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
                    "Domains did not become active");
         System.out.println();
