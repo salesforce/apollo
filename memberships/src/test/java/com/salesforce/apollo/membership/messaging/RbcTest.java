@@ -144,13 +144,13 @@ public class RbcTest {
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
-        final var exec = Executors.newCachedThreadPool();
+        final var exec = Executors.newFixedThreadPool(100);
         messengers = members.stream().map(node -> {
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();
