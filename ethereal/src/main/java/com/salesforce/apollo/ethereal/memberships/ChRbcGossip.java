@@ -102,7 +102,8 @@ public class ChRbcGossip {
         this.metrics = m;
         this.exec = exec;
         comm = communications.create((Member) member, context.getId(), new Terminal(),
-                                     r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r),
+                                     r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r,
+                                                             exec),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
         ring = new RingCommunications<Gossiper>(context, member, this.comm, exec);
     }

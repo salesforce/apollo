@@ -75,8 +75,8 @@ public class GenesisAssemblyTest {
     public void genesis() throws Exception {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
-        var scheduler = Executors.newScheduledThreadPool(cardinality);
-        var exec = Executors.newCachedThreadPool();
+        var scheduler = Executors.newScheduledThreadPool(2);
+        var exec = Executors.newFixedThreadPool(cardinality * 2);
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> Utils.getMember(i))
@@ -91,7 +91,7 @@ public class GenesisAssemblyTest {
                                               .setProducer(ProducerParameters.newBuilder()
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
-                                              .setGossipDuration(Duration.ofMillis(100));
+                                              .setGossipDuration(Duration.ofMillis(10));
         List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
@@ -116,7 +116,8 @@ public class GenesisAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), Executors.newSingleThreadExecutor(),
+                                       null);
             comm.setMember(m);
             return comm;
         }));
@@ -126,7 +127,7 @@ public class GenesisAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r),
+                                                                                                        null, r, exec),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));

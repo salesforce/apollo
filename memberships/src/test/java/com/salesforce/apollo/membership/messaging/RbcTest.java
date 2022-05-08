@@ -144,7 +144,7 @@ public class RbcTest {
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
-        final var exec = Executors.newFixedThreadPool(50);
+        final var exec = Executors.newCachedThreadPool();
         messengers = members.stream().map(node -> {
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()

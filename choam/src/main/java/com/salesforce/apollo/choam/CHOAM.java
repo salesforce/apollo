@@ -671,14 +671,14 @@ public class CHOAM {
         comm = params.communications()
                      .create(params.member(), params.context().getId(), service,
                              r -> new TerminalServer(params.communications().getClientIdentityProvider(),
-                                                     params.metrics(), r),
+                                                     params.metrics(), r, params.exec()),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
         final Submitter txnSubmissionService = new TransSubmission();
         submissionComm = params.communications()
                                .create(params.member(), params.context().getId(), txnSubmissionService,
                                        r -> new TxnSubmitServer(params.communications().getClientIdentityProvider(),
-                                                                params.metrics(), r),
+                                                                params.metrics(), r, params.exec()),
                                        TxnSubmitClient.getCreate(params.metrics()),
                                        TxnSubmission.getLocalLoopback(params.member(), txnSubmissionService));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
@@ -1194,6 +1194,9 @@ public class CHOAM {
      * @return
      */
     private SubmitResult submit(SubmitTransaction request, Digest from) {
+        if (from == null) {
+            return SubmitResult.getDefaultInstance();
+        }
         if (params.context().getMember(from) == null) {
             log.debug("Invalid transaction submission from non member: {} on: {}", from, params.member());
             return SubmitResult.newBuilder().setResult(Result.INVALID_SUBMIT).build();
@@ -1209,6 +1212,9 @@ public class CHOAM {
     }
 
     private Initial sync(Synchronize request, Digest from) {
+        if (from == null) {
+            return Initial.getDefaultInstance();
+        }
         Member member = params.context().getMember(from);
         if (member == null) {
             log.warn("Received sync from non member: {} on: {}", from, params.member());
