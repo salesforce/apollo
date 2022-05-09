@@ -175,7 +175,7 @@ public class RingTest {
 
     @Test
     public void testRingCalculation() {
-        double epsilon = 0.99;
+        double epsilon = 0.99999;
         double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20, 0.25, 0.33 };
         int[] cardinality = new int[] { 10, 100, 1_000, 10_000, 1_000_000, 10_000_000 };
 
@@ -190,7 +190,7 @@ public class RingTest {
 
     @Test
     public void testRingCalculationTwoThirdsMajority() {
-        double epsilon = 0.99;
+        double epsilon = 0.99999;
         double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
         int[] cardinality = new int[] { 10, 100, 1_000, 10_000, 1_000_000, 10_000_000 };
 
@@ -209,7 +209,7 @@ public class RingTest {
 
     @Test
     public void incrementBreaksTwoThirdsMajority() {
-        double epsilon = 0.99;
+        double epsilon = 0.99999;
         double[] probabilityByzantine = new double[] { 0.01, 0.10, 0.15, 0.20 };
 
         for (double pByz : probabilityByzantine) {

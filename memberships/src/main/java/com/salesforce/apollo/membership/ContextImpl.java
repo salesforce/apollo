@@ -55,7 +55,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
         this.id = id;
         this.bias = bias;
         this.cardinality = cardinality;
-        for (int i = 0; i < minMajority(pByz, cardinality, 0.99, bias) * bias + 1; i++) {
+        for (int i = 0; i < minMajority(pByz, cardinality, 0.99999, bias) * bias + 1; i++) {
             rings.add(new Ring<T>(i, (m, ring) -> hashFor(m, ring)));
         }
     }
@@ -109,11 +109,11 @@ public class ContextImpl<T extends Member> implements Context<T> {
 
     @Override
     public List<T> activeMembers() {
-        return members.values().stream().filter(e -> e.isActive()).map(e -> (T) e.member()).toList();
+        return members.values().stream().filter(e -> e.isActive()).map(e -> e.member()).toList();
     }
 
     @Override
-    public void add(Collection<T> members) {
+    public <Q extends T> void add(Collection<Q> members) {
         members.forEach(m -> add(m));
     }
 
@@ -141,15 +141,15 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public UUID dependUpon(Context<T> foundation) {
-        return foundation.register(new MembershipListener<T>() {
+    public <Q extends T> UUID dependUpon(Context<Q> foundation) {
+        return foundation.register(new MembershipListener<Q>() {
             @Override
-            public void active(T member) {
+            public void active(Q member) {
                 activateIfMember(member);
             }
 
             @Override
-            public void offline(T member) {
+            public void offline(Q member) {
                 offlineIfMember(member);
             }
         });
@@ -296,7 +296,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public void offline(Collection<T> members) {
+    public <Q extends T> void offline(Collection<Q> members) {
         members.forEach(m -> offline(m));
     }
 
@@ -394,7 +394,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
-    public void remove(Collection<T> members) {
+    public <Q extends T> void remove(Collection<Q> members) {
         members.forEach(m -> remove(m));
     }
 
@@ -514,7 +514,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public int toleranceLevel() {
-        return (rings.size() - 1) / 2;
+        return (rings.size() - 1) / bias;
     }
 
     @Override

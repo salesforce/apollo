@@ -89,7 +89,8 @@ public class MembershipTests {
 
         var txneer = choams.get(members.get(0).getId());
 
-        assertTrue(Utils.waitForCondition(120_00, 1000, () -> txneer.active()), "Transactioneer did not become active");
+        assertTrue(Utils.waitForCondition(120_00, 1_000, () -> txneer.active()),
+                   "Transactioneer did not become active");
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
@@ -102,8 +103,8 @@ public class MembershipTests {
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        assertTrue(Utils.waitForCondition(30_000, () -> blocks.get(testSubject.getId()).get() >= target),
-                   "Expecting: " + target + "completed: " + blocks);
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> blocks.get(testSubject.getId()).get() >= target),
+                   "Expecting: " + target + " completed: " + blocks.get(testSubject.getId()).get());
 
     }
 

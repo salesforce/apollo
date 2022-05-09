@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.model;
 
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,13 +17,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.fireflies.View;
+import com.salesforce.apollo.fireflies.View.Participant;
 import com.salesforce.apollo.membership.Context;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
+import com.salesforce.apollo.stereotomy.services.EventValidation;
 
 /**
  * The logical domain of the current "Process" - OS and Simulation defined,
@@ -39,21 +42,29 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  *
  */
 public class ProcessDomain extends Domain {
-    private record Managed<T extends Member> (SubDomain domain, Context<T> embedded, ContextBridge<T> bridge) {}
+    private record Managed(SubDomain domain, Context<?> embedded, ContextBridge bridge) {}
 
+    private final ContextBridge        bridge;
+    private final View                 foundation;
     @SuppressWarnings("unused")
-    private final Map<Digest, Managed<?>> hostedDomains = new ConcurrentHashMap<>();
-    @SuppressWarnings("unused")
-    private final View                    foundation;
+    private final Map<Digest, Managed> hostedDomains = new ConcurrentHashMap<>();
 
-    public ProcessDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
-                         Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime) {
+    public ProcessDomain(Digest group, ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
+                         Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
+                         InetSocketAddress endpoint) {
         super(id, builder, dbURL, checkpointBaseDir, runtime);
-//        var base = Context.<Participant>newBuilder()
-//                          .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
-//                          .build();
-//        foundation = new View(base, new Materialized(params.member(), null, null), null, null, null);
-        foundation = null;
+        var base = Context.<Participant>newBuilder()
+                          .setId(group)
+                          .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
+                          .build();
+        this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(), 0.0125,
+                                   DigestAlgorithm.DEFAULT, null);
+        bridge = new ContextBridge(params.context(), this);
+        bridge.register(base);
+    }
+
+    public View getFoundation() {
+        return foundation;
     }
 
     public Optional<CertificateWithPrivateKey> provision(Duration duration, SignatureAlgorithm signatureAlgorithm) {

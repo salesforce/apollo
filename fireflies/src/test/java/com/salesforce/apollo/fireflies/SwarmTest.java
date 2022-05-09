@@ -126,7 +126,9 @@ public class SwarmTest {
         System.out.println("Stopping views");
         testViews.forEach(e -> e.stop());
         testViews.clear();
-//        communications.close();
+        communications.forEach(e -> e.close());
+
+        communications.forEach(e -> e.start());
         for (int i = 0; i < 4; i++) {
             System.out.println("Restarting views " + (i * 25) + " to " + (i + 1) * 25);
             int start = testViews.size();

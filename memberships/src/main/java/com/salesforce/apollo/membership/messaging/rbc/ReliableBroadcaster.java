@@ -399,7 +399,8 @@ public class ReliableBroadcaster {
         this.exec = exec;
         buffer = new Buffer(context.timeToLive() + 1);
         this.comm = communications.create(member, context.getId(), new Service(),
-                                          r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r),
+                                          r -> new RbcServer(communications.getClientIdentityProvider(), metrics, r,
+                                                             exec),
                                           getCreate(metrics), ReliableBroadcast.getLocalLoopback(member));
         gossiper = new RingCommunications<>(context, member, this.comm, exec);
     }

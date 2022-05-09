@@ -151,7 +151,7 @@ public interface Committee {
                 valid++;
             }
         }
-        final int toleranceLevel = params.toleranceLevel();
+        final int toleranceLevel = params.majority();
         log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid,
                     toleranceLevel + 1, params.member());
         return valid > toleranceLevel;

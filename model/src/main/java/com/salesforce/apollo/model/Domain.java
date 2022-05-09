@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
@@ -81,13 +82,17 @@ abstract public class Domain {
 
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
-    public static void addMembers(Connection connection, List<byte[]> members) {
+    public static void addMembers(Connection connection, List<byte[]> members, String state) {
         var context = DSL.using(connection, SQLDialect.H2);
         for (var m : members) {
             context.insertInto(IDENTIFIER, IDENTIFIER.PREFIX).values(m).onDuplicateKeyIgnore().execute();
             var id = context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(m)).fetchOne();
             if (id != null) {
-                context.insertInto(MEMBER).set(MEMBER.IDENTIFIER, id.value1()).onConflictDoNothing().execute();
+                context.insertInto(MEMBER)
+                       .set(MEMBER.IDENTIFIER, id.value1())
+                       .set(MEMBER.STATE, state)
+                       .onConflictDoNothing()
+                       .execute();
             }
         }
     }
@@ -108,6 +113,16 @@ abstract public class Domain {
                                          .setUpdate(Mutator.changeLog(resources, "/initialize.xml"))
                                          .build())
                   .build();
+    }
+
+    public static boolean isActiveMember(DSLContext context, SelfAddressingIdentifier id) {
+        final var idTable = com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+        return context.fetchExists(context.select(MEMBER.IDENTIFIER)
+                                          .from(MEMBER)
+                                          .join(idTable)
+                                          .on(idTable.ID.eq(MEMBER.IDENTIFIER))
+                                          .and(idTable.PREFIX.eq(id.getDigest().getBytes()))
+                                          .and(MEMBER.STATE.eq("active")));
     }
 
     public static Path tempDirOf(ControlledIdentifier<SelfAddressingIdentifier> id) {
@@ -133,6 +148,8 @@ abstract public class Domain {
     protected final Oracle                                         oracle;
     protected final Parameters                                     params;
     protected final SqlStateMachine                                sqlStateMachine;
+
+    protected final Connection stateConnection;
 
     public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
                   Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
@@ -162,9 +179,10 @@ abstract public class Domain {
                                                     .build());
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
-        this.oracle = new ShardedOracle(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+        stateConnection = sqlStateMachine.newConnection();
+        this.oracle = new ShardedOracle(stateConnection, mutator, runtimeClone.getScheduler(),
                                         params.getSubmitTimeout(), runtimeClone.getExec());
-        this.commonKERL = new ShardedKERL(sqlStateMachine.newConnection(), mutator, runtimeClone.getScheduler(),
+        this.commonKERL = new ShardedKERL(stateConnection, mutator, runtimeClone.getScheduler(),
                                           params.getSubmitTimeout(), params.getDigestAlgorithm(),
                                           runtimeClone.getExec());
     }
@@ -197,6 +215,20 @@ abstract public class Domain {
 
     public ControlledIdentifierMember getMember() {
         return member;
+    }
+
+    public boolean isMember(Member m) {
+        if (!active()) {
+            return params.runtime()
+                         .foundation()
+                         .getFoundation()
+                         .getMembershipList()
+                         .stream()
+                         .map(d -> Digest.from(d))
+                         .anyMatch(d -> m.getId().equals(d));
+        }
+        final var context = DSL.using(stateConnection, SQLDialect.H2);
+        return isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
     }
 
     public void start() {
@@ -236,11 +268,12 @@ abstract public class Domain {
     }
 
     private Transaction initalMembership(List<Digest> digests) {
-        var call = mutator.call("{ call apollo_kernel.add_members(?) }",
+        var call = mutator.call("{ call apollo_kernel.add_members(?, ?) }",
                                 digests.stream()
                                        .map(d -> new SelfAddressingIdentifier(d))
                                        .map(id -> id.toIdent().toByteArray())
-                                       .toList());
+                                       .toList(),
+                                "active");
         return transactionOf(Txn.newBuilder().setCall(call).build());
     }
 

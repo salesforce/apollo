@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.model;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
@@ -23,7 +25,10 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
+import com.salesfoce.apollo.choam.proto.Foundation;
+import com.salesfoce.apollo.choam.proto.FoundationSeal;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
 import com.salesforce.apollo.choam.Parameters.ProducerParameters;
@@ -32,17 +37,14 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
-import com.salesforce.apollo.fireflies.View.Participant;
-import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -55,7 +57,6 @@ public class FireFliesTest {
 
     private final List<ProcessDomain>             domains = new ArrayList<>();
     private final Map<ProcessDomain, LocalRouter> routers = new HashMap<>();
-    private final Map<ProcessDomain, View>        views   = new HashMap<>();
 
     @AfterEach
     public void after() {
@@ -63,8 +64,6 @@ public class FireFliesTest {
         domains.clear();
         routers.values().forEach(r -> r.close());
         routers.clear();
-        views.values().forEach(v -> v.stop());
-        views.clear();
     }
 
     @BeforeEach
@@ -89,45 +88,65 @@ public class FireFliesTest {
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
-        var foundations = new HashMap<Member, Context<Participant>>();
-
+        Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var exec = Executors.newCachedThreadPool();
+        var foundation = Foundation.newBuilder();
+        identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
+        var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(2), null);
-            var foundation = Context.<Participant>newBuilder().setCardinality(CARDINALITY).build();
-            var node = new ProcessDomain(id, params, "jdbc:h2:mem:", checkpointDirBase,
+            var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
+                                                          .setFoundation(sealed)
                                                           .setScheduler(scheduler)
                                                           .setContext(context)
                                                           .setExec(exec)
-                                                          .setCommunications(localRouter));
+                                                          .setCommunications(localRouter),
+                                         new InetSocketAddress(0));
             domains.add(node);
-            foundations.put(node.getMember(), foundation);
             routers.put(node, localRouter);
             localRouter.setMember(node.getMember());
             localRouter.start();
         });
-        domains.forEach(m -> {
-            views.put(m, new View(foundations.get(m.getMember()), m.getMember(), new InetSocketAddress(0),
-                                  EventValidation.NONE, routers.get(m), 0.0125, DigestAlgorithm.DEFAULT, null));
-        });
     }
 
-//    @Test
+    @Test
     public void smokin() throws Exception {
         Executor exec = Executors.newCachedThreadPool();
         var scheduler = Executors.newSingleThreadScheduledExecutor();
+        long then = System.currentTimeMillis();
+        final var seeds = domains.stream()
+                                 .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
+                                 .toList()
+                                 .subList(0, CARDINALITY - 2);
+        domains.forEach(d -> {
+            d.getFoundation().start(exec, Duration.ofMillis(10), seeds, scheduler);
+        });
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+            return domains.stream()
+                          .filter(d -> d.getFoundation().getContext().getActive().size() != domains.size())
+                          .count() == 0;
+        }));
+        System.out.println();
+        System.out.println("******");
+        System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
         domains.forEach(n -> n.start());
-        views.values()
-             .forEach(v -> v.start(exec, Duration.ofMillis(10),
-                                   domains.stream()
-                                          .map(n -> View.identityFor(0, new InetSocketAddress(0),
-                                                                     n.getMember().getEvent()))
-                                          .toList(),
-                                   scheduler));
-        Thread.sleep(10_000);
+        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
+                   "Domains did not become active");
+        System.out.println();
+        System.out.println("******");
+        System.out.println("Domains have activated in " + (System.currentTimeMillis() - then) + " Ms across all "
+        + domains.size() + " members");
+        System.out.println("******");
+        System.out.println();
+        var oracle = domains.get(0).getDelphi();
+        oracle.add(new Oracle.Namespace("test")).get();
+        DomainTest.smoke(oracle);
     }
 
     private Builder params() {

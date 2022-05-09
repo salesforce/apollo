@@ -28,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -88,9 +88,7 @@ public class CHOAMTest {
     private List<SigningMember>                members;
     private MetricRegistry                     registry;
     private Map<Digest, Router>                routers;
-    private ScheduledExecutorService           txScheduler;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
-    private Executor                           exec     = Executors.newFixedThreadPool(CARDINALITY);
 
     @AfterEach
     public void after() throws Exception {
@@ -127,8 +125,6 @@ public class CHOAMTest {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
-        txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
         var params = Parameters.newBuilder()
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
@@ -161,8 +157,10 @@ public class CHOAMTest {
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            var ei = new AtomicInteger();
             return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newSingleThreadExecutor(r -> new Thread(r, "Exec[" + m.getId() + "]")));
+                               Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec[" + m.getId() + ":"
+                               + ei.incrementAndGet() + "]")));
         }));
     }
 
@@ -182,13 +180,15 @@ public class CHOAMTest {
         assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
                    "System did not become active");
 
-        for (int i = 0; i < clientCount; i++) {
-            updaters.entrySet().stream().map(e -> {
-                var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-                return new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec, countdown,
-                                          txScheduler);
-            }).forEach(e -> transactioneers.add(e));
-        }
+        updaters.entrySet().forEach(e -> {
+            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
+            var txScheduler = Executors.newScheduledThreadPool(1);
+            var exec = Executors.newFixedThreadPool(2);
+            for (int i = 0; i < clientCount; i++) {
+                transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
+                                                       countdown, txScheduler));
+            }
+        });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
         assertTrue(countdown.await(LARGE_TESTS ? 600 : 30, TimeUnit.SECONDS), "did not finish transactions: "

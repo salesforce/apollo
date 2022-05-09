@@ -127,6 +127,9 @@ public class TestCHOAM {
             localRouter.setMember(m);
             return localRouter;
         }));
+        final var si = new AtomicInteger();
+        final var scheduler = Executors.newScheduledThreadPool(5, r -> new Thread(r, "Scheduler[" + si.incrementAndGet()
+        + "]"));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -157,13 +160,9 @@ public class TestCHOAM {
                                                  .setProcessor(processor)
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
-                                                 .setExec(Executors.newFixedThreadPool(1, r -> new Thread(r, "Exec["
+                                                 .setExec(Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec["
                                                  + nExec.incrementAndGet() + ":" + m.getId() + "]")))
-                                                 .setScheduler(Executors.newScheduledThreadPool(1,
-                                                                                                r -> new Thread(r,
-                                                                                                                "Sched["
-                                                                                                                + m.getId()
-                                                                                                                + "]")))
+                                                 .setScheduler(scheduler)
                                                  .build()));
         }));
     }

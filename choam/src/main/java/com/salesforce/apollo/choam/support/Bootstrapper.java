@@ -260,7 +260,7 @@ public class Bootstrapper {
     }
 
     private void computeGenesis(Map<Digest, Initial> votes) {
-        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.toleranceLevel() + 1,
+        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.majority() + 1,
                  params.member());
         Multiset<HashedCertifiedBlock> tally = TreeMultiset.create();
         Map<Digest, Initial> valid = votes.entrySet()
@@ -305,11 +305,11 @@ public class Bootstrapper {
                                                                                         e.getValue().getGenesis())))
                                           .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue()));
 
-        int threshold = params.toleranceLevel();
+        int threshold = params.majority();
         if (genesis == null) {
             Pair<HashedCertifiedBlock, Integer> winner = null;
 
-            log.info("Tally: {} required: {} on: {}", tally, params.toleranceLevel() + 1, params.member());
+            log.info("Tally: {} required: {} on: {}", tally, params.majority() + 1, params.member());
             for (HashedCertifiedBlock cb : tally) {
                 int count = tally.count(cb);
                 if (count > threshold) {

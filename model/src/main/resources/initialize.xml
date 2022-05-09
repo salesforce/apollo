@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog
-    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
       http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
 
     <include file="stereotomy/initialize.xml" relativeToChangelogFile="true" />
     <include file="delphinius/initialize.xml" relativeToChangelogFile="true" />
     <include file="model/model.xml" relativeToChangelogFile="true" />
 
-    <changeSet id="addmember-proto-0" author="hhildebrand"> 
+    <changeSet id="addmember-0" author="hhildebrand">
         <sql>create alias apollo_kernel.add_members for
             "com.salesforce.apollo.model.Domain.addMembers"
         </sql>

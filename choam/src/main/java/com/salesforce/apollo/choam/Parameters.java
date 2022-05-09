@@ -40,7 +40,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
-import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
@@ -58,9 +57,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          Parameters.ProducerParameters producer, Parameters.MvStoreBuilder mvBuilder,
                          Parameters.LimiterBuilder txnLimiterBuilder) {
 
-    public int toleranceLevel() {
-        final double n = runtime.context.getRingCount();
-        return Dag.minimalQuorum((short) n, 3);
+    public int majority() {
+        return runtime.context.toleranceLevel() * (runtime.context.getBias() - 1);
     }
 
     public static class MvStoreBuilder {
@@ -534,7 +532,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private int      initialLimit    = 1_000;
         private int      maxLimit        = 5_000;
         private int      minLimit        = 1_000;
-        private Duration timeout         = Duration.ofSeconds(1);
+        private Duration timeout         = Duration.ofMillis(100);
 
         public Limiter<Void> build(String name, MetricRegistry metrics) {
             final SimpleLimiter<Void> limiter = SimpleLimiter.newBuilder()
