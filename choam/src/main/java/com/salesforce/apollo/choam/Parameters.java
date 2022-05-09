@@ -532,7 +532,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private int      initialLimit    = 1_000;
         private int      maxLimit        = 5_000;
         private int      minLimit        = 1_000;
-        private Duration timeout         = Duration.ofSeconds(1);
+        private Duration timeout         = Duration.ofMillis(100);
 
         public Limiter<Void> build(String name, MetricRegistry metrics) {
             final SimpleLimiter<Void> limiter = SimpleLimiter.newBuilder()
