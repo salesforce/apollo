@@ -256,7 +256,11 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private built ready() {
-        final int l = candidates[conf.pid()].level();
+        final var unit = candidates[conf.pid()];
+        if (unit == null) {
+            return null; // we're not even ready
+        }
+        final int l = unit.level();
         final var current = level.get();
         boolean ready = !epochDone.get() && current > l;
         if (ready) {

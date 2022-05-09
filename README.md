@@ -1,5 +1,5 @@
 # Apollo Delphinius
-The Apollo Delphinius project is a multi-tenant, distibuted system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via JDBC connectable over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service.
+The Apollo Delphinius project is a multi-tenant, distibuted system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
 
 The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency service for managing identity, key management, access control and verifiable credentials such as JWT issuance and validation.
 
