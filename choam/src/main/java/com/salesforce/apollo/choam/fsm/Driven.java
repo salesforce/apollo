@@ -74,6 +74,8 @@ public interface Driven {
 
     void fail();
 
+    void produceAssemble();
+
     void reconfigure();
 
     void startProduction();

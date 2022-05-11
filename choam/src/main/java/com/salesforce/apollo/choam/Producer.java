@@ -120,13 +120,18 @@ public class Producer {
         }
 
         @Override
+        public void produceAssemble() {
+            Producer.this.produceAssemble();
+        }
+
+        @Override
         public void reconfigure() {
             log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member());
             assembly = new ViewAssembly(nextViewId, view, comms) {
                 @Override
                 public void complete() {
-                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                              params().member());
+                    log.warn("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
+                             params().member());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                     super.complete();
@@ -148,6 +153,7 @@ public class Producer {
 
     private final AtomicBoolean                     assembled     = new AtomicBoolean();
     private volatile ViewAssembly                   assembly;
+    private final AtomicReference<HashedBlock>      checkpoint    = new AtomicReference<>();
     private final CommonCommunications<Terminal, ?> comms;
     private final Ethereal                          controller;
     private final ChRbcGossip                       coordinator;
@@ -161,7 +167,6 @@ public class Producer {
     private final AtomicBoolean                     started       = new AtomicBoolean(false);
     private final Transitions                       transitions;
     private final ViewContext                       view;
-    private final AtomicReference<HashedBlock>      checkpoint    = new AtomicReference<>();
 
     public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
                     CommonCommunications<Terminal, ?> comms) {
@@ -188,7 +193,7 @@ public class Producer {
                   params.member());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
-        fsm.setName(params().member().getId().toString());
+        fsm.setName("Producer" + getViewId() + params().member().getId().toString());
         transitions = fsm.getTransitions();
 
         Config.Builder config = params().producer().ethereal().clone();
@@ -204,7 +209,7 @@ public class Producer {
 
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
-        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + 1024, ds,
+        controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
                                   (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch));
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), params().exec(), producerMetrics);
@@ -257,6 +262,7 @@ public class Producer {
     }
 
     private void create(PreBlock preblock, boolean last) {
+        log.debug("preblock produced, last: {} on: {}", last, params().member());
         var aggregate = preblock.data().stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
@@ -305,9 +311,6 @@ public class Producer {
 
     private void newEpoch(Integer epoch) {
         log.trace("new epoch: {} on: {}", epoch, params().member());
-        if (epoch == 0) {
-            produceAssemble();
-        }
         transitions.newEpoch(epoch, lastEpoch);
     }
 

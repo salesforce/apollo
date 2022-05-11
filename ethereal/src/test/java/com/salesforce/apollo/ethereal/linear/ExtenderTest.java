@@ -67,7 +67,7 @@ public class ExtenderTest {
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
         var ordering = new Extender(d, rs, cnf);
 
-        for (int level = 0; level < 7; level++) {
+        for (int level = 0; level < 8; level++) {
             assertNotNull(ordering.nextRound(), "failed at level:  " + level);
         }
         assertNull(ordering.nextRound());
@@ -84,7 +84,7 @@ public class ExtenderTest {
         var ordering = new Extender(d, rs, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();
-        for (int level = 0; level < 7; level++) {
+        for (int level = 0; level < 8; level++) {
             TimingRound timingRound = ordering.nextRound();
             assertNotNull(timingRound, "failed at level:  " + level);
             var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT);

@@ -129,7 +129,7 @@ public class ViewAssembly implements Reconfiguration {
             pid++;
         }
         config.setPid(pid).setnProc((short) view.roster().size());
-        config.setEpochLength(3).setNumberOfEpochs(3);
+        config.setEpochLength(7).setNumberOfEpochs(3);
         config.setLabel("View Recon" + nextViewId + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> process(preblock, last), epoch -> {

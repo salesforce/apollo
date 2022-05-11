@@ -68,7 +68,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final int CARDINALITY = 5;
+    private static final int CARDINALITY = 10;
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -170,7 +170,7 @@ public class CHOAMTest {
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 500 : 1;
-        final int max = LARGE_TESTS ? 50 : 10;
+        final int max = LARGE_TESTS ? 500 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
@@ -191,8 +191,9 @@ public class CHOAMTest {
         });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(LARGE_TESTS ? 600 : 30, TimeUnit.SECONDS), "did not finish transactions: "
-        + countdown.getCount() + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
+        final var finished = countdown.await(LARGE_TESTS ? 1200 : 30, TimeUnit.SECONDS);
+        assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
+        + transactioneers.stream().map(t -> t.completed()).toList());
 
         final ULong target = updaters.values()
                                      .stream()

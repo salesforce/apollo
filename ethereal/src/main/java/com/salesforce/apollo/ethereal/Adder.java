@@ -430,18 +430,12 @@ public class Adder {
         if (existing != null) {
             return;
         }
-        if (u.toByteString().size() > maxSize) {
-            failed.add(digest);
-            log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, u.getId(),
-                      conf.logLabel());
-            return;
-        }
         final var decoded = PreUnit.decode(u.getId());
         if (decoded.creator() == conf.pid()) {
             return;
         }
         if (decoded.epoch() != epoch) {
-            log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, maxSize, decoded,
+            log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, decoded,
                       conf.logLabel());
             return;
         }
@@ -449,6 +443,13 @@ public class Adder {
         if (decoded.creator() >= conf.nProc() || decoded.creator() < 0) {
             failed.add(digest);
             log.debug("Invalid creator: {} on: {}", decoded, conf.nProc() - 1, conf.logLabel());
+            return;
+        }
+
+        if (u.toByteString().size() > maxSize) {
+            failed.add(digest);
+            log.trace("Invalid size: {} > {} id: {} on: {}", u.toByteString().size(), maxSize, decoded,
+                      conf.logLabel());
             return;
         }
 

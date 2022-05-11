@@ -359,6 +359,10 @@ public class Ethereal {
      * such epoch already exists, returns it.
      */
     private epoch newEpoch(int epoch) {
+        if (epoch >= config.numberOfEpochs()) {
+            log.trace("Finished, beyond last epoch: {} on: {}", epoch, config.logLabel());
+            return null;
+        }
         mx.lock();
         try {
             final var currentId = currentEpoch.get();

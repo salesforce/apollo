@@ -56,7 +56,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 5;
+    private static final int     CARDINALITY = 20;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
@@ -96,7 +96,7 @@ public class TestCHOAM {
                                .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(10))
+                               .setGossipDuration(Duration.ofMillis(200))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)
@@ -175,7 +175,7 @@ public class TestCHOAM {
         final var timeout = Duration.ofSeconds(3);
 
         final var transactioneers = new ArrayList<Transactioneer>();
-        final var clientCount = LARGE_TESTS ? 5_000 : 50;
+        final var clientCount = LARGE_TESTS ? 1_000 : 50;
         final var max = LARGE_TESTS ? 500 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
@@ -196,21 +196,22 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(LARGE_TESTS ? 600 : 60, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 1200 : 60, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: "
             + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {
             routers.values().forEach(e -> e.close());
             choams.values().forEach(e -> e.stop());
+
+            System.out.println();
+
+            ConsoleReporter.forRegistry(registry)
+                           .convertRatesTo(TimeUnit.SECONDS)
+                           .convertDurationsTo(TimeUnit.MILLISECONDS)
+                           .build()
+                           .report();
         }
         assertTrue(checkpointOccurred.get());
-        System.out.println();
-
-        ConsoleReporter.forRegistry(registry)
-                       .convertRatesTo(TimeUnit.SECONDS)
-                       .convertDurationsTo(TimeUnit.MILLISECONDS)
-                       .build()
-                       .report();
     }
 
     private Function<ULong, File> wrap(Function<ULong, File> checkpointer) {
