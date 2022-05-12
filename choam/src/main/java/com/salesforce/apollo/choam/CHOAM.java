@@ -306,8 +306,8 @@ public class CHOAM {
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
             if (!checkJoin(request, from)) {
-                log.warn("Join requested for invalid view: {} from: {} on: {}", Digest.from(request.getNextView()),
-                         from, params.member());
+                log.debug("Join requested for invalid view: {} from: {} on: {}", Digest.from(request.getNextView()),
+                          from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
@@ -532,6 +532,7 @@ public class CHOAM {
                                                .setByteSize(length)
                                                .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toDigeste());
+        log.info("Checkpoint length: {} segment size: {} stateHash: {}", length, blockSize, stateHash);
         if (state != null) {
             byte[] buff = new byte[blockSize];
             try (FileInputStream fis = new FileInputStream(state)) {
@@ -774,25 +775,25 @@ public class CHOAM {
     private boolean checkJoin(JoinRequest request, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
-            log.warn("Request to join from non member: {} on: {}", from, params.member());
+            log.debug("Request to join from non member: {} on: {}", from, params.member());
             return false;
         }
         Digest nextView = new Digest(request.getNextView());
         final var nextId = nextViewId.get();
         if (nextId == null) {
-            log.warn("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
-                     params.member());
+            log.debug("Cannot join view: {} from: {}, next view has not been defined on: {}", nextView, source,
+                      params.member());
             return false;
         }
         if (!nextId.equals(nextView)) {
-            log.warn("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId, source,
-                     params.member());
+            log.debug("Request to join incorrect view: {} expected: {} from: {} on: {}", nextView, nextId, source,
+                      params.member());
             return false;
         }
         final Set<Member> members = Committee.viewMembersOf(nextView, params.context());
         if (!members.contains(params.member())) {
-            log.warn("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
-                     members, params.member());
+            log.debug("Not a member of view: {} invalid join request from: {} members: {} on: {}", nextView, source,
+                      members, params.member());
             return false;
         }
         return true;

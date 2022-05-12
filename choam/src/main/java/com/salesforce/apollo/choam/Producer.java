@@ -130,8 +130,8 @@ public class Producer {
             assembly = new ViewAssembly(nextViewId, view, comms) {
                 @Override
                 public void complete() {
-                    log.warn("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                             params().member());
+                    log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
+                              params().member());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                     super.complete();

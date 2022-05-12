@@ -9,39 +9,37 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
+
 public class ChangeLogHistoryServiceFactory {
 
-    private static ChangeLogHistoryServiceFactory instance;
+    private final static ThreadLocal<ChangeLogHistoryServiceFactory> instance = new ThreadLocal<>();
 
     private List<ChangeLogHistoryService> registry = new CopyOnWriteArrayList<>();
 
     private Map<Database, ChangeLogHistoryService> services = new ConcurrentHashMap<>();
 
     public static synchronized ChangeLogHistoryServiceFactory getInstance() {
-        if (instance == null) {
-            instance = new ChangeLogHistoryServiceFactory();
+        if (instance.get() == null) {
+            instance.set(new ChangeLogHistoryServiceFactory());
         }
-        return instance;
+        return instance.get();
     }
 
     /**
      * Set the instance used by this singleton. Used primarily for testing.
      */
     public static synchronized void setInstance(ChangeLogHistoryServiceFactory changeLogHistoryServiceFactory) {
-        ChangeLogHistoryServiceFactory.instance = changeLogHistoryServiceFactory;
+        ChangeLogHistoryServiceFactory.instance.set(changeLogHistoryServiceFactory);
     }
 
-
     public static synchronized void reset() {
-        instance = null;
+        instance.set(null);
     }
 
     private ChangeLogHistoryServiceFactory() {
         try {
-            for (ChangeLogHistoryService service : Scope.getCurrentScope().getServiceLocator().findInstances(ChangeLogHistoryService.class)) {
-                register(service);
-            }
-
+            register(new ReplicatedChangeLogHistoryService());
         } catch (Exception e) {
             throw new UnexpectedLiquibaseException(e);
         }
@@ -98,7 +96,7 @@ public class ChangeLogHistoryServiceFactory {
             for (ChangeLogHistoryService changeLogHistoryService : registry) {
                 changeLogHistoryService.reset();
             }
-            instance = null;
+            instance.set(null);
         }
     }
 }

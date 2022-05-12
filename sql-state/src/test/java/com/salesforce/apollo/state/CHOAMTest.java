@@ -68,7 +68,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final int CARDINALITY = 10;
+    private static final int CARDINALITY = 5;
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -169,8 +169,8 @@ public class CHOAMTest {
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 500 : 1;
-        final int max = LARGE_TESTS ? 500 : 10;
+        final int clientCount = LARGE_TESTS ? 1_000 : 1;
+        final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
         System.out.println("Warm up");
