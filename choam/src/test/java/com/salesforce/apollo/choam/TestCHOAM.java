@@ -56,7 +56,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 20;
+    private static final int     CARDINALITY = 10;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
@@ -176,7 +176,7 @@ public class TestCHOAM {
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 1_000 : 50;
-        final var max = LARGE_TESTS ? 500 : 10;
+        final var max = LARGE_TESTS ? 1_000 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
         var cnt = new AtomicInteger();
