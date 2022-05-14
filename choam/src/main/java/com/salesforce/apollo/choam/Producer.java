@@ -54,7 +54,7 @@ public class Producer {
 
     record PendingBlock(HashedBlock block, Map<Member, Validate> witnesses, AtomicBoolean published) {}
 
-    /** Leaf action driver coupling for the Producer FSM */
+    /** Leaf action Driven coupling for the Earner FSM */
     private class DriveIn implements Driven {
 
         @Override

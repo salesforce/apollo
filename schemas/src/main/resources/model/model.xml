@@ -27,8 +27,8 @@
             referencedTableSchemaName="stereotomy" />
 
         <sql>alter table apollo_kernel.member add constraint
-            member_state_validate check (state in ('offline', 'active',
-            'joining', 'leaving'))
+            member_state_validate check (state in ('inactive',
+            'joining', 'leaving', 'active'))
         </sql>
 
     </changeSet>

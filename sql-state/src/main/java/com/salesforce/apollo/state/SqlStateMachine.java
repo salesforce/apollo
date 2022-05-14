@@ -20,9 +20,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -128,15 +126,7 @@ public class SqlStateMachine {
 
     public record Current(ULong height, Digest blkHash) {}
 
-    public static class Event {
-        public final JsonNode body;
-        public final String   discriminator;
-
-        public Event(String discriminator, JsonNode body) {
-            this.discriminator = discriminator;
-            this.body = body;
-        }
-    }
+    public record Event(String discriminator, JsonNode body) {}
 
     public static class ReadOnlyConnector extends DelegatingJdbcConnector {
 
@@ -247,27 +237,24 @@ public class SqlStateMachine {
     }
 
     private static class EventTrampoline {
-        private final Map<String, Consumer<JsonNode>> handlers = new HashMap<>();
-        private final List<Event>                     pending  = new ArrayList<>();
+        private volatile Consumer<List<Event>> handler;
+        private volatile List<Event>           pending = new ArrayList<>();
 
-        private void deregister(String discriminator) {
-            handlers.remove(discriminator);
+        public void deregister() {
+            handler = null;
         }
 
         private void evaluate() {
             try {
-                for (Event event : pending) {
-                    Consumer<JsonNode> handler = handlers.get(event.discriminator);
-                    if (handler != null) {
-                        try {
-                            handler.accept(event.body);
-                        } catch (Throwable e) {
-                            log.trace("handler failed for {}", e);
-                        }
+                if (handler != null) {
+                    try {
+                        handler.accept(pending);
+                    } catch (Throwable e) {
+                        log.trace("handler failed for {}", e);
                     }
                 }
             } finally {
-                pending.clear();
+                pending = new ArrayList<>();
             }
         }
 
@@ -275,8 +262,8 @@ public class SqlStateMachine {
             pending.add(event);
         }
 
-        private void register(String discriminator, Consumer<JsonNode> handler) {
-            handlers.put(discriminator, handler);
+        private void register(Consumer<List<Event>> handler) {
+            this.handler = handler;
         }
     }
 
@@ -381,8 +368,8 @@ public class SqlStateMachine {
         }
     }
 
-    public void deregister(String discriminator) {
-        trampoline.deregister(discriminator);
+    public void deregisterHandler() {
+        trampoline.deregister();
     }
 
     public BiConsumer<ULong, CheckpointState> getBootstrapper() {
@@ -474,8 +461,8 @@ public class SqlStateMachine {
         }
     }
 
-    public void register(String discriminator, Consumer<JsonNode> handler) {
-        trampoline.register(discriminator, handler);
+    public void register(Consumer<List<Event>> handler) {
+        trampoline.register(handler);
     }
 
     // Test accessible

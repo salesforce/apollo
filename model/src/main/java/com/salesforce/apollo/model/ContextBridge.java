@@ -30,7 +30,7 @@ public class ContextBridge implements MembershipListener<Member> {
 
     @Override
     public void active(Member member) {
-        if (domain.isMember(member)) {
+        if (domain.activate(member)) {
             managed.activate(member);
         }
     }
@@ -45,9 +45,7 @@ public class ContextBridge implements MembershipListener<Member> {
 
     @Override
     public void offline(Member member) {
-        if (domain.isMember(member)) {
-            managed.offline(member);
-        }
+        managed.offlineIfMember(member);
     }
 
     public void register(Context context) {
