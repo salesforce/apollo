@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Stop output INFO at start -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
+    <appender name="STDOUT"
+        class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <Pattern>
+                %d{mm:ss.SSS} [%thread] %-5level %logger{0} -
+  %msg%n
+            </Pattern>
+        </encoder>
+    </appender>
+    <root level="info">
+        <appender-ref ref="STDOUT" />
+    </root>
+    <logger name="com.salesforce.apollo.kairos" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+</configuration>
