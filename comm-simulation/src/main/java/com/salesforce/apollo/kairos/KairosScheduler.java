@@ -16,8 +16,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.jmock.lib.concurrent.UnsupportedSynchronousOperationException;
-
 import com.salesforce.apollo.kairos.KairosFuture.CallableRunnableAdapter;
 
 /**
@@ -47,6 +45,15 @@ public final class KairosScheduler implements ScheduledExecutorService {
         default:
             throw new IllegalStateException("Unreachable");
         }
+    }
+
+    private static UnsupportedOperationException blockingOperationsNotSupported() {
+        return new UnsupportedOperationException("cannot perform blocking wait on a task scheduled on a "
+        + KairosScheduler.class.getName());
+    }
+
+    private static UnsupportedOperationException shutdownNotSupported() {
+        return new UnsupportedOperationException("shutdown not supported");
     }
 
     private final Simulation simulation;
@@ -142,14 +149,5 @@ public final class KairosScheduler implements ScheduledExecutorService {
     @Override
     public <T> Future<T> submit(Runnable command, T result) {
         return submit(new CallableRunnableAdapter<T>(command, result));
-    }
-
-    UnsupportedSynchronousOperationException blockingOperationsNotSupported() {
-        return new UnsupportedSynchronousOperationException("cannot perform blocking wait on a task scheduled on a "
-        + KairosScheduler.class.getName());
-    }
-
-    private UnsupportedOperationException shutdownNotSupported() {
-        return new UnsupportedOperationException("shutdown not supported");
     }
 }
