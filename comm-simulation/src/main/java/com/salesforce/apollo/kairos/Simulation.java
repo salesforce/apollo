@@ -54,7 +54,7 @@ public class Simulation {
     private final AtomicInteger tieBreaker = new AtomicInteger();
 
     public Simulation() {
-        this(Instant.MIN);
+        this(Instant.EPOCH);
     }
 
     public Simulation(Instant start) {
