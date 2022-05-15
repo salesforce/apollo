@@ -36,11 +36,7 @@ abstract public class SimulatedManagedChannel extends ManagedChannel {
 
     @Override
     public final boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-        try {
-            return scheduleAwaitTermination().get();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("Error in simulation", e.getCause());
-        }
+        return concrete.awaitTermination(timeout, unit);
     }
 
     @Override
@@ -53,15 +49,10 @@ abstract public class SimulatedManagedChannel extends ManagedChannel {
         return concrete.isTerminated();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public final <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(MethodDescriptor<RequestT, ResponseT> methodDescriptor,
                                                                                CallOptions callOptions) {
-        try {
-            return (ClientCall<RequestT, ResponseT>) scheduleNewCall().get();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException("Error in simulation", e.getCause());
-        }
+        return createNewCall(methodDescriptor, callOptions);
     }
 
     @Override
@@ -87,7 +78,8 @@ abstract public class SimulatedManagedChannel extends ManagedChannel {
         return MoreObjects.toStringHelper(this).add("concrete", concrete).toString();
     }
 
-    protected abstract KairosFuture<Boolean> scheduleAwaitTermination();
+    protected abstract <RequestT, ResponseT> ClientCall<RequestT, ResponseT> createNewCall(MethodDescriptor<RequestT, ResponseT> methodDescriptor,
+                                                                                           CallOptions callOptions);
 
     protected abstract KairosFuture<ClientCall<?, ?>> scheduleNewCall();
 
