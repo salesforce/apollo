@@ -28,6 +28,27 @@ import com.salesforce.apollo.kairos.KairosFuture.CallableRunnableAdapter;
  */
 public final class KairosScheduler implements ScheduledExecutorService {
 
+    public static Duration duration(long amount, TimeUnit unit) {
+        switch (unit) {
+        case NANOSECONDS:
+            return Duration.ofNanos(amount);
+        case MICROSECONDS:
+            return Duration.ofNanos(unit.convert(amount, TimeUnit.NANOSECONDS));
+        case MILLISECONDS:
+            return Duration.ofMillis(amount);
+        case SECONDS:
+            return Duration.ofSeconds(amount);
+        case MINUTES:
+            return Duration.ofMinutes(amount);
+        case HOURS:
+            return Duration.ofHours(amount);
+        case DAYS:
+            return Duration.ofDays(amount);
+        default:
+            throw new IllegalStateException("Unreachable");
+        }
+    }
+
     private final Simulation simulation;
 
     public KairosScheduler(Simulation simulation) {
@@ -78,13 +99,13 @@ public final class KairosScheduler implements ScheduledExecutorService {
     @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
         KairosFuture<V> task = new KairosFuture<V>(callable, simulation);
-        return task.setEvent(simulation.schedule(KairosScheduler.duration(delay, unit), task));
+        return task.setEvent(simulation.schedule(duration(delay, unit), task));
     }
 
     @Override
     public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         KairosFuture<Void> task = new KairosFuture<>(command, simulation);
-        return task.setEvent(simulation.schedule(KairosScheduler.duration(delay, unit), task));
+        return task.setEvent(simulation.schedule(duration(delay, unit), task));
     }
 
     @Override
@@ -94,8 +115,8 @@ public final class KairosScheduler implements ScheduledExecutorService {
 
     @Override
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
-        KairosFuture<Object> task = new KairosFuture<>(KairosScheduler.duration(delay, unit), command, simulation);
-        return task.setEvent(simulation.schedule(KairosScheduler.duration(delay, unit), task));
+        KairosFuture<Object> task = new KairosFuture<>(duration(delay, unit), command, simulation);
+        return task.setEvent(simulation.schedule(duration(delay, unit), task));
     }
 
     @Override
@@ -130,26 +151,5 @@ public final class KairosScheduler implements ScheduledExecutorService {
 
     private UnsupportedOperationException shutdownNotSupported() {
         return new UnsupportedOperationException("shutdown not supported");
-    }
-
-    public static Duration duration(long amount, TimeUnit unit) {
-        switch (unit) {
-        case NANOSECONDS:
-            return Duration.ofNanos(amount);
-        case MICROSECONDS:
-            return Duration.ofNanos(unit.convert(amount, TimeUnit.NANOSECONDS));
-        case MILLISECONDS:
-            return Duration.ofMillis(amount);
-        case SECONDS:
-            return Duration.ofSeconds(amount);
-        case MINUTES:
-            return Duration.ofMinutes(amount);
-        case HOURS:
-            return Duration.ofHours(amount);
-        case DAYS:
-            return Duration.ofDays(amount);
-        default:
-            throw new IllegalStateException("Unreachable");
-        }
     }
 }
