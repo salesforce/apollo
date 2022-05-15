@@ -195,57 +195,67 @@ public class CHOAMTest {
         assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
         + transactioneers.stream().map(t -> t.completed()).toList());
 
-        final ULong target = updaters.values()
-                                     .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
-                                     .get();
-
         try {
-            Utils.waitForCondition(20_000, 1000,
-                                   () -> members.stream()
-                                                .map(m -> updaters.get(m))
-                                                .map(ssm -> ssm.getCurrentBlock())
-                                                .filter(cb -> cb != null)
-                                                .map(cb -> cb.height())
-                                                .filter(l -> l.compareTo(target) >= 0)
-                                                .count() == members.size());
-
-            record row(float price, int quantity) {}
-
-            System.out.println("Validating consistency");
-
-            Map<Member, Map<Integer, row>> manifested = new HashMap<>();
-
-            for (Member m : members) {
-                Connection connection = updaters.get(m).newConnection();
-                Statement statement = connection.createStatement();
-                ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
-                while (results.next()) {
-                    manifested.computeIfAbsent(m, k -> new HashMap<>())
-                              .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
+                if (!(transactioneers.stream()
+                                     .mapToInt(t -> t.inFlight())
+                                     .filter(t -> t == 0)
+                                     .count() == transactioneers.size())) {
+                    return false;
                 }
-                connection.close();
-            }
-
-            Map<Integer, row> standard = manifested.get(members.get(0));
-            for (Member m : members) {
-                var candidate = manifested.get(m);
-                for (var entry : standard.entrySet()) {
-                    assertTrue(candidate.containsKey(entry.getKey()));
-                    assertEquals(entry.getValue(), candidate.get(entry.getKey()));
-                }
-            }
+                final ULong target = updaters.values()
+                                             .stream()
+                                             .map(ssm -> ssm.getCurrentBlock())
+                                             .filter(cb -> cb != null)
+                                             .map(cb -> cb.height())
+                                             .max((a, b) -> a.compareTo(b))
+                                             .get();
+                return members.stream()
+                              .map(m -> updaters.get(m))
+                              .map(ssm -> ssm.getCurrentBlock())
+                              .filter(cb -> cb != null)
+                              .map(cb -> cb.height())
+                              .filter(l -> l.compareTo(target) == 0)
+                              .count() == members.size();
+            }), "members did not stabilize at same block: " + updaters.values()
+                                                                      .stream()
+                                                                      .map(ssm -> ssm.getCurrentBlock())
+                                                                      .filter(cb -> cb != null)
+                                                                      .map(cb -> cb.height())
+                                                                      .toList());
         } finally {
-            System.out.println("target: " + target + " results: "
-            + members.stream()
-                     .map(m -> updaters.get(m))
-                     .map(ssm -> ssm.getCurrentBlock())
-                     .filter(cb -> cb != null)
-                     .map(cb -> cb.height())
-                     .toList());
+            System.out.println("Final block height: " + members.stream()
+                                                               .map(m -> updaters.get(m))
+                                                               .map(ssm -> ssm.getCurrentBlock())
+                                                               .filter(cb -> cb != null)
+                                                               .map(cb -> cb.height())
+                                                               .toList());
+        }
+
+        record row(float price, int quantity) {}
+
+        System.out.println("Validating consistency");
+
+        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
+
+        for (Member m : members) {
+            Connection connection = updaters.get(m).newConnection();
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+            while (results.next()) {
+                manifested.computeIfAbsent(m, k -> new HashMap<>())
+                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            }
+            connection.close();
+        }
+
+        Map<Integer, row> standard = manifested.get(members.get(0));
+        for (Member m : members) {
+            var candidate = manifested.get(m);
+            for (var entry : standard.entrySet()) {
+                assertTrue(candidate.containsKey(entry.getKey()));
+                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            }
         }
     }
 

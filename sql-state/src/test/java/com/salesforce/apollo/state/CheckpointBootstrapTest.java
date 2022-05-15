@@ -22,7 +22,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.state.proto.Txn;
@@ -88,16 +87,13 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
         assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS), "Checkpoint did not occur");
 
-        System.out.println("State: " + updaters.values().stream().map(ssm -> ssm.getCurrentBlock()).toList());
-        final ULong target = updaters.values()
-                                     .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
-                                     .get();
-
         assertTrue(Utils.waitForCondition(10_000, 1000, () -> {
+            if (!(transactioneers.stream()
+                                 .mapToInt(t -> t.inFlight())
+                                 .filter(t -> t == 0)
+                                 .count() == transactioneers.size())) {
+                return false;
+            }
             var mT = members.stream()
                             .map(m -> updaters.get(m))
                             .map(ssm -> ssm.getCurrentBlock())
@@ -110,7 +106,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                           .map(ssm -> ssm.getCurrentBlock())
                           .filter(cb -> cb != null)
                           .map(cb -> cb.height())
-                          .filter(l -> l.compareTo(target) >= 0)
                           .filter(l -> l.compareTo(mT) == 0)
                           .count() == members.size();
         }), "state: " + members.stream()
@@ -120,13 +115,12 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                .map(cb -> cb.height())
                                .toList());
 
-        System.out.println("target: " + target + " results: "
-        + members.stream()
-                 .map(m -> updaters.get(m))
-                 .map(ssm -> ssm.getCurrentBlock())
-                 .filter(cb -> cb != null)
-                 .map(cb -> cb.height())
-                 .toList());
+        System.out.println("Final state: " + members.stream()
+                                                    .map(m -> updaters.get(m))
+                                                    .map(ssm -> ssm.getCurrentBlock())
+                                                    .filter(cb -> cb != null)
+                                                    .map(cb -> cb.height())
+                                                    .toList());
 
         System.out.println();
 

@@ -21,15 +21,15 @@ import com.salesforce.apollo.choam.support.InvalidTransaction;
 
 class Transactioneer {
     private final static Random            entropy   = new Random();
-    private final Supplier<Txn>            update;
     private final AtomicInteger            completed = new AtomicInteger();
     private final CountDownLatch           countdown;
+    private final Executor                 executor;
     private final AtomicInteger            inFlight  = new AtomicInteger();
     private final int                      max;
     private final Mutator                  mutator;
     private final ScheduledExecutorService scheduler;
     private final Duration                 timeout;
-    private final Executor                 executor;
+    private final Supplier<Txn>            update;
 
     public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, Executor executor,
                           CountDownLatch countdown, ScheduledExecutorService txScheduler) {
@@ -44,6 +44,10 @@ class Transactioneer {
 
     public int completed() {
         return completed.get();
+    }
+
+    public int inFlight() {
+        return inFlight.get();
     }
 
     void decorate(CompletableFuture<?> fs) {
