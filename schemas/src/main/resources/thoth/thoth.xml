@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd
+      http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
+
+    <changeSet author="hhildebrand" id="thoth-1">
+        <sql>create schema if not exists apollo_thoth</sql>
+
+        <createTable tableName="member"
+            schemaName="apollo_thoth">
+            <column name="identifier" type="INT8">
+                <constraints nullable="false"
+                    primaryKey="true" />
+            </column>
+            <column name="state" type="VARCHAR(7)">
+                <!-- <constraints nullable="false" /> -->
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="member" baseTableSchemaName="apollo_thoth"
+            constraintName="member_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+
+        <sql>alter table apollo_thoth.member add constraint
+            member_state_validate check (state in ('inactive',
+            'joining', 'leaving', 'active'))
+        </sql>
+
+    </changeSet>
+</databaseChangeLog>
