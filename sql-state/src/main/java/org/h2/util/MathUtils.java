@@ -36,7 +36,7 @@ public class MathUtils {
      * @return the rounded value
      */
     public static int roundUpInt(int x, int blockSizePowerOf2) {
-        return (x + blockSizePowerOf2 - 1) & (-blockSizePowerOf2);
+        return (x + blockSizePowerOf2 - 1) & -blockSizePowerOf2;
     }
 
     /**
@@ -50,7 +50,7 @@ public class MathUtils {
      * @return the rounded value
      */
     public static long roundUpLong(long x, long blockSizePowerOf2) {
-        return (x + blockSizePowerOf2 - 1) & (-blockSizePowerOf2);
+        return (x + blockSizePowerOf2 - 1) & -blockSizePowerOf2;
     }
 
     private static synchronized SecureRandom getSecureRandom() {

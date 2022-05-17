@@ -8,8 +8,10 @@ package org.h2.util;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.zone.ZoneRules;
 import java.util.Locale;
 
 /**
