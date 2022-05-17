@@ -23,6 +23,7 @@
         <module>stereotomy-services</module>
         <module>comm-simulation</module>
         <module>thoth</module>
+        <module>h2-deterministic</module>
     </modules>
 
     <properties>
@@ -169,6 +170,21 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>stereotomy-services</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>demo</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>thoth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>h2-deterministic</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
