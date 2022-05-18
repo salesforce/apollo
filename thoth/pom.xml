@@ -13,24 +13,11 @@
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>utils</artifactId>
+            <artifactId>memberships</artifactId>
         </dependency>
         <dependency>
-            <!-- necessary for Java 9+ -->
-            <groupId>org.apache.tomcat</groupId>
-            <artifactId>annotations-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.dropwizard</groupId>
-            <artifactId>dropwizard-metrics</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty-shaded</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-stub</artifactId>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>stereotomy</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
