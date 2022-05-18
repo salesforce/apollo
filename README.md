@@ -68,8 +68,8 @@ Apollo contains two modules that create a shaded version of standard libraries. 
 
 The two modules to exclude are:
 
- * deterministic-h2
- * deterministic-liquibase
+ * h2-deterministic
+ * liquibase-deterministic
 
 Again, I stress that you must **NOT** include them in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.  Just don't.
 
