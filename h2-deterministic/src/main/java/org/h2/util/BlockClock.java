@@ -36,6 +36,17 @@ public class BlockClock extends Clock {
         return zoneId;
     }
 
+    public void incrementHeight() {
+        final var current = height;
+        height = current + 1;
+        txn = txnInc;
+    }
+
+    public void incrementTxn() {
+        final var current = txn;
+        txn = current + txnInc;
+    }
+
     @Override
     public Instant instant() {
         final var currentHeight = height;
@@ -49,16 +60,5 @@ public class BlockClock extends Clock {
             return this;
         }
         return new BlockClock(zone);
-    }
-
-    protected void incrementHeight() {
-        final var current = height;
-        height = current + 1;
-        txn = txnInc;
-    }
-
-    protected void incrementTxn() {
-        final var current = txn;
-        txn = current + txnInc;
     }
 }

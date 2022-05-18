@@ -26,8 +26,8 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import org.h2.value.Value;
-import org.h2.value.ValueToObjectConverter;
+import deterministic.org.h2.value.Value;
+import deterministic.org.h2.value.ValueToObjectConverter;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
@@ -247,11 +247,11 @@ public class Mutator {
         return Migration.newBuilder().setUpdate(changeLog).build();
     }
 
-    private final org.h2.engine.Session h2Session;
+    private final deterministic.org.h2.engine.Session h2Session;
 
     private final Session session;
 
-    public Mutator(Session session, org.h2.engine.Session h2Session) {
+    public Mutator(Session session, deterministic.org.h2.engine.Session h2Session) {
         this.session = session;
         this.h2Session = h2Session;
     }

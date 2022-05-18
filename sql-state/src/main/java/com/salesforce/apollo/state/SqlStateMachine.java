@@ -34,17 +34,19 @@ import java.util.zip.GZIPOutputStream;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
-
-import org.h2.api.ErrorCode;
-import org.h2.engine.SessionLocal;
-import org.h2.jdbc.JdbcConnection;
-import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
-import org.h2.jdbc.JdbcSQLNonTransientException;
-import org.h2.message.DbException;
-import org.h2.util.CloseWatcher;
-import org.h2.util.DateTimeUtils;
-import org.h2.util.JdbcUtils;
-import org.h2.value.Value;
+ 
+import deterministic.org.h2.api.ErrorCode;
+import deterministic.org.h2.engine.SessionLocal;
+import deterministic.org.h2.jdbc.JdbcConnection;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientConnectionException;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientException;
+import deterministic.org.h2.message.DbException;
+import deterministic.org.h2.util.BlockClock;
+import deterministic.org.h2.util.CloseWatcher;
+import deterministic.org.h2.util.DateTimeUtils;
+import deterministic.org.h2.util.JdbcUtils;
+import deterministic.org.h2.util.MathUtils;
+import deterministic.org.h2.value.Value;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +134,7 @@ public class SqlStateMachine {
 
         private final CloseWatcher watcher;
 
-        public ReadOnlyConnector(Connection wrapped, org.h2.engine.Session session) throws SQLException {
+        public ReadOnlyConnector(Connection wrapped, deterministic.org.h2.engine.Session session) throws SQLException {
             super(wrapped);
             wrapped.setReadOnly(true);
             wrapped.setAutoCommit(false);
@@ -275,17 +277,16 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
-                                                                                                          SqlStateMachine.class.getCanonicalName());
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
-    private static final RowSetFactory             factory;
-    private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
-    private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
-    private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
-    private static final String                    SQL_STATE_INTERNAL                     = "/sql-state/internal.xml";
-    private static final String                    UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+    private static final String        CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
+                                                                                              SqlStateMachine.class.getCanonicalName());
+    private static final String        DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
+    private static final RowSetFactory factory;
+    private static final Logger        log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper  MAPPER                                 = new ObjectMapper();
+    private static final String        PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
+    private static final String        SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
+    private static final String        SQL_STATE_INTERNAL                     = "/sql-state/internal.xml";
+    private static final String        UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -297,10 +298,6 @@ public class SqlStateMachine {
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot create row set factory", e);
         }
-    }
-
-    public static SecureRandom getSecureRandom() {
-        return secureRandom.get();
     }
 
     public static boolean publish(Connection connection, String channel, String jsonBody) {
@@ -986,8 +983,8 @@ public class SqlStateMachine {
     }
 
     private <T> T withContext(Callable<T> action) {
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
+        SecureRandom prev = MathUtils.SECURE_RANDOM.get();
+        MathUtils.SECURE_RANDOM.set(entropy.get());
         BlockClock prevClock = DateTimeUtils.CLOCK.get();
         DateTimeUtils.CLOCK.set(clock);
         try {
@@ -995,7 +992,7 @@ public class SqlStateMachine {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {
-            secureRandom.set(prev);
+            MathUtils.SECURE_RANDOM.set(prev);
             DateTimeUtils.CLOCK.set(prevClock);
         }
     }

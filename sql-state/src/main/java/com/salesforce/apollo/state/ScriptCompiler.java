@@ -34,10 +34,10 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
-import org.h2.api.ErrorCode;
-import org.h2.message.DbException;
-import org.h2.util.StringUtils;
-import org.h2.util.Utils;
+import deterministic.org.h2.api.ErrorCode;
+import deterministic.org.h2.message.DbException;
+import deterministic.org.h2.util.StringUtils;
+import deterministic.org.h2.util.Utils;
 
 /**
  * @author hal.hildebrand

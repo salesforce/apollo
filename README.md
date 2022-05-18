@@ -61,7 +61,26 @@ Again, I stress that because these generated source directories are under the "(
 Note that adding these generated source directories to the compile path is automatically taken care of in the Maven *pom.xml* in the "build-helper" plugin.
 
 ## IDE Integration
-Because of the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
+**This is Important!**
+Apollo contains two modules that create a shaded version of standard libraries.  These modules **must** be run, but only need to be run once in order to install the resulting jar into your local maven repository.  Obviously, the also have to be built by Maven, and consequently they are part of the build sequence.  However, Eclipse and IntellJ **do not understand this**. What this means is that the IDE thinks the module is fine and doesn't notice there has been package rewriting to avoid conflicts with existing libraries.  What this means is that you *must* exclude these modules in your IDE environment.  If you really think you need to be working on them, then you probably understand all this. But if you are simply trying to get Apollo into your IDE, importing these 2 modules is gonna ruin your day.
+
+### Modules to exclude
+
+The two modules to exclude are:
+
+ * deterministic-h2
+ * deterministic-liquibase
+
+Again, I stress that you must **NOT** include them in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.  Just don't.
+
+These modules must be built, so please run
+    mvn clean install -DskipTests
+ 
+From the command line before attempting to load the Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding these modules will have no adverse effect on the rest of the build.
+
+### Your IDE and Maven code generation
+
+Due to the code generation requirements (really, I can't do jack about them, so complaining is silly), this can cause interesting issues with your IDE if you import Apollo.  I work with Eclipse, and things are relatively good with the current releases. However, there are sometimes synchronization issues in Eclipse Maven integration that may require an additional generate-sources pass. Apollo is a multi-module project and be sure you're leaving time for the asynchronous build process to complete.
 
 I have no idea about IntellJ or Visual Code, so you're on your own there.
 
