@@ -74,8 +74,9 @@ The two modules to exclude are:
 Again, I stress that you must **NOT** include them in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.  Just don't.
 
 These modules must be built, so please run
+
     mvn clean install -DskipTests
- 
+
 From the command line before attempting to load the Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding these modules will have no adverse effect on the rest of the build.
 
 ### Your IDE and Maven code generation

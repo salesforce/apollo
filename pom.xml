@@ -24,6 +24,9 @@
         <module>comm-simulation</module>
         <module>thoth</module>
         <module>h2-deterministic</module>
+        <!-- Ignore for now
+        <module>liquibase-deterministic</module>
+        -->
     </modules>
 
     <properties>
@@ -185,6 +188,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>h2-deterministic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>liquibase-deterministic</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
