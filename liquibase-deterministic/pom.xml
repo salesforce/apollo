@@ -20,64 +20,6 @@
             	</exclusion>
             </exclusions>
         </dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>h2-deterministic</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.salesforce.apollo</groupId>
-            <artifactId>utils</artifactId>
-            <exclusions>
-            	<exclusion>
-            		<groupId>org.bouncycastle</groupId>
-            		<artifactId>bcprov-jdk15on</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.bouncycastle</groupId>
-            		<artifactId>bctls-jdk15on</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.bouncycastle</groupId>
-            		<artifactId>bcutil-jdk15on</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.bouncycastle</groupId>
-            		<artifactId>bcpkix-jdk15on</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>io.grpc</groupId>
-            		<artifactId>grpc-context</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>io.grpc</groupId>
-            		<artifactId>grpc-api</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>com.google.guava</groupId>
-            		<artifactId>guava</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>io.grpc</groupId>
-            		<artifactId>grpc-protobuf-lite</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.apache.commons</groupId>
-            		<artifactId>commons-math3</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.slf4j</groupId>
-            		<artifactId>jul-to-slf4j</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.jooq</groupId>
-            		<artifactId>joou</artifactId>
-            	</exclusion>
-            	<exclusion>
-            		<groupId>org.slf4j</groupId>
-            		<artifactId>slf4j-api</artifactId>
-            	</exclusion>
-            </exclusions>
-        </dependency>
   </dependencies>
 
     <build>
@@ -109,25 +51,6 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"></transformer>
                             </transformers>
-                            <relocations>
-                                <relocation>
-                                    <pattern>liquibase</pattern>
-                                    <shadedPattern>deterministic.liquibase</shadedPattern>
-                                    <includes>
-                                        <include>liquibase.*</include>
-                                    </includes>
-                                    <excludes>
-                                        <exclude>com.datical.liquibase.ext.*</exclude>
-                                    </excludes>
-                                </relocation>
-                                <relocation>
-                                    <pattern>com.datical.liquibase.ext</pattern>
-                                    <shadedPattern>deterministic.com.datical.liquibase.ext</shadedPattern>
-                                    <includes>
-                                        <include>com.datical.liquibase.ext.*</include>
-                                    </includes>
-                                </relocation>
-                            </relocations>
                               <artifactSet>
                                 <excludes>
                                   <exclude>com.salesforce.apollo:*</exclude>

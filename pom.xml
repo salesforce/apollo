@@ -24,9 +24,7 @@
         <module>comm-simulation</module>
         <module>thoth</module>
         <module>h2-deterministic</module>
-        <!-- Ignore for now
         <module>liquibase-deterministic</module>
-        -->
     </modules>
 
     <properties>

@@ -9,8 +9,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
-
 public class ChangeLogHistoryServiceFactory {
 
     private final static ThreadLocal<ChangeLogHistoryServiceFactory> instance = new ThreadLocal<>();
@@ -39,7 +37,9 @@ public class ChangeLogHistoryServiceFactory {
 
     private ChangeLogHistoryServiceFactory() {
         try {
-            register(new ReplicatedChangeLogHistoryService());
+            for (ChangeLogHistoryService service : Scope.getCurrentScope().getServiceLocator().findInstances(ChangeLogHistoryService.class)) {
+                register(service);
+            }
         } catch (Exception e) {
             throw new UnexpectedLiquibaseException(e);
         }

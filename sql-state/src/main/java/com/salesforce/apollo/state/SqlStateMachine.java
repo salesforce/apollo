@@ -290,7 +290,6 @@ public class SqlStateMachine {
 
     static {
         ThreadLocalScopeManager.initialize();
-        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
     }
     static {
         try {
@@ -609,6 +608,7 @@ public class SqlStateMachine {
 
     private Boolean acceptMigration(Migration migration) throws SQLException {
         try {
+            ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
             switch (migration.getCommandCase()) {
             case CHANGELOGSYNC:
                 changeLogSync(migration.getChangelogSync());

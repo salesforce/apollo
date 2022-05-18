@@ -40,8 +40,8 @@
             <artifactId>liquibase-slf4j</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>liquibase-deterministic</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
