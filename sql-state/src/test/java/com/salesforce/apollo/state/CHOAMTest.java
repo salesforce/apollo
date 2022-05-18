@@ -197,10 +197,10 @@ public class CHOAMTest {
 
         try {
             assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
-                if (!(transactioneers.stream()
+                if (transactioneers.stream()
                                      .mapToInt(t -> t.inFlight())
                                      .filter(t -> t == 0)
-                                     .count() == transactioneers.size())) {
+                                     .count() != transactioneers.size()) {
                     return false;
                 }
                 final ULong target = updaters.values()
@@ -231,6 +231,9 @@ public class CHOAMTest {
                                                                .map(cb -> cb.height())
                                                                .toList());
         }
+
+        choams.values().forEach(e -> e.stop());
+        routers.values().forEach(e -> e.close());
 
         record row(float price, int quantity) {}
 
