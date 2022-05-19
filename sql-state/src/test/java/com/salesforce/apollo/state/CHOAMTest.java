@@ -234,6 +234,7 @@ public class CHOAMTest {
 
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
+        Thread.sleep(1_000);
 
         record row(float price, int quantity) {}
 
