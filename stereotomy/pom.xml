@@ -46,7 +46,6 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.jooq</groupId>
