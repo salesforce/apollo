@@ -17,7 +17,7 @@
         </dependency>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
-            <artifactId>stereotomy</artifactId>
+            <artifactId>stereotomy-services</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->

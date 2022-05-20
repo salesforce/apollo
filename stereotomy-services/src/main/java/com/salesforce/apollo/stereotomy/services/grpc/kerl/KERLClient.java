@@ -8,11 +8,11 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -190,143 +190,214 @@ public class KERLClient implements KERLService {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoords coordinates) {
+    public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
         EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
         }
-        Attachment attachment;
-        try {
-            attachment = client.getAttachment(request).get();
-        } catch (InterruptedException e) {
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(attachment.getSerializedSize());
-            metrics.inboundGetAttachmentResponse().mark(request.getSerializedSize());
-        }
-        return Optional.ofNullable(attachment.equals(Attachment.getDefaultInstance()) ? null : attachment);
+        var f = new CompletableFuture<Attachment>();
+        ListenableFuture<Attachment> complete = client.getAttachment(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var attachment = client.getAttachment(request).get();
+                final var serializedSize = attachment.getSerializedSize();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                f.complete(attachment.equals(Attachment.getDefaultInstance()) ? null : attachment);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                f.completeExceptionally(e);
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override
-    public Optional<KERL_> getKERL(Ident identifier) {
+    public CompletableFuture<KERL_> getKERL(Ident identifier) {
         Context timer = metrics == null ? null : metrics.getKERLClient().time();
         IdentifierContext request = IdentifierContext.newBuilder()
                                                      .setIdentifier(identifier)
                                                      .setContext(context)
                                                      .build();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGetKERLRequest().mark(request.getSerializedSize());
+            final var bsize = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bsize);
+            metrics.outboundGetKERLRequest().mark(bsize);
         }
-        KERL_ event;
-        try {
-            event = client.getKERL(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(event.getSerializedSize());
-            metrics.inboundGetKERLResponse().mark(event.getSerializedSize());
-        }
-        return Optional.ofNullable(event.equals(KERL_.getDefaultInstance()) ? null : event);
+        var f = new CompletableFuture<KERL_>();
+        ListenableFuture<KERL_> complete = client.getKERL(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var kerl = client.getKERL(request).get();
+                final var serializedSize = kerl.getSerializedSize();
+                if (metrics != null) {
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetKERLResponse().mark(serializedSize);
+                }
+                f.complete(kerl.equals(KERL_.getDefaultInstance()) ? null : kerl);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                f.completeExceptionally(e);
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override
-    public Optional<KeyEvent_> getKeyEvent(Digeste digest) {
+    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
         Context timer = metrics == null ? null : metrics.getKeyEventClient().time();
         EventDigestContext request = EventDigestContext.newBuilder().setDigest(digest).setContext(context).build();
+        final var bsize = request.getSerializedSize();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGetKeyEventRequest().mark(request.getSerializedSize());
+            metrics.outboundBandwidth().mark(bsize);
+            metrics.outboundGetKeyEventRequest().mark(bsize);
         }
-        KeyEvent_ event;
-        try {
-            event = client.getKeyEvent(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-        }
-        metrics.inboundBandwidth().mark(event.getSerializedSize());
-        metrics.inboundGetKeyEventResponse().mark(request.getSerializedSize());
-        return Optional.ofNullable(event.equals(KeyEvent_.getDefaultInstance()) ? null : event);
+        var result = client.getKeyEvent(request);
+        var f = new CompletableFuture<KeyEvent_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyEvent_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyEvent_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyEventResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override
-    public Optional<KeyEvent_> getKeyEvent(EventCoords coordinates) {
+    public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getKeyEventCoordsClient().time();
         EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGetKeyEventCoordsRequest().mark(request.getSerializedSize());
+            final var bsize = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bsize);
+            metrics.outboundGetKeyEventCoordsRequest().mark(bsize);
         }
-        KeyEvent_ event;
-        try {
-            event = client.getKeyEventCoords(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(event.getSerializedSize());
-            metrics.inboundGetKeyEventCoordsResponse().mark(event.getSerializedSize());
-        }
-        return Optional.ofNullable(event.equals(KeyEvent_.getDefaultInstance()) ? null : event);
+        var result = client.getKeyEventCoords(request);
+        var f = new CompletableFuture<KeyEvent_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyEvent_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyEvent_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyEventResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override
-    public Optional<KeyState_> getKeyState(EventCoords coordinates) {
+    public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
         Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
         EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGetKeyStateCoordsRequest().mark(request.getSerializedSize());
+            final var bs = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateCoordsRequest().mark(bs);
         }
-        KeyState_ event;
-        try {
-            event = client.getKeyStateCoords(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(event.getSerializedSize());
-            metrics.inboundGetKeyStateCoordsResponse().mark(event.getSerializedSize());
-        }
-        return Optional.ofNullable(event.equals(KeyState_.getDefaultInstance()) ? null : event);
+        var result = client.getKeyStateCoords(request);
+        var f = new CompletableFuture<KeyState_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyState_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyState_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                timer.stop();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override
-    public Optional<KeyState_> getKeyState(Ident identifier) {
+    public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
         Context timer = metrics == null ? null : metrics.getKeyStateClient().time();
         IdentifierContext request = IdentifierContext.newBuilder()
                                                      .setIdentifier(identifier)
                                                      .setContext(context)
                                                      .build();
         if (metrics != null) {
-            metrics.outboundBandwidth().mark(request.getSerializedSize());
-            metrics.outboundGetKeyStateRequest().mark(request.getSerializedSize());
+            final var bs = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateRequest().mark(bs);
         }
-        KeyState_ event;
-        try {
-            event = client.getKeyState(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            return Optional.empty();
-        }
-        if (timer != null) {
-            timer.stop();
-            metrics.inboundBandwidth().mark(event.getSerializedSize());
-            metrics.inboundGetKeyStateResponse().mark(event.getSerializedSize());
-        }
-        return Optional.ofNullable(event.equals(KeyState_.getDefaultInstance()) ? null : event);
+        var result = client.getKeyState(request);
+        var f = new CompletableFuture<KeyState_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyState_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyState_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                timer.stop();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override

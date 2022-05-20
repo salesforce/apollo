@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -22,16 +22,16 @@ import com.salesfoce.apollo.utils.proto.Digeste;
  */
 public interface ProtoKERLProvider {
 
-    Optional<Attachment> getAttachment(EventCoords coordinates);
+    CompletableFuture<Attachment> getAttachment(EventCoords coordinates);
 
-    Optional<KERL_> getKERL(Ident identifier);
+    CompletableFuture<KERL_> getKERL(Ident identifier);
 
-    Optional<KeyEvent_> getKeyEvent(Digeste digest);
+    CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest);
 
-    Optional<KeyEvent_> getKeyEvent(EventCoords coordinates);
+    CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates);
 
-    Optional<KeyState_> getKeyState(EventCoords coordinates);
+    CompletableFuture<KeyState_> getKeyState(EventCoords coordinates);
 
-    Optional<KeyState_> getKeyState(Ident identifier);
+    CompletableFuture<KeyState_> getKeyState(Ident identifier);
 
 }

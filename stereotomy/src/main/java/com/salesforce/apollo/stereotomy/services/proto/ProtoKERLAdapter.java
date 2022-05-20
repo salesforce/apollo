@@ -8,7 +8,6 @@ package com.salesforce.apollo.stereotomy.services.proto;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -75,33 +74,71 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoords coordinates) {
-        return kerl.getAttachment(EventCoordinates.from(coordinates)).map(attch -> attch.toAttachemente());
+    public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
+        var fs = new CompletableFuture<Attachment>();
+        try {
+            fs.complete(kerl.getAttachment(EventCoordinates.from(coordinates))
+                            .map(attch -> attch.toAttachemente())
+                            .get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     @Override
-    public Optional<KERL_> getKERL(Ident identifier) {
-        return kerl.kerl(Identifier.from(identifier)).map(kerl -> kerl(kerl));
+    public CompletableFuture<KERL_> getKERL(Ident identifier) {
+        var fs = new CompletableFuture<KERL_>();
+        try {
+            fs.complete(kerl.kerl(Identifier.from(identifier)).map(kerl -> kerl(kerl)).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     @Override
-    public Optional<KeyEvent_> getKeyEvent(Digeste digest) {
-        return kerl.getKeyEvent(Digest.from(digest)).map(event -> event.toKeyEvent_());
+    public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
+        var fs = new CompletableFuture<KeyEvent_>();
+        try {
+            fs.complete(kerl.getKeyEvent(Digest.from(digest)).map(event -> event.toKeyEvent_()).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     @Override
-    public Optional<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-        return kerl.getKeyEvent(EventCoordinates.from(coordinates)).map(event -> event.toKeyEvent_());
+    public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
+        var fs = new CompletableFuture<KeyEvent_>();
+        try {
+            fs.complete(kerl.getKeyEvent(EventCoordinates.from(coordinates)).map(event -> event.toKeyEvent_()).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     @Override
-    public Optional<KeyState_> getKeyState(EventCoords coordinates) {
-        return kerl.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState_());
+    public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
+        var fs = new CompletableFuture<KeyState_>();
+        try {
+            fs.complete(kerl.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState_()).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     @Override
-    public Optional<KeyState_> getKeyState(Ident identifier) {
-        return kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_());
+    public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
+        var fs = new CompletableFuture<KeyState_>();
+        try {
+            fs.complete(kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_()).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
     }
 
     private KERL_ kerl(List<EventWithAttachments> k) {

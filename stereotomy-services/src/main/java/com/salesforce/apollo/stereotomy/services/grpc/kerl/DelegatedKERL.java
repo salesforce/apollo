@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -61,7 +62,16 @@ public class DelegatedKERL implements KERL {
 
     @Override
     public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        return client.getAttachment(coordinates.toEventCoords()).map(attch -> Attachment.of(attch));
+        try {
+            return Optional.ofNullable(client.getAttachment(coordinates.toEventCoords())
+                                             .thenApply(attch -> Attachment.of(attch))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
@@ -71,27 +81,74 @@ public class DelegatedKERL implements KERL {
 
     @Override
     public Optional<KeyEvent> getKeyEvent(Digest digest) {
-        return client.getKeyEvent(digest.toDigeste()).map(event -> ProtobufEventFactory.from(event));
+        try {
+            return Optional.ofNullable(client.getKeyEvent(digest.toDigeste())
+                                             .thenApply(event -> ProtobufEventFactory.from(event))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
     public Optional<KeyEvent> getKeyEvent(EventCoordinates coordinates) {
-        return client.getKeyEvent(coordinates.toEventCoords()).map(event -> ProtobufEventFactory.from(event));
+        try {
+            return Optional.ofNullable(client.getKeyEvent(coordinates.toEventCoords())
+                                             .thenApply(event -> ProtobufEventFactory.from(event))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
     public Optional<KeyState> getKeyState(EventCoordinates coordinates) {
-        return client.getKeyState(coordinates.toEventCoords()).map(ks -> new KeyStateImpl(ks));
+        try {
+            return Optional.ofNullable(client.getKeyState(coordinates.toEventCoords())
+                                             .thenApply(ks -> new KeyStateImpl(ks))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
     public Optional<KeyState> getKeyState(Identifier identifier) {
-        return client.getKeyState(identifier.toIdent()).map(ks -> new KeyStateImpl(ks));
+        try {
+            return Optional.ofNullable(client.getKeyState(identifier.toIdent())
+                                             .thenApply(ks -> new KeyStateImpl(ks))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
     public Optional<List<EventWithAttachments>> kerl(Identifier identifier) {
-        return client.getKERL(identifier.toIdent())
-                     .map(k -> k.getEventsList().stream().map(kwa -> ProtobufEventFactory.from(kwa)).toList());
+        try {
+            return Optional.ofNullable(client.getKERL(identifier.toIdent())
+                                             .thenApply(k -> k.getEventsList()
+                                                              .stream()
+                                                              .map(kwa -> ProtobufEventFactory.from(kwa))
+                                                              .toList())
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 }
