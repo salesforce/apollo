@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services.grpc.kerl;
+package com.salesforce.apollo.thoth.grpc;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import com.codahale.metrics.Timer.Context;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
@@ -18,34 +19,35 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
+import com.salesfoce.apollo.thoth.proto.ThothGrpc.ThothImplBase;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 /**
  * @author hal.hildebrand
  *
  */
-public class KERLServer extends KERLServiceImplBase {
+public class ThothServer extends ThothImplBase {
 
     private final StereotomyMetrics metrics;
 
     private final RoutableService<ProtoKERLService> routing;
 
-    public KERLServer(StereotomyMetrics metrics, RoutableService<ProtoKERLService> router) {
+    public ThothServer(StereotomyMetrics metrics, RoutableService<ProtoKERLService> router) {
         this.metrics = metrics;
         this.routing = router;
     }
 
     @Override
-    public void append(KeyEventsContext request, StreamObserver<KeyStates> responseObserver) {
+    public void append(KeyEventsContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.appendEventsService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -54,8 +56,7 @@ public class KERLServer extends KERLServiceImplBase {
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getKeyEventList());
             if (result == null) {
-                responseObserver.onNext(KeyStates.getDefaultInstance());
-                responseObserver.onCompleted();
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
                 result.whenComplete((ks, t) -> {
                     if (timer != null) {
@@ -63,13 +64,11 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                     if (t != null) {
                         responseObserver.onError(t);
-                    } else {
-                        var states = ks == null ? KeyStates.getDefaultInstance()
-                                                : KeyStates.newBuilder().addAllKeyStates(ks).build();
-                        responseObserver.onNext(states);
+                    } else if (ks != null) {
+                        responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(states.getSerializedSize());
-                        metrics.outboundAppendEventsResponse().mark(states.getSerializedSize());
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
                     }
                 });
             }
@@ -78,7 +77,7 @@ public class KERLServer extends KERLServiceImplBase {
     }
 
     @Override
-    public void appendKERL(KERLContext request, StreamObserver<KeyStates> responseObserver) {
+    public void appendKERL(KERLContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.appendKERLService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -87,8 +86,7 @@ public class KERLServer extends KERLServiceImplBase {
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getKerl());
             if (result == null) {
-                responseObserver.onNext(KeyStates.getDefaultInstance());
-                responseObserver.onCompleted();
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
                 result.whenComplete((b, t) -> {
                     if (timer != null) {
@@ -96,13 +94,11 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                     if (t != null) {
                         responseObserver.onError(t);
-                    } else {
-                        var results = b == null ? KeyStates.getDefaultInstance()
-                                                : KeyStates.newBuilder().addAllKeyStates(b).build();
-                        responseObserver.onNext(results);
+                    } else if (b != null) {
+                        responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(results.getSerializedSize());
-                        metrics.outboundAppendKERLResponse().mark(results.getSerializedSize());
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
                     }
                 });
             }
@@ -110,8 +106,7 @@ public class KERLServer extends KERLServiceImplBase {
     }
 
     @Override
-    public void appendWithAttachments(KeyEventWitAttachmentsContext request,
-                                      StreamObserver<KeyStates> responseObserver) {
+    public void appendWithAttachments(KeyEventWitAttachmentsContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
@@ -120,8 +115,7 @@ public class KERLServer extends KERLServiceImplBase {
         routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getEventsList(), request.getAttachmentsList());
             if (result == null) {
-                responseObserver.onNext(KeyStates.getDefaultInstance());
-                responseObserver.onCompleted();
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
             } else {
                 result.whenComplete((ks, t) -> {
                     if (timer != null) {
@@ -129,13 +123,11 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                     if (t != null) {
                         responseObserver.onError(t);
-                    } else {
-                        var states = ks == null ? KeyStates.getDefaultInstance()
-                                                : KeyStates.newBuilder().addAllKeyStates(ks).build();
-                        responseObserver.onNext(states);
+                    } else if (ks != null) {
+                        responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();
-                        metrics.outboundBandwidth().mark(states.getSerializedSize());
-                        metrics.outboundAppendWithAttachmentsResponse().mark(states.getSerializedSize());
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
                     }
                 });
             }

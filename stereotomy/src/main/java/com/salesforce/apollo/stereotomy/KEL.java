@@ -61,7 +61,7 @@ public interface KEL {
     /**
      * Answer the Attachment for the coordinates
      */
-    Optional<Attachment> getAttachment(EventCoordinates coordinates);
+    CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates);
 
     /**
      * The digest algorithm used

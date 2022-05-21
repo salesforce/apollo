@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.observer;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -26,6 +27,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoEventObserver;
 
 /**
  * @author hal.hildebrand
@@ -41,8 +43,33 @@ public class EventObserverClient implements EventObserverService {
 
     }
 
-    public static EventObserverService getLocalLoopback() {
-        return null;
+    public static EventObserverService getLocalLoopback(ProtoEventObserver service, Member member) {
+        return new EventObserverService() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public Member getMember() {
+                return member;
+            }
+
+            @Override
+            public CompletableFuture<List<AttachmentEvent>> publish(KERL_ kerl) {
+                return service.publish(kerl);
+            }
+
+            @Override
+            public CompletableFuture<Void> publishAttachments(List<AttachmentEvent> attachments) {
+                return service.publishAttachments(attachments);
+            }
+
+            @Override
+            public CompletableFuture<List<AttachmentEvent>> publishEvents(List<KeyEvent_> events) {
+                return service.publishEvents(events);
+            }
+        };
     }
 
     private final ManagedServerConnection channel;

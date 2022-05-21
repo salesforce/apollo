@@ -61,17 +61,8 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        try {
-            return Optional.ofNullable(client.getAttachment(coordinates.toEventCoords())
-                                             .thenApply(attch -> Attachment.of(attch))
-                                             .get());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        }
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        return client.getAttachment(coordinates.toEventCoords()).thenApply(attch -> Attachment.of(attch));
     }
 
     @Override

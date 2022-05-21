@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -242,7 +244,7 @@ abstract public class UniKERL implements KERL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
         var resolved = dsl.select(COORDINATES.ID)
                           .from(COORDINATES)
                           .join(IDENTIFIER)
@@ -254,7 +256,9 @@ abstract public class UniKERL implements KERL {
                           .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber().longValue()))
                           .fetchOne();
         if (resolved == null) {
-            return Optional.empty();
+            var fs = new CompletableFuture<Attachment>();
+            fs.complete(null);
+            return fs;
         }
 
         var seals = dsl.select(ATTACHMENT.SEAL)
@@ -289,7 +293,9 @@ abstract public class UniKERL implements KERL {
                           })
                           .filter(s -> s != null)
                           .collect(Collectors.toMap(r -> r.witness, r -> JohnHancock.from(r.signature)));
-        return Optional.of(new AttachmentImpl(seals, receipts));
+        var fs = new CompletableFuture<Attachment>();
+        fs.complete(new AttachmentImpl(seals, receipts));
+        return fs;
     }
 
     @Override
@@ -388,7 +394,11 @@ abstract public class UniKERL implements KERL {
         var result = new ArrayList<EventWithAttachments>();
         while (current != null) {
             var coordinates = current.getCoordinates();
-            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            try {
+                result.add(new EventWithAttachments(current, getAttachment(coordinates).get()));
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException();
+            }
             current = getKeyEvent(current.getPrevious()).orElse(null);
         }
         Collections.reverse(result);

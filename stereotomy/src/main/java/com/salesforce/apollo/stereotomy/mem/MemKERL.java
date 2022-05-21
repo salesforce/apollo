@@ -136,8 +136,10 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
-        return Optional.ofNullable(receipts.get(coordinateOrdering(coordinates)));
+    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        var fs = new CompletableFuture<Attachment>();
+        fs.complete(receipts.get(coordinateOrdering(coordinates)));
+        return fs;
     }
 
     @Override
@@ -225,7 +227,11 @@ public class MemKERL implements KERL {
         var result = new ArrayList<EventWithAttachments>();
         while (current != null) {
             var coordinates = current.getCoordinates();
-            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            try {
+                result.add(new EventWithAttachments(current, getAttachment(coordinates).get()));
+            } catch (InterruptedException | ExecutionException e) {
+                throw new IllegalStateException(e);
+            }
             current = getKeyEvent(current.getPrevious()).orElse(null);
         }
         Collections.reverse(result);

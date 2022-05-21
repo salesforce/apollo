@@ -6,13 +6,25 @@ option java_outer_classname = "ThothProto";
 option objc_class_prefix = "Tp";
 import "util.proto";
 import "stereotomy.proto";
+import "stereotomy-services.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
 package thoth;
 
-service Thoth { 
-    rpc intervals (Intervals) returns (Entries) {} 
+
+
+service Thoth {
+    rpc append (stereotomy.services.KeyEventsContext) returns(google.protobuf.Empty) {}
+    rpc appendKERL (stereotomy.services.KERLContext) returns(google.protobuf.Empty) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns(google.protobuf.Empty) {}
+    
+    rpc getAttachment (stereotomy.services.EventContext) returns(stereotomy.Attachment) {}
+    rpc getKeyEvent (stereotomy.services.EventDigestContext) returns(stereotomy.KeyEvent_) {}
+    rpc getKeyEventCoords (stereotomy.services.EventContext) returns(stereotomy.KeyEvent_) {}
+    rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
+    rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
 }
 
 

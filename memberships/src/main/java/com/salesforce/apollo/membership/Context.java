@@ -347,6 +347,15 @@ public interface Context<T extends Member> {
     boolean isOffline(T m);
 
     /**
+     * Answer true if the member is a successor of the supplied digest on any ring
+     * 
+     * @param member
+     * @param digest
+     * @return
+     */
+    boolean isSuccessorOf(T m, Digest digest);
+
+    /**
      * Answer the majority cardinality of the context, based on the current ring
      * count
      */

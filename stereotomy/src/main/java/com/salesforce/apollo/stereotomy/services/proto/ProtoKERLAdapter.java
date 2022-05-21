@@ -18,6 +18,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
@@ -78,12 +79,16 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         var fs = new CompletableFuture<Attachment>();
         try {
             fs.complete(kerl.getAttachment(EventCoordinates.from(coordinates))
-                            .map(attch -> attch.toAttachemente())
+                            .thenApply(attch -> attch.toAttachemente())
                             .get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
         return fs;
+    }
+
+    public DigestAlgorithm getDigestAlgorithm() {
+        return kerl.getDigestAlgorithm();
     }
 
     @Override

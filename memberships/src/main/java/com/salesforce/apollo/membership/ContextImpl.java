@@ -286,6 +286,16 @@ public class ContextImpl<T extends Member> implements Context<T> {
     }
 
     @Override
+    public boolean isSuccessorOf(T m, Digest digest) {
+        for (Ring<T> ring : rings) {
+            if (m.equals(ring.successor(m))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public int majority() {
         return getRingCount() - toleranceLevel();
     }
