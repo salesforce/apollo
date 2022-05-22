@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.utils;
 
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.List;
@@ -15,123 +16,58 @@ import java.util.function.Function;
 
 import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.apache.commons.math3.random.MersenneTwister;
-import org.apache.commons.pool2.BasePooledObjectFactory;
-import org.apache.commons.pool2.ObjectPool;
-import org.apache.commons.pool2.PoolUtils;
-import org.apache.commons.pool2.PooledObject;
-import org.apache.commons.pool2.impl.DefaultPooledObject;
-import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author hal.hildebrand
  *
  */
 final public class Entropy {
-    private static class BitsStreamEntropyFactory extends BasePooledObjectFactory<BitsStreamGenerator> {
-        @Override
-        public BitsStreamGenerator create() throws Exception {
-            return new MersenneTwister(bitsStreamEntropy.nextLong());
-        }
 
-        @Override
-        public PooledObject<BitsStreamGenerator> wrap(BitsStreamGenerator random) {
-            return new DefaultPooledObject<>(random);
+    private static ThreadLocal<BitsStreamGenerator> bitsStreamPool   = new ThreadLocal<>() {
+
+                                                                         @Override
+                                                                         protected BitsStreamGenerator initialValue() {
+                                                                             return new MersenneTwister(secureEntropy.nextLong());
+                                                                         }
+                                                                     };
+    private static final SecureRandom               secureEntropy;
+    private static ThreadLocal<SecureRandom>        secureRandomPool = new ThreadLocal<>() {
+
+                                                                         @Override
+                                                                         protected SecureRandom initialValue() {
+                                                                             SecureRandom entropy;
+                                                                             try {
+                                                                                 entropy = SecureRandom.getInstance("SHA1PRNG");
+                                                                             } catch (NoSuchAlgorithmException e) {
+                                                                                 throw new IllegalStateException(e);
+                                                                             }
+                                                                             entropy.setSeed(secureEntropy.nextLong());
+                                                                             return entropy;
+                                                                         }
+                                                                     };
+
+    static {
+        try {
+            secureEntropy = SecureRandom.getInstanceStrong();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
-
-    private static class SecureRandomFactory extends BasePooledObjectFactory<SecureRandom> {
-        @Override
-        public SecureRandom create() throws Exception {
-            return new SecureRandom();
-        }
-
-        @Override
-        public PooledObject<SecureRandom> wrap(SecureRandom random) {
-            return new DefaultPooledObject<>(random);
-        }
-    }
-
-    private static final SecureRandom              bitsStreamEntropy = new SecureRandom();
-    private static ObjectPool<BitsStreamGenerator> bitsStreamPool    = PoolUtils.erodingPool(new GenericObjectPool<>(new BitsStreamEntropyFactory()));
-    private static Logger                          log               = LoggerFactory.getLogger(Entropy.class);
-    private static ObjectPool<SecureRandom>        secureRandomPool  = PoolUtils.erodingPool(new GenericObjectPool<>(new SecureRandomFactory()));
 
     public static void acceptBitsStream(Consumer<BitsStreamGenerator> c) {
-        BitsStreamGenerator entropy;
-        try {
-            entropy = bitsStreamPool.borrowObject();
-        } catch (Exception e) {
-            log.error("Unable to borrow bitsStream random", e);
-            throw new IllegalStateException("Unable to borrow bitsStream random", e);
-        }
-        try {
-            c.accept(entropy);
-        } finally {
-            try {
-                bitsStreamPool.returnObject(entropy);
-            } catch (Exception e) {
-                log.error("Unable to return bitsStream random", e);
-            }
-        }
+        c.accept(bitsStreamPool.get());
     }
 
     public static void acceptSecure(Consumer<SecureRandom> c) {
-        SecureRandom entropy;
-        try {
-            entropy = secureRandomPool.borrowObject();
-        } catch (Exception e) {
-            log.error("Unable to borrow secure random", e);
-            throw new IllegalStateException("Unable to borrow secure random", e);
-        }
-        try {
-            c.accept(entropy);
-        } finally {
-            try {
-                secureRandomPool.returnObject(entropy);
-            } catch (Exception e) {
-                log.error("Unable to return secure random", e);
-            }
-        }
+        c.accept(secureRandomPool.get());
     }
 
     public static <T> T applyBitsStream(Function<BitsStreamGenerator, T> func) {
-        BitsStreamGenerator entropy;
-        try {
-            entropy = bitsStreamPool.borrowObject();
-        } catch (Exception e) {
-            log.error("Unable to borrow bitsStream random", e);
-            throw new IllegalStateException("Unable to borrow bitsStream random", e);
-        }
-        try {
-            return func.apply(entropy);
-        } finally {
-            try {
-                bitsStreamPool.returnObject(entropy);
-            } catch (Exception e) {
-                log.error("Unable to return bitsStream random", e);
-            }
-        }
+        return func.apply(bitsStreamPool.get());
     }
 
     public static <T> T applySecure(Function<SecureRandom, T> func) {
-        SecureRandom entropy;
-        try {
-            entropy = secureRandomPool.borrowObject();
-        } catch (Exception e) {
-            log.error("Unable to borrow secure random", e);
-            throw new IllegalStateException("Unable to borrow secure random", e);
-        }
-        try {
-            return func.apply(entropy);
-        } finally {
-            try {
-                secureRandomPool.returnObject(entropy);
-            } catch (Exception e) {
-                log.error("Unable to return secure random", e);
-            }
-        }
+        return func.apply(secureRandomPool.get());
     }
 
     public static void nextBitsStreamBytes(byte[] bytes) {

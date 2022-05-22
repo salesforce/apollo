@@ -46,10 +46,6 @@
             <groupId>org.jooq</groupId>
             <artifactId>joou</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-pool2</artifactId>
-        </dependency>
 
         <!-- Test only deps below this line -->
 

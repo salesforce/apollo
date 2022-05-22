@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.GZIPOutputStream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
@@ -93,7 +91,6 @@ public class CheckpointAssemblerTest {
 
     @Test
     public void functional() throws Exception {
-        BitsStreamGenerator entropy = new MersenneTwister(0x1638);
         File checkpointDir = new File("target/checkpoint");
         Utils.clean(checkpointDir);
         checkpointDir.mkdirs();
