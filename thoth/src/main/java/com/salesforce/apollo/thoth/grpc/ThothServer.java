@@ -16,7 +16,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
@@ -37,8 +36,7 @@ import io.grpc.stub.StreamObserver;
  */
 public class ThothServer extends ThothImplBase {
 
-    private final StereotomyMetrics metrics;
-
+    private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
 
     public ThothServer(StereotomyMetrics metrics, RoutableService<ProtoKERLService> router) {
@@ -204,44 +202,6 @@ public class ThothServer extends ThothImplBase {
                             final var serializedSize = kerl.getSerializedSize();
                             metrics.outboundBandwidth().mark(serializedSize);
                             metrics.outboundGetKERLResponse().mark(serializedSize);
-                        }
-                    }
-                });
-            }
-        });
-    }
-
-    @Override
-    public void getKeyEvent(EventDigestContext request, StreamObserver<KeyEvent_> responseObserver) {
-        Context timer = metrics != null ? metrics.getKeyEventService().time() : null;
-        if (metrics != null) {
-            final var serializedSize = request.getSerializedSize();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundGetKeyEventRequest().mark(serializedSize);
-        }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            CompletableFuture<KeyEvent_> response = s.getKeyEvent(request.getDigest());
-            if (response == null) {
-                if (timer != null) {
-                    timer.stop();
-                }
-                responseObserver.onNext(KeyEvent_.getDefaultInstance());
-                responseObserver.onCompleted();
-            } else {
-                response.whenComplete((event, t) -> {
-                    if (timer != null) {
-                        timer.stop();
-                    }
-                    if (t != null) {
-                        responseObserver.onError(t);
-                    } else {
-                        event = event == null ? KeyEvent_.getDefaultInstance() : event;
-                        responseObserver.onNext(event);
-                        responseObserver.onCompleted();
-                        if (metrics != null) {
-                            final var serializedSize = event.getSerializedSize();
-                            metrics.outboundBandwidth().mark(serializedSize);
-                            metrics.outboundGetKeyEventResponse().mark(serializedSize);
                         }
                     }
                 });

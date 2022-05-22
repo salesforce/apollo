@@ -23,7 +23,6 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
@@ -48,7 +47,6 @@ public class ThothClient implements ThothService {
         return (t, f, c) -> {
             return new ThothClient(context, c, t, metrics);
         };
-
     }
 
     public static ThothService getLocalLoopback(ProtoKERLService service, Member member) {
@@ -81,11 +79,6 @@ public class ThothClient implements ThothService {
             @Override
             public ListenableFuture<KERL_> getKERL(Ident identifier) {
                 return wrap(service.getKERL(identifier));
-            }
-
-            @Override
-            public ListenableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-                return wrap(service.getKeyEvent(digest));
             }
 
             @Override
@@ -242,34 +235,6 @@ public class ThothClient implements ThothService {
             }
         }, r -> r.run());
         return complete;
-    }
-
-    @Override
-    public ListenableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-        Context timer = metrics == null ? null : metrics.getKeyEventClient().time();
-        EventDigestContext request = EventDigestContext.newBuilder().setDigest(digest).setContext(context).build();
-        final var bsize = request.getSerializedSize();
-        if (metrics != null) {
-            metrics.outboundBandwidth().mark(bsize);
-            metrics.outboundGetKeyEventRequest().mark(bsize);
-        }
-        var result = client.getKeyEvent(request);
-        result.addListener(() -> {
-            if (timer != null) {
-                timer.stop();
-            }
-            KeyEvent_ ks;
-            try {
-                ks = result.get();
-                if (timer != null) {
-                    final var serializedSize = ks.getSerializedSize();
-                    metrics.inboundBandwidth().mark(serializedSize);
-                    metrics.inboundGetKeyEventResponse().mark(serializedSize);
-                }
-            } catch (InterruptedException | ExecutionException e) {
-            }
-        }, r -> r.run());
-        return result;
     }
 
     @Override

@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import org.h2.jdbc.JdbcConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,23 +40,33 @@ import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.db.UniKERLDirect;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.grpc.Reconciliation;
+import com.salesforce.apollo.thoth.grpc.ReconciliationClient;
+import com.salesforce.apollo.thoth.grpc.ReconciliationServer;
+import com.salesforce.apollo.thoth.grpc.ReconciliationService;
 import com.salesforce.apollo.thoth.grpc.ThothClient;
 import com.salesforce.apollo.thoth.grpc.ThothServer;
 import com.salesforce.apollo.thoth.grpc.ThothService;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import liquibase.Liquibase;
+import liquibase.database.core.H2Database;
+import liquibase.exception.DatabaseException;
+import liquibase.exception.LiquibaseException;
+import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
  * Thoth provides the replicated state store for KERLs
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -67,6 +78,10 @@ public class Thoth {
         public MajorityWriteFail(String message) {
             super(message);
         }
+
+    }
+
+    private class Reconcile implements Reconciliation {
 
     }
 
@@ -83,7 +98,8 @@ public class Thoth {
         }
 
         @Override
-        public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
+        public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events,
+                                                         List<com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent> attachments) {
             return Thoth.this.kerl.append(events, attachments);
         }
 
@@ -126,24 +142,35 @@ public class Thoth {
         return fs;
     }
 
-    private final Context<Member>                                      context;
-    private final Executor                                             executor;
-    private final ProtoKERLAdapter                                     kerl;
-    private final SigningMember                                        member;
-    private final Service                                              service = new Service();
-    private final CommonCommunications<ThothService, ProtoKERLService> thothComms;
-    private final TemporalAmount                                       timeout;
+    private final JdbcConnection                                              connection;
+    private final Context<Member>                                             context;
+    private final Executor                                                    executor;
+    private final ProtoKERLAdapter                                            kerl;
+    private final SigningMember                                               member;
+    private final Reconcile                                                   reconciliation = new Reconcile();
+    private final Service                                                     service        = new Service();
+    private final CommonCommunications<ThothService, ProtoKERLService>        thothComms;
+    private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
+    private final TemporalAmount                                              timeout;
 
-    public Thoth(Context<Member> context, SigningMember member, KERL kerl, Router router, Executor executor,
-                 TemporalAmount timeout, StereotomyMetrics metrics) {
+    public Thoth(Context<Member> context, SigningMember member, JdbcConnection connection,
+                 DigestAlgorithm digestAlgorithm, Router router, Executor executor, TemporalAmount timeout,
+                 StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
         thothComms = router.create(member, context.getId(), service, r -> new ThothServer(metrics, r),
                                    ThothClient.getCreate(context.getId(), metrics),
                                    ThothClient.getLocalLoopback(service, member));
-        this.kerl = new ProtoKERLAdapter(kerl);
+        reconcileComms = router.create(member, context.getId(), reconciliation,
+                                       r -> new ReconciliationServer(metrics, r),
+                                       ReconciliationClient.getCreate(context.getId(), metrics),
+                                       ReconciliationClient.getLocalLoopback(reconciliation, member));
+        this.connection = connection;
+        this.kerl = new ProtoKERLAdapter(new UniKERLDirect(connection, digestAlgorithm));
         this.executor = executor;
+
+        initializeKerl();
     }
 
     public CompletableFuture<Void> append(KERL_ kerl) {
@@ -351,6 +378,22 @@ public class Thoth {
     private Digest digestOf(RotationEvent event) {
         return this.kerl.getDigestAlgorithm()
                         .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+    }
+
+    private void initializeKerl() {
+        var database = new H2Database() {
+            @Override
+            public void close() throws DatabaseException {
+                // Don't close the connection
+            }
+        };
+        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
+                                                 database)) {
+            liquibase.update((String) null);
+        } catch (LiquibaseException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,

@@ -20,11 +20,14 @@ service Thoth {
     rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns(google.protobuf.Empty) {}
     
     rpc getAttachment (stereotomy.services.EventContext) returns(stereotomy.Attachment) {}
-    rpc getKeyEvent (stereotomy.services.EventDigestContext) returns(stereotomy.KeyEvent_) {}
     rpc getKeyEventCoords (stereotomy.services.EventContext) returns(stereotomy.KeyEvent_) {}
     rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
     rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
+}
+
+service Reconciliation {
+    
 }
 
 
