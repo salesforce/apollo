@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.thoth;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.TemporalAmount;
 import java.util.List;
@@ -14,6 +15,9 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -35,7 +39,10 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
+import com.salesfoce.apollo.thoth.proto.Entries;
+import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -147,10 +154,12 @@ public class Thoth {
     private final Executor                                                    executor;
     private final ProtoKERLAdapter                                            kerl;
     private final SigningMember                                               member;
+    private final RingCommunications<ReconciliationService>                   reconcile;
+    private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();
+    private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final CommonCommunications<ThothService, ProtoKERLService>        thothComms;
-    private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final TemporalAmount                                              timeout;
 
     public Thoth(Context<Member> context, SigningMember member, JdbcConnection connection,
@@ -169,6 +178,8 @@ public class Thoth {
         this.connection = connection;
         this.kerl = new ProtoKERLAdapter(new UniKERLDirect(connection, digestAlgorithm));
         this.executor = executor;
+        this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
+        ;
 
         initializeKerl();
     }
@@ -336,6 +347,23 @@ public class Thoth {
         return result;
     }
 
+    public void start(ScheduledExecutorService scheduler, Duration duration) {
+        if (!started.compareAndSet(false, true)) {
+            return;
+        }
+        thothComms.register(context.getId(), service);
+        reconcileComms.register(context.getId(), reconciliation);
+        reconcile(scheduler, duration);
+    }
+
+    public void stop() {
+        if (!started.compareAndSet(true, false)) {
+            return;
+        }
+        thothComms.deregister(context.getId());
+        reconcileComms.deregister(context.getId());
+    }
+
     private <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, AtomicReference<T> result) {
         return majority.thenCompose(b -> {
             var fs = new CompletableFuture<T>();
@@ -396,6 +424,11 @@ public class Thoth {
         }
     }
 
+    private CombinedIntervals keyIntervals() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,
                            Supplier<Boolean> isTimedOut, AtomicInteger tally, ThothService link, String action) {
         if (futureSailor.isEmpty()) {
@@ -421,6 +454,11 @@ public class Thoth {
         log.trace("{}: {} on: {}", action, identifier, member);
         tally.incrementAndGet();
         return !isTimedOut.get();
+    }
+
+    private void populate(CombinedIntervals keyIntervals) {
+        // TODO Auto-generated method stub
+
     }
 
     private <T> boolean read(CompletableFuture<T> result, Optional<ListenableFuture<T>> futureSailor, Digest identifier,
@@ -454,5 +492,49 @@ public class Thoth {
             log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember(), member);
             return !isTimedOut.get();
         }
+    }
+
+    private void reconcile(List<KeyEvent_> events) {
+        // TODO Auto-generated method stub
+
+    }
+
+    private void reconcile(Optional<ListenableFuture<Entries>> futureSailor, ReconciliationService link,
+                           ScheduledExecutorService scheduler, Duration duration) {
+        if (!started.get() || futureSailor.isEmpty()) {
+            return;
+        }
+        try {
+            Entries entries = futureSailor.get().get();
+            log.trace("Received: {} events in interval reconciliation from: {} on: {}", entries.getEventsCount(),
+                      link.getMember(), member);
+            reconcile(entries.getEventsList());
+        } catch (InterruptedException | ExecutionException e) {
+            log.debug("Error in interval reconciliation with {} : {}", link.getMember(), e.getCause());
+        }
+        if (started.get()) {
+            scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private ListenableFuture<Entries> reconcile(ReconciliationService link, Integer ring) {
+        CombinedIntervals keyIntervals = keyIntervals();
+        log.info("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
+                 keyIntervals);
+        populate(keyIntervals);
+        return link.intervals(Intervals.newBuilder()
+                                       .setContext(context.getId().toDigeste())
+                                       .setRing(ring)
+                                       .addAllIntervals(keyIntervals.toIntervals())
+                                       .build());
+    }
+
+    private void reconcile(ScheduledExecutorService scheduler, Duration duration) {
+        if (!started.get()) {
+            return;
+        }
+        reconcile.execute((link, ring) -> reconcile(link, ring),
+                          (futureSailor, link, ring) -> reconcile(futureSailor, link, scheduler, duration));
+
     }
 }

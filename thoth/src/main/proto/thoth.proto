@@ -32,14 +32,15 @@ service Reconciliation {
 
 
 message Entries {
-    repeated google.protobuf.Any records = 1;
+    repeated stereotomy.KeyEvent_ events = 1;
 }
 
 message Intervals {
-    bytes context = 1;
-    repeated Interval intervals = 2;
-    repeated bytes have = 3;
-}
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated Interval intervals = 3;
+    utils.Biff have = 4;
+} 
 
 message Get {
     utils.Digeste context = 1;

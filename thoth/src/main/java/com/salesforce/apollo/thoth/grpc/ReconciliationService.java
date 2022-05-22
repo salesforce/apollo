@@ -7,6 +7,9 @@
 
 package com.salesforce.apollo.thoth.grpc;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.thoth.proto.Entries;
+import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesforce.apollo.comm.Link;
 
 /**
@@ -14,5 +17,7 @@ import com.salesforce.apollo.comm.Link;
  *
  */
 public interface ReconciliationService extends Link {
+
+    ListenableFuture<Entries> intervals(Intervals build);
 
 }

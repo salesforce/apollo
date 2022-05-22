@@ -9,6 +9,9 @@ package com.salesforce.apollo.thoth.grpc;
 
 import java.io.IOException;
 
+import com.google.common.util.concurrent.ListenableFuture;
+import com.salesfoce.apollo.thoth.proto.Entries;
+import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -42,6 +45,12 @@ public class ReconciliationClient implements ReconciliationService {
             @Override
             public void close() throws IOException {
             }
+
+            @Override
+            public ListenableFuture<Entries> intervals(Intervals build) {
+                // TODO Auto-generated method stub
+                return null;
+            }
         };
     }
 
@@ -68,6 +77,12 @@ public class ReconciliationClient implements ReconciliationService {
 
     @Override
     public Member getMember() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public ListenableFuture<Entries> intervals(Intervals build) {
         // TODO Auto-generated method stub
         return null;
     }
