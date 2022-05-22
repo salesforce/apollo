@@ -37,6 +37,7 @@ import com.salesforce.apollo.ethereal.memberships.comm.GossiperService;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.Status;
@@ -119,7 +120,7 @@ public class ChRbcGossip {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy().nextLong(2 * duration.toMillis()));
+        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamLong(2 * duration.toMillis()));
         log.trace("Starting GossipService[{}] on: {}", context.getId(), member);
         comm.register(context.getId(), new Terminal());
         scheduler.schedule(() -> {

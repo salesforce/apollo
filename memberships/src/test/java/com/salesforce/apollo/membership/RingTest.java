@@ -58,8 +58,7 @@ public class RingTest {
         var notAfter = Instant.now().plusSeconds(10_000);
         Digest id = new Digest(DigestAlgorithm.DEFAULT, hash);
         X509Certificate generated = Certificates.selfSign(false, Utils.encode(id, "foo.com", i, keyPair.getPublic()),
-                                                          Utils.secureEntropy(), keyPair, notBefore, notAfter,
-                                                          Collections.emptyList());
+                                                          keyPair, notBefore, notAfter, Collections.emptyList());
         return new MemberImpl(id, generated, generated.getPublicKey());
     }
 

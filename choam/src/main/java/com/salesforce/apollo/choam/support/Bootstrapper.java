@@ -35,8 +35,8 @@ import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Pair;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.ULongBloomFilter;
 
@@ -70,7 +70,7 @@ public class Bootstrapper {
     public static Digest randomCut(DigestAlgorithm algo) {
         long[] cut = new long[algo.longLength()];
         for (int i = 0; i < cut.length; i++) {
-            cut[i] = Utils.secureEntropy().nextLong();
+            cut[i] = Entropy.nextSecureLong();
         }
         return new Digest(algo, cut);
     }
@@ -124,7 +124,7 @@ public class Bootstrapper {
     private ListenableFuture<Blocks> anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member().getId());
-        long seed = Utils.bitStreamEntropy().nextLong();
+        long seed = Entropy.nextBitsStreamLong();
         BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
                                                                         params.combine().falsePositiveRate());
 
@@ -244,7 +244,7 @@ public class Bootstrapper {
     private ListenableFuture<Blocks> completeViewChain(Terminal link, AtomicReference<ULong> start, ULong end) {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member().getId());
-        long seed = Utils.bitStreamEntropy().nextLong();
+        long seed = Entropy.nextBitsStreamLong();
         ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
                                                                       params.combine().falsePositiveRate());
         start.set(store.lastViewChainFrom(start.get()));

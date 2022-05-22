@@ -34,19 +34,7 @@ import java.util.zip.GZIPOutputStream;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
- 
-import deterministic.org.h2.api.ErrorCode;
-import deterministic.org.h2.engine.SessionLocal;
-import deterministic.org.h2.jdbc.JdbcConnection;
-import deterministic.org.h2.jdbc.JdbcSQLNonTransientConnectionException;
-import deterministic.org.h2.jdbc.JdbcSQLNonTransientException;
-import deterministic.org.h2.message.DbException;
-import deterministic.org.h2.util.BlockClock;
-import deterministic.org.h2.util.CloseWatcher;
-import deterministic.org.h2.util.DateTimeUtils;
-import deterministic.org.h2.util.JdbcUtils;
-import deterministic.org.h2.util.MathUtils;
-import deterministic.org.h2.value.Value;
+
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,9 +67,21 @@ import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
 import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
 import com.salesforce.apollo.state.liquibase.ThreadLocalScopeManager;
 import com.salesforce.apollo.utils.DelegatingJdbcConnector;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
+import deterministic.org.h2.api.ErrorCode;
+import deterministic.org.h2.engine.SessionLocal;
+import deterministic.org.h2.jdbc.JdbcConnection;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientConnectionException;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientException;
+import deterministic.org.h2.message.DbException;
+import deterministic.org.h2.util.BlockClock;
+import deterministic.org.h2.util.CloseWatcher;
+import deterministic.org.h2.util.DateTimeUtils;
+import deterministic.org.h2.util.JdbcUtils;
+import deterministic.org.h2.util.MathUtils;
+import deterministic.org.h2.value.Value;
 import liquibase.CatalogAndSchema;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
@@ -397,7 +397,7 @@ public class SqlStateMachine {
 
     public Function<ULong, File> getCheckpointer() {
         return height -> {
-            String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
+            String rndm = Long.toString(Entropy.nextBitsStreamLong());
             try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {

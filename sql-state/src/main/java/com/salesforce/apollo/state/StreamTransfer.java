@@ -18,6 +18,10 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.BbBackedInputStream;
+import com.salesforce.apollo.utils.Entropy;
+
 import deterministic.org.h2.api.ErrorCode;
 import deterministic.org.h2.api.IntervalQualifier;
 import deterministic.org.h2.engine.Constants;
@@ -71,9 +75,6 @@ import deterministic.org.h2.value.ValueVarcharIgnoreCase;
 import deterministic.org.h2.value.lob.LobData;
 import deterministic.org.h2.value.lob.LobDataDatabase;
 import deterministic.org.h2.value.lob.LobDataFetchOnDemand;
-
-import com.google.protobuf.ByteString;
-import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
  * The stream transfer class is used to read and write Value objects to streams
@@ -180,7 +181,7 @@ public class StreamTransfer {
         this.version = version;
         this.session = session;
         lobMacSalt = new byte[LOB_MAC_SALT_LENGTH];
-        com.salesforce.apollo.utils.Utils.bitStreamEntropy().nextBytes(lobMacSalt);
+        Entropy.nextBitsStreamBytes(lobMacSalt);
     }
 
     public StreamTransfer(Session session) {

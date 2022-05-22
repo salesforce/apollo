@@ -7,6 +7,7 @@
 package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.Crown.crownFromParents;
+import static com.salesforce.apollo.ethereal.PreUnit.forSigning;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -310,7 +311,7 @@ public interface PreUnit {
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
         var salt = new byte[algo.digestLength()];
-        Utils.secureEntropy().nextBytes(salt);
+        Entropy.nextSecureBytes(salt);
         var signature = sign(signer, id, crown, data, rsBytes, salt);
         var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, rsBytes,
                                          signature, salt),

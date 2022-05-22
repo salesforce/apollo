@@ -50,6 +50,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -177,7 +178,7 @@ public class RbcTest {
             var rnd = r;
             messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
-                Utils.secureEntropy().nextBytes(rand);
+                Entropy.nextSecureBytes(rand);
                 ByteBuffer buf = ByteBuffer.wrap(new byte[36]);
                 buf.putInt(rnd);
                 buf.put(rand);

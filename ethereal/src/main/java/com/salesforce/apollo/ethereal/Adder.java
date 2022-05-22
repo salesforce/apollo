@@ -35,7 +35,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -106,11 +106,11 @@ public class Adder {
         this.threshold = Dag.threshold(conf.nProc());
         this.maxSize = maxSize;
         for (int i = 0; i < 3; i++) {
-            prevs.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+            prevs.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
                                             conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            cmts.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+            cmts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
                                            conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            unts.add(new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(),
+            unts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
                                            conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
         }
     }
@@ -603,18 +603,18 @@ public class Adder {
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
-        return cmts.get(Utils.bitStreamEntropy().nextInt(cmts.size())).toBff();
+        return cmts.get(Entropy.nextBitsStreamInt(cmts.size())).toBff();
     }
 
     /**
      * Answer the bloom filter with the prevotes the receiver has
      */
     private Biff havePreVotes() {
-        return prevs.get(Utils.bitStreamEntropy().nextInt(prevs.size())).toBff();
+        return prevs.get(Entropy.nextBitsStreamInt(prevs.size())).toBff();
     }
 
     private Biff haveUnits() {
-        return unts.get(Utils.bitStreamEntropy().nextInt(unts.size())).toBff();
+        return unts.get(Entropy.nextBitsStreamInt(unts.size())).toBff();
     }
 
     /**

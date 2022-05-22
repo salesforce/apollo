@@ -8,7 +8,6 @@ package com.salesforce.apollo.utils.bloomFilters;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 /**
@@ -30,13 +29,12 @@ public class BloomFilterTest {
     public void smoke() throws Exception {
         int max = 1_000_000;
         double target = 0.000125;
-        BloomFilter<Digest> biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), max, target);
+        BloomFilter<Digest> biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), max, target);
 
-        SecureRandom random = Utils.secureEntropy();
         List<Digest> added = new ArrayList<>();
         for (int i = 0; i < max; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
-            random.nextBytes(hash);
+            Entropy.nextSecureBytes(hash);
             Digest d = new Digest(DigestAlgorithm.DEFAULT, hash);
             added.add(d);
             biff.add(d);
@@ -51,7 +49,7 @@ public class BloomFilterTest {
 
         for (int i = 0; i < unknownSample; i++) {
             byte[] hash = new byte[DigestAlgorithm.DEFAULT.digestLength()];
-            random.nextBytes(hash);
+            Entropy.nextSecureBytes(hash);
 //            if (i % 80_000 == 0) {
 //                System.out.println();
 //            }

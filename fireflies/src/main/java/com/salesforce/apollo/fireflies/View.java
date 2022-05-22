@@ -12,13 +12,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.Provider;
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -78,6 +76,7 @@ import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.services.EventValidation;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -183,7 +182,7 @@ public class View {
          * @param toleranceLevel - t
          * @return the mask
          */
-        public static BitSet createInitialMask(int toleranceLevel, SecureRandom entropy) {
+        public static BitSet createInitialMask(int toleranceLevel) {
             int nbits = 2 * toleranceLevel + 1;
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();
@@ -193,7 +192,7 @@ public class View {
             for (int i = 0; i < toleranceLevel; i++) {
                 random.add(false);
             }
-            Collections.shuffle(random, entropy);
+            Entropy.secureShuffle(random);
             for (int i = 0; i < nbits; i++) {
                 if (random.get(i)) {
                     mask.set(i);
@@ -262,7 +261,7 @@ public class View {
         BitSet nextMask() {
             NoteWrapper current = note;
             if (current == null) {
-                BitSet mask = createInitialMask(context.toleranceLevel(), Utils.secureEntropy());
+                BitSet mask = createInitialMask(context.toleranceLevel());
                 assert View.isValidMask(mask, context.toleranceLevel()) : "Invalid initial mask: " + mask + "for node: "
                 + getId();
                 return mask;
@@ -293,7 +292,7 @@ public class View {
             } else {
                 // Fill the rest of the mask with randomly set index
                 while (mask.cardinality() > context.toleranceLevel() + 1) {
-                    int index = Utils.secureEntropy().nextInt(context.getRingCount());
+                    int index = Entropy.nextSecureInt(context.getRingCount());
                     if (mask.get(index)) {
                         mask.set(index, false);
                     }
@@ -602,7 +601,7 @@ public class View {
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            long seed = Utils.secureEntropy().nextLong();
+            long seed = Entropy.nextSecureLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setIdentities(processIdentityDigests(from, BloomFilter.from(digests.getIdentityBff()), seed,
@@ -629,7 +628,7 @@ public class View {
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
+            int initialDelay = Entropy.nextSecureInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> {
                 exec.execute(Utils.wrapped(() -> {
                     try {
@@ -1049,8 +1048,7 @@ public class View {
                                         .setNote(Note.newBuilder()
                                                      .setId(seed.getId().toDigeste())
                                                      .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel(),
-                                                                                                         Utils.secureEntropy())
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
@@ -1089,7 +1087,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     private Digests commonDigests() {
-        long seed = Utils.secureEntropy().nextLong();
+        long seed = Entropy.nextSecureLong();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
                       .setNoteBff(getNotesBff(seed, fpr).toBff())

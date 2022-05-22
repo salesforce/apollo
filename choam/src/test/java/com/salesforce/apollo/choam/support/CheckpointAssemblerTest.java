@@ -147,7 +147,7 @@ public class CheckpointAssemblerTest {
             public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<CheckpointSegments> futureSailor = SettableFuture.create();
                 CheckpointReplication rep = invocation.getArgument(0, CheckpointReplication.class);
-                List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 2, entropy);
+                List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 2);
                 System.out.println("Fetched: " + fetched.size());
                 futureSailor.set(CheckpointSegments.newBuilder().addAllSegments(fetched).build());
                 return futureSailor;

@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.zip.GZIPInputStream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
 import org.h2.mvstore.MVMap;
 
 import com.google.protobuf.ByteString;
@@ -74,7 +73,7 @@ public class CheckpointState {
         state.clear();
     }
 
-    public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments, BitsStreamGenerator entropy) {
+    public List<Slice> fetchSegments(BloomFilter<Integer> bff, int maxSegments) {
         List<Slice> slices = new ArrayList<>();
         for (int i = 0; i < checkpoint.getSegmentsCount(); i++) {
             if (!bff.contains(i)) {

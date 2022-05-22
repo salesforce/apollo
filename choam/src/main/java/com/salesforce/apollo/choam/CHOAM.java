@@ -98,7 +98,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
@@ -969,7 +968,7 @@ public class CHOAM {
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
 
         return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
-                                                              params.maxCheckpointSegments(), Utils.bitStreamEntropy()))
+                                                              params.maxCheckpointSegments()))
                           .build();
     }
 

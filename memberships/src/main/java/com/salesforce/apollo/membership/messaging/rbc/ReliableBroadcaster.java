@@ -53,6 +53,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.comms.RbcServer;
 import com.salesforce.apollo.membership.messaging.rbc.comms.ReliableBroadcast;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
@@ -193,8 +194,7 @@ public class ReliableBroadcaster {
         }
 
         public BloomFilter<Digest> forReconcilliation() {
-            var biff = new DigestBloomFilter(Utils.bitStreamEntropy().nextLong(), params.bufferSize,
-                                             params.falsePositiveRate);
+            var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), params.bufferSize, params.falsePositiveRate);
             state.keySet().forEach(k -> biff.add(k));
             return biff;
         }
@@ -466,8 +466,8 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Utils.bitStreamEntropy()
-                                                         .nextInt((int) Math.max(1, duration.toMillis() * 2)));
+        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamInt((int) Math.max(1,
+                                                                                             duration.toMillis() * 2)));
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member);
         comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);

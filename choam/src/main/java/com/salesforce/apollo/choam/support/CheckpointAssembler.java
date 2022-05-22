@@ -37,7 +37,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
@@ -84,7 +84,7 @@ public class CheckpointAssembler {
     }
 
     private CheckpointReplication buildRequest() {
-        long seed = Utils.bitStreamEntropy().nextLong();
+        long seed = Entropy.nextBitsStreamLong();
         BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
         IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
             segmentsBff.add(i);

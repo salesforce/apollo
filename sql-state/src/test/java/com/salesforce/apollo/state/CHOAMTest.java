@@ -61,6 +61,7 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -116,9 +117,9 @@ public class CHOAMTest {
     @BeforeEach
     public void before() {
         registry = new MetricRegistry();
-        checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
-        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
         Random entropy = new Random();
@@ -198,9 +199,9 @@ public class CHOAMTest {
         try {
             assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
                 if (transactioneers.stream()
-                                     .mapToInt(t -> t.inFlight())
-                                     .filter(t -> t == 0)
-                                     .count() != transactioneers.size()) {
+                                   .mapToInt(t -> t.inFlight())
+                                   .filter(t -> t == 0)
+                                   .count() != transactioneers.size()) {
                     return false;
                 }
                 final ULong target = updaters.values()

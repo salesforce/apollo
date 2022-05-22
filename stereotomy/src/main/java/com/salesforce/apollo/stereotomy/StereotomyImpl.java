@@ -301,9 +301,8 @@ public class StereotomyImpl implements Stereotomy {
 
             var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(state.getIdentifier()), qb64(signature)));
 
-            return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, entropy, keyPair,
-                                                                                   validFrom, validFrom.plus(valid),
-                                                                                   extensions),
+            return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, keyPair, validFrom,
+                                                                                   validFrom.plus(valid), extensions),
                                                              keyPair.getPrivate()));
         }
 
