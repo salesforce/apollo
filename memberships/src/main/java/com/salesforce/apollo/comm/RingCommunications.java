@@ -8,7 +8,6 @@ package com.salesforce.apollo.comm;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
@@ -26,6 +25,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -133,7 +133,7 @@ public class RingCommunications<Comm extends Link> {
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         if (current == 0) {
-            Collections.shuffle(traversalOrder);
+            Entropy.secureShuffle(traversalOrder);
         }
         for (int i = 0; i < rings; i++) {
             link = linkFor(digest, current, test);
@@ -152,7 +152,7 @@ public class RingCommunications<Comm extends Link> {
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
         if (current == 0) {
-            Collections.shuffle(traversalOrder);
+            Entropy.secureShuffle(traversalOrder);
         }
         for (int i = 0; i < rings; i++) {
             link = linkFor(current);
