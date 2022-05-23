@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.thoth;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -38,7 +39,7 @@ public class KERLSpace {
      */
     public List<Digest> populate(CombinedIntervals keyIntervals) {
         // TODO Auto-generated method stub
-        return null;
+        return Collections.emptyList();
     }
 
     /**
@@ -51,7 +52,7 @@ public class KERLSpace {
      */
     public Update reconcile(Intervals intervals) {
         // TODO Auto-generated method stub
-        return null;
+        return Update.getDefaultInstance();
     }
 
     /**

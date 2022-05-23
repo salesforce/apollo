@@ -7,7 +7,6 @@
 
 package com.salesforce.apollo.thoth;
 
-import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,7 +21,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -123,7 +121,7 @@ public class Thoth {
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).append(kerl_);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -132,7 +130,7 @@ public class Thoth {
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).append(events);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -141,7 +139,7 @@ public class Thoth {
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).append(events, attachments);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -150,7 +148,7 @@ public class Thoth {
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getAttachment(coordinates);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -159,7 +157,7 @@ public class Thoth {
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getKERL(identifier);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -168,7 +166,7 @@ public class Thoth {
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getKeyEvent(digest);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -177,7 +175,7 @@ public class Thoth {
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getKeyEvent(coordinates);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -186,7 +184,7 @@ public class Thoth {
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getKeyState(coordinates);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -195,7 +193,7 @@ public class Thoth {
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
             try (var k = kerlPool.create()) {
                 return new ProtoKERLAdapter(k).getKeyState(identifier);
-            } catch (IOException | SQLException e) {
+            } catch (Throwable e) {
                 return completeExceptionally(e);
             }
         }
@@ -296,7 +294,8 @@ public class Thoth {
                                                                                       isTimedOut, tally, link,
                                                                                       "append events"),
                                              null);
-        return complete(majority, null);
+        final CompletableFuture<Void> complete = complete(majority, null);
+        return complete;
     }
 
     public CompletableFuture<Void> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
@@ -435,13 +434,13 @@ public class Thoth {
         reconcileComms.deregister(context.getId());
     }
 
-    private <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, AtomicReference<T> result) {
+    private <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
         return majority.thenCompose(b -> {
             var fs = new CompletableFuture<T>();
             if (!b) {
                 fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
             } else {
-                fs.complete(result.get());
+                fs.complete(result);
             }
             return fs;
         });
@@ -602,8 +601,8 @@ public class Thoth {
 
     private ListenableFuture<Update> reconcile(ReconciliationService link, Integer ring) {
         CombinedIntervals keyIntervals = keyIntervals();
-        log.info("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
-                 keyIntervals);
+        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
+                  keyIntervals);
         return link.reconcile(Intervals.newBuilder()
                                        .setContext(context.getId().toDigeste())
                                        .setRing(ring)

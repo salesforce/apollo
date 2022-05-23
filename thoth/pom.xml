@@ -12,7 +12,7 @@
     <properties>
         <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
     </properties>
-    
+
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
@@ -124,6 +124,11 @@
                             <artifactId>h2</artifactId>
                             <version>${h2.version}</version>
                         </dependency>
+                        <dependency>
+                            <groupId>com.salesforce.apollo</groupId>
+                            <artifactId>stereotomy</artifactId>
+                            <version>${project.version}</version>
+                        </dependency>
                     </dependencies>
                 </plugin>
                 <plugin>
@@ -164,6 +169,54 @@
                             </target>
                         </generator>
                     </configuration>
+                </plugin>
+                <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+                <plugin>
+                	<groupId>org.eclipse.m2e</groupId>
+                	<artifactId>lifecycle-mapping</artifactId>
+                	<version>1.0.0</version>
+                	<configuration>
+                		<lifecycleMappingMetadata>
+                			<pluginExecutions>
+                				<pluginExecution>
+                					<pluginExecutionFilter>
+                						<groupId>
+                							org.apache.maven.plugins
+                						</groupId>
+                						<artifactId>
+                							maven-clean-plugin
+                						</artifactId>
+                						<versionRange>
+                							[2.5,)
+                						</versionRange>
+                						<goals>
+                							<goal>clean</goal>
+                						</goals>
+                					</pluginExecutionFilter>
+                					<action>
+                						<ignore></ignore>
+                					</action>
+                				</pluginExecution>
+                				<pluginExecution>
+                					<pluginExecutionFilter>
+                						<groupId>org.liquibase</groupId>
+                						<artifactId>
+                							liquibase-maven-plugin
+                						</artifactId>
+                						<versionRange>
+                							[4.8.0,)
+                						</versionRange>
+                						<goals>
+                							<goal>update</goal>
+                						</goals>
+                					</pluginExecutionFilter>
+                					<action>
+                						<ignore></ignore>
+                					</action>
+                				</pluginExecution>
+                			</pluginExecutions>
+                		</lifecycleMappingMetadata>
+                	</configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -115,8 +114,8 @@ public class FireFliesTest {
 
     @Test
     public void smokin() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
-        var scheduler = Executors.newSingleThreadScheduledExecutor();
+        var exec = Executors.newFixedThreadPool(CARDINALITY);
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
                                  .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))

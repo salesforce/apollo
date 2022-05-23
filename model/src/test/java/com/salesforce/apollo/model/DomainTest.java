@@ -214,8 +214,7 @@ public class DomainTest {
                                                             controlled -> controlled));
 
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
-        var exec = Executors.newCachedThreadPool();
+        var exec = Executors.newFixedThreadPool(CARDINALITY);
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
