@@ -58,7 +58,7 @@ public class ProcessDomain extends Domain {
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())
                           .build();
         this.foundation = new View(base, getMember(), endpoint, EventValidation.NONE, params.communications(), 0.0125,
-                                   DigestAlgorithm.DEFAULT, null);
+                                   DigestAlgorithm.DEFAULT, null, params.exec());
         bridge = new ContextBridge(params.context(), this);
         bridge.register(base);
     }
