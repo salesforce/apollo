@@ -23,11 +23,11 @@ import com.salesforce.apollo.crypto.Digest;
  * @author hal.hildebrand
  *
  */
-public class KERLSpace {
+public class KerlSpace {
     @SuppressWarnings("unused")
     private final JdbcConnectionPool connectionPool;
 
-    public KERLSpace(JdbcConnectionPool connectionPool) {
+    public KerlSpace(JdbcConnectionPool connectionPool) {
         this.connectionPool = connectionPool;
     }
 

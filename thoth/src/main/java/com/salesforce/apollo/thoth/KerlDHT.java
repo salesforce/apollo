@@ -59,13 +59,13 @@ import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.grpc.DhtClient;
+import com.salesforce.apollo.thoth.grpc.DhtServer;
+import com.salesforce.apollo.thoth.grpc.DhtService;
 import com.salesforce.apollo.thoth.grpc.Reconciliation;
 import com.salesforce.apollo.thoth.grpc.ReconciliationClient;
 import com.salesforce.apollo.thoth.grpc.ReconciliationServer;
 import com.salesforce.apollo.thoth.grpc.ReconciliationService;
-import com.salesforce.apollo.thoth.grpc.ThothClient;
-import com.salesforce.apollo.thoth.grpc.ThothServer;
-import com.salesforce.apollo.thoth.grpc.ThothService;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
@@ -77,12 +77,12 @@ import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
- * Thoth provides the replicated state store for KERLs
+ * KerlDHT provides the replicated state store for KERLs
  *
  * @author hal.hildebrand
  *
  */
-public class Thoth {
+public class KerlDHT {
     public static class MajorityWriteFail extends Exception {
 
         private static final long serialVersionUID = 1L;
@@ -102,7 +102,7 @@ public class Thoth {
                 return Update.getDefaultInstance();
             }
 
-            return Thoth.this.kerlSpace.reconcile(intervals);
+            return KerlDHT.this.kerlSpace.reconcile(intervals);
         }
 
         @Override
@@ -111,7 +111,7 @@ public class Thoth {
             if (!valid(from, ring)) {
                 return;
             }
-            Thoth.this.kerlSpace.update(update.getEventsList());
+            KerlDHT.this.kerlSpace.update(update.getEventsList());
         }
     }
 
@@ -208,7 +208,7 @@ public class Thoth {
         }
     }
 
-    private final static Logger log = LoggerFactory.getLogger(Thoth.class);
+    private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
     private static <T> CompletableFuture<T> complete(T value) {
         var fs = new CompletableFuture<T>();
@@ -227,26 +227,26 @@ public class Thoth {
     private final Executor                                                    executor;
     private final double                                                      fpr;
     private final UniKERLDirectPooled                                         kerlPool;
-    private final KERLSpace                                                   kerlSpace;
+    private final KerlSpace                                                   kerlSpace;
     private final SigningMember                                               member;
     private final RingCommunications<ReconciliationService>                   reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final CommonCommunications<ThothService, ProtoKERLService>        thothComms;
+    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
     private final TemporalAmount                                              timeout;
 
-    public Thoth(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
-                 DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
-                 double falsePositiveRate, StereotomyMetrics metrics) {
+    public KerlDHT(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
+                   DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
+                   double falsePositiveRate, StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
         this.fpr = falsePositiveRate;
-        thothComms = communications.create(member, context.getId(), service, r -> new ThothServer(r, executor, metrics),
-                                           ThothClient.getCreate(context.getId(), metrics),
-                                           ThothClient.getLocalLoopback(service, member));
+        dhtComms = communications.create(member, context.getId(), service, r -> new DhtServer(r, executor, metrics),
+                                           DhtClient.getCreate(context.getId(), metrics),
+                                           DhtClient.getLocalLoopback(service, member));
         reconcileComms = communications.create(member, context.getId(), reconciliation,
                                                r -> new ReconciliationServer(r,
                                                                              communications.getClientIdentityProvider(),
@@ -257,7 +257,7 @@ public class Thoth {
         this.kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
         this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
-        this.kerlSpace = new KERLSpace(connectionPool);
+        this.kerlSpace = new KerlSpace(connectionPool);
 
         initializeSchema();
     }
@@ -274,7 +274,7 @@ public class Thoth {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, thothComms,
+        new RingIterator<>(context, member, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
                                              () -> majority.complete(false),
                                              (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
@@ -296,7 +296,7 @@ public class Thoth {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, thothComms,
+        new RingIterator<>(context, member, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events), () -> majority.complete(false),
                                              (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
@@ -319,7 +319,7 @@ public class Thoth {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, thothComms,
+        new RingIterator<>(context, member, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events, attachments),
                                              () -> majority.complete(false),
@@ -341,7 +341,7 @@ public class Thoth {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Attachment>();
-        new RingIterator<>(context, member, thothComms, executor).iterate(identifier,
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier,
                                                                           (link, r) -> link.getAttachment(coordinates),
                                                                           (tally, futureSailor, link,
                                                                            r) -> read(result, futureSailor, identifier,
@@ -361,7 +361,7 @@ public class Thoth {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KERL_>();
-        new RingIterator<>(context, member, thothComms, executor).iterate(digest, (link, r) -> link.getKERL(identifier),
+        new RingIterator<>(context, member, dhtComms, executor).iterate(digest, (link, r) -> link.getKERL(identifier),
                                                                           (tally, futureSailor, link,
                                                                            r) -> read(result, futureSailor, digest,
                                                                                       isTimedOut, link, "get kerl"));
@@ -379,7 +379,7 @@ public class Thoth {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyEvent_>();
-        new RingIterator<>(context, member, thothComms,
+        new RingIterator<>(context, member, dhtComms,
                            executor).iterate(digest, (link, r) -> link.getKeyEvent(coordinates),
                                              (tally, futureSailor, link, r) -> read(result, futureSailor, digest,
                                                                                     isTimedOut, link, "get key event"));
@@ -397,7 +397,7 @@ public class Thoth {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
-        new RingIterator<>(context, member, thothComms, executor).iterate(digest,
+        new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
                                                                           (link, r) -> link.getKeyState(coordinates),
                                                                           (tally, futureSailor, link,
                                                                            r) -> read(result, futureSailor, digest,
@@ -417,7 +417,7 @@ public class Thoth {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
-        new RingIterator<>(context, member, thothComms, executor).iterate(digest,
+        new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
                                                                           (link, r) -> link.getKeyState(identifier),
                                                                           (tally, futureSailor, link,
                                                                            r) -> read(result, futureSailor, digest,
@@ -430,7 +430,7 @@ public class Thoth {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        thothComms.register(context.getId(), service);
+        dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
         reconcile(scheduler, duration);
     }
@@ -439,7 +439,7 @@ public class Thoth {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        thothComms.deregister(context.getId());
+        dhtComms.deregister(context.getId());
         reconcileComms.deregister(context.getId());
     }
 
@@ -525,7 +525,7 @@ public class Thoth {
     }
 
     private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,
-                           Supplier<Boolean> isTimedOut, AtomicInteger tally, ThothService link, String action) {
+                           Supplier<Boolean> isTimedOut, AtomicInteger tally, DhtService link, String action) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
@@ -558,7 +558,7 @@ public class Thoth {
     }
 
     private <T> boolean read(CompletableFuture<T> result, Optional<ListenableFuture<T>> futureSailor, Digest identifier,
-                             Supplier<Boolean> isTimedOut, ThothService link, String action) {
+                             Supplier<Boolean> isTimedOut, DhtService link, String action) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }

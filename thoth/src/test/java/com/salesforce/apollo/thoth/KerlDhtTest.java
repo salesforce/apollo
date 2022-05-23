@@ -58,7 +58,7 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  * @author hal.hildebrand
  *
  */
-public class ThothTest {
+public class KerlDhtTest {
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final int                                                   CARDINALITY = 5;
 
@@ -78,7 +78,7 @@ public class ThothTest {
                                                         controlled -> controlled));
     }
 
-    private final Map<Digest, Thoth>       thoths  = new HashMap<>();
+    private final Map<Digest, KerlDHT>       dhts  = new HashMap<>();
     private final Map<Digest, LocalRouter> routers = new HashMap<>();
 
     @BeforeEach
@@ -92,7 +92,7 @@ public class ThothTest {
     @AfterEach
     public void after() {
         routers.values().forEach(r -> r.close());
-        thoths.values().forEach(t -> t.stop());
+        dhts.values().forEach(t -> t.stop());
     }
 
     private void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
@@ -105,7 +105,7 @@ public class ThothTest {
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2), executor, null);
         router.setMember(member);
         routers.put(member.getId(), router);
-        thoths.put(member.getId(), new Thoth(context, member, connectionPool, DigestAlgorithm.DEFAULT, router, executor,
+        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router, executor,
                                              Duration.ofMillis(300), 0.125, null));
     }
 
@@ -113,7 +113,7 @@ public class ThothTest {
     public void smokin() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
-        thoths.values().forEach(thoth -> thoth.start(scheduler, Duration.ofMillis(10)));
+        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofMillis(10)));
         var specification = IdentifierSpecification.newBuilder();
 
         var factory = new ProtobufEventFactory();
@@ -122,10 +122,10 @@ public class ThothTest {
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
-        var thoth = thoths.values().stream().findFirst().get();
+        var dht = dhts.values().stream().findFirst().get();
 
-        thoth.append(Collections.singletonList(inception.toKeyEvent_())).get();
-        var lookup = thoth.getKeyEvent(inception.getCoordinates().toEventCoords()).get();
+        dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
+        var lookup = dht.getKeyEvent(inception.getCoordinates().toEventCoords()).get();
         assertNotNull(lookup);
         assertEquals(inception.toKeyEvent_(), lookup);
 
@@ -136,8 +136,8 @@ public class ThothTest {
 
         RotationEvent rotation = rotation(prevNext, digest, inception, nextKeyPair, factory);
 
-        thoth.append(Collections.singletonList(rotation.toKeyEvent_())).get();
-        lookup = thoth.getKeyEvent(rotation.getCoordinates().toEventCoords()).get();
+        dht.append(Collections.singletonList(rotation.toKeyEvent_())).get();
+        lookup = dht.getKeyEvent(rotation.getCoordinates().toEventCoords()).get();
         assertNotNull(lookup);
         assertEquals(rotation.toKeyEvent_(), lookup);
 

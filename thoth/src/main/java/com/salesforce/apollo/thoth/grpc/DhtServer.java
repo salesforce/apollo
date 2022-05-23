@@ -24,7 +24,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesfoce.apollo.thoth.proto.ThothGrpc.ThothImplBase;
+import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -39,14 +39,14 @@ import io.grpc.stub.StreamObserver;
  * @author hal.hildebrand
  *
  */
-public class ThothServer extends ThothImplBase {
-    private final static Logger log = LoggerFactory.getLogger(ThothServer.class);
+public class DhtServer extends KerlDhtImplBase {
+    private final static Logger log = LoggerFactory.getLogger(DhtServer.class);
 
     private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
     private final Executor                          exec;
 
-    public ThothServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
+    public DhtServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
         this.exec = exec;

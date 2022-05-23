@@ -14,7 +14,7 @@ package thoth;
 
 
 
-service Thoth {
+service KerlDht {
     rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
     rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
     rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns (google.protobuf.Empty) {}

@@ -24,7 +24,7 @@ import com.salesforce.apollo.comm.Link;
  *
  */
 
-public interface ThothService extends Link {
+public interface DhtService extends Link {
 
     ListenableFuture<Empty> append(KERL_ kerl);
 

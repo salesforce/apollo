@@ -27,8 +27,8 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
-import com.salesfoce.apollo.thoth.proto.ThothGrpc;
-import com.salesfoce.apollo.thoth.proto.ThothGrpc.ThothFutureStub;
+import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
+import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -41,16 +41,16 @@ import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
  * @author hal.hildebrand
  *
  */
-public class ThothClient implements ThothService {
+public class DhtClient implements DhtService {
 
-    public static CreateClientCommunications<ThothService> getCreate(Digest context, StereotomyMetrics metrics) {
+    public static CreateClientCommunications<DhtService> getCreate(Digest context, StereotomyMetrics metrics) {
         return (t, f, c) -> {
-            return new ThothClient(context, c, t, metrics);
+            return new DhtClient(context, c, t, metrics);
         };
     }
 
-    public static ThothService getLocalLoopback(ProtoKERLService service, Member member) {
-        return new ThothService() {
+    public static DhtService getLocalLoopback(ProtoKERLService service, Member member) {
+        return new DhtService() {
 
             @Override
             public ListenableFuture<Empty> append(KERL_ kerl) {
@@ -104,16 +104,16 @@ public class ThothClient implements ThothService {
     }
 
     private final ManagedServerConnection channel;
-    private final ThothFutureStub         client;
+    private final KerlDhtFutureStub       client;
     private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
 
-    public ThothClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
+    public DhtClient(Digest context, ManagedServerConnection channel, Member member, StereotomyMetrics metrics) {
         this.context = context.toDigeste();
         this.member = member;
         this.channel = channel;
-        this.client = ThothGrpc.newFutureStub(channel.channel).withCompression("gzip");
+        this.client = KerlDhtGrpc.newFutureStub(channel.channel).withCompression("gzip");
         this.metrics = metrics;
     }
 
