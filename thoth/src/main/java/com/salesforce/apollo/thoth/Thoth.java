@@ -120,6 +120,7 @@ public class Thoth {
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             try (var k = kerlPool.create()) {
+                log.info("appending kerl on: {}", member.getId());
                 return new ProtoKERLAdapter(k).append(kerl_);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -129,6 +130,7 @@ public class Thoth {
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             try (var k = kerlPool.create()) {
+                log.info("appending events on: {}", member.getId());
                 return new ProtoKERLAdapter(k).append(events);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -138,6 +140,7 @@ public class Thoth {
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             try (var k = kerlPool.create()) {
+                log.info("appending events and attachments on: {}", member.getId());
                 return new ProtoKERLAdapter(k).append(events, attachments);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -147,6 +150,7 @@ public class Thoth {
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
+                log.info("get attachments for coordinates on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getAttachment(coordinates);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -156,6 +160,7 @@ public class Thoth {
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
             try (var k = kerlPool.create()) {
+                log.info("get kerl for identifier on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getKERL(identifier);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -165,6 +170,7 @@ public class Thoth {
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
             try (var k = kerlPool.create()) {
+                log.info("get key event for digest on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getKeyEvent(digest);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -174,6 +180,7 @@ public class Thoth {
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
+                log.info("get key event for coordinates on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getKeyEvent(coordinates);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -183,6 +190,7 @@ public class Thoth {
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
             try (var k = kerlPool.create()) {
+                log.info("get key state for coordinates on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getKeyState(coordinates);
             } catch (Throwable e) {
                 return completeExceptionally(e);
@@ -192,6 +200,7 @@ public class Thoth {
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
             try (var k = kerlPool.create()) {
+                log.info("get key state for identifier on: {}", member.getId());
                 return new ProtoKERLAdapter(k).getKeyState(identifier);
             } catch (Throwable e) {
                 return completeExceptionally(e);
