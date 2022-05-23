@@ -10,6 +10,7 @@ package com.salesforce.apollo.thoth;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.TemporalAmount;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.h2.jdbc.JdbcConnection;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
@@ -51,6 +54,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirect;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
@@ -63,6 +67,8 @@ import com.salesforce.apollo.thoth.grpc.ReconciliationService;
 import com.salesforce.apollo.thoth.grpc.ThothClient;
 import com.salesforce.apollo.thoth.grpc.ThothServer;
 import com.salesforce.apollo.thoth.grpc.ThothService;
+import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -98,7 +104,7 @@ public class Thoth {
                 return Update.getDefaultInstance();
             }
 
-            return Thoth.this.reconcile(intervals);
+            return Thoth.this.kerlSpace.reconcile(intervals);
         }
 
         @Override
@@ -107,7 +113,7 @@ public class Thoth {
             if (!valid(from, ring)) {
                 return;
             }
-            Thoth.this.update(update);
+            Thoth.this.kerlSpace.update(update.getEventsList());
         }
     }
 
@@ -180,13 +186,16 @@ public class Thoth {
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final CommonCommunications<ThothService, ProtoKERLService>        thothComms;
     private final TemporalAmount                                              timeout;
+    private final double                                                      fpr;
+    private final KERLSpace                                                   kerlSpace;
 
     public Thoth(Context<Member> context, SigningMember member, JdbcConnection connection,
                  DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
-                 StereotomyMetrics metrics) {
+                 double falsePositiveRate, StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
+        this.fpr = falsePositiveRate;
         thothComms = communications.create(member, context.getId(), service, r -> new ThothServer(r, executor, metrics),
                                            ThothClient.getCreate(context.getId(), metrics),
                                            ThothClient.getLocalLoopback(service, member));
@@ -200,9 +209,9 @@ public class Thoth {
         this.kerl = new ProtoKERLAdapter(new UniKERLDirect(connection, digestAlgorithm));
         this.executor = executor;
         this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
-        ;
+        this.kerlSpace = new KERLSpace(DSL.using(connection));
 
-        initializeKerl();
+        initializeSchema();
     }
 
     public CompletableFuture<Void> append(KERL_ kerl) {
@@ -429,7 +438,7 @@ public class Thoth {
                         .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
-    private void initializeKerl() {
+    private void initializeSchema() {
         var database = new H2Database() {
             @Override
             public void close() throws DatabaseException {
@@ -437,7 +446,7 @@ public class Thoth {
             }
         };
         database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/stereotomy/initialize.xml", new ClassLoaderResourceAccessor(),
+        try (Liquibase liquibase = new Liquibase("/initialize-thoth.xml", new ClassLoaderResourceAccessor(),
                                                  database)) {
             liquibase.update((String) null);
         } catch (LiquibaseException e) {
@@ -446,8 +455,25 @@ public class Thoth {
     }
 
     private CombinedIntervals keyIntervals() {
-        // TODO Auto-generated method stub
-        return null;
+        List<KeyInterval> intervals = new ArrayList<>();
+        for (int i = 0; i < context.getRingCount(); i++) {
+            Ring<Member> ring = context.ring(i);
+            Member predecessor = ring.predecessor(member);
+            if (predecessor == null) {
+                continue;
+            }
+
+            Digest begin = ring.hash(predecessor);
+            Digest end = ring.hash(member);
+
+            if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
+                intervals.add(new KeyInterval(end, kerl.getDigestAlgorithm().getLast()));
+                intervals.add(new KeyInterval(kerl.getDigestAlgorithm().getOrigin(), begin));
+            } else {
+                intervals.add(new KeyInterval(begin, end));
+            }
+        }
+        return new CombinedIntervals(intervals);
     }
 
     private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,
@@ -477,9 +503,10 @@ public class Thoth {
         return !isTimedOut.get();
     }
 
-    private void populate(CombinedIntervals keyIntervals) {
-        // TODO Auto-generated method stub
-
+    private Biff populate(CombinedIntervals keyIntervals) {
+        List<Digest> digests = kerlSpace.populate(keyIntervals);
+        var biff = new DigestBloomFilter(Entropy.nextBitsStreamLong(), digests.size(), fpr);
+        return biff.toBff();
     }
 
     private <T> boolean read(CompletableFuture<T> result, Optional<ListenableFuture<T>> futureSailor, Digest identifier,
@@ -515,16 +542,6 @@ public class Thoth {
         }
     }
 
-    private Update reconcile(Intervals intervals) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    private void reconcile(List<KeyEvent_> events) {
-        // TODO Auto-generated method stub
-
-    }
-
     private void reconcile(Optional<ListenableFuture<Update>> futureSailor, ReconciliationService link,
                            ScheduledExecutorService scheduler, Duration duration) {
         if (!started.get() || futureSailor.isEmpty()) {
@@ -534,7 +551,7 @@ public class Thoth {
             Update update = futureSailor.get().get();
             log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
                       link.getMember(), member);
-            reconcile(update.getEventsList());
+            kerlSpace.update(update.getEventsList());
         } catch (InterruptedException | ExecutionException e) {
             log.debug("Error in interval reconciliation with {} : {}", link.getMember(), e.getCause());
         }
@@ -547,11 +564,11 @@ public class Thoth {
         CombinedIntervals keyIntervals = keyIntervals();
         log.info("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
                  keyIntervals);
-        populate(keyIntervals);
         return link.reconcile(Intervals.newBuilder()
                                        .setContext(context.getId().toDigeste())
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
+                                       .setHave(populate(keyIntervals))
                                        .build());
     }
 
@@ -561,11 +578,6 @@ public class Thoth {
         }
         reconcile.execute((link, ring) -> reconcile(link, ring),
                           (futureSailor, link, ring) -> reconcile(futureSailor, link, scheduler, duration));
-
-    }
-
-    private void update(Updating update) {
-        // TODO Auto-generated method stub
 
     }
 

@@ -6,30 +6,65 @@
       http://www.liquibase.org/xml/ns/pro http://www.liquibase.org/xml/ns/pro/liquibase-pro-4.5.xsd">
 
     <changeSet author="hhildebrand" id="thoth-1">
-        <sql>create schema if not exists apollo_thoth</sql>
+        <sql>create schema if not exists thoth</sql>
 
-        <createTable tableName="member"
-            schemaName="apollo_thoth">
+        <createTable tableName="pending_coordinates"
+            schemaName="thoth">
+            <column generationType="ALWAYS" name="id"
+                type="IDENTITY">
+                <constraints nullable="false"
+                    primaryKey="true" primaryKeyName="pending_coordinates_pkey" />
+            </column>
             <column name="identifier" type="INT8">
+                <constraints nullable="false" />
+            </column>
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="sequence_number" type="BIGINT">
+                <constraints nullable="false" />
+            </column>
+            <column name="ilk" type="VARCHAR(3)">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+
+        <sql>alter table thoth.pending_coordinates add constraint
+            pending_coordinates_ilk_validate check (ilk in ('dip', 'drt', 'icp',
+            'ixn', 'nan', 'rct', 'vrc', 'rot'))
+        </sql>
+
+        <addUniqueConstraint
+            columnNames="identifier, digest, sequence_number, ilk"
+            tableName="pending_coordinates" schemaName="thoth" />
+
+        <addForeignKeyConstraint
+            onDelete="CASCADE" baseColumnNames="identifier"
+            baseTableName="pending_coordinates" baseTableSchemaName="thoth"
+            constraintName="pending_coordinates_identifier_fk"
+            referencedTableName="identifier" referencedColumnNames="id"
+            referencedTableSchemaName="stereotomy" />
+            
+        <createTable tableName="pending_event"
+            schemaName="thoth">
+            <column name="pending_coordinates" type="INT8">
                 <constraints nullable="false"
                     primaryKey="true" />
             </column>
-            <column name="state" type="VARCHAR(7)">
-                <!-- <constraints nullable="false" /> -->
+            <column name="digest" type="VARBINARY">
+                <constraints nullable="false" />
+            </column>
+            <column name="content" type="VARBINARY">
+                <constraints nullable="false" />
             </column>
         </createTable>
 
         <addForeignKeyConstraint
-            onDelete="CASCADE" baseColumnNames="identifier"
-            baseTableName="member" baseTableSchemaName="apollo_thoth"
-            constraintName="member_identifier_fk"
-            referencedTableName="identifier" referencedColumnNames="id"
-            referencedTableSchemaName="stereotomy" />
-
-        <sql>alter table apollo_thoth.member add constraint
-            member_state_validate check (state in ('inactive',
-            'joining', 'leaving', 'active'))
-        </sql>
-
+            onDelete="CASCADE" baseColumnNames="pending_coordinates"
+            baseTableName="pending_event" baseTableSchemaName="thoth"
+            constraintName="pending_event_pending_coordinates_fk"
+            referencedTableName="pending_coordinates" referencedColumnNames="id"
+            referencedTableSchemaName="thoth" />
+            
     </changeSet>
 </databaseChangeLog>

@@ -14,6 +14,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -68,9 +69,13 @@ public class ThothTest {
         JdbcConnection connection = new JdbcConnection(url, new Properties(), "", "", false);
         String prefix = UUID.randomUUID().toString();
         Executor executor = Executors.newCachedThreadPool();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
         Router router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2), executor, null);
 
         final var thoth = new Thoth(context, member, connection, DigestAlgorithm.DEFAULT, router, executor,
-                                    Duration.ofMillis(300), null);
+                                    Duration.ofMillis(300), 0.125, null);
+        thoth.start(scheduler, Duration.ofMillis(10));
+        Thread.sleep(1_000);
     }
 }

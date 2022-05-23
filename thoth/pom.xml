@@ -9,7 +9,10 @@
     <name>Thoth - Stable and Consistent Membership Views</name>
     <description>Stable and consistent membership views based upon Fireclies views.  Uses Ethereal consensus to manage membership view evolution. Integrates with Stereotomy for underlying decentralized PKI Async, BFT and PKI secured.</description>
 
-
+    <properties>
+        <h2.db.url>jdbc:h2:file:${project.build.directory}/data/jooq</h2.db.url>
+    </properties>
+    
     <dependencies>
         <dependency>
             <groupId>com.salesforce.apollo</groupId>
@@ -22,6 +25,10 @@
         <dependency>
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
@@ -53,6 +60,112 @@
                 <groupId>org.xolstice.maven.plugins</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>2.5</version>
+                <executions>
+                    <execution>
+                        <id>clean-db</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.directory}/data</directory>
+                                </fileset>
+                            </filesets>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+                <configuration>
+                    <driver>org.h2.Driver</driver>
+                    <url>${h2.db.url}</url>
+                    <verbose>true</verbose>
+                    <changeLogFile>/initialize-thoth.xml</changeLogFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>initialize database</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>update</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.liquibase</groupId>
+                    <artifactId>liquibase-maven-plugin</artifactId>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.h2database</groupId>
+                            <artifactId>h2</artifactId>
+                            <version>${h2.version}</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.jooq</groupId>
+                    <artifactId>jooq-codegen-maven</artifactId>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.h2database</groupId>
+                            <artifactId>h2</artifactId>
+                            <version>${h2.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>com.fasterxml.jackson.core</groupId>
+                            <artifactId>jackson-databind</artifactId>
+                            <version>${jackson.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                        <jdbc>
+                            <driver>org.h2.Driver</driver>
+                            <url>${h2.db.url}</url>
+                        </jdbc>
+                        <generator>
+                            <database>
+                                <name>org.jooq.meta.h2.H2Database</name>
+                                <includes>.*</includes>
+                                <excludes></excludes>
+                                <schemata>
+                                    <schema>
+                                        <inputSchema>THOTH</inputSchema>
+                                    </schema>
+                                </schemata>
+                            </database>
+                            <generate></generate>
+                            <target>
+                                <packageName>com.salesforce.apollo.thoth.schema</packageName>
+                                <directory>target/generated-sources/jooq</directory>
+                            </target>
+                        </generator>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
 </project>
