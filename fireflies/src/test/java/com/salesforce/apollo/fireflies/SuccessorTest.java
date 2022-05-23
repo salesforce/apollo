@@ -119,7 +119,7 @@ public class SuccessorTest {
             comms.start();
             Context<Participant> context = ctxBuilder.build();
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toMap(v -> v.getNode().getId(), v -> v));
 
         views.values().forEach(view -> view.start(executor, Duration.ofMillis(10), seeds, scheduler));

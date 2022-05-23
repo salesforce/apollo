@@ -8,6 +8,10 @@ package com.salesforce.apollo.stereotomy.services.grpc.kerl;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -26,6 +30,7 @@ import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -34,14 +39,16 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class KERLServer extends KERLServiceImplBase {
+    private final static Logger log = LoggerFactory.getLogger(KERLServer.class);
 
-    private final StereotomyMetrics metrics;
-
+    private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
+    private final Executor                          exec;
 
-    public KERLServer(StereotomyMetrics metrics, RoutableService<ProtoKERLService> router) {
+    public KERLServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
+        this.exec = exec;
     }
 
     @Override
@@ -51,7 +58,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundAppendEventsRequest().mark(request.getSerializedSize());
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getKeyEventList());
             if (result == null) {
                 responseObserver.onNext(KeyStates.getDefaultInstance());
@@ -73,8 +80,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
-
+        }), log));
     }
 
     @Override
@@ -84,7 +90,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundAppendKERLRequest().mark(request.getSerializedSize());
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getKerl());
             if (result == null) {
                 responseObserver.onNext(KeyStates.getDefaultInstance());
@@ -106,7 +112,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -117,7 +123,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<List<KeyState_>> result = s.append(request.getEventsList(), request.getAttachmentsList());
             if (result == null) {
                 responseObserver.onNext(KeyStates.getDefaultInstance());
@@ -139,8 +145,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
-
+        }), log));
     }
 
     @Override
@@ -151,7 +156,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGetAttachmentRequest().mark(serializedSize);
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<Attachment> response = s.getAttachment(request.getCoordinates());
             if (response == null) {
                 if (timer != null) {
@@ -178,7 +183,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -189,7 +194,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGetKERLRequest().mark(serializedSize);
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<KERL_> response = s.getKERL(request.getIdentifier());
             if (response == null) {
                 if (timer != null) {
@@ -216,7 +221,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -227,7 +232,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGetKeyEventRequest().mark(serializedSize);
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<KeyEvent_> response = s.getKeyEvent(request.getDigest());
             if (response == null) {
                 if (timer != null) {
@@ -254,7 +259,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -264,7 +269,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(request.getSerializedSize());
             metrics.inboundGetKeyEventCoordsRequest().mark(request.getSerializedSize());
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<KeyEvent_> response = s.getKeyEvent(request.getCoordinates());
             if (response == null) {
                 if (timer != null) {
@@ -291,7 +296,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -302,7 +307,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGetKeyStateRequest().mark(serializedSize);
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<KeyState_> response = s.getKeyState(request.getIdentifier());
             if (response == null) {
                 if (timer != null) {
@@ -328,7 +333,7 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 });
             }
-        });
+        }), log));
     }
 
     @Override
@@ -339,7 +344,7 @@ public class KERLServer extends KERLServiceImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
         }
-        routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             CompletableFuture<KeyState_> response = s.getKeyState(request.getCoordinates());
             if (response == null) {
                 if (timer != null) {
@@ -365,6 +370,6 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 }
             });
-        });
+        }), log));
     }
 }

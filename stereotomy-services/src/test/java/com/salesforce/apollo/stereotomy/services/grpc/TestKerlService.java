@@ -143,9 +143,9 @@ public class TestKerlService {
 
         ProtoKERLService protoService = new ProtoKERLAdapter(kel);
 
-        serverRouter.create(serverMember, context, protoService, r -> new KERLServer(null, r), null, null);
+        serverRouter.create(serverMember, context, protoService, r -> new KERLServer(r, exec, null), null, null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new KERLServer(null, r),
+        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new KERLServer(r, exec, null),
                                               KERLClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

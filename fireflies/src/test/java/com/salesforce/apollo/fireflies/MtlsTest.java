@@ -158,7 +158,7 @@ public class MtlsTest {
                                               Executors.newFixedThreadPool(3), clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();

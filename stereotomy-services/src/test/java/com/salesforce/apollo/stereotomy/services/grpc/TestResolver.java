@@ -74,9 +74,10 @@ public class TestResolver {
             }
         };
 
-        serverRouter.create(serverMember, context, protoService, r -> new ResolverServer(null, r), null, null);
+        serverRouter.create(serverMember, context, protoService, r -> new ResolverServer(r, exec, null), null, null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new ResolverServer(null, r),
+        var clientComms = clientRouter.create(clientMember, context, protoService,
+                                              r -> new ResolverServer(r, exec, null),
                                               ResolverClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

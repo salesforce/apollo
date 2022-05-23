@@ -91,10 +91,11 @@ public class TestEventObserver {
             }
         };
 
-        serverRouter.create(serverMember, context, protoService, r -> new EventObserverServer(null, r), null, null);
+        serverRouter.create(serverMember, context, protoService, r -> new EventObserverServer(r, exec, null), null,
+                            null);
 
         var clientComms = clientRouter.create(clientMember, context, protoService,
-                                              r -> new EventObserverServer(null, r),
+                                              r -> new EventObserverServer(r, exec, null),
                                               EventObserverClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

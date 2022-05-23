@@ -806,7 +806,7 @@ public class View {
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics) {
+                FireflyMetrics metrics, Executor exec) {
         this.metrics = metrics;
         this.validation = validation;
         this.fpr = fpr;
@@ -816,7 +816,7 @@ public class View {
         this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
         this.comm = communications.create(node, context.getId(), service,
                                           r -> new FfServer(service, communications.getClientIdentityProvider(),
-                                                            metrics, r),
+                                                            r, exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         add(node);
         log.info("View [{}]", node.getId());
