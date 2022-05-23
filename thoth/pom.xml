@@ -88,7 +88,7 @@
                     <driver>org.h2.Driver</driver>
                     <url>${h2.db.url}</url>
                     <verbose>true</verbose>
-                    <changeLogFile>/initialize-thoth.xml</changeLogFile>
+                    <changeLogFile>initialize-thoth.xml</changeLogFile>
                 </configuration>
                 <executions>
                     <execution>
