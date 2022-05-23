@@ -10,7 +10,6 @@ package com.salesforce.apollo.thoth;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -18,7 +17,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.h2.jdbc.JdbcConnection;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -66,14 +65,14 @@ public class ThothTest {
         final var url = "jdbc:h2:mem:thoth_test-smoke;DB_CLOSE_DELAY=-1";
         Context<Member> context = Context.<Member>newBuilder().setCardinality(5).build();
         SigningMember member = new ControlledIdentifierMember(identities.values().stream().findFirst().get());
-        JdbcConnection connection = new JdbcConnection(url, new Properties(), "", "", false);
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         String prefix = UUID.randomUUID().toString();
         Executor executor = Executors.newCachedThreadPool();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         Router router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2), executor, null);
 
-        final var thoth = new Thoth(context, member, connection, DigestAlgorithm.DEFAULT, router, executor,
+        final var thoth = new Thoth(context, member, connectionPool, DigestAlgorithm.DEFAULT, router, executor,
                                     Duration.ofMillis(300), 0.125, null);
         thoth.start(scheduler, Duration.ofMillis(10));
         Thread.sleep(1_000);

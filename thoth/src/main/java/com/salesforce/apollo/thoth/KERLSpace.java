@@ -9,7 +9,7 @@ package com.salesforce.apollo.thoth;
 
 import java.util.List;
 
-import org.jooq.DSLContext;
+import org.h2.jdbcx.JdbcConnectionPool;
 
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.thoth.proto.Intervals;
@@ -24,10 +24,10 @@ import com.salesforce.apollo.crypto.Digest;
  */
 public class KERLSpace {
     @SuppressWarnings("unused")
-    private final DSLContext dsl;
+    private final JdbcConnectionPool connectionPool;
 
-    public KERLSpace(DSLContext dsl) {
-        this.dsl = dsl;
+    public KERLSpace(JdbcConnectionPool connectionPool) {
+        this.connectionPool = connectionPool;
     }
 
     /**

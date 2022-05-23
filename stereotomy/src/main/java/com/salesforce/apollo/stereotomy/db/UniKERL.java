@@ -232,8 +232,7 @@ abstract public class UniKERL implements KERL {
         initialize(DSL.using(connection));
     }
 
-    protected final DigestAlgorithm digestAlgorithm;
-
+    protected final DigestAlgorithm   digestAlgorithm;
     protected final DSLContext        dsl;
     protected final KeyEventProcessor processor;
 

@@ -7,6 +7,8 @@
 
 package com.salesforce.apollo.thoth;
 
+import java.io.IOException;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.TemporalAmount;
@@ -23,8 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-import org.h2.jdbc.JdbcConnection;
-import org.jooq.impl.DSL;
+import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +57,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.db.UniKERLDirect;
+import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
@@ -74,7 +75,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import liquibase.Liquibase;
 import liquibase.database.core.H2Database;
-import liquibase.exception.DatabaseException;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
@@ -120,49 +120,84 @@ public class Thoth {
     private class Service implements ProtoKERLService {
 
         @Override
-        public CompletableFuture<List<KeyState_>> append(KERL_ kerl) {
-            return Thoth.this.kerl.append(kerl);
+        public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).append(kerl_);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
-            return Thoth.this.kerl.append(events);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).append(events);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
-        public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events,
-                                                         List<com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent> attachments) {
-            return Thoth.this.kerl.append(events, attachments);
+        public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).append(events, attachments);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-            return Thoth.this.kerl.getAttachment(coordinates);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getAttachment(coordinates);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
-            return Thoth.this.kerl.getKERL(identifier);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getKERL(identifier);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-            return Thoth.this.kerl.getKeyEvent(digest);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getKeyEvent(digest);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-            return Thoth.this.kerl.getKeyEvent(coordinates);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getKeyEvent(coordinates);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-            return Thoth.this.kerl.getKeyState(coordinates);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getKeyState(coordinates);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-            return Thoth.this.kerl.getKeyState(identifier);
+            try (var k = kerlPool.create()) {
+                return new ProtoKERLAdapter(k).getKeyState(identifier);
+            } catch (IOException | SQLException e) {
+                return completeExceptionally(e);
+            }
         }
     }
 
@@ -174,10 +209,18 @@ public class Thoth {
         return fs;
     }
 
-    private final JdbcConnection                                              connection;
+    private static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
+        var fs = new CompletableFuture<T>();
+        fs.completeExceptionally(t);
+        return fs;
+    }
+
+    private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
     private final Executor                                                    executor;
-    private final ProtoKERLAdapter                                            kerl;
+    private final double                                                      fpr;
+    private final UniKERLDirectPooled                                         kerlPool;
+    private final KERLSpace                                                   kerlSpace;
     private final SigningMember                                               member;
     private final RingCommunications<ReconciliationService>                   reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
@@ -186,10 +229,8 @@ public class Thoth {
     private final AtomicBoolean                                               started        = new AtomicBoolean();
     private final CommonCommunications<ThothService, ProtoKERLService>        thothComms;
     private final TemporalAmount                                              timeout;
-    private final double                                                      fpr;
-    private final KERLSpace                                                   kerlSpace;
 
-    public Thoth(Context<Member> context, SigningMember member, JdbcConnection connection,
+    public Thoth(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
                  DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                  double falsePositiveRate, StereotomyMetrics metrics) {
         this.context = context;
@@ -205,11 +246,11 @@ public class Thoth {
                                                                              executor, metrics),
                                                ReconciliationClient.getCreate(context.getId(), metrics),
                                                ReconciliationClient.getLocalLoopback(reconciliation, member));
-        this.connection = connection;
-        this.kerl = new ProtoKERLAdapter(new UniKERLDirect(connection, digestAlgorithm));
+        this.connectionPool = connectionPool;
+        this.kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
         this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
-        this.kerlSpace = new KERLSpace(DSL.using(connection));
+        this.kerlSpace = new KERLSpace(connectionPool);
 
         initializeSchema();
     }
@@ -285,7 +326,7 @@ public class Thoth {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest identifier = kerl.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -305,7 +346,7 @@ public class Thoth {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerl.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -323,7 +364,7 @@ public class Thoth {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerl.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -341,7 +382,7 @@ public class Thoth {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerl.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -361,7 +402,7 @@ public class Thoth {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerl.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -407,12 +448,12 @@ public class Thoth {
     }
 
     private Digest digestOf(InceptionEvent event) {
-        return this.kerl.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
+        return this.kerlPool.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
     }
 
     private Digest digestOf(InteractionEvent event) {
-        return this.kerl.getDigestAlgorithm()
-                        .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return this.kerlPool.getDigestAlgorithm()
+                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private Digest digestOf(final KeyEvent_ event) {
@@ -434,23 +475,22 @@ public class Thoth {
     }
 
     private Digest digestOf(RotationEvent event) {
-        return this.kerl.getDigestAlgorithm()
-                        .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return this.kerlPool.getDigestAlgorithm()
+                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private void initializeSchema() {
-        var database = new H2Database() {
-            @Override
-            public void close() throws DatabaseException {
-                // Don't close the connection
+        var database = new H2Database();
+        try (var connection = connectionPool.getConnection()) {
+            database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
+            try (Liquibase liquibase = new Liquibase("/initialize-thoth.xml", new ClassLoaderResourceAccessor(),
+                                                     database)) {
+                liquibase.update((String) null);
+            } catch (LiquibaseException e) {
+                throw new IllegalStateException(e);
             }
-        };
-        database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));
-        try (Liquibase liquibase = new Liquibase("/initialize-thoth.xml", new ClassLoaderResourceAccessor(),
-                                                 database)) {
-            liquibase.update((String) null);
-        } catch (LiquibaseException e) {
-            throw new IllegalStateException(e);
+        } catch (SQLException e1) {
+            throw new IllegalStateException(e1);
         }
     }
 
@@ -467,8 +507,8 @@ public class Thoth {
             Digest end = ring.hash(member);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, kerl.getDigestAlgorithm().getLast()));
-                intervals.add(new KeyInterval(kerl.getDigestAlgorithm().getOrigin(), begin));
+                intervals.add(new KeyInterval(end, kerlPool.getDigestAlgorithm().getLast()));
+                intervals.add(new KeyInterval(kerlPool.getDigestAlgorithm().getOrigin(), begin));
             } else {
                 intervals.add(new KeyInterval(begin, end));
             }
