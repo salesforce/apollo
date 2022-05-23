@@ -8,8 +8,10 @@
 package com.salesforce.apollo.thoth.grpc;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.thoth.proto.Entries;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesfoce.apollo.thoth.proto.Update;
+import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesforce.apollo.comm.Link;
 
 /**
@@ -18,6 +20,8 @@ import com.salesforce.apollo.comm.Link;
  */
 public interface ReconciliationService extends Link {
 
-    ListenableFuture<Entries> intervals(Intervals build);
+    ListenableFuture<Update> reconcile(Intervals intervals);
+
+    ListenableFuture<Empty> update(Updating update);
 
 }

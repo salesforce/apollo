@@ -10,10 +10,12 @@ package com.salesforce.apollo.thoth.grpc;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.salesfoce.apollo.thoth.proto.Entries;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc.ReconciliationFutureStub;
+import com.salesfoce.apollo.thoth.proto.Update;
+import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
@@ -38,16 +40,22 @@ public class ReconciliationClient implements ReconciliationService {
         return new ReconciliationService() {
 
             @Override
+            public void close() throws IOException {
+            }
+
+            @Override
             public Member getMember() {
                 return member;
             }
 
             @Override
-            public void close() throws IOException {
+            public ListenableFuture<Update> reconcile(Intervals intervals) {
+                // TODO Auto-generated method stub
+                return null;
             }
 
             @Override
-            public ListenableFuture<Entries> intervals(Intervals build) {
+            public ListenableFuture<Empty> update(Updating update) {
                 // TODO Auto-generated method stub
                 return null;
             }
@@ -56,8 +64,10 @@ public class ReconciliationClient implements ReconciliationService {
 
     private final ManagedServerConnection  channel;
     private final ReconciliationFutureStub client;
+    @SuppressWarnings("unused")
     private final Digeste                  context;
     private final Member                   member;
+    @SuppressWarnings("unused")
     private final StereotomyMetrics        metrics;
 
     public ReconciliationClient(Digest context, ManagedServerConnection channel, Member member,
@@ -71,20 +81,21 @@ public class ReconciliationClient implements ReconciliationService {
 
     @Override
     public void close() throws IOException {
-        // TODO Auto-generated method stub
-
+        channel.release();
     }
 
     @Override
     public Member getMember() {
-        // TODO Auto-generated method stub
-        return null;
+        return member;
     }
 
     @Override
-    public ListenableFuture<Entries> intervals(Intervals build) {
-        // TODO Auto-generated method stub
-        return null;
+    public ListenableFuture<Update> reconcile(Intervals intervals) {
+        return client.reconcile(intervals);
     }
 
+    @Override
+    public ListenableFuture<Empty> update(Updating update) {
+        return client.update(update);
+    }
 }

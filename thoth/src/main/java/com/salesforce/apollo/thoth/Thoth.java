@@ -39,8 +39,9 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
-import com.salesfoce.apollo.thoth.proto.Entries;
 import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesfoce.apollo.thoth.proto.Update;
+import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
@@ -90,6 +91,24 @@ public class Thoth {
 
     private class Reconcile implements Reconciliation {
 
+        @Override
+        public Update reconcile(Intervals intervals, Digest from) {
+            var ring = intervals.getRing();
+            if (!valid(from, ring)) {
+                return Update.getDefaultInstance();
+            }
+
+            return Thoth.this.reconcile(intervals);
+        }
+
+        @Override
+        public void update(Updating update, Digest from) {
+            var ring = update.getRing();
+            if (!valid(from, ring)) {
+                return;
+            }
+            Thoth.this.update(update);
+        }
     }
 
     private class Service implements ProtoKERLService {
@@ -163,18 +182,20 @@ public class Thoth {
     private final TemporalAmount                                              timeout;
 
     public Thoth(Context<Member> context, SigningMember member, JdbcConnection connection,
-                 DigestAlgorithm digestAlgorithm, Router router, Executor executor, TemporalAmount timeout,
+                 DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
                  StereotomyMetrics metrics) {
         this.context = context;
         this.member = member;
         this.timeout = timeout;
-        thothComms = router.create(member, context.getId(), service, r -> new ThothServer(metrics, r),
-                                   ThothClient.getCreate(context.getId(), metrics),
-                                   ThothClient.getLocalLoopback(service, member));
-        reconcileComms = router.create(member, context.getId(), reconciliation,
-                                       r -> new ReconciliationServer(metrics, r),
-                                       ReconciliationClient.getCreate(context.getId(), metrics),
-                                       ReconciliationClient.getLocalLoopback(reconciliation, member));
+        thothComms = communications.create(member, context.getId(), service, r -> new ThothServer(r, executor, metrics),
+                                           ThothClient.getCreate(context.getId(), metrics),
+                                           ThothClient.getLocalLoopback(service, member));
+        reconcileComms = communications.create(member, context.getId(), reconciliation,
+                                               r -> new ReconciliationServer(r,
+                                                                             communications.getClientIdentityProvider(),
+                                                                             executor, metrics),
+                                               ReconciliationClient.getCreate(context.getId(), metrics),
+                                               ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connection = connection;
         this.kerl = new ProtoKERLAdapter(new UniKERLDirect(connection, digestAlgorithm));
         this.executor = executor;
@@ -494,21 +515,26 @@ public class Thoth {
         }
     }
 
+    private Update reconcile(Intervals intervals) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
     private void reconcile(List<KeyEvent_> events) {
         // TODO Auto-generated method stub
 
     }
 
-    private void reconcile(Optional<ListenableFuture<Entries>> futureSailor, ReconciliationService link,
+    private void reconcile(Optional<ListenableFuture<Update>> futureSailor, ReconciliationService link,
                            ScheduledExecutorService scheduler, Duration duration) {
         if (!started.get() || futureSailor.isEmpty()) {
             return;
         }
         try {
-            Entries entries = futureSailor.get().get();
-            log.trace("Received: {} events in interval reconciliation from: {} on: {}", entries.getEventsCount(),
+            Update update = futureSailor.get().get();
+            log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
                       link.getMember(), member);
-            reconcile(entries.getEventsList());
+            reconcile(update.getEventsList());
         } catch (InterruptedException | ExecutionException e) {
             log.debug("Error in interval reconciliation with {} : {}", link.getMember(), e.getCause());
         }
@@ -517,12 +543,12 @@ public class Thoth {
         }
     }
 
-    private ListenableFuture<Entries> reconcile(ReconciliationService link, Integer ring) {
+    private ListenableFuture<Update> reconcile(ReconciliationService link, Integer ring) {
         CombinedIntervals keyIntervals = keyIntervals();
         log.info("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
                  keyIntervals);
         populate(keyIntervals);
-        return link.intervals(Intervals.newBuilder()
+        return link.reconcile(Intervals.newBuilder()
                                        .setContext(context.getId().toDigeste())
                                        .setRing(ring)
                                        .addAllIntervals(keyIntervals.toIntervals())
@@ -536,5 +562,29 @@ public class Thoth {
         reconcile.execute((link, ring) -> reconcile(link, ring),
                           (futureSailor, link, ring) -> reconcile(futureSailor, link, scheduler, duration));
 
+    }
+
+    private void update(Updating update) {
+        // TODO Auto-generated method stub
+
+    }
+
+    private boolean valid(Digest from, int ring) {
+        if (ring >= context.getRingCount() || ring < 0) {
+            log.warn("invalid ring {} from {}", ring, from);
+            return false;
+        }
+        Member fromMember = context.getMember(from);
+        if (fromMember == null) {
+            return false;
+        }
+        Member successor = context.ring(ring).successor(fromMember, m -> context.isActive(m.getId()));
+        if (successor == null) {
+            return false;
+        }
+        if (!successor.equals(member)) {
+            return false;
+        }
+        return true;
     }
 }
