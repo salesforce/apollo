@@ -21,7 +21,8 @@
         <module>schemas</module>
         <module>demo</module>
         <module>stereotomy-services</module>
-        <module>comm-simulation</module>
+        <!--
+        <module>comm-simulation</module> -->
         <module>thoth</module>
         <module>h2-deterministic</module>
         <module>liquibase-deterministic</module>
