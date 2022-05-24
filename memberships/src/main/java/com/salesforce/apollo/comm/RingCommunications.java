@@ -92,6 +92,7 @@ public class RingCommunications<Comm extends Link> {
         for (int i = 0; i < context.getRingCount(); i++) {
             traversalOrder.add(i);
         }
+        Entropy.secureShuffle(traversalOrder);
     }
 
     public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {

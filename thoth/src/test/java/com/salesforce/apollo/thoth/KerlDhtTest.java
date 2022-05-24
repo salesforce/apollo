@@ -59,9 +59,13 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  *
  */
 public class KerlDhtTest {
-    private static final double                                                PBYZ        = 0.33;
+    private static final double                                                PBYZ = 0.33;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static final int                                                   CARDINALITY = 100;
+    private static final int                                                   CARDINALITY;
+
+    static {
+        CARDINALITY = Boolean.getBoolean("large_tests") ? 100 : 5;
+    }
 
     @BeforeAll
     public static void beforeClass() {
