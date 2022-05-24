@@ -7,6 +7,7 @@
 
 package com.salesforce.apollo.thoth;
 
+import java.io.PrintStream;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -67,14 +68,20 @@ import com.salesforce.apollo.thoth.grpc.ReconciliationClient;
 import com.salesforce.apollo.thoth.grpc.ReconciliationServer;
 import com.salesforce.apollo.thoth.grpc.ReconciliationService;
 import com.salesforce.apollo.utils.Entropy;
+import com.salesforce.apollo.utils.LoggingOutputStream;
+import com.salesforce.apollo.utils.LoggingOutputStream.LogLevel;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import liquibase.Liquibase;
+import liquibase.Scope;
+import liquibase.Scope.Attr;
 import liquibase.database.core.H2Database;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import liquibase.ui.ConsoleUIService;
+import liquibase.ui.UIService;
 
 /**
  * KerlDHT provides the replicated state store for KERLs
@@ -488,6 +495,9 @@ public class KerlDHT {
     }
 
     private void initializeSchema() {
+        ConsoleUIService service = (ConsoleUIService) Scope.getCurrentScope().get(Attr.ui, UIService.class);
+        service.setOutputStream(new PrintStream(new LoggingOutputStream(LoggerFactory.getLogger("liquibase"),
+                                                                        LogLevel.INFO)));
         var database = new H2Database();
         try (var connection = connectionPool.getConnection()) {
             database.setConnection(new liquibase.database.jvm.JdbcConnection(connection));

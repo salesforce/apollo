@@ -24,6 +24,21 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
+    <logger name="com.salesforce.apollo.comm" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.membership" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.stereotomy" level="warn"
+        additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
     <logger name="com.salesforce.apollo.thoth" level="info"
         additivity="false">
         <appender-ref ref="STDOUT" />

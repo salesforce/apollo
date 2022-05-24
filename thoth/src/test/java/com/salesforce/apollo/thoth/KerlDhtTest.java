@@ -59,8 +59,9 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  *
  */
 public class KerlDhtTest {
+    private static final double                                                PBYZ        = 0.33;
     private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
-    private static final int                                                   CARDINALITY = 5;
+    private static final int                                                   CARDINALITY = 100;
 
     @BeforeAll
     public static void beforeClass() {
@@ -78,21 +79,25 @@ public class KerlDhtTest {
                                                         controlled -> controlled));
     }
 
-    private final Map<Digest, KerlDHT>       dhts  = new HashMap<>();
+    private final Map<Digest, KerlDHT>     dhts    = new HashMap<>();
     private final Map<Digest, LocalRouter> routers = new HashMap<>();
+    private int                            majority;
 
     @BeforeEach
     public void before() {
         String prefix = UUID.randomUUID().toString();
         Executor exec = Executors.newFixedThreadPool(CARDINALITY);
-        Context<Member> context = Context.<Member>newBuilder().setCardinality(CARDINALITY).build();
+        Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(CARDINALITY).build();
+        majority = context.majority();
         identities.values().forEach(ident -> instantiate(ident, context, exec, prefix));
     }
 
     @AfterEach
     public void after() {
         routers.values().forEach(r -> r.close());
+        routers.clear();
         dhts.values().forEach(t -> t.stop());
+        dhts.clear();
     }
 
     private void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
@@ -111,6 +116,10 @@ public class KerlDhtTest {
 
     @Test
     public void smokin() throws Exception {
+        System.out.println();
+        System.out.println();
+        System.out.println(String.format("Cardinality: %s, Prob Byz: %s, Majority: %s", CARDINALITY, PBYZ, majority));
+        System.out.println();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofMillis(10)));
