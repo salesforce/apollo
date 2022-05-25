@@ -9,6 +9,7 @@ package com.salesforce.apollo.comm;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -291,7 +292,7 @@ public class ServerConnectionCache {
     public void close() {
         lock(() -> {
             log.info("Closing connection cache: {}", this);
-            cache.values().forEach(conn -> {
+            for (ManagedServerConnection conn : new ArrayList<>(cache.values())) {
                 try {
                     conn.channel.shutdownNow();
                     if (metrics != null) {
@@ -301,7 +302,7 @@ public class ServerConnectionCache {
                 } catch (Throwable e) {
                     log.debug("Error closing {}", conn.id);
                 }
-            });
+            }
             cache.clear();
             queue.clear();
             return null;

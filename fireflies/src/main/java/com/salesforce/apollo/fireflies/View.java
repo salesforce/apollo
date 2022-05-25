@@ -579,7 +579,7 @@ public class View {
             var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
             if (!from.equals(wrapper.identifier())) {
                 log.warn("invalid identity on ring {} from {}", ring, from);
-                return emptyGossip();
+                return Gossip.getDefaultInstance();
             }
 
             Participant member = context.getMember(from);
@@ -588,7 +588,7 @@ public class View {
                 member = context.getMember(from);
                 if (member == null) {
                     log.warn("No member on ring {} from {}", ring, from);
-                    return emptyGossip();
+                    return Gossip.getDefaultInstance();
                 }
             }
 
@@ -596,8 +596,8 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
-                return emptyGossip();
+                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
+                return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
@@ -653,16 +653,16 @@ public class View {
         public void update(int ring, Update update, Digest from) {
             Participant member = context.getActiveMember(from);
             if (member == null) {
-                log.warn("invalid from: {} on ring: {} on: {}", from, ring, from);
+                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, from);
                 return;
             }
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             if (!successor.equals(node)) {
-                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
@@ -737,10 +737,6 @@ public class View {
     }
 
     private static Logger log = LoggerFactory.getLogger(View.class);
-
-    public static Gossip emptyGossip() {
-        return Gossip.getDefaultInstance();
-    }
 
     public static Identity identityFor(int epoch, InetSocketAddress endpoint, EstablishmentEvent event) {
         assert endpoint != null;
