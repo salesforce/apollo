@@ -95,7 +95,7 @@ public class SwarmTest {
 
     @Test
     public void churn() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
         initialize(exec);
 
         List<View> testViews = new ArrayList<>();
@@ -185,7 +185,7 @@ public class SwarmTest {
 
     @Test
     public void swarm() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
         initialize(exec);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
         long then = System.currentTimeMillis();

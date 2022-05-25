@@ -6,14 +6,14 @@
  */
 package com.salesforce.apollo.thoth.grpc;
 
-import static com.salesforce.apollo.utils.ListenableCompletableFuture.wrap;
-
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
@@ -101,6 +101,18 @@ public class DhtClient implements DhtService {
                 return member;
             }
         };
+    }
+
+    public static <T> ListenableFuture<T> wrap(CompletableFuture<T> future) {
+        SettableFuture<T> fs = SettableFuture.create();
+        future.whenComplete((r, t) -> {
+            if (t != null) {
+                fs.setException(t);
+            } else {
+                fs.set(r);
+            }
+        });
+        return fs;
     }
 
     private final ManagedServerConnection channel;

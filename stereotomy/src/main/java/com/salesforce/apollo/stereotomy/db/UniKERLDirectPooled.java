@@ -44,6 +44,11 @@ public class UniKERLDirectPooled {
         public ClosableKERL(Connection connection) {
             this.connection = connection;
             this.kerl = new UniKERLDirect(connection, digestAlgorithm);
+            try {
+                connection.setAutoCommit(false);
+            } catch (SQLException e) {
+                throw new IllegalStateException("Cannot set auto commit to false", e);
+            }
         }
 
         @Override

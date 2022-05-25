@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -137,7 +138,7 @@ public class MtlsTest {
             }
         }
         var scheduler = Executors.newScheduledThreadPool(members.size());
-        var exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
 
         var builder = ServerConnectionCache.newBuilder().setTarget(2);
         var frist = new AtomicBoolean(true);

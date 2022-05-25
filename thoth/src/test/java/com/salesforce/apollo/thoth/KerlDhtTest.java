@@ -59,9 +59,9 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  *
  */
 public class KerlDhtTest {
-    private static final double                                                PBYZ = 0.33;
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final int                                                   CARDINALITY;
+    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static final double                                                PBYZ = 0.33;
 
     static {
         CARDINALITY = Boolean.getBoolean("large_tests") ? 100 : 5;
@@ -84,8 +84,16 @@ public class KerlDhtTest {
     }
 
     private final Map<Digest, KerlDHT>     dhts    = new HashMap<>();
-    private final Map<Digest, LocalRouter> routers = new HashMap<>();
     private int                            majority;
+    private final Map<Digest, LocalRouter> routers = new HashMap<>();
+
+    @AfterEach
+    public void after() {
+        routers.values().forEach(r -> r.close());
+        routers.clear();
+        dhts.values().forEach(t -> t.stop());
+        dhts.clear();
+    }
 
     @BeforeEach
     public void before() {
@@ -96,28 +104,6 @@ public class KerlDhtTest {
         identities.values().forEach(ident -> instantiate(ident, context, exec, prefix));
     }
 
-    @AfterEach
-    public void after() {
-        routers.values().forEach(r -> r.close());
-        routers.clear();
-        dhts.values().forEach(t -> t.stop());
-        dhts.clear();
-    }
-
-    private void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
-                             Executor executor, String prefix) {
-        SigningMember member = new ControlledIdentifierMember(identifier);
-        context.activate(member);
-        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", prefix, member.getId());
-        context.activate(member);
-        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
-        LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2), executor, null);
-        router.setMember(member);
-        routers.put(member.getId(), router);
-        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router, executor,
-                                             Duration.ofMillis(300), 0.125, null));
-    }
-
     @Test
     public void smokin() throws Exception {
         System.out.println();
@@ -126,11 +112,11 @@ public class KerlDhtTest {
         System.out.println();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         routers.values().forEach(r -> r.start());
-        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofMillis(10)));
-        var specification = IdentifierSpecification.newBuilder();
-
+        dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
         var factory = new ProtobufEventFactory();
 
+        // inception
+        var specification = IdentifierSpecification.newBuilder();
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
         var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
@@ -167,6 +153,22 @@ public class KerlDhtTest {
         var identifier = Identifier.NONE;
         InceptionEvent event = factory.inception(identifier, specification.build());
         return event;
+    }
+
+    private void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
+                             Executor executor, String prefix) {
+        SigningMember member = new ControlledIdentifierMember(identifier);
+        context.activate(member);
+        final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
+//        System.out.println("URL: " + url);
+        context.activate(member);
+        JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
+        LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
+                                             Executors.newFixedThreadPool(2), null);
+        router.setMember(member);
+        routers.put(member.getId(), router);
+        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router, executor,
+                                             Duration.ofSeconds(1), 0.125, null));
     }
 
     private RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

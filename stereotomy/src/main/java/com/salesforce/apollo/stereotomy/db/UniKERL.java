@@ -29,6 +29,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,17 +133,20 @@ abstract public class UniKERL implements KERL {
                                         .fetchOne()
                                         .value1();
 
-        final var id = context.insertInto(COORDINATES)
-                              .set(COORDINATES.DIGEST, prevDigest == null ? DIGEST_NONE_BYTES : prevDigest.value1())
-                              .set(COORDINATES.IDENTIFIER,
-                                   context.select(IDENTIFIER.ID)
-                                          .from(IDENTIFIER)
-                                          .where(IDENTIFIER.PREFIX.eq(identBytes)))
-                              .set(COORDINATES.ILK, event.getIlk())
-                              .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
-                              .returningResult(COORDINATES.ID)
-                              .fetchOne()
-                              .value1();
+        final long id;
+        try {
+            id = context.insertInto(COORDINATES)
+                        .set(COORDINATES.DIGEST, prevDigest == null ? DIGEST_NONE_BYTES : prevDigest.value1())
+                        .set(COORDINATES.IDENTIFIER,
+                             context.select(IDENTIFIER.ID).from(IDENTIFIER).where(IDENTIFIER.PREFIX.eq(identBytes)))
+                        .set(COORDINATES.ILK, event.getIlk())
+                        .set(COORDINATES.SEQUENCE_NUMBER, event.getSequenceNumber().longValue())
+                        .returningResult(COORDINATES.ID)
+                        .fetchOne()
+                        .value1();
+        } catch (DataAccessException e) {
+            return; // already present
+        }
 
         final var digest = event.hash(digestAlgorithm);
         context.insertInto(EVENT)

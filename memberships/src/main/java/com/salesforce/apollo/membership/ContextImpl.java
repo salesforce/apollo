@@ -176,7 +176,7 @@ public class ContextImpl<T extends Member> implements Context<T> {
      */
     @Override
     public int diameter(int c) {
-        double pN = ((double) (2 * toleranceLevel())) / ((double) c);
+        double pN = ((double) (bias * toleranceLevel())) / ((double) c);
         double logN = Math.log(c);
         return (int) (logN / Math.log(c * pN));
     }

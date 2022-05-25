@@ -10,6 +10,7 @@ package com.salesforce.apollo.thoth.grpc;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.ReconciliationGrpc;
@@ -50,14 +51,16 @@ public class ReconciliationClient implements ReconciliationService {
 
             @Override
             public ListenableFuture<Update> reconcile(Intervals intervals) {
-                // TODO Auto-generated method stub
-                return null;
+                SettableFuture<Update> fs = SettableFuture.create();
+                fs.set(Update.getDefaultInstance());
+                return fs;
             }
 
             @Override
             public ListenableFuture<Empty> update(Updating update) {
-                // TODO Auto-generated method stub
-                return null;
+                SettableFuture<Empty> fs = SettableFuture.create();
+                fs.set(Empty.getDefaultInstance());
+                return fs;
             }
         };
     }

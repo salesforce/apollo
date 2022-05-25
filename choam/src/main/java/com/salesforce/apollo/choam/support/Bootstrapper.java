@@ -99,10 +99,10 @@ public class Bootstrapper {
         store.put(anchor);
         if (g != null) {
             genesis = new HashedCertifiedBlock(params.digestAlgorithm(), g);
-            log.info("Restore using genesis: {} on: {}", genesis.hash, params.member());
+            log.info("Restore using genesis: {} on: {}", genesis.hash, params.member().getId());
             lastCheckpoint = ULong.valueOf(store.getLastBlock().block.getHeader().getLastCheckpoint());
         } else {
-            log.info("Restore using no prior state on: {}", params.member());
+            log.info("Restore using no prior state on: {}", params.member().getId());
             lastCheckpoint = null;
         }
     }
@@ -147,7 +147,8 @@ public class Bootstrapper {
         store.put(checkpointView);
         assert !checkpointView.height()
                               .equals(Unsigned.ulong(0)) : "Should not attempt when bootstrapping from genesis";
-        log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash, params.member());
+        log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash,
+                 params.member().getId());
 
         CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(), checkpoint.block.getCheckpoint(),
                                                                 params.member(), store, comms, params.context(),
@@ -157,7 +158,7 @@ public class Bootstrapper {
         checkpointAssembled = assembler.assemble(params.scheduler(), params.synchronizeDuration(), params.exec())
                                        .whenComplete((cps, t) -> {
                                            log.info("Restored checkpoint: {} on: {}", checkpoint.height(),
-                                                    params.member());
+                                                    params.member().getId());
                                            checkpointState = cps;
                                        });
         // reconstruct chain to genesis
@@ -174,6 +175,8 @@ public class Bootstrapper {
     private boolean completeAnchor(Optional<ListenableFuture<Blocks>> futureSailor, AtomicReference<ULong> start,
                                    ULong end, Terminal link) {
         if (sync.isDone() || anchorSynchronized.isDone()) {
+            log.trace("Anchor synchronized isDone: {} anchor sync: {} on: {}", sync.isDone(),
+                      anchorSynchronized.isDone(), params.member().getId());
             return false;
         }
         if (futureSailor.isEmpty()) {
@@ -187,7 +190,7 @@ public class Bootstrapper {
                   .stream()
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
                   .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                        link.getMember(), params.member()))
+                                        link.getMember().getId(), params.member().getId()))
                   .forEach(cb -> store.put(cb));
         } catch (InterruptedException e) {
             log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
@@ -212,7 +215,9 @@ public class Bootstrapper {
 
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicReference<ULong> start,
                                       ULong end, Terminal link) {
-        if (sync.isDone() || anchorSynchronized.isDone()) {
+        if (sync.isDone() || viewChainSynchronized.isDone()) {
+            log.trace("View chain synchronized isDone: {} sync: {} on: {}", sync.isDone(),
+                      viewChainSynchronized.isDone(), params.member().getId());
             return false;
         }
         if (futureSailor.isEmpty()) {
@@ -227,7 +232,7 @@ public class Bootstrapper {
                   .stream()
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
                   .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
-                                        link.getMember(), params.member()))
+                                        link.getMember().getId(), params.member().getId()))
                   .forEach(cb -> store.put(cb));
         } catch (InterruptedException e) {
             log.debug("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
@@ -236,6 +241,8 @@ public class Bootstrapper {
         }
         if (store.completeFrom(start.get())) {
             validateViewChain();
+            log.debug("View chain complete ({} to {}) from: {} on: {}", start.get(), end, link.getMember().getId(),
+                      params.member().getId());
             return false;
         }
         return true;
@@ -260,8 +267,8 @@ public class Bootstrapper {
     }
 
     private void computeGenesis(Map<Digest, Initial> votes) {
-        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.majority() + 1,
-                 params.member());
+        log.info("Computing genesis with {} votes, required: {} on: {}", votes.size(), params.majority(),
+                 params.member().getId());
         Multiset<HashedCertifiedBlock> tally = TreeMultiset.create();
         Map<Digest, Initial> valid = votes.entrySet()
                                           .stream()
@@ -276,16 +283,16 @@ public class Bootstrapper {
                                                   if (lastCheckpoint != null &&
                                                       lastCheckpoint.compareTo(ULong.valueOf(0)) > 0) {
                                                       log.trace("Rejecting genesis: {} last checkpoint: {} > 0 on: {}",
-                                                                e.getKey(), lastCheckpoint, params.member());
+                                                                e.getKey(), lastCheckpoint, params.member().getId());
                                                       return false;
                                                   }
                                                   log.trace("Accepting genesis: {} on: {}", e.getKey(),
-                                                            params.member());
+                                                            params.member().getId());
                                                   return true;
                                               }
                                               if (!e.getValue().hasCheckpoint()) {
                                                   log.trace("Rejecting: {} has no checkpoint. last checkpoint: {} > 0 on: {}",
-                                                            e.getKey(), lastCheckpoint, params.member());
+                                                            e.getKey(), lastCheckpoint, params.member().getId());
                                                   return false;
                                               }
 
@@ -298,7 +305,8 @@ public class Bootstrapper {
                                                                                                   .getHeader()
                                                                                                   .getLastReconfig());
                                               // checkpoint's view should match
-                                              log.trace("Accepting checkpoint: {} on: {}", e.getKey(), params.member());
+                                              log.trace("Accepting checkpoint: {} on: {}", e.getKey(),
+                                                        params.member().getId());
                                               return checkpointViewHeight.equals(recordedCheckpointViewHeight);
                                           })
                                           .peek(e -> tally.add(new HashedCertifiedBlock(params.digestAlgorithm(),
@@ -309,10 +317,10 @@ public class Bootstrapper {
         if (genesis == null) {
             Pair<HashedCertifiedBlock, Integer> winner = null;
 
-            log.info("Tally: {} required: {} on: {}", tally, params.majority() + 1, params.member());
+            log.info("Tally: {} required: {} on: {}", tally, params.majority(), params.member().getId());
             for (HashedCertifiedBlock cb : tally) {
                 int count = tally.count(cb);
-                if (count > threshold) {
+                if (count >= threshold) {
                     if (winner == null || count > winner.b) {
                         winner = new Pair<>(cb, count);
                     }
@@ -320,13 +328,13 @@ public class Bootstrapper {
             }
 
             if (winner == null) {
-                log.debug("No winner on: {}", params.member());
+                log.debug("No winner on: {}", params.member().getId());
                 scheduleSample();
                 return;
             }
 
             genesis = winner.a;
-            log.info("Winner: {} on: {}", genesis.hash, params.member());
+            log.info("Winner: {} on: {}", genesis.hash, params.member().getId());
         }
 
         // get the most recent checkpoint.
@@ -369,7 +377,7 @@ public class Bootstrapper {
             if (t == null) {
                 log.info("Synchronized to: {} from: {} last view: {} on: {}", genesis.hash,
                          checkpoint == null ? genesis.hash : checkpoint.hash,
-                         checkpointView == null ? genesis.hash : checkpoint.hash, params.member());
+                         checkpointView == null ? genesis.hash : checkpoint.hash, params.member().getId());
                 sync.complete(new SynchronizedState(genesis, checkpointView, checkpoint, checkpointState));
             } else {
                 log.error("Failed synchronizing to {} from: {} last view: {} on: {}", genesis.hash,
@@ -387,17 +395,22 @@ public class Bootstrapper {
     }
 
     private void sample() {
+        final HashedCertifiedBlock established = genesis;
+        if (sync.isDone() || established != null) {
+            log.trace("Synchronization isDone: {} genesis: {} on: {}", sync.isDone(),
+                      established == null ? null : established.hash, params.member().getId());
+            return;
+        }
         HashMap<Digest, Initial> votes = new HashMap<>();
         Synchronize s = Synchronize.newBuilder()
                                    .setContext(params.context().getId().toDigeste())
                                    .setHeight(anchor.height().longValue())
                                    .build();
         final var randomCut = randomCut(params.digestAlgorithm());
-        new RingIterator<>(params.context(), params.member(), comms,
-                           params.exec()).iterate(randomCut, (link, ring) -> synchronize(s, link),
-                                                  (tally, futureSailor, link, ring) -> synchronize(futureSailor, votes,
-                                                                                                   link),
-                                                  () -> computeGenesis(votes));
+        new RingIterator<>(params.context(), params.member(), comms, params.exec(),
+                           true).iterate(randomCut, (link, ring) -> synchronize(s, link),
+                                         (tally, futureSailor, link, ring) -> synchronize(futureSailor, votes, link),
+                                         () -> computeGenesis(votes));
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {
@@ -407,12 +420,12 @@ public class Bootstrapper {
             return;
         }
         log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", start, anchorTo,
-                 params.synchronizeDuration().toMillis(), params.member());
+                 params.synchronizeDuration().toMillis(), params.member().getId());
         params.scheduler().schedule(() -> {
             try {
                 anchor(start, anchorTo);
             } catch (Throwable e) {
-                log.error("Cannot execute completeViewChain on: {}", params.member());
+                log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
         }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
@@ -422,12 +435,18 @@ public class Bootstrapper {
         if (sync.isDone()) {
             return;
         }
-        log.info("Scheduling state sample on: {}", params.member());
+        log.info("Scheduling state sample on: {}", params.member().getId());
         params.scheduler().schedule(() -> {
+            final HashedCertifiedBlock established = genesis;
+            if (sync.isDone() || established != null) {
+                log.trace("Synchronization isDone: {} genesis: {} on: {}", sync.isDone(),
+                          established == null ? null : established.hash, params.member().getId());
+                return;
+            }
             try {
                 sample();
             } catch (Throwable e) {
-                log.error("Unable to sample sync state on: {}", params.member(), e);
+                log.error("Unable to sample sync state on: {}", params.member().getId(), e);
                 sync.completeExceptionally(e);
             }
         }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
@@ -437,15 +456,16 @@ public class Bootstrapper {
         assert !start.get().equals(to) : "Should not schedule view chain completion on an empty interval: ["
         + start.get() + ":" + to + "]";
         if (sync.isDone()) {
+            log.trace("View chain complete on: {}", params.member().getId());
             return;
         }
         log.info("Scheduling view chain completion ({} to {}) duration: {} millis on: {}", start, to,
-                 params.synchronizeDuration().toMillis(), params.member());
+                 params.synchronizeDuration().toMillis(), params.member().getId());
         params.scheduler().schedule(() -> {
             try {
                 completeViewChain(start, to);
             } catch (Throwable e) {
-                log.error("Cannot execute completeViewChain on: {}", params.member());
+                log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
         }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
@@ -456,11 +476,12 @@ public class Bootstrapper {
         final HashedCertifiedBlock established = genesis;
         if (sync.isDone() || established != null) {
             log.trace("Terminating synchronization early isDone: {} genesis: {} cancelled: {} on: {}", sync.isDone(),
-                      established == null ? null : established.hash, link.getMember(), params.member());
+                      established == null ? null : established.hash, link.getMember().getId(), params.member().getId());
             return false;
         }
         if (futureSailor.isEmpty()) {
-            log.trace("Empty response from: {} on: {}", link.getMember(), params.member());
+            log.trace("Empty synchronization response from: {} on: {}", link == null ? null : link.getMember().getId(),
+                      params.member().getId());
             return true;
         }
         try {
@@ -468,19 +489,20 @@ public class Bootstrapper {
             if (vote.hasGenesis()) {
                 HashedCertifiedBlock gen = new HashedCertifiedBlock(params.digestAlgorithm(), vote.getGenesis());
                 if (!gen.height().equals(ULong.valueOf(0))) {
-                    log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash, link.getMember(),
-                              params.member());
+                    log.error("Returned genesis: {} is not height 0 from: {} on: {}", gen.hash,
+                              link.getMember().getId(), params.member().getId());
                 }
                 votes.put(link.getMember().getId(), vote);
                 log.debug("Synchronization vote: {} count: {} from: {} recorded on: {}", gen.hash, votes.size(),
-                          link.getMember(), params.member());
+                          link.getMember().getId(), params.member().getId());
             }
         } catch (InterruptedException e) {
-            log.warn("Error counting vote from: {} on: {}", link.getMember(), params.member().getId());
+            log.warn("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
         } catch (ExecutionException e) {
-            log.warn("Error counting vote from: {} on: {}", link.getMember(), params.member().getId());
+            log.warn("Error counting vote from: {} on: {}", link.getMember().getId(), params.member().getId());
         }
-        log.trace("Continuing, processed sync response from: {} on: {}", link.getMember(), params.member());
+        log.trace("Continuing, processed sync response from: {} on: {}", link.getMember().getId(),
+                  params.member().getId());
         return true;
     }
 
@@ -488,7 +510,7 @@ public class Bootstrapper {
         if (params.member().equals(link.getMember())) {
             return null;
         }
-        log.debug("Attempting synchronization with: {} on: {}", link.getMember(), params.member());
+        log.debug("Attempting synchronization with: {} on: {}", link.getMember().getId(), params.member().getId());
         return link.sync(s);
     }
 
@@ -497,9 +519,10 @@ public class Bootstrapper {
         try {
             store.validate(anchor.height(), to);
             anchorSynchronized.complete(true);
-            log.info("Anchor chain to checkpoint synchronized on: {}", params.member());
+            log.info("Anchor chain to checkpoint synchronized on: {}", params.member().getId());
         } catch (Throwable e) {
-            log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), to, params.member(), e);
+            log.error("Anchor chain from: {} to: {} does not validate on: {}", anchor.height(), to,
+                      params.member().getId(), e);
             anchorSynchronized.completeExceptionally(e);
         }
     }
@@ -508,11 +531,11 @@ public class Bootstrapper {
         if (!viewChainSynchronized.isDone()) {
             try {
                 store.validateViewChain(checkpointView.height());
-                log.info("View chain synchronized on: {}", params.member());
+                log.info("View chain synchronized on: {}", params.member().getId());
                 viewChainSynchronized.complete(true);
             } catch (Throwable t) {
                 log.error("View chain from: {} to: {} does not validate on: {}", checkpointView.height(), 0,
-                          params.member(), t);
+                          params.member().getId(), t);
                 viewChainSynchronized.completeExceptionally(t);
             }
         }

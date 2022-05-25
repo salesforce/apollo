@@ -574,7 +574,7 @@ public class View {
         public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
                 log.warn("invalid ring {} from {}", ring, from);
-                return emptyGossip();
+                return Gossip.getDefaultInstance();
             }
             var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
             if (!from.equals(wrapper.identifier())) {
@@ -596,6 +596,7 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
+                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
                 return emptyGossip();
             }
             if (!successor.equals(node)) {
@@ -650,6 +651,20 @@ public class View {
          * @param from
          */
         public void update(int ring, Update update, Digest from) {
+            Participant member = context.getActiveMember(from);
+            if (member == null) {
+                log.warn("invalid from: {} on ring: {} on: {}", from, ring, from);
+                return;
+            }
+            Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+            if (successor == null) {
+                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
+                return;
+            }
+            if (!successor.equals(node)) {
+                log.warn("invalid from: {} on ring: {} on: {}", from, ring, member.getId());
+                return;
+            }
             processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
         }
 
@@ -815,8 +830,8 @@ public class View {
         var identity = identityFor(0, endpoint, member.getEvent());
         this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new FfServer(service, communications.getClientIdentityProvider(),
-                                                            r, exec, metrics),
+                                          r -> new FfServer(service, communications.getClientIdentityProvider(), r,
+                                                            exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         add(node);
         log.info("View [{}]", node.getId());

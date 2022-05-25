@@ -23,6 +23,7 @@ import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.Ring.IterateResult;
 import com.salesforce.apollo.membership.SigningMember;
 
 /**
@@ -32,17 +33,30 @@ import com.salesforce.apollo.membership.SigningMember;
 public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private static final Logger log = LoggerFactory.getLogger(RingIterator.class);
 
+    private final boolean    ignoreSelf;
     private volatile boolean majorityFailed  = false;
     private volatile boolean majoritySucceed = false;
 
     public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                         Executor exec) {
+        this(context, member, comm, exec, false);
+    }
+
+    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
+                        Executor exec, boolean ignoreSelf) {
         super(context, member, comm, exec);
+        this.ignoreSelf = ignoreSelf;
     }
 
     public RingIterator(Direction direction, Context<Member> context, SigningMember member,
                         CommonCommunications<Comm, ?> comm, Executor exec) {
+        this(direction, context, member, comm, exec, false);
+    }
+
+    public RingIterator(Direction direction, Context<Member> context, SigningMember member,
+                        CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf) {
         super(direction, context, member, comm, exec);
+        this.ignoreSelf = ignoreSelf;
     }
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
@@ -63,6 +77,11 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
 
     }
 
+    @Override
+    protected Logger getLog() {
+        return log;
+    }
+
     private <T> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, ListenableFuture<T>> round, Runnable failedMajority,
                                      PredicateHandler<T, Comm> handler, Runnable onComplete, AtomicInteger tally,
@@ -70,75 +89,98 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally,
                                                  traversed);
-        final int current = lastRingIndex();
         int ringCount = context.getRingCount();
-        boolean finalIteration = current % ringCount >= ringCount - 1;
-        int majority = context.majority();
 
-        Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, majority, failedMajority, tally,
-                                                     proceed, finalIteration, onComplete);
-
-        final var next = nextRing(digest, m -> traversed.add(m));
-        if (finalIteration) {
-            traversed.clear();
-        }
+        final var next = nextRing(digest, m -> {
+            if (ignoreSelf && member.equals(m)) {
+                return IterateResult.CONTINUE;
+            }
+            if (!context.isActive(m)) {
+                return IterateResult.CONTINUE;
+            }
+            return traversed.add(m) ? IterateResult.SUCCESS : IterateResult.FAIL;
+        });
         try (Comm link = next.link()) {
+            final int current = lastRingIndex();
+            boolean finalIteration = current == ringCount - 1;
+
+            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally,
+                                                         finalIteration, onComplete);
+            if (finalIteration) {
+                traversed.clear();
+            }
             if (link == null) {
-                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
-                          member);
+//                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
+//                          member);
                 final boolean allow = handler.handle(tally, Optional.empty(), link, current);
                 allowed.accept(allow);
+                if (!finalIteration && allow) {
+                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
+                              member.getId());
+                    exec.execute(proceed);
+                }
                 return;
             }
-            log.trace("Iteration on: {} ring: {} to: {} on: {}", context.getId(), current, link.getMember(), member);
-            ListenableFuture<T> futureSailor = round.apply(link, current);
+            log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", current, tally.get(), digest,
+                      context.getId(), next.ring(), link.getMember() == null ? null : link.getMember().getId(),
+                      member.getId());
+            ListenableFuture<T> futureSailor = round.apply(link, next.ring());
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
-                          current, link.getMember(), member);
-                final boolean allow = handler.handle(tally, Optional.empty(), link, current);
+                          current, link.getMember() == null ? null : link.getMember().getId(), member.getId());
+                final boolean allow = handler.handle(tally, Optional.empty(), link, next.ring());
                 allowed.accept(allow);
+                if (!finalIteration && allow) {
+                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
+                              member.getId());
+                    exec.execute(proceed);
+                }
                 return;
             }
-            futureSailor.addListener(() -> allowed.accept(handler.handle(tally, Optional.of(futureSailor), link,
-                                                                         current)),
-                                     exec);
+            futureSailor.addListener(() -> {
+                final var allow = handler.handle(tally, Optional.of(futureSailor), link, next.ring());
+                allowed.accept(allow);
+                if (!finalIteration && allow) {
+                    log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
+                              member.getId());
+                    exec.execute(proceed);
+                }
+            }, exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
     }
 
-    private void proceed(Digest key, final boolean allow, Runnable onMajority, int majority, Runnable failedMajority,
-                         AtomicInteger tally, Runnable proceed, boolean finalIteration, Runnable onComplete) {
+    private void proceed(Digest key, final boolean allow, Runnable onMajority, Runnable failedMajority,
+                         AtomicInteger tally, boolean finalIteration, Runnable onComplete) {
         log.trace("Determining continuation of: {} for: {} tally: {} majority: {} final itr: {} allow: {} on: {}", key,
-                  context.getId(), tally.get(), majority, finalIteration, allow, member);
+                  context.getId(), tally.get(), context.majority(), finalIteration, allow, member.getId());
         if (onMajority != null && !majoritySucceed) {
-            if (tally.get() >= majority) {
+            if (tally.get() >= context.majority()) {
                 majoritySucceed = true;
                 log.debug("Obtained majority of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                          member);
+                          member.getId());
                 onMajority.run();
             }
         }
         if (finalIteration && allow) {
-            log.trace("Final iteration of: {} for: {} tally: {} on: {}", context.getId(), tally.get(), member);
+            log.trace("Final iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
+                      member.getId());
             if (failedMajority != null && !majorityFailed) {
-                if (tally.get() < majority) {
+                if (tally.get() < context.majority()) {
                     majorityFailed = true;
                     log.debug("Failed to obtain majority of: {} for: {} tally: {} required: {} on: {}", key,
-                              context.getId(), tally.get(), majority, member);
+                              context.getId(), tally.get(), context.majority(), member);
                     failedMajority.run();
                 }
             }
             if (onComplete != null) {
                 log.trace("Completing iteration of: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(),
-                          member);
+                          member.getId());
                 onComplete.run();
             }
-        } else if (allow) {
-            log.trace("Proceeding on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
-            exec.execute(proceed);
-        } else {
-            log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member);
+        } else if (!allow) {
+            log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member.getId());
         }
     }
 }

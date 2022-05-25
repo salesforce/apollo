@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -56,6 +57,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
@@ -126,102 +128,60 @@ public class KerlDHT {
 
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
-            try (var k = kerlPool.create()) {
-                log.info("appending kerl on: {}", member.getId());
-                return new ProtoKERLAdapter(k).append(kerl_);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("appending kerl on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).append(kerl_));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
-            try (var k = kerlPool.create()) {
-                log.info("appending events on: {}", member.getId());
-                return new ProtoKERLAdapter(k).append(events);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("appending events on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).append(events));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
-            try (var k = kerlPool.create()) {
-                log.info("appending events and attachments on: {}", member.getId());
-                return new ProtoKERLAdapter(k).append(events, attachments);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("appending events and attachments on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).append(events, attachments));
         }
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
-            try (var k = kerlPool.create()) {
-                log.info("get attachments for coordinates on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getAttachment(coordinates);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get attachments for coordinates on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getAttachment(coordinates));
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
-            try (var k = kerlPool.create()) {
-                log.info("get kerl for identifier on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getKERL(identifier);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get kerl for identifier on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKERL(identifier));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
-            try (var k = kerlPool.create()) {
-                log.info("get key event for digest on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getKeyEvent(digest);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get key event for digest on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(digest));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
-            try (var k = kerlPool.create()) {
-                log.info("get key event for coordinates on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getKeyEvent(coordinates);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get key event for coordinates on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
-            try (var k = kerlPool.create()) {
-                log.info("get key state for coordinates on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getKeyState(coordinates);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get key state for coordinates on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKeyState(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
-            try (var k = kerlPool.create()) {
-                log.info("get key state for identifier on: {}", member.getId());
-                return new ProtoKERLAdapter(k).getKeyState(identifier);
-            } catch (Throwable e) {
-                return completeExceptionally(e);
-            }
+            log.info("get key state for identifier on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKeyState(identifier));
         }
     }
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
-
-    private static <T> CompletableFuture<T> complete(T value) {
-        var fs = new CompletableFuture<T>();
-        fs.complete(value);
-        return fs;
-    }
 
     private static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         var fs = new CompletableFuture<T>();
@@ -231,6 +191,7 @@ public class KerlDHT {
 
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
+    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
     private final Executor                                                    executor;
     private final double                                                      fpr;
     private final UniKERLDirectPooled                                         kerlPool;
@@ -241,7 +202,6 @@ public class KerlDHT {
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
     private final TemporalAmount                                              timeout;
 
     public KerlDHT(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
@@ -252,8 +212,8 @@ public class KerlDHT {
         this.timeout = timeout;
         this.fpr = falsePositiveRate;
         dhtComms = communications.create(member, context.getId(), service, r -> new DhtServer(r, executor, metrics),
-                                           DhtClient.getCreate(context.getId(), metrics),
-                                           DhtClient.getLocalLoopback(service, member));
+                                         DhtClient.getCreate(context.getId(), metrics),
+                                         DhtClient.getLocalLoopback(service, member));
         reconcileComms = communications.create(member, context.getId(), reconciliation,
                                                r -> new ReconciliationServer(r,
                                                                              communications.getClientIdentityProvider(),
@@ -281,13 +241,10 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, dhtComms,
-                           executor).iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
-                                             () -> majority.complete(false),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append kerl"),
-                                             null);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.append(kerl), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link, "append kerl"),
+                                                                        () -> majority.complete(true));
         return complete(majority, null);
     }
 
@@ -303,13 +260,10 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, dhtComms,
-                           executor).iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.append(events), () -> majority.complete(false),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append events"),
-                                             null);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.append(events), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link, "append events"),
+                                                                        () -> majority.complete(true));
         final CompletableFuture<Void> complete = complete(majority, null);
         return complete;
     }
@@ -326,14 +280,10 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(context, member, dhtComms,
-                           executor).iterate(identifier, () -> majority.complete(true),
-                                             (link, r) -> link.append(events, attachments),
-                                             () -> majority.complete(false),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append events"),
-                                             null);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.append(events, attachments), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link, "append events"),
+                                                                        () -> majority.complete(true));
         return complete(majority, null);
     }
 
@@ -349,11 +299,11 @@ public class KerlDHT {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Attachment>();
         new RingIterator<>(context, member, dhtComms, executor).iterate(identifier,
-                                                                          (link, r) -> link.getAttachment(coordinates),
-                                                                          (tally, futureSailor, link,
-                                                                           r) -> read(result, futureSailor, identifier,
-                                                                                      isTimedOut, link,
-                                                                                      "get attachment"));
+                                                                        (link, r) -> link.getAttachment(coordinates),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, futureSailor, identifier,
+                                                                                    isTimedOut, link,
+                                                                                    "get attachment"));
         return result;
     }
 
@@ -369,9 +319,9 @@ public class KerlDHT {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KERL_>();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest, (link, r) -> link.getKERL(identifier),
-                                                                          (tally, futureSailor, link,
-                                                                           r) -> read(result, futureSailor, digest,
-                                                                                      isTimedOut, link, "get kerl"));
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, futureSailor, digest,
+                                                                                    isTimedOut, link, "get kerl"));
         return result;
     }
 
@@ -386,9 +336,10 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyEvent_>();
-        new RingIterator<>(context, member, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKeyEvent(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, futureSailor, digest,
+        new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
+                                                                        (link, r) -> link.getKeyEvent(coordinates),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, futureSailor, digest,
                                                                                     isTimedOut, link, "get key event"));
         return result;
     }
@@ -405,11 +356,11 @@ public class KerlDHT {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
-                                                                          (link, r) -> link.getKeyState(coordinates),
-                                                                          (tally, futureSailor, link,
-                                                                           r) -> read(result, futureSailor, digest,
-                                                                                      isTimedOut, link,
-                                                                                      "get attachment"));
+                                                                        (link, r) -> link.getKeyState(coordinates),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, futureSailor, digest,
+                                                                                    isTimedOut, link,
+                                                                                    "get attachment"));
         return result;
     }
 
@@ -425,11 +376,11 @@ public class KerlDHT {
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
-                                                                          (link, r) -> link.getKeyState(identifier),
-                                                                          (tally, futureSailor, link,
-                                                                           r) -> read(result, futureSailor, digest,
-                                                                                      isTimedOut, link,
-                                                                                      "get attachment"));
+                                                                        (link, r) -> link.getKeyState(identifier),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, futureSailor, digest,
+                                                                                    isTimedOut, link,
+                                                                                    "get attachment"));
         return result;
     }
 
@@ -439,7 +390,7 @@ public class KerlDHT {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-        reconcile(scheduler, duration);
+//        reconcile(scheduler, duration);
     }
 
     public void stop() {
@@ -460,6 +411,14 @@ public class KerlDHT {
             }
             return fs;
         });
+    }
+
+    private <T> CompletableFuture<T> complete(Function<KERL, CompletableFuture<T>> func) {
+        try (var k = kerlPool.create()) {
+            return func.apply(k);
+        } catch (Throwable e) {
+            return completeExceptionally(e);
+        }
     }
 
     private Digest digestOf(InceptionEvent event) {
@@ -542,22 +501,27 @@ public class KerlDHT {
         try {
             futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e);
+            log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember().getId(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             if (e.getCause() instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
                 if (sre.getStatus() == Status.UNAVAILABLE) {
-                    log.trace("Server unavailable action: {} from: {} on: {}", action, identifier, link.getMember(),
-                              member);
+                    log.trace("Server unavailable action: {} for: {} from: {} on: {}", action, identifier,
+                              link.getMember().getId(), member.getId());
+                } else {
+                    log.warn("Server status: {} : {} action: {} for: {} from: {} on: {}", sre.getStatus().getCode(),
+                             sre.getStatus().getDescription(), action, identifier, link.getMember().getId(),
+                             member.getId());
                 }
             } else {
-                log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e.getCause());
+                log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember().getId(), member.getId(),
+                         e.getCause());
             }
             return !isTimedOut.get();
         }
-        log.trace("{}: {} on: {}", action, identifier, member);
-        tally.incrementAndGet();
+        int count = tally.incrementAndGet();
+        log.trace("{}: {} tally: {} on: {}", action, identifier, count, member.getId());
         return !isTimedOut.get();
     }
 
@@ -583,7 +547,8 @@ public class KerlDHT {
             if (t instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) t;
                 if (sre.getStatus() == Status.NOT_FOUND) {
-                    log.trace("Error {}: {} server not found: {} on: {}", action, identifier, link.getMember(), member);
+                    log.trace("Error {}: {} server not found: {} on: {}", action, identifier, link.getMember().getId(),
+                              member.getId());
                     return !isTimedOut.get();
                 }
             }
@@ -591,11 +556,11 @@ public class KerlDHT {
             return !isTimedOut.get();
         }
         if (content != null || (content != null && content.equals(Attachment.getDefaultInstance()))) {
-            log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember(), member);
+            log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             result.complete(content);
             return false;
         } else {
-            log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember(), member);
+            log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             return !isTimedOut.get();
         }
     }
@@ -608,10 +573,11 @@ public class KerlDHT {
         try {
             Update update = futureSailor.get().get();
             log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
-                      link.getMember(), member);
+                      link.getMember().getId(), member.getId());
             kerlSpace.update(update.getEventsList());
         } catch (InterruptedException | ExecutionException e) {
-            log.debug("Error in interval reconciliation with {} : {}", link.getMember(), e.getCause());
+            log.debug("Error in interval reconciliation with {} : {} on: {}", link.getMember().getId(), member.getId(),
+                      e.getCause());
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -620,8 +586,8 @@ public class KerlDHT {
 
     private ListenableFuture<Update> reconcile(ReconciliationService link, Integer ring) {
         CombinedIntervals keyIntervals = keyIntervals();
-        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(), member,
-                  keyIntervals);
+        log.trace("Interval reconciliation on ring: {} with: {} on: {} intervals: {}", ring, link.getMember(),
+                  member.getId(), keyIntervals);
         return link.reconcile(Intervals.newBuilder()
                                        .setContext(context.getId().toDigeste())
                                        .setRing(ring)
@@ -641,7 +607,7 @@ public class KerlDHT {
 
     private boolean valid(Digest from, int ring) {
         if (ring >= context.getRingCount() || ring < 0) {
-            log.warn("invalid ring {} from {}", ring, from);
+            log.warn("invalid ring {} from {} on: {}", ring, from, member.getId());
             return false;
         }
         Member fromMember = context.getMember(from);

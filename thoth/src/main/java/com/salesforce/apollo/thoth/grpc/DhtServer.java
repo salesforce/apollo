@@ -69,7 +69,9 @@ public class DhtServer extends KerlDhtImplBase {
                         timer.stop();
                     }
                     if (t != null) {
-                        responseObserver.onError(t);
+                        final var description = t.getClass().getSimpleName()
+                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
                     } else if (ks != null) {
                         responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();
@@ -99,7 +101,9 @@ public class DhtServer extends KerlDhtImplBase {
                         timer.stop();
                     }
                     if (t != null) {
-                        responseObserver.onError(t);
+                        final var description = t.getClass().getSimpleName()
+                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
                     } else if (b != null) {
                         responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();
@@ -128,7 +132,9 @@ public class DhtServer extends KerlDhtImplBase {
                         timer.stop();
                     }
                     if (t != null) {
-                        responseObserver.onError(t);
+                        final var description = t.getClass().getSimpleName()
+                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
                     } else if (ks != null) {
                         responseObserver.onNext(Empty.getDefaultInstance());
                         responseObserver.onCompleted();

@@ -123,7 +123,7 @@ public class GenesisAssembly implements Genesis {
     public void certify() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.certifications.size() > params().majority())
+                 .filter(p -> p.certifications.size() >= params().majority())
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
         reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                           view.genesis(slate, view.context().getId(),
@@ -247,7 +247,7 @@ public class GenesisAssembly implements Genesis {
         var member = view.context().getMember(Digest.from(v.getWitness().getId()));
         if (member != null) {
             witnesses.put(member, v);
-            if (witnesses.size() > params().majority()) {
+            if (witnesses.size() >= params().majority()) {
                 if (published.compareAndSet(false, true)) {
                     publish();
                 }

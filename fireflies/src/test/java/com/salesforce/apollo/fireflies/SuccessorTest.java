@@ -110,7 +110,7 @@ public class SuccessorTest {
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)
                                                .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
-        Executor executor = Executors.newCachedThreadPool();
+        Executor executor = Executors.newFixedThreadPool(CARDINALITY);
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(prefix, builder, executor, metrics.limitsMetrics());
