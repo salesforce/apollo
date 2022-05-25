@@ -25,8 +25,8 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
  * @author hal.hildebrand
  *
  */
-public interface Verifier {
-    static final Logger log = LoggerFactory.getLogger(Verifier.class);
+public interface KeyEventVerifier {
+    static final Logger log = LoggerFactory.getLogger(KeyEventVerifier.class);
 
     default JohnHancock verifyAuthentication(KeyState state, KeyEvent event, JohnHancock signatures, KEL kel) {
         Optional<KeyEvent> lookup = kel.getKeyEvent(state.getLastEstablishmentEvent());

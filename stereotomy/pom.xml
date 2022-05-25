@@ -45,6 +45,10 @@
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>joou</artifactId>
+        </dependency> 
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
