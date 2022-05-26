@@ -290,6 +290,7 @@ public class SqlStateMachine {
 
     static {
         ThreadLocalScopeManager.initialize();
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
     }
     static {
         try {
@@ -411,6 +412,11 @@ public class SqlStateMachine {
                     log.error("Written file does not exist: {}", temp.getAbsolutePath());
                     return null;
                 }
+//                try (FileInputStream fis = new FileInputStream(temp)) {
+//                    System.out.println(Utils.getDocument(fis));
+//                } catch (IOException e1) {
+//                    throw new IllegalStateException(e1);
+//                }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
                      FileOutputStream fos = new FileOutputStream(checkpoint);
@@ -484,7 +490,7 @@ public class SqlStateMachine {
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
-
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase(SQL_STATE_INTERNAL, new ClassLoaderResourceAccessor(), database)) {
