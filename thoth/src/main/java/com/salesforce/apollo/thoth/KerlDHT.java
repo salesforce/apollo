@@ -29,6 +29,9 @@ import org.h2.jdbcx.JdbcConnectionPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
+import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
@@ -40,6 +43,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.InteractionEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEventWithAttachments;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
@@ -179,6 +183,12 @@ public class KerlDHT {
             log.info("get key state for identifier on: {}", member.getId());
             return complete(k -> new ProtoKERLAdapter(k).getKeyState(identifier));
         }
+
+        @Override
+        public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
+            log.info("get key state with attachments for coordinates on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).getKeyStateWithAttachments(coords));
+        }
     }
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
@@ -298,11 +308,12 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<Attachment>();
+        HashMultiset<Attachment> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms, executor).iterate(identifier,
                                                                         (link, r) -> link.getAttachment(coordinates),
                                                                         (tally, futureSailor, link,
-                                                                         r) -> read(result, futureSailor, identifier,
-                                                                                    isTimedOut, link,
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    identifier, isTimedOut, link,
                                                                                     "get attachment"));
         return result;
     }
@@ -318,10 +329,12 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KERL_>();
+        HashMultiset<KERL_> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest, (link, r) -> link.getKERL(identifier),
                                                                         (tally, futureSailor, link,
-                                                                         r) -> read(result, futureSailor, digest,
-                                                                                    isTimedOut, link, "get kerl"));
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
+                                                                                    "get kerl"));
         return result;
     }
 
@@ -336,11 +349,13 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyEvent_>();
+        HashMultiset<KeyEvent_> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
                                                                         (link, r) -> link.getKeyEvent(coordinates),
                                                                         (tally, futureSailor, link,
-                                                                         r) -> read(result, futureSailor, digest,
-                                                                                    isTimedOut, link, "get key event"));
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
+                                                                                    "get key event"));
         return result;
     }
 
@@ -355,11 +370,12 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
+        HashMultiset<KeyState_> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
                                                                         (link, r) -> link.getKeyState(coordinates),
                                                                         (tally, futureSailor, link,
-                                                                         r) -> read(result, futureSailor, digest,
-                                                                                    isTimedOut, link,
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
                                                                                     "get attachment"));
         return result;
     }
@@ -375,11 +391,32 @@ public class KerlDHT {
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
         var result = new CompletableFuture<KeyState_>();
+        HashMultiset<KeyState_> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms, executor).iterate(digest,
                                                                         (link, r) -> link.getKeyState(identifier),
                                                                         (tally, futureSailor, link,
-                                                                         r) -> read(result, futureSailor, digest,
-                                                                                    isTimedOut, link,
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
+                                                                                    "get attachment"));
+        return result;
+    }
+
+    public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates) {
+        if (coordinates == null) {
+            return complete(null);
+        }
+        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        if (digest == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStateWithAttachments_>();
+        HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
+        new RingIterator<>(context, member, dhtComms,
+                           executor).iterate(digest, (link, r) -> link.getKeyStateWithAttachments(coordinates),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
                                                                                     "get attachment"));
         return result;
     }
@@ -390,7 +427,7 @@ public class KerlDHT {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-//        reconcile(scheduler, duration);
+        reconcile(scheduler, duration);
     }
 
     public void stop() {
@@ -531,7 +568,8 @@ public class KerlDHT {
         return biff.toBff();
     }
 
-    private <T> boolean read(CompletableFuture<T> result, Optional<ListenableFuture<T>> futureSailor, Digest identifier,
+    private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered,
+                             Optional<ListenableFuture<T>> futureSailor, Digest identifier,
                              Supplier<Boolean> isTimedOut, DhtService link, String action) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
@@ -557,8 +595,18 @@ public class KerlDHT {
         }
         if (content != null || (content != null && content.equals(Attachment.getDefaultInstance()))) {
             log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
-            result.complete(content);
-            return false;
+            gathered.add(content);
+            var winner = gathered.entrySet()
+                                 .stream()
+                                 .filter(e -> e.getCount() >= context.majority())
+                                 .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                                 .orElse(null);
+            if (winner != null) {
+                result.complete(winner.getElement());
+                return false;
+            } else {
+                return true;
+            }
         } else {
             log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             return !isTimedOut.get();

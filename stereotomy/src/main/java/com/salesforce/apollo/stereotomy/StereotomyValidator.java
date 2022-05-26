@@ -14,7 +14,6 @@ import java.security.cert.X509Certificate;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.stereotomy.Stereotomy.Decoded;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
-import com.salesforce.apollo.stereotomy.services.Verifiers;
 
 /**
  * @author hal.hildebrand

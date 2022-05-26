@@ -7,7 +7,6 @@
 package com.salesforce.apollo.ethereal;
 
 import static com.salesforce.apollo.ethereal.Crown.crownFromParents;
-import static com.salesforce.apollo.ethereal.PreUnit.forSigning;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -228,7 +227,7 @@ public interface PreUnit {
             if (creator >= verifiers.length) {
                 return false;
             }
-            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData, salt));
+            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, rsData, salt));
         }
     }
 
@@ -322,7 +321,7 @@ public interface PreUnit {
     }
 
     static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
-        return signer.sign(forSigning(id, crown, data, rsData, salt));
+        return signer.sign(PreUnit.forSigning(id, crown, data, rsData, salt));
     }
 
     short creator();

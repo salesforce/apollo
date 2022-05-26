@@ -188,6 +188,11 @@ message KeyState_ {
     int32 witnessThreshold = 11; 
 }
 
+message KeyStateWithAttachments_ {
+    KeyState_ state = 1;
+    Attachment attachment = 2;
+}
+
 // A bound value
 message Bound {
     InceptionEvent identifier = 1;

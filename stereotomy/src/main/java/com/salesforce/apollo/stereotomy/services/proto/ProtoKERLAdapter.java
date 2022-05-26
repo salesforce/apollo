@@ -15,6 +15,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.crypto.Digest;
@@ -79,7 +80,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         var fs = new CompletableFuture<Attachment>();
         try {
             fs.complete(kerl.getAttachment(EventCoordinates.from(coordinates))
-                            .thenApply(attch -> attch.toAttachemente())
+                            .map(attch -> attch.toAttachemente())
                             .get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
@@ -140,6 +141,19 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         var fs = new CompletableFuture<KeyState_>();
         try {
             fs.complete(kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_()).get());
+        } catch (Exception e) {
+            fs.completeExceptionally(e);
+        }
+        return fs;
+    }
+
+    @Override
+    public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
+        var fs = new CompletableFuture<KeyStateWithAttachments_>();
+        try {
+            fs.complete(kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
+                            .map(ksa -> ksa.toEvente())
+                            .get());
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }

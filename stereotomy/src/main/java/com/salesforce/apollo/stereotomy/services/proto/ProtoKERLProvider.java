@@ -13,6 +13,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Digeste;
 
@@ -21,7 +22,6 @@ import com.salesfoce.apollo.utils.proto.Digeste;
  *
  */
 public interface ProtoKERLProvider {
-
     CompletableFuture<Attachment> getAttachment(EventCoords coordinates);
 
     CompletableFuture<KERL_> getKERL(Ident identifier);
@@ -33,5 +33,7 @@ public interface ProtoKERLProvider {
     CompletableFuture<KeyState_> getKeyState(EventCoords coordinates);
 
     CompletableFuture<KeyState_> getKeyState(Ident identifier);
+
+    CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords);
 
 }

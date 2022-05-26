@@ -21,6 +21,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -94,6 +95,11 @@ public class DhtClient implements DhtService {
             @Override
             public ListenableFuture<KeyState_> getKeyState(Ident identifier) {
                 return wrap(service.getKeyState(identifier));
+            }
+
+            @Override
+            public ListenableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates) {
+                return wrap(service.getKeyStateWithAttachments(coordinates));
             }
 
             @Override
@@ -336,6 +342,33 @@ public class DhtClient implements DhtService {
             }
         }, r -> r.run());
         return result;
+    }
+
+    @Override
+    public ListenableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates) {
+        Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
+        }
+        ListenableFuture<KeyStateWithAttachments_> complete = client.getKeyStateWithAttachments(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var attachment = client.getAttachment(request).get();
+                if (metrics != null) {
+                    final var serializedSize = attachment.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                }
+            } catch (InterruptedException e) {
+            } catch (ExecutionException e) {
+            }
+        }, r -> r.run());
+        return complete;
     }
 
     @Override

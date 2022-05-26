@@ -70,12 +70,12 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
@@ -1481,7 +1481,7 @@ public class View {
     private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
         identities.stream()
                   .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
-                  .filter(id -> validation.apply(id.event()))
+                  .filter(id -> validation.validate(id.event()))
                   .forEach(identity -> add(identity));
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
@@ -1526,7 +1526,7 @@ public class View {
         if (gossip.getIdentities().getUpdatesCount() == 1) {
             var id = gossip.getIdentities().getUpdates(0);
             IdentityWrapper identity = new IdentityWrapper(digestAlgo.digest(id.toByteString()), id);
-            if (validation.apply(identity.event())) {
+            if (validation.validate(identity.event())) {
                 add(identity);
                 SignedNote signed = gossip.getNotes().getUpdates(0);
                 NoteWrapper note = new NoteWrapper(signed, digestAlgo);

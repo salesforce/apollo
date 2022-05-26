@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  * For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-package com.salesforce.apollo.stereotomy.services;
+package com.salesforce.apollo.stereotomy;
 
-import com.google.common.base.Predicate;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 
 /**
@@ -15,19 +14,18 @@ import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
  * @author hal.hildebrand
  *
  */
-public interface EventValidation extends Predicate<EstablishmentEvent> {
+public interface EventValidation {
 
     EventValidation NONE = new EventValidation() {
         @Override
-        public boolean apply(EstablishmentEvent event) {
+        public boolean validate(EstablishmentEvent event) {
             return true;
         }
     };
 
     /**
-     * Answer true if the identifier prefix is validated. This means that thresholds
-     * have been met from indicated witnesses and trusted validators.
+     * Answer true if the event is validated. This means that thresholds have been
+     * met from indicated witnesses and trusted validators.
      */
-    @Override
-    boolean apply(EstablishmentEvent event);
+    boolean validate(EstablishmentEvent event);
 }

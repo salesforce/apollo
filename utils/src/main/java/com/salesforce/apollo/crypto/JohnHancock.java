@@ -123,13 +123,11 @@ public class JohnHancock {
         var verifiedSignatures = new ArrayList<Integer>();
         var keyIndex = 0;
         for (var signature : bytes) {
-
             var publicKey = keys[keyIndex];
-
-            var ops = SignatureAlgorithm.lookup(publicKey);
-            if (ops.verify(publicKey, signature, message)) {
+            if (algorithm.verify(publicKey, signature, message)) {
                 verifiedSignatures.add(keyIndex);
             }
+            keyIndex++;
         }
 
         int[] arrIndexes = verifiedSignatures.stream().mapToInt(i -> i.intValue()).toArray();

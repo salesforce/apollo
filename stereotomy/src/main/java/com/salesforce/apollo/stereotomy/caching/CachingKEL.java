@@ -136,7 +136,7 @@ public class CachingKEL<K extends KEL> implements KEL {
     }
 
     @Override
-    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
         return complete(kel -> kel.getAttachment(coordinates));
     }
 

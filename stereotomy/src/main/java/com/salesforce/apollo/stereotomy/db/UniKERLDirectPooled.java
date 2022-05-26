@@ -81,7 +81,7 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
+        public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
             return kerl.getAttachment(coordinates);
         }
 

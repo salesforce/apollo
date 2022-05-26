@@ -20,6 +20,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
@@ -102,6 +103,11 @@ public class KERLClient implements KERLService {
             @Override
             public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
                 return service.getKeyState(identifier);
+            }
+
+            @Override
+            public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
+                return service.getKeyStateWithAttachments(coords);
             }
 
             @Override
@@ -465,6 +471,12 @@ public class KERLClient implements KERLService {
             }
         }, r -> r.run());
         return f;
+    }
+
+    @Override
+    public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override

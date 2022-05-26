@@ -18,6 +18,7 @@ import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -40,6 +41,44 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class DhtServer extends KerlDhtImplBase {
+    @Override
+    public void getKeyStateWithAttachments(EventContext request,
+                                           StreamObserver<KeyStateWithAttachments_> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<KeyStateWithAttachments_> response = s.getKeyStateWithAttachments(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyStateWithAttachments_.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+            response.whenComplete((state, t) -> {
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
+                    responseObserver.onNext(state);
+                    responseObserver.onCompleted();
+                    if (metrics != null) {
+                        final var serializedSize = state.getSerializedSize();
+                        metrics.outboundBandwidth().mark(serializedSize);
+                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+                    }
+                }
+            });
+        }), log));
+    }
+
     private final static Logger log = LoggerFactory.getLogger(DhtServer.class);
 
     private final StereotomyMetrics                 metrics;

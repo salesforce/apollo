@@ -61,8 +61,17 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Attachment> getAttachment(EventCoordinates coordinates) {
-        return client.getAttachment(coordinates.toEventCoords()).thenApply(attch -> Attachment.of(attch));
+    public Optional<Attachment> getAttachment(EventCoordinates coordinates) {
+        try {
+            return Optional.ofNullable(client.getAttachment(coordinates.toEventCoords())
+                                             .thenApply(attch -> Attachment.of(attch))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
     }
 
     @Override
@@ -117,6 +126,20 @@ public class DelegatedKERL implements KERL {
         try {
             return Optional.ofNullable(client.getKeyState(identifier.toIdent())
                                              .thenApply(ks -> new KeyStateImpl(ks))
+                                             .get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e.getCause());
+        }
+    }
+
+    @Override
+    public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        try {
+            return Optional.ofNullable(client.getKeyStateWithAttachments(coordinates.toEventCoords())
+                                             .thenApply(ksa -> KeyStateWithAttachments.from(ksa))
                                              .get());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -16,6 +16,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesforce.apollo.comm.Link;
 
@@ -41,4 +42,6 @@ public interface DhtService extends Link {
     ListenableFuture<KeyState_> getKeyState(EventCoords coordinates);
 
     ListenableFuture<KeyState_> getKeyState(Ident identifier);
+
+    ListenableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coordinates);
 }
