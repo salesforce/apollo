@@ -573,12 +573,12 @@ public class View {
          */
         public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
-                log.warn("invalid ring {} from {}", ring, from);
+                log.debug("invalid ring {} from {}", ring, from);
                 return Gossip.getDefaultInstance();
             }
             var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
             if (!from.equals(wrapper.identifier())) {
-                log.warn("invalid identity on ring {} from {}", ring, from);
+                log.debug("invalid identity on ring {} from {}", ring, from);
                 return Gossip.getDefaultInstance();
             }
 
@@ -587,7 +587,7 @@ public class View {
                 add(wrapper);
                 member = context.getMember(from);
                 if (member == null) {
-                    log.warn("No member on ring {} from {}", ring, from);
+                    log.debug("No member on ring {} from {}", ring, from);
                     return Gossip.getDefaultInstance();
                 }
             }
@@ -596,7 +596,7 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.debug("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
                 return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
@@ -653,16 +653,16 @@ public class View {
         public void update(int ring, Update update, Digest from) {
             Participant member = context.getActiveMember(from);
             if (member == null) {
-                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, from);
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, from);
                 return;
             }
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             if (!successor.equals(node)) {
-                log.warn("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
