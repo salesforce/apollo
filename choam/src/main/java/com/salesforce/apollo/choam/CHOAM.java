@@ -531,7 +531,7 @@ public class CHOAM {
                                                .setByteSize(length)
                                                .setSegmentSize(blockSize)
                                                .setStateHash(stateHash.toDigeste());
-        log.info("Checkpoint length: {} segment size: {} stateHash: {}", length, blockSize, stateHash);
+        log.warn("Checkpoint length: {} segment size: {} stateHash: {}", length, blockSize, stateHash);
         if (state != null) {
             byte[] buff = new byte[blockSize];
             try (FileInputStream fis = new FileInputStream(state)) {
