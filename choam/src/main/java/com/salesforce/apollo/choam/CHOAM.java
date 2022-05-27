@@ -1022,6 +1022,9 @@ public class CHOAM {
 
     private ViewMember join(JoinRequest request, Digest from) {
         final var c = current.get();
+        if (c == null) {
+            return ViewMember.getDefaultInstance();
+        }
         return c.join(request, from);
     }
 
