@@ -26,6 +26,7 @@
         <module>thoth</module>
         <module>h2-deterministic</module>
         <module>liquibase-deterministic</module>
+        <module>grpc</module>
     </modules>
 
     <properties>
@@ -192,6 +193,11 @@
             <dependency>
                 <groupId>com.salesforce.apollo</groupId>
                 <artifactId>liquibase-deterministic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>grpc</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
