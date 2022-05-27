@@ -515,7 +515,7 @@ public class CHOAM {
 
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize) {
         Digest stateHash = algo.getOrigin();
         long length = 0;
         if (state != null) {
@@ -529,11 +529,10 @@ public class CHOAM {
         }
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setByteSize(length)
-                                               .setSegmentSize(blockSize)
+                                               .setSegmentSize(segmentSize)
                                                .setStateHash(stateHash.toDigeste());
-        log.warn("Checkpoint length: {} segment size: {} stateHash: {}", length, blockSize, stateHash);
         if (state != null) {
-            byte[] buff = new byte[blockSize];
+            byte[] buff = new byte[segmentSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
                     ByteString segment = ByteString.copyFrom(buff, 0, read);
@@ -544,13 +543,15 @@ public class CHOAM {
                 return null;
             }
         }
+        log.warn("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
+                 builder.getSegmentsCount(), stateHash);
         return builder.build();
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                 HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
                                 Iterable<Transaction> initialization) {
-        var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockSize());
+        var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockDelta());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, ULong.valueOf(0),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -586,7 +587,7 @@ public class CHOAM {
         final Block lvc = lastViewChange.block;
         int lastTarget = lvc.hasGenesis() ? lvc.getGenesis().getInitialView().getCheckpointTarget()
                                           : lvc.getReconfigure().getCheckpointTarget();
-        int checkpointTarget = lastTarget == 0 ? params.checkpointBlockSize() : lastTarget - 1;
+        int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
         var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
@@ -807,7 +808,7 @@ public class CHOAM {
             transitions.fail();
             return null;
         }
-        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointBlockSize());
+        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize());
         if (cp == null) {
             transitions.fail();
             return null;

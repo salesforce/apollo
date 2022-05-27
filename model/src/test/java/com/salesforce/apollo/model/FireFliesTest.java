@@ -161,7 +161,7 @@ public class FireFliesTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(200);
+                               .setCheckpointBlockDelta(200);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;

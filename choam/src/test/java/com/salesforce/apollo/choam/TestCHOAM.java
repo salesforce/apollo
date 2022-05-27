@@ -103,7 +103,7 @@ public class TestCHOAM {
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
-                               .setCheckpointBlockSize(1);
+                               .setCheckpointBlockDelta(1);
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
 
         checkpointOccurred = new CompletableFuture<>();

@@ -137,7 +137,7 @@ public class CHOAMTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(2);
+                               .setCheckpointBlockDelta(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
 

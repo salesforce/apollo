@@ -44,6 +44,7 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Slice;
+import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -117,7 +118,7 @@ public class CheckpointAssemblerTest {
                                            .peek(m -> context.activate(m))
                                            .collect(Collectors.toList());
 
-        Checkpoint checkpoint = HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
+        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
 
         SigningMember bootstrapping = members.get(0);
 
