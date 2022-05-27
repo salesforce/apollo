@@ -58,6 +58,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
@@ -104,7 +105,7 @@ import liquibase.util.StringUtil;
  * <p>
  * Batch oriented, but low enough latency to make it worth the wait (with the
  * right system wide consensus/distribution, 'natch).
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -369,28 +370,31 @@ public class SqlStateMachine {
         trampoline.deregister();
     }
 
-    public BiConsumer<ULong, CheckpointState> getBootstrapper() {
-        return (height, state) -> {
+    public BiConsumer<HashedBlock, CheckpointState> getBootstrapper() {
+        return (block, state) -> {
+            begin(block.height(), block.hash);
             String rndm = UUID.randomUUID().toString();
             try (java.sql.Statement statement = connection().createStatement()) {
-                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
+                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", block.height(), rndm));
                 try {
                     state.assemble(temp);
                 } catch (IOException e) {
-                    log.error("unable to assemble checkpoint: {} into: {}", height, temp, e);
+                    log.error("unable to assemble checkpoint: {} into: {}", block.height(), temp, e);
                     return;
                 }
                 try {
-                    log.error("Restoring checkpoint: {} ", height);
+                    log.error("Restoring checkpoint: {} ", block.height());
                     statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
-                    log.error("Restored from checkpoint: {}", height);
+                    log.error("Restored from checkpoint: {}", block.height());
                     statement.close();
+                    initializeStatements();
+                    endBlock(block.height(), block.hash);
                 } catch (SQLException e) {
-                    log.error("unable to restore checkpoint: {}", height, e);
+                    log.error("unable to restore checkpoint: {}", block.height(), e);
                     return;
                 }
             } catch (SQLException e) {
-                log.error("unable to restore from checkpoint: {}", height, e);
+                log.error("unable to restore from checkpoint: {}", block.height(), e);
                 return;
             }
         };
@@ -497,9 +501,7 @@ public class SqlStateMachine {
             liquibase.update((String) null);
             statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
-            deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-            getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-            updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
+            initializeStatements();
         } catch (SQLException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } catch (LiquibaseException e) {
@@ -525,7 +527,7 @@ public class SqlStateMachine {
     }
 
     private List<Object> acceptBatchTransaction(BatchedTransaction txns) throws Exception {
-        List<Object> results = new ArrayList<Object>();
+        List<Object> results = new ArrayList<>();
         for (int i = 0; i < txns.getTransactionsCount(); i++) {
             try {
                 results.add(SqlStateMachine.this.execute(txns.getTransactions(i)));
@@ -876,6 +878,12 @@ public class SqlStateMachine {
         case MIGRATION -> acceptMigration(txn.getMigration());
         default -> null;
         };
+    }
+
+    private void initializeStatements() throws SQLException {
+        deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
     }
 
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {

@@ -35,6 +35,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -236,7 +237,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
                                     ScheduledExecutorService scheduler,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
-                                    TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
+                                    TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
                                     Supplier<KERL_> kerl, FoundationSeal foundation) {
         public static class Builder implements Cloneable {
@@ -267,7 +268,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private ChoamMetrics                                   metrics;
             private TransactionExecutor                            processor    = (i, h, t, f) -> {
                                                                                 };
-            private BiConsumer<ULong, CheckpointState>             restorer     = (height, checkpointState) -> {
+            private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
                                                                                 };
             private ScheduledExecutorService                       scheduler;
 
@@ -327,7 +328,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return processor;
             }
 
-            public BiConsumer<ULong, CheckpointState> getRestorer() {
+            public BiConsumer<HashedBlock, CheckpointState> getRestorer() {
                 return restorer;
             }
 
@@ -386,7 +387,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
-            public Builder setRestorer(BiConsumer<ULong, CheckpointState> biConsumer) {
+            public Builder setRestorer(BiConsumer<HashedBlock, CheckpointState> biConsumer) {
                 this.restorer = biConsumer;
                 return this;
             }
@@ -848,7 +849,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.processor;
     }
 
-    public BiConsumer<ULong, CheckpointState> restorer() {
+    public BiConsumer<HashedBlock, CheckpointState> restorer() {
         return runtime.restorer;
     }
 
