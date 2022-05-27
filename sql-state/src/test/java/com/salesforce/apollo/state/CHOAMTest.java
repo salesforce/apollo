@@ -233,8 +233,15 @@ public class CHOAMTest {
                                                                .toList());
         }
 
+        // because there is a state replication predicate check, make darn sure all the
+        // systems are in sync
+        Thread.sleep(5_000);
+
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
+
+        // because there is a state replication predicate check, make darn sure all the
+        // systems are in sync
         Thread.sleep(1_000);
 
         record row(float price, int quantity) {}
