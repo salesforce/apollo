@@ -1172,7 +1172,9 @@ public class CHOAM {
 
     private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
         cachedCheckpoints.put(block.height(), checkpoint);
+        params.processor().beginBlock(block.height(), block.hash);
         params.restorer().accept(block.height(), checkpoint);
+        params.processor().endBlock(block.height(), block.hash);
         restore();
     }
 
