@@ -1,5 +1,5 @@
 # Apollo Delphinius
-The Apollo Delphinius project is a multi-tenant, distibuted system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
+The Apollo Delphinius project is a multi-tenant, distributed system platform. Apollo provides a secure communications overlay using Fireflies.  The consensus layer is supplied by an asynchronous bft consensus protocol. The sql state interface is via a JDBC connection over replicated SQL state machines, supported by checkpointed CHOAM linear logs. Identity and key managment is provided as a foundational service and integrated into the MTLS grpc communication.
 
 The target service goal is a multitenant Zanzibar/KERI integration that provides a wide area replicated, low latency service for managing identity, key management, access control and verifiable credentials such as JWT issuance and validation.
 
@@ -9,7 +9,11 @@ The target service goal is a multitenant Zanzibar/KERI integration that provides
 The Java Maven CI is now integrated, and given how weak these CI daemons are, this should guarantee reproducible clean builds from the command line maven.
 
 ## Building Apollo
-To build Apollo, cd to the root directory of the repository and then do:
+**Important**: To provide deterministic SQL execution, Apollo requires an installation step that need only be done once.  If you are building Apollo for the first time, you  __must__  cd to the root directory of the repository and then:
+
+    mvn clean install -Ppre -DskipTests
+  
+This will perform a full build, including the deterministic SQL execution module.  After this is complete, you do not need to do this again. You can build Apollo normally, without the deterministic SQL module and to do so cd to the root directory of the repository and then:
    
     mvn clean install
 
@@ -33,10 +37,10 @@ Apollo requires the JDK 17+ and [Maven](https://maven.apache.org/) 3.8.1 and abo
 * Delphinius - Google Zanzibar clone. Provides Relation Based Access Control hosted on CHOAM SQL state machines.
 
 ## Protobuf and GRPC
-Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter.
+Apollo uses Protobuf for all serialization and GRPC for all interprocess communication.  This implies code generation.  Not something I adore, but not much choice in the matter. GRPC/Proto generation also appears not to play well with the Eclipse IDE Maven integration. To aleviate this, _all_ grpc/proto generation occurs in one module, the aptly named _grpc_ module.
 
 ## JOOQ
-Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore, but...
+Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore.  Unlike GRPC, the JOOQ code generation plays very nicely with the Eclipse IDE's Maven integration, so JOOQ code generation is included in the module that defines it.
 
 ## Not A Coin Platform(tm)
 Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
@@ -54,7 +58,7 @@ Apollo requires code generation as part of the build.  This is performed in the 
 
 The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for the various serializable forms and network protocols used by Apollo.  The JOOQ code generation is for the JOOQ SQL functionality.
 
-Code generation is output into the (module dir)/target/generated-sources directory.  For GRPC/Proto, there are 2 directory roots: "(module dir)/target/generated-sources/protobuf/grpc-java" and "(module dir)/target/generated-sources/protobuf/java".  For JOOQ, the root directory is "(module dir)/target/generated-sources/jooq".
+Code generation only occurs in the _grpc_ module and is output into the _grpc/target/generated-sources_ directory.  For GRPC/Proto, there are 2 directory roots: _grpc/target/generated-sources/protobuf/grpc-java_ and _grpc/target/generated-sources/protobuf/java_ .  For JOOQ, the root directory is _(module dir)/target/generated-sources/jooq_ .
 
 Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
 
@@ -62,7 +66,7 @@ Note that adding these generated source directories to the compile path is autom
 
 ## IDE Integration
 **This is Important!**
-Apollo contains one module that create a shaded version of standard libraries.  This module **must** be built (installed), but only needs to be run once in order to install the resulting jar into your local maven repository.  Obviously, the also have to be built by Maven, and consequently it is part of the build sequence.  However, Eclipse and IntellJ **do not understand this**. What this means is that the IDE thinks the module is fine and doesn't notice there has been package rewriting to avoid conflicts with existing libraries.  What this means is that you *must* exclude this module in your IDE environment.  If you really think you need to be working on it, then you probably understand all this. But if you are simply trying to get Apollo into your IDE, importing these module is gonna ruin your day.
+Apollo contains one module that create a shaded version of standard libraries.  This module **must** be built (installed), but only needs to be built once in order to install the resulting jar into your local maven repository.  This is performed as part of the top level pom's _pre_ profile.  As mentioned previously, this profile must be executed at least once before the full build.  Note, however, Eclipse and IntellJ **do not understand this** and will not be able to import this module without error and messing up the rest of the code. What this means is that the IDE thinks the module is fine and doesn't notice there has been package rewriting to avoid conflicts with existing libraries.  What this means is that you *must* exclude this module in your IDE environment.  This module will not be imported unless you explicitly do so, so please do not do so.  If you really think you need to be working on it, then you probably understand all this. But if you are simply trying to get Apollo into your IDE, importing these module is gonna ruin your day.
 
 ### Module to exclude
 
@@ -72,11 +76,11 @@ The module to exclude is:
 
 Again, I stress that you must **NOT** include this in the import of Apollo into your IDE. You'll be scratching your head and yelling at me about uncompilable code and I will simply, calmly point you to this part of the readme file.
 
-This modules must be built, so please run
+This modules must be built, so please run once from the top level of the repository
 
-    mvn clean install -DskipTests
+    mvn clean install -Ppre -DskipTests
 
-From the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding this module will have no adverse effect on the rest of the build.
+from the command line before attempting to load the remaining Apollo modules into your IDE. Again, this only need be done once as this will be installed in your local Maven repository and you won't have to do it again.  Rebuilding this module will have no adverse effect on the rest of the build.
 
 ### Your IDE and Maven code generation
 
@@ -91,6 +95,8 @@ After you do this, you shouldn't have any issue *if* your IDE Maven integration 
 Myself, I find that I have to first select the top level Apollo.app module, and then Menu -> Run As -> Maven generate sources (or the equivalent in your IDE).  This *should* generate all the sources required for every submodule, so...
 
 Feel free to generate issues and such and I will look into it as I do want this to be flawless and a good experience.  I know that's impossible, but it undoubtedly can be made better, and PRs are of course a thing.
+
+Note that also, for inexplicable reasons, Eclipse Maven will determine it needs to invalidate the _grpc_ generated code and will thus need to be regenerated. I'm trying to figure out the heck is going on, but when this happens please simply regenerate by selecting the _grpc_ module and performing: Menu -> Run As -> Maven generate sources (or the equivalent in your IDE).
 
 ## Metrics
 Apollo uses Dropwizard Metrics and these are available for Fireflies, Reliable Broadcast, Ethereal and CHOAM.

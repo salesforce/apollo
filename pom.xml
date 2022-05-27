@@ -24,7 +24,6 @@
         <!--
         <module>comm-simulation</module> -->
         <module>thoth</module>
-        <module>h2-deterministic</module>
         <module>liquibase-deterministic</module>
         <module>grpc</module>
     </modules>
@@ -402,6 +401,17 @@
         </pluginRepository>
     </pluginRepositories>
 
+	<profiles>
+		<profile> 
+			<id>pre</id>
+			<activation>
+				<activeByDefault>false</activeByDefault>
+			</activation>
+			<modules>
+        		<module>h2-deterministic</module>
+			</modules>
+		</profile>
+	</profiles>
 
     <build>
         <extensions>

@@ -32,6 +32,9 @@ service Reconciliation {
     rpc update ( Updating ) returns (google.protobuf.Empty) {}
 }
 
+service Witness {
+
+}
 
 message Update {
     repeated stereotomy.KeyEvent_ events = 1;

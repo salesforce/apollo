@@ -167,7 +167,7 @@ public class StereotomyImpl implements Stereotomy {
 
     private class BoundControllableIdentifier<D extends Identifier> extends AbstractCtrlId
                                              implements BoundIdentifier<D> {
-        volatile KeyState state;
+        private volatile KeyState state;
 
         public BoundControllableIdentifier(KeyState state) {
             this.state = state;
@@ -182,7 +182,7 @@ public class StereotomyImpl implements Stereotomy {
                 !getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
-            return Objects.equals(state, other.state);
+            return Objects.equals(getState(), other.getState());
         }
 
         @Override
@@ -193,12 +193,12 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<EstablishmentEvent> getLastEstablishingEvent() {
-            return StereotomyImpl.this.getLastEstablishingEvent(state);
+            return StereotomyImpl.this.getLastEstablishingEvent(getState());
         }
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
+            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
         }
 
         @Override
@@ -206,18 +206,23 @@ public class StereotomyImpl implements Stereotomy {
             final int prime = 31;
             int result = super.hashCode();
             result = prime * result + getEnclosingInstance().hashCode();
-            result = prime * result + Objects.hash(state);
+            result = prime * result + Objects.hash(getState());
             return result;
         }
 
         @Override
         public KeyState_ toKeyState_() {
-            return state.toKeyState_();
+            return getState().toKeyState_();
         }
 
         @Override
         KeyState getState() {
-            return state;
+            KeyState current = state;
+            return current;
+        }
+
+        void setState(KeyState delegatingState) {
+            this.state = delegatingState;
         }
 
         private StereotomyImpl getEnclosingInstance() {
@@ -247,7 +252,7 @@ public class StereotomyImpl implements Stereotomy {
                 !getEnclosingInstance().equals(other.getEnclosingInstance())) {
                 return false;
             }
-            return Objects.equals(state, other.state);
+            return Objects.equals(getState(), other.getState());
         }
 
         @Override
@@ -257,12 +262,12 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public Optional<Signer> getSigner() {
-            return StereotomyImpl.this.getSigner(state);
+            return StereotomyImpl.this.getSigner(getState());
         }
 
         @Override
         public Optional<Verifier> getVerifier() {
-            return Optional.of(new Verifier.DefaultVerifier(state.getKeys()));
+            return Optional.of(new Verifier.DefaultVerifier(getState().getKeys()));
         }
 
         @Override
@@ -270,7 +275,7 @@ public class StereotomyImpl implements Stereotomy {
             final int prime = 31;
             int result = super.hashCode();
             result = prime * result + getEnclosingInstance().hashCode();
-            result = prime * result + Objects.hash(state);
+            result = prime * result + Objects.hash(getState());
             return result;
         }
 
@@ -299,7 +304,8 @@ public class StereotomyImpl implements Stereotomy {
 
             var signature = signer.get().sign(qb64(new BasicIdentifier(keyPair.getPublic())));
 
-            var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(state.getIdentifier()), qb64(signature)));
+            var dn = new BcX500NameDnImpl(String.format("UID=%s, DC=%s", qb64(getState().getIdentifier()),
+                                                        qb64(signature)));
 
             return Optional.of(new CertificateWithPrivateKey(Certificates.selfSign(false, dn, keyPair, validFrom,
                                                                                    validFrom.plus(valid), extensions),
@@ -308,43 +314,33 @@ public class StereotomyImpl implements Stereotomy {
 
         @Override
         public void rotate() {
-            final var rotated = StereotomyImpl.this.rotate(state);
+            final var rotated = StereotomyImpl.this.rotate(getState());
             if (rotated.isEmpty()) {
                 throw new IllegalStateException("could not rotate the state for identifier: " + getIdentifier());
             }
-            state = rotated.get();
+            setState(rotated.get());
         }
 
         @Override
         public void rotate(Builder spec) {
-            final var rotated = StereotomyImpl.this.rotate(state, spec);
+            final var rotated = StereotomyImpl.this.rotate(getState(), spec);
             if (rotated.isEmpty()) {
                 throw new IllegalStateException("could not rotate the state for identifier: " + getIdentifier());
             }
-            state = rotated.get();
+            setState(rotated.get());
         }
 
         @Override
         public void seal(InteractionSpecification.Builder spec) {
-            final var sealed = StereotomyImpl.this.seal(state, spec);
+            final var sealed = StereotomyImpl.this.seal(getState(), spec);
             if (sealed.isEmpty()) {
                 throw new IllegalStateException("could not generate seal for identifier: " + getIdentifier());
             }
-            state = sealed.get();
-        }
-
-        @Override
-        KeyState getState() {
-            final var current = state;
-            return current;
+            setState(sealed.get());
         }
 
         private StereotomyImpl getEnclosingInstance() {
             return StereotomyImpl.this;
-        }
-
-        private void setState(KeyState delegatingState) {
-            this.state = delegatingState;
         }
     }
 
@@ -589,7 +585,7 @@ public class StereotomyImpl implements Stereotomy {
             log.warn("Identifier cannot be rotated: {} estatblishment event missing", identifier);
             return null;
         }
-        EstablishmentEvent establishing = (EstablishmentEvent) lastEstablishing.get();
+        EstablishmentEvent establishing = lastEstablishing.get();
         var currentKeyCoordinates = KeyCoordinates.of(establishing, 0);
 
         KeyPair nextKeyPair = keyStore.getNextKey(currentKeyCoordinates)
