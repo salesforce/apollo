@@ -214,7 +214,8 @@ abstract public class AbstractLifecycleTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setCheckpointBlockDelta(checkpointBlockSize());
+                               .setCheckpointBlockDelta(checkpointBlockSize())
+                               .setCheckpointSegmentSize(128);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;

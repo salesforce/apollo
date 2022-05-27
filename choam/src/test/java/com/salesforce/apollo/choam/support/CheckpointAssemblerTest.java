@@ -66,10 +66,9 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  */
 public class CheckpointAssemblerTest {
 
-    private static final int                              BLOCK_SIZE = 256;
+    private static final int                              CARDINALITY  = 10;
     private static Map<Digest, CertificateWithPrivateKey> certs;
-
-    private static final int CARDINALITY = 10;
+    private static final int                              SEGMENT_SIZE = 256;
 
     @BeforeAll
     public static void beforeClass() {
@@ -118,7 +117,7 @@ public class CheckpointAssemblerTest {
                                            .peek(m -> context.activate(m))
                                            .collect(Collectors.toList());
 
-        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
+        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
 
         SigningMember bootstrapping = members.get(0);
 
