@@ -106,7 +106,7 @@ import io.grpc.StatusRuntimeException;
  * Combine Honnete Ober Advancer Mercantiles.
  * 
  * @author hal.hildebrand
- *
+ * 
  */
 public class CHOAM {
     public interface BlockProducer {
@@ -1283,7 +1283,7 @@ public class CHOAM {
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
                  params.member());
         try {
-            linear.execute(() -> combine());
+            linear.execute(() -> transitions.regenerated());
         } catch (RejectedExecutionException e) {
             // ignore
         }
