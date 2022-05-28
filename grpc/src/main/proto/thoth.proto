@@ -74,7 +74,7 @@ message ValidationsContext {
 
 message Validations {
 	stereotomy.EventCoords coordinates = 1;
-	repeated Validations validations = 2;
+	repeated Validation validations = 2;
 }
 
 message Validation {

@@ -116,7 +116,7 @@ public class Ani implements EventValidation {
     private boolean validate(KeyStateWithAttachments ksa, EstablishmentEvent event) {
         var state = ksa.state();
         if (state.getWitnesses().isEmpty()) {
-            return true; // TODO - ? HSH
+            return true; // no witnesses for event
         }
         var witnesses = new PublicKey[state.getWitnesses().size()];
         for (var i = 0; i < state.getWitnesses().size(); i++) {

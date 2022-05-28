@@ -7,7 +7,13 @@
 
 package com.salesforce.apollo.thoth;
 
+import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
+import static com.salesforce.apollo.thoth.schema.tables.Validation.VALIDATION;
+
 import java.io.PrintStream;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +32,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +43,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -49,9 +59,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesfoce.apollo.thoth.proto.Validation;
 import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
@@ -156,8 +168,7 @@ public class KerlDHT {
 
         @Override
         public CompletableFuture<Empty> appendValidations(List<Validations> validations) {
-            // TODO Auto-generated method stub
-            return null;
+            return db_appendValidations(validations);
         }
 
         @Override
@@ -204,12 +215,23 @@ public class KerlDHT {
 
         @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
-            // TODO
-            return null;
+            return db_getValidations(coordinates);
         }
     }
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
+
+    private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
+        return majority.thenCompose(b -> {
+            var fs = new CompletableFuture<T>();
+            if (!b) {
+                fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
+            } else {
+                fs.complete(result);
+            }
+            return fs;
+        });
+    }
 
     private static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         var fs = new CompletableFuture<T>();
@@ -230,7 +252,8 @@ public class KerlDHT {
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-    private final TemporalAmount                                              timeout;
+
+    private final TemporalAmount timeout;
 
     public KerlDHT(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
@@ -517,24 +540,113 @@ public class KerlDHT {
         reconcileComms.deregister(context.getId());
     }
 
-    private <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
-        return majority.thenCompose(b -> {
-            var fs = new CompletableFuture<T>();
-            if (!b) {
-                fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
-            } else {
-                fs.complete(result);
-            }
-            return fs;
-        });
-    }
-
     private <T> CompletableFuture<T> complete(Function<ProtoKERLAdapter, CompletableFuture<T>> func) {
         try (var k = kerlPool.create()) {
             return func.apply(new ProtoKERLAdapter(k));
         } catch (Throwable e) {
             return completeExceptionally(e);
         }
+    }
+
+    private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
+        Connection connection;
+        try {
+            connection = connectionPool.getConnection();
+        } catch (SQLException e) {
+            return completeExceptionally(e);
+        }
+        CompletableFuture<Empty> complete = new CompletableFuture<>();
+
+        try {
+            DSL.using(connection, SQLDialect.H2).transaction(ctx -> {
+                validations.forEach(v -> {
+                    var dsl = DSL.using(ctx);
+                    var coordinates = v.getCoordinates();
+
+                    final var id = dsl.select(COORDINATES.ID)
+                                      .from(COORDINATES)
+                                      .join(IDENTIFIER)
+                                      .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                                      .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                      .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                                      .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                                      .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                                      .fetchOne();
+                    if (id == null) {
+                        return;
+                    }
+                    for (var entry : v.getValidationsList()) {
+                        dsl.mergeInto(VALIDATION)
+                           .usingDual()
+                           .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(IDENTIFIER.ID)))
+                           .whenNotMatchedThenInsert()
+                           .set(VALIDATION.FOR, id.value1())
+                           .set(VALIDATION.VALIDATOR,
+                                dsl.select(IDENTIFIER.ID)
+                                   .from(IDENTIFIER)
+                                   .where(IDENTIFIER.PREFIX.eq(entry.getValidator().toByteArray())))
+                           .set(VALIDATION.SIGNATURE, entry.getSignature().toByteArray())
+                           .execute();
+                    }
+                });
+                complete.complete(Empty.getDefaultInstance());
+            });
+        } catch (Exception e) {
+            complete.completeExceptionally(e);
+        }
+
+        return complete;
+    }
+
+    private CompletableFuture<Validations> db_getValidations(EventCoords coordinates) {
+        Connection connection;
+        try {
+            connection = connectionPool.getConnection();
+        } catch (SQLException e) {
+            return completeExceptionally(e);
+        }
+        DSLContext dsl = DSL.using(connection, SQLDialect.H2);
+        CompletableFuture<Validations> complete = new CompletableFuture<>();
+        var resolved = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                          .fetchOne();
+        if (resolved == null) {
+            complete.complete(Validations.getDefaultInstance());
+            return complete;
+        }
+
+        record validation(Ident identifier, Sig signature) {}
+        var builder = Validations.newBuilder().setCoordinates(coordinates);
+
+        dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
+           .from(RECEIPT)
+           .join(IDENTIFIER)
+           .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
+           .where(VALIDATION.FOR.eq(resolved.value1()))
+           .fetch()
+           .stream()
+           .map(r -> {
+               try {
+                   return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
+               } catch (InvalidProtocolBufferException e) {
+                   log.error("Error deserializing signature witness: {}", e);
+                   return null;
+               }
+           })
+           .filter(s -> s != null)
+           .forEach(e -> builder.addValidations(Validation.newBuilder()
+                                                          .setValidator(e.identifier)
+                                                          .setSignature(e.signature)
+                                                          .build()));
+        complete.complete(builder.build());
+        return complete;
     }
 
     private Digest digestOf(InceptionEvent event) {
