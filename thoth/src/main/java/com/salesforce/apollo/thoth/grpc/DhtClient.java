@@ -23,10 +23,11 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
@@ -106,6 +107,11 @@ public class DhtClient implements DhtService {
             public Member getMember() {
                 return member;
             }
+
+            @Override
+            public ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+                return wrap(service.appendAttachments(attachments));
+            }
         };
     }
 
@@ -175,16 +181,33 @@ public class DhtClient implements DhtService {
     @Override
     public ListenableFuture<Empty> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = KeyEventWitAttachmentsContext.newBuilder()
-                                                   .addAllEvents(eventsList)
-                                                   .addAllAttachments(attachmentsList)
-                                                   .setContext(context)
-                                                   .build();
+        var request = KeyEventWithAttachmentsContext.newBuilder()
+                                                    .addAllEvents(eventsList)
+                                                    .addAllAttachments(attachmentsList)
+                                                    .setContext(context)
+                                                    .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         var result = client.appendWithAttachments(request);
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachmentsList) {
+        Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
+        var request = AttachmentsContext.newBuilder().addAllAttachments(attachmentsList).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        var result = client.appendAttachments(request);
         result.addListener(() -> {
             if (timer != null) {
                 timer.stop();

@@ -164,15 +164,17 @@ abstract public class UniKERL implements KERL {
                .execute();
     }
 
-    public static void appendAttachment(Connection connection, byte[] attachmentBytes) {
-        AttachmentEvent event;
-        try {
-            event = new AttachmentEventImpl(com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.parseFrom(attachmentBytes));
-        } catch (InvalidProtocolBufferException e) {
-            log.error("Error deserializing attachment event", e);
-            return;
-        }
-        append(DSL.using(connection), event);
+    public static void appendAttachments(Connection connection, List<byte[]> attachments) {
+        attachments.forEach(bytes -> {
+            AttachmentEvent event;
+            try {
+                event = new AttachmentEventImpl(com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.parseFrom(bytes));
+            } catch (InvalidProtocolBufferException e) {
+                log.error("Error deserializing attachment event", e);
+                return;
+            }
+            append(DSL.using(connection), event);
+        });
     }
 
     public static byte[] appendEvent(Connection connection, byte[] event, String ilk, int digestCode) {

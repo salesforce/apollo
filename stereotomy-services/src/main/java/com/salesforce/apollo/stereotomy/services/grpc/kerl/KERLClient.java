@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -22,13 +23,14 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceFutureStub;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -69,6 +71,11 @@ public class KERLClient implements KERLService {
             public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events,
                                                              List<AttachmentEvent> attachments) {
                 return service.append(events, attachments);
+            }
+
+            @Override
+            public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+                return service.appendAttachments(attachments);
             }
 
             @Override
@@ -218,11 +225,11 @@ public class KERLClient implements KERLService {
     public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> eventsList,
                                                      List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = KeyEventWitAttachmentsContext.newBuilder()
-                                                   .addAllEvents(eventsList)
-                                                   .addAllAttachments(attachmentsList)
-                                                   .setContext(context)
-                                                   .build();
+        var request = KeyEventWithAttachmentsContext.newBuilder()
+                                                    .addAllEvents(eventsList)
+                                                    .addAllAttachments(attachmentsList)
+                                                    .setContext(context)
+                                                    .build();
         final var bsize = request.getSerializedSize();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(bsize);
@@ -250,6 +257,35 @@ public class KERLClient implements KERLService {
                 metrics.inboundBandwidth().mark(serializedSize);
                 metrics.inboundAppendWithAttachmentsResponse().mark(serializedSize);
             }
+        }, r -> r.run());
+        return f;
+    }
+
+    @Override
+    public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+        Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
+        var request = AttachmentsContext.newBuilder().addAllAttachments(attachments).setContext(context).build();
+        final var bsize = request.getSerializedSize();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(bsize);
+            metrics.outboundAppendWithAttachmentsRequest().mark(bsize);
+        }
+        var result = client.appendAttachments(request);
+        var f = new CompletableFuture<Empty>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(null);
         }, r -> r.run());
         return f;
     }
@@ -475,8 +511,38 @@ public class KERLClient implements KERLService {
 
     @Override
     public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
-        // TODO Auto-generated method stub
-        return null;
+        Context timer = metrics == null ? null : metrics.getKeyStateCoordsClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coords).setContext(context).build();
+        if (metrics != null) {
+            final var bs = request.getSerializedSize();
+            metrics.outboundBandwidth().mark(bs);
+            metrics.outboundGetKeyStateCoordsRequest().mark(bs);
+        }
+        var result = client.getKeyStateWithAttachments(request);
+        var f = new CompletableFuture<KeyStateWithAttachments_>();
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            KeyStateWithAttachments_ ks;
+            try {
+                ks = result.get();
+            } catch (InterruptedException e) {
+                f.completeExceptionally(e);
+                return;
+            } catch (ExecutionException e) {
+                f.completeExceptionally(e.getCause());
+                return;
+            }
+            f.complete(ks.equals(KeyStateWithAttachments_.getDefaultInstance()) ? null : ks);
+            if (timer != null) {
+                final var serializedSize = ks.getSerializedSize();
+                timer.stop();
+                metrics.inboundBandwidth().mark(serializedSize);
+                metrics.inboundGetKeyStateCoordsResponse().mark(serializedSize);
+            }
+        }, r -> r.run());
+        return f;
     }
 
     @Override

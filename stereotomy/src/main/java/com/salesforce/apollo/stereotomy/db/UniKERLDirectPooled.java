@@ -52,7 +52,7 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public CompletableFuture<Void> append(AttachmentEvent event) {
+        public CompletableFuture<Void> append(List<AttachmentEvent> event) {
             return kerl.append(event);
         }
 

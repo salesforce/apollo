@@ -23,7 +23,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLServiceGrpc.KERLServiceImplBase;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyStates;
 import com.salesforce.apollo.comm.RoutableService;
@@ -116,7 +116,7 @@ public class KERLServer extends KERLServiceImplBase {
     }
 
     @Override
-    public void appendWithAttachments(KeyEventWitAttachmentsContext request,
+    public void appendWithAttachments(KeyEventWithAttachmentsContext request,
                                       StreamObserver<KeyStates> responseObserver) {
         Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
         if (metrics != null) {

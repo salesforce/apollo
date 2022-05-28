@@ -23,7 +23,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
 import com.salesforce.apollo.comm.RoutableService;
@@ -155,7 +155,7 @@ public class DhtServer extends KerlDhtImplBase {
     }
 
     @Override
-    public void appendWithAttachments(KeyEventWitAttachmentsContext request, StreamObserver<Empty> responseObserver) {
+    public void appendWithAttachments(KeyEventWithAttachmentsContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
         if (metrics != null) {
             metrics.inboundBandwidth().mark(request.getSerializedSize());

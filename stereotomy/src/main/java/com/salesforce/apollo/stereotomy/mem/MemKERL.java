@@ -99,8 +99,8 @@ public class MemKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(AttachmentEvent event) {
-        appendAttachments(event.coordinates(), event.attachments());
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        events.forEach(event -> appendAttachments(event.coordinates(), event.attachments()));
         var returned = new CompletableFuture<Void>();
         returned.complete(null);
         return returned;
@@ -124,12 +124,7 @@ public class MemKERL implements KERL {
                 return null;
             }
         }).toList();
-        attachments.forEach(attach -> {
-            try {
-                append(attach).get();
-            } catch (InterruptedException | ExecutionException e) {
-            }
-        });
+        append(attachments);
         var fs = new CompletableFuture<List<KeyState>>();
         fs.complete(states);
         return fs;

@@ -7,7 +7,6 @@ option objc_class_prefix = "Tp";
 import "util.proto";
 import "stereotomy.proto";
 import "stereotomy-services.proto";
-import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
 package thoth;
@@ -17,7 +16,8 @@ package thoth;
 service KerlDht {
     rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
     rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
-    rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
     
     rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
     rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
@@ -25,6 +25,7 @@ service KerlDht {
     rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
     rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
+    rpc getValidations (stereotomy.services.EventContext) returns (Validations) {}
 }
 
 service Reconciliation {
@@ -63,4 +64,14 @@ message Get {
 message Interval {
         utils.Digeste start = 1;
         utils.Digeste end = 2;
+}
+
+message Validations {
+	stereotomy.EventCoords coordinates = 1;
+	repeated Validations validations = 2;
+}
+
+message Validation {
+	stereotomy.Ident validator = 1;
+	utils.Sig signature = 2;
 }

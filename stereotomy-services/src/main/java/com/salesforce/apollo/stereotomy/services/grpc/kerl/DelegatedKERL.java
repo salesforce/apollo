@@ -38,13 +38,8 @@ public class DelegatedKERL implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(AttachmentEvent event) {
-        var builder = com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent.newBuilder();
-        return client.append(Collections.emptyList(),
-                             Collections.singletonList(builder.setCoordinates(event.coordinates().toEventCoords())
-                                                              .setAttachment(event.attachments().toAttachemente())
-                                                              .build()))
-                     .thenApply(l -> null);
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        return client.appendAttachments(events.stream().map(e -> e.toEvent_()).toList()).thenApply(l -> null);
     }
 
     @Override

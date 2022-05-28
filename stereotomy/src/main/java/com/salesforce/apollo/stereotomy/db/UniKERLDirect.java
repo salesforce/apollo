@@ -29,9 +29,9 @@ public class UniKERLDirect extends UniKERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(AttachmentEvent event) {
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
         dsl.transaction(ctx -> {
-            append(DSL.using(ctx), event);
+            events.forEach(event -> append(DSL.using(ctx), event));
         });
         var result = new CompletableFuture<Void>();
         result.complete(null);

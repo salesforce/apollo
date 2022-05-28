@@ -42,7 +42,7 @@ Apollo uses Protobuf for all serialization and GRPC for all interprocess communi
 ## JOOQ
 Apollo makes use of [JOOQ](https://www.jooq.org) as a SQL DSL for Java. This also implies code generation and, again, not something I adore.  Unlike GRPC, the JOOQ code generation plays very nicely with the Eclipse IDE's Maven integration, so JOOQ code generation is included in the module that defines it.
 
-## Not A Coin Platform(tm)
+## Not A Coin Platform™
 Apollo isn't designed for coins, rather as essentially a distributed multitenant database.  Of course, while the systems and mechanisms of Apollo can be used for such, the design goals are much different.  Thus, no coins for you.
 
 ## WIP
@@ -58,7 +58,7 @@ Apollo requires code generation as part of the build.  This is performed in the 
 
 The current code generators used in Apollo are GRPC/Proto and JOOQ.  GRPC is for the various serializable forms and network protocols used by Apollo.  The JOOQ code generation is for the JOOQ SQL functionality.
 
-Code generation only occurs in the _grpc_ module and is output into the _grpc/target/generated-sources_ directory.  For GRPC/Proto, there are 2 directory roots: _grpc/target/generated-sources/protobuf/grpc-java_ and _grpc/target/generated-sources/protobuf/java_ .  For JOOQ, the root directory is _(module dir)/target/generated-sources/jooq_ .
+GRPC/Protoc code generation only occurs in the _grpc_ module and is output into the _grpc/target/generated-sources_ directory.  For GRPC/Proto, there are 2 directory roots: _grpc/target/generated-sources/protobuf/grpc-java_ and _grpc/target/generated-sources/protobuf/java_ .  For JOOQ, the root directory is _(module dir)/target/generated-sources/jooq_ .
 
 Again, I stress that because these generated source directories are under the "(module dir)/target" directory, they are removed during the "clean" phase of Maven and consequently must be regenerated in order to compile the rest of the build.
 

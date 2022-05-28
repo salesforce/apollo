@@ -33,6 +33,8 @@ public interface DhtService extends Link {
 
     ListenableFuture<Empty> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
+    ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
+
     ListenableFuture<Attachment> getAttachment(EventCoords coordinates);
 
     ListenableFuture<KERL_> getKERL(Ident identifier);

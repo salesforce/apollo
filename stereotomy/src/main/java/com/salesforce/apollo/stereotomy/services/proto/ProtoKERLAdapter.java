@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
+import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
@@ -23,7 +25,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KERL.EventWithAttachments;
-import com.salesforce.apollo.stereotomy.event.AttachmentEvent;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.AttachmentEventImpl;
@@ -45,7 +46,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     @Override
     public CompletableFuture<List<KeyState_>> append(KERL_ k) {
         List<KeyEvent> events = new ArrayList<>();
-        List<AttachmentEvent> attachments = new ArrayList<>();
+        List<com.salesforce.apollo.stereotomy.event.AttachmentEvent> attachments = new ArrayList<>();
         k.getEventsList().stream().map(e -> ProtobufEventFactory.from(e)).forEach(ewa -> {
             events.add(ewa.event());
             attachments.add(ProtobufEventFactory.INSTANCE.attachment((EstablishmentEvent) ewa.event(),
@@ -66,13 +67,22 @@ public class ProtoKERLAdapter implements ProtoKERLService {
 
     @Override
     public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> eventsList,
-                                                     List<com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent> attachmentsList) {
+                                                     List<AttachmentEvent> attachmentsList) {
         return kerl.append(eventsList.stream().map(ke -> ProtobufEventFactory.from(ke)).toList(),
                            attachmentsList.stream()
                                           .map(ae -> new AttachmentEventImpl(ae))
-                                          .map(ae -> (AttachmentEvent) ae)
+                                          .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
                                           .toList())
                    .thenApply(l -> l.stream().map(ks -> ks.toKeyState_()).toList());
+    }
+
+    @Override
+    public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+        return kerl.append(attachments.stream()
+                                      .map(e -> new AttachmentEventImpl(e))
+                                      .map(e -> (com.salesforce.apollo.stereotomy.event.AttachmentEvent) e)
+                                      .toList())
+                   .thenApply(n -> Empty.getDefaultInstance());
     }
 
     @Override

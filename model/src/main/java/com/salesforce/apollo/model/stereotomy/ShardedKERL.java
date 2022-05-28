@@ -48,9 +48,10 @@ public class ShardedKERL extends UniKERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(AttachmentEvent event) {
-        var call = mutator.call("{ ? = call stereotomy.appendAttachement(?) }",
-                                Collections.singletonList(JDBCType.BINARY), event.getBytes());
+    public CompletableFuture<Void> append(List<AttachmentEvent> events) {
+        var call = mutator.call("{ ? = call stereotomy.appendAttachements(?) }",
+                                Collections.singletonList(JDBCType.BINARY),
+                                events.stream().map(ae -> ae.getBytes()).toList());
         CompletableFuture<CallResult> submitted;
         try {
             submitted = mutator.execute(exec, call, timeout, scheduler);

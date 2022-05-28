@@ -149,6 +149,12 @@ public class KerlDHT {
         }
 
         @Override
+        public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+            log.info("append attachments on: {}", member.getId());
+            return complete(k -> new ProtoKERLAdapter(k).appendAttachments(attachments));
+        }
+
+        @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
             log.info("get attachments for coordinates on: {}", member.getId());
             return complete(k -> new ProtoKERLAdapter(k).getAttachment(coordinates));
