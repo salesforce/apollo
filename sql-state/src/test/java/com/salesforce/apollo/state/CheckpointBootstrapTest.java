@@ -15,13 +15,13 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.state.proto.Txn;
@@ -74,20 +74,30 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         System.out.println("Starting txns");
 
         transactioneers.stream().forEach(e -> e.start());
-        checkpointOccurred.whenComplete((s, t) -> {
-            txExecutor.execute(() -> {
-                System.out.println("Starting late joining node");
-                var choam = choams.get(testSubject.getId());
-                choam.context().activate(Collections.singletonList(testSubject));
-                choam.start();
-                routers.get(testSubject.getId()).start();
-            });
-        });
-
         assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
-        assertTrue(checkpointOccurred.get(120, TimeUnit.SECONDS), "Checkpoint did not occur");
+        assertTrue(checkpointOccurred.await(30, TimeUnit.SECONDS), "Checkpoints did not complete");
 
-        assertTrue(Utils.waitForCondition(10_000, 1000, () -> {
+        ULong chkptHeight = checkpointHeight.get();
+        System.out.println("Checkpoint at height: " + chkptHeight);
+
+        assertTrue(Utils.waitForCondition(5_000, 1_000, () -> {
+            return members.stream()
+                          .filter(m -> !m.equals(testSubject))
+                          .map(m -> updaters.get(m))
+                          .map(ssm -> ssm.getCurrentBlock())
+                          .filter(cb -> cb != null)
+                          .map(cb -> cb.height())
+                          .filter(l -> l.compareTo(chkptHeight) >= 0)
+                          .count() == members.size() - 1;
+        }), "All members did not process the checkpoint");
+
+        System.out.println("Starting late joining node");
+        var choam = choams.get(testSubject.getId());
+        choam.context().activate(testSubject);
+        choam.start();
+        routers.get(testSubject.getId()).start();
+
+        assertTrue(Utils.waitForCondition(30_000, 1000, () -> {
             if (!(transactioneers.stream()
                                  .mapToInt(t -> t.inFlight())
                                  .filter(t -> t == 0)

@@ -20,11 +20,13 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -94,17 +96,17 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected Map<Digest, AtomicInteger>         blocks;
-    protected CompletableFuture<Boolean>         checkpointOccurred;
+    protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
+    protected CountDownLatch                     checkpointOccurred;
     protected Map<Digest, CHOAM>                 choams;
     protected List<SigningMember>                members;
     protected Map<Digest, Router>                routers;
     protected SigningMember                      testSubject;
     protected int                                toleranceLevel;
-    protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
-
-    private File                          baseDir;
-    private File                          checkpointDirBase;
-    private final Map<Member, Parameters> parameters = new HashMap<>();
+    protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
+    private File                                 baseDir;
+    private File                                 checkpointDirBase;
+    private final Map<Member, Parameters>        parameters       = new HashMap<>();
 
     public AbstractLifecycleTest() {
         super();
@@ -128,7 +130,7 @@ abstract public class AbstractLifecycleTest {
 
     @BeforeEach
     public void before() {
-        checkpointOccurred = new CompletableFuture<>();
+        checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
@@ -253,7 +255,8 @@ abstract public class AbstractLifecycleTest {
         return l -> {
             try {
                 final var check = checkpointer.apply(l);
-                checkpointOccurred.complete(true);
+                checkpointOccurred.countDown();
+                checkpointHeight.compareAndSet(null, l.add(1));
                 return check;
             } catch (Throwable e) {
                 e.printStackTrace();

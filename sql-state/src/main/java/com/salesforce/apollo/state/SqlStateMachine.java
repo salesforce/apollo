@@ -373,30 +373,33 @@ public class SqlStateMachine {
     public BiConsumer<HashedBlock, CheckpointState> getBootstrapper() {
         return (block, state) -> {
             begin(block.height(), block.hash);
-            String rndm = UUID.randomUUID().toString();
-            try (java.sql.Statement statement = connection().createStatement()) {
-                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", block.height(), rndm));
-                try {
-                    state.assemble(temp);
-                } catch (IOException e) {
-                    log.error("unable to assemble checkpoint: {} into: {}", block.height(), temp, e);
-                    return;
-                }
-                try {
-                    log.error("Restoring checkpoint: {} ", block.height());
-                    statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
-                    log.error("Restored from checkpoint: {}", block.height());
-                    statement.close();
-                    initializeStatements();
-                    endBlock(block.height(), block.hash);
+            withContext(() -> {
+                String rndm = UUID.randomUUID().toString();
+                try (java.sql.Statement statement = connection().createStatement()) {
+                    File temp = new File(checkpointDirectory,
+                                         String.format("checkpoint-%s--%s.sql", block.height(), rndm));
+                    try {
+                        state.assemble(temp);
+                    } catch (IOException e) {
+                        log.error("unable to assemble checkpoint: {} into: {}", block.height(), temp, e);
+                        return;
+                    }
+                    try {
+                        log.info("Restoring checkpoint: {} ", block.height());
+                        statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
+                        log.info("Restored from checkpoint: {}", block.height());
+                        statement.close();
+                        initializeStatements();
+                        endBlock(block.height(), block.hash);
+                    } catch (SQLException e) {
+                        log.error("unable to restore checkpoint: {}", block.height(), e);
+                        return;
+                    }
                 } catch (SQLException e) {
-                    log.error("unable to restore checkpoint: {}", block.height(), e);
+                    log.error("unable to restore from checkpoint: {}", block.height(), e);
                     return;
                 }
-            } catch (SQLException e) {
-                log.error("unable to restore from checkpoint: {}", block.height(), e);
-                return;
-            }
+            });
         };
     }
 

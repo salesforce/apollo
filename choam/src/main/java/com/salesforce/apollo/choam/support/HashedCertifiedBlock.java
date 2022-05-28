@@ -55,6 +55,6 @@ public class HashedCertifiedBlock extends HashedBlock {
 
     @Override
     public String toString() {
-        return "cb[" + hash.toString() + "]";
+        return "cb" + hash.toString() + " height: " + height();
     }
 }

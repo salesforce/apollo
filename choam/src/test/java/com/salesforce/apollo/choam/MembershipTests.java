@@ -145,6 +145,7 @@ public class MembershipTests {
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
+
             final TransactionExecutor processor = new TransactionExecutor() {
                 @Override
                 public void endBlock(ULong height, Digest hash) {

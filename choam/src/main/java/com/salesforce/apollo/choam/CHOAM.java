@@ -223,13 +223,6 @@ public class CHOAM {
         }
     }
 
-    public class TransSubmission implements Submitter {
-        @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.submit(request, from);
-        }
-    }
-
     public class Trampoline implements Concierge {
 
         @Override
@@ -270,6 +263,13 @@ public class CHOAM {
         void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
         default void genesis(Digest hash, List<Transaction> initialization) {
+        }
+    }
+
+    public class TransSubmission implements Submitter {
+        @Override
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
         }
     }
 
@@ -501,7 +501,6 @@ public class CHOAM {
     private class Synchronizer extends Administration {
         public Synchronizer(Map<Member, Verifier> validators) {
             super(validators, null);
-
         }
     }
 
@@ -543,7 +542,7 @@ public class CHOAM {
                 return null;
             }
         }
-        log.warn("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
+        log.info("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
                  builder.getSegmentsCount(), stateHash);
         return builder.build();
     }
@@ -623,7 +622,6 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
-    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final ExecutorService                                       executions;
     private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -639,6 +637,7 @@ public class CHOAM {
     private final Session                                               session;
     private final AtomicBoolean                                         started               = new AtomicBoolean();
     private final Store                                                 store;
+    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final AtomicBoolean                                         synchronizing         = new AtomicBoolean(false);
     private final Combine.Transitions                                   transitions;
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
@@ -753,10 +752,6 @@ public class CHOAM {
         c.accept(next);
         log.info("Accepted block: {} height: {} body: {} on: {}", next.hash, next.height(), next.block.getBodyCase(),
                  params.member());
-    }
-
-    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        return new Bootstrapper(anchor, params, store, comm);
     }
 
     private void cancelSynchronization() {
@@ -1122,7 +1117,7 @@ public class CHOAM {
             }
             futureSynchronization.set(null);
         }
-        futureBootstrap.set(bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -1147,8 +1142,12 @@ public class CHOAM {
             log.info("No state to restore from on: {}", params.member().getId());
             return;
         }
-        genesis.set(new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))));
-        head.set(lastBlock);
+        HashedCertifiedBlock geni = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                             store.getCertifiedBlock(ULong.valueOf(0)));
+        genesis.set(geni);
+        head.set(geni);
+        checkpoint.set(geni);
+
         Header header = lastBlock.block.getHeader();
         HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                  store.getCertifiedBlock(ULong.valueOf(header.getLastReconfig())));
@@ -1159,15 +1158,13 @@ public class CHOAM {
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
         CertifiedBlock lastCheckpoint = store.getCertifiedBlock(ULong.valueOf(header.getLastCheckpoint()));
         if (lastCheckpoint != null) {
-            checkpoint.set(new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint));
+            HashedCertifiedBlock ckpt = new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint);
+            checkpoint.set(ckpt);
+            head.set(ckpt);
         }
 
-        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}",
-                 new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))).hash,
-                 lastView.hash,
-                 lastCheckpoint == null ? "<missing>"
-                                        : new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint).hash,
-                 lastBlock.hash, params.member().getId());
+        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", geni.hash, lastView.hash,
+                 checkpoint.get().hash, lastBlock.hash, params.member().getId());
     }
 
     private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
@@ -1278,7 +1275,7 @@ public class CHOAM {
             current1 = store.getCertifiedBlock(state.lastCheckpoint.height().add(1));
         }
         while (current1 != null) {
-            synchronizedProcess(current1, false);
+            synchronizedProcess(current1);
             current1 = store.getCertifiedBlock(height(current1.getBlock()).add(1));
         }
         synchronizing.set(false);
@@ -1292,7 +1289,7 @@ public class CHOAM {
         }
     }
 
-    private void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {
+    private void synchronizedProcess(CertifiedBlock certifiedBlock) {
         if (!started.get()) {
             log.info("Not started on: {}", params.member());
             return;
@@ -1349,9 +1346,6 @@ public class CHOAM {
             }
         }
         pending.add(hcb);
-        if (combine) {
-            combine();
-        }
     }
 
     private Committee testQuorum() {
