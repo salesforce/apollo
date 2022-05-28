@@ -22,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,10 +66,8 @@ abstract public class AbstractLifecycleTest {
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-    private static final ExecutorService          exec            = Executors.newCachedThreadPool();
-    private static final List<Transaction>        GENESIS_DATA;
-    private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-    private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final List<Transaction> GENESIS_DATA;
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     static {
         var txns = MigrationTest.initializeBookSchema();
@@ -152,7 +149,8 @@ abstract public class AbstractLifecycleTest {
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec, null);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newSingleThreadExecutor(), null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -188,9 +186,9 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(exec)
+                                                       .setExec(Executors.newFixedThreadPool(2))
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(scheduler)
+                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))
