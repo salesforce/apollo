@@ -20,16 +20,18 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
+import com.salesfoce.apollo.thoth.proto.Validations;
+import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesforce.apollo.comm.RoutableService;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.Status;
@@ -41,51 +43,13 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class DhtServer extends KerlDhtImplBase {
-    @Override
-    public void getKeyStateWithAttachments(EventContext request,
-                                           StreamObserver<KeyStateWithAttachments_> responseObserver) {
-        Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
-        if (metrics != null) {
-            final var serializedSize = request.getSerializedSize();
-            metrics.inboundBandwidth().mark(serializedSize);
-            metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
-        }
-        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            CompletableFuture<KeyStateWithAttachments_> response = s.getKeyStateWithAttachments(request.getCoordinates());
-            if (response == null) {
-                if (timer != null) {
-                    timer.stop();
-                }
-                responseObserver.onNext(KeyStateWithAttachments_.getDefaultInstance());
-                responseObserver.onCompleted();
-            }
-            response.whenComplete((state, t) -> {
-                if (timer != null) {
-                    timer.stop();
-                }
-                if (t != null) {
-                    responseObserver.onError(t);
-                } else {
-                    state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
-                    responseObserver.onNext(state);
-                    responseObserver.onCompleted();
-                    if (metrics != null) {
-                        final var serializedSize = state.getSerializedSize();
-                        metrics.outboundBandwidth().mark(serializedSize);
-                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
-                    }
-                }
-            });
-        }), log));
-    }
-
     private final static Logger log = LoggerFactory.getLogger(DhtServer.class);
 
-    private final StereotomyMetrics                 metrics;
-    private final RoutableService<ProtoKERLService> routing;
-    private final Executor                          exec;
+    private final Executor             exec;
+    private final StereotomyMetrics    metrics;
+    private final RoutableService<Dht> routing;
 
-    public DhtServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
+    public DhtServer(RoutableService<Dht> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
         this.routing = router;
         this.exec = exec;
@@ -124,6 +88,37 @@ public class DhtServer extends KerlDhtImplBase {
     }
 
     @Override
+    public void appendAttachments(AttachmentsContext request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Empty> result = s.appendAttachments(request.getAttachmentsList());
+            if (result == null) {
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+            } else {
+                result.whenComplete((e, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        final var description = t.getClass().getSimpleName()
+                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
+                    } else if (e != null) {
+                        responseObserver.onNext(e);
+                        responseObserver.onCompleted();
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+                    }
+                });
+            }
+        }), log));
+    }
+
+    @Override
     public void appendKERL(KERLContext request, StreamObserver<Empty> responseObserver) {
         Context timer = metrics != null ? metrics.appendKERLService().time() : null;
         if (metrics != null) {
@@ -145,6 +140,37 @@ public class DhtServer extends KerlDhtImplBase {
                         responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
                     } else if (b != null) {
                         responseObserver.onNext(Empty.getDefaultInstance());
+                        responseObserver.onCompleted();
+                    } else {
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+                    }
+                });
+            }
+        }), log));
+    }
+
+    @Override
+    public void appendValidations(ValidationsContext request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics != null ? metrics.appendWithAttachmentsService().time() : null;
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Empty> result = s.appendValidations(request.getValidationsList());
+            if (result == null) {
+                responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
+            } else {
+                result.whenComplete((e, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        final var description = t.getClass().getSimpleName()
+                        + (t.getMessage() == null ? "" : "(" + t.getMessage() + ")");
+                        responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS.withDescription(description)));
+                    } else if (e != null) {
+                        responseObserver.onNext(e);
                         responseObserver.onCompleted();
                     } else {
                         responseObserver.onError(new StatusRuntimeException(Status.DATA_LOSS));
@@ -371,5 +397,49 @@ public class DhtServer extends KerlDhtImplBase {
                 }
             });
         }), log));
+    }
+
+    @Override
+    public void getKeyStateWithAttachments(EventContext request,
+                                           StreamObserver<KeyStateWithAttachments_> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<KeyStateWithAttachments_> response = s.getKeyStateWithAttachments(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyStateWithAttachments_.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+            response.whenComplete((state, t) -> {
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
+                    responseObserver.onNext(state);
+                    responseObserver.onCompleted();
+                    if (metrics != null) {
+                        final var serializedSize = state.getSerializedSize();
+                        metrics.outboundBandwidth().mark(serializedSize);
+                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+                    }
+                }
+            });
+        }), log));
+    }
+
+    @Override
+    public void getValidations(EventContext request, StreamObserver<Validations> responseObserver) {
+        // TODO Auto-generated method stub
+        super.getValidations(request, responseObserver);
     }
 }

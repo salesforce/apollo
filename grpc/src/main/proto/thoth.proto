@@ -18,6 +18,7 @@ service KerlDht {
     rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
     rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (google.protobuf.Empty) {}
     rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendValidations (ValidationsContext) returns (google.protobuf.Empty) {}
     
     rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
     rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
@@ -64,6 +65,11 @@ message Get {
 message Interval {
         utils.Digeste start = 1;
         utils.Digeste end = 2;
+}
+
+message ValidationsContext {
+	utils.Digeste context = 1;
+	repeated Validations validations = 2;
 }
 
 message Validations {

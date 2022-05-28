@@ -49,6 +49,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.RingCommunications;
@@ -61,11 +62,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.grpc.Dht;
 import com.salesforce.apollo.thoth.grpc.DhtClient;
 import com.salesforce.apollo.thoth.grpc.DhtServer;
 import com.salesforce.apollo.thoth.grpc.DhtService;
@@ -128,72 +128,84 @@ public class KerlDHT {
         }
     }
 
-    private class Service implements ProtoKERLService {
+    private class Service implements Dht {
 
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             log.info("appending kerl on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(kerl_));
+            return complete(k -> k.append(kerl_));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             log.info("appending events on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(events));
+            return complete(k -> k.append(events));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             log.info("appending events and attachments on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(events, attachments));
+            return complete(k -> k.append(events, attachments));
         }
 
         @Override
         public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
             log.info("append attachments on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).appendAttachments(attachments));
+            return complete(k -> k.appendAttachments(attachments));
+        }
+
+        @Override
+        public CompletableFuture<Empty> appendValidations(List<Validations> validations) {
+            // TODO Auto-generated method stub
+            return null;
         }
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
             log.info("get attachments for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getAttachment(coordinates));
+            return complete(k -> k.getAttachment(coordinates));
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
             log.info("get kerl for identifier on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKERL(identifier));
+            return complete(k -> k.getKERL(identifier));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
             log.info("get key event for digest on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(digest));
+            return complete(k -> k.getKeyEvent(digest));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
             log.info("get key event for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(coordinates));
+            return complete(k -> k.getKeyEvent(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
             log.info("get key state for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyState(coordinates));
+            return complete(k -> k.getKeyState(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
             log.info("get key state for identifier on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyState(identifier));
+            return complete(k -> k.getKeyState(identifier));
         }
 
         @Override
         public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
             log.info("get key state with attachments for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyStateWithAttachments(coords));
+            return complete(k -> k.getKeyStateWithAttachments(coords));
+        }
+
+        @Override
+        public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+            // TODO
+            return null;
         }
     }
 
@@ -207,7 +219,7 @@ public class KerlDHT {
 
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
-    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
+    private final CommonCommunications<DhtService, Dht>                       dhtComms;
     private final Executor                                                    executor;
     private final double                                                      fpr;
     private final UniKERLDirectPooled                                         kerlPool;
@@ -237,7 +249,7 @@ public class KerlDHT {
                                                ReconciliationClient.getCreate(context.getId(), metrics),
                                                ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connectionPool = connectionPool;
-        this.kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
+        kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
         this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
         this.kerlSpace = new KerlSpace(connectionPool);
@@ -301,6 +313,46 @@ public class KerlDHT {
         }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link, "append events"),
                                                                         () -> majority.complete(true));
         return complete(majority, null);
+    }
+
+    public CompletableFuture<Void> appendAttachments(List<AttachmentEvent> events) {
+        if (events.isEmpty()) {
+            return complete(null);
+        }
+        final var event = events.get(0);
+        Digest identifier = kerlPool.getDigestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        CompletableFuture<Boolean> majority = new CompletableFuture<>();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.appendAttachments(events), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
+                                                    "append attachments"), () -> majority.complete(true));
+        final CompletableFuture<Void> complete = complete(majority, null);
+        return complete;
+    }
+
+    public CompletableFuture<Void> appendValidations(List<Validations> validations) {
+        if (validations.isEmpty()) {
+            return complete(null);
+        }
+        final var event = validations.get(0);
+        Digest identifier = kerlPool.getDigestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        CompletableFuture<Boolean> majority = new CompletableFuture<>();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.appendValidations(validations), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
+                                                    "append validations"), () -> majority.complete(true));
+        final CompletableFuture<Void> complete = complete(majority, null);
+        return complete;
     }
 
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
@@ -427,6 +479,27 @@ public class KerlDHT {
         return result;
     }
 
+    public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+        if (coordinates == null) {
+            return complete(null);
+        }
+        Digest identifier = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<Validations>();
+        HashMultiset<Validations> gathered = HashMultiset.create();
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier,
+                                                                        (link, r) -> link.getValidations(coordinates),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    identifier, isTimedOut, link,
+                                                                                    "get attachment"));
+        return result;
+    }
+
     public void start(ScheduledExecutorService scheduler, Duration duration) {
         if (!started.compareAndSet(false, true)) {
             return;
@@ -456,21 +529,21 @@ public class KerlDHT {
         });
     }
 
-    private <T> CompletableFuture<T> complete(Function<KERL, CompletableFuture<T>> func) {
+    private <T> CompletableFuture<T> complete(Function<ProtoKERLAdapter, CompletableFuture<T>> func) {
         try (var k = kerlPool.create()) {
-            return func.apply(k);
+            return func.apply(new ProtoKERLAdapter(k));
         } catch (Throwable e) {
             return completeExceptionally(e);
         }
     }
 
     private Digest digestOf(InceptionEvent event) {
-        return this.kerlPool.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
+        return kerlPool.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
     }
 
     private Digest digestOf(InteractionEvent event) {
-        return this.kerlPool.getDigestAlgorithm()
-                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return kerlPool.getDigestAlgorithm()
+                       .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private Digest digestOf(final KeyEvent_ event) {
@@ -492,8 +565,8 @@ public class KerlDHT {
     }
 
     private Digest digestOf(RotationEvent event) {
-        return this.kerlPool.getDigestAlgorithm()
-                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return kerlPool.getDigestAlgorithm()
+                       .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private void initializeSchema() {
