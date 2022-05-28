@@ -25,6 +25,7 @@ service KerlDht {
     rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.services.EventContext) returns (KeyStateWithEndorsementsAndValidations) {}
     rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
     rpc getValidations (stereotomy.services.EventContext) returns (Validations) {}
 }
@@ -80,4 +81,10 @@ message Validations {
 message Validation {
 	stereotomy.Ident validator = 1;
 	utils.Sig signature = 2;
+}
+
+message KeyStateWithEndorsementsAndValidations {
+	stereotomy.KeyState_ state = 1;
+    map<int32, utils.Sig> endorsements = 2;
+    repeated Validation validations = 3;
 }

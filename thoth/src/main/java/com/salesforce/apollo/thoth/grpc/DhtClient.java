@@ -31,6 +31,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmen
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
+import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
@@ -115,13 +116,18 @@ public class DhtClient implements DhtService {
             }
 
             @Override
+            public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+                return wrap(service.getKeyStateWithEndorsementsAndValidations(coordinates));
+            }
+
+            @Override
             public Member getMember() {
                 return member;
             }
 
             @Override
             public ListenableFuture<Validations> getValidations(EventCoords coordinates) {
-                return null;
+                return wrap(service.getValidations(coordinates));
             }
         };
     }
@@ -404,6 +410,33 @@ public class DhtClient implements DhtService {
             metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
         }
         ListenableFuture<KeyStateWithAttachments_> complete = client.getKeyStateWithAttachments(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var attachment = client.getAttachment(request).get();
+                if (metrics != null) {
+                    final var serializedSize = attachment.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                }
+            } catch (InterruptedException e) {
+            } catch (ExecutionException e) {
+            }
+        }, r -> r.run());
+        return complete;
+    }
+
+    @Override
+    public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
+        }
+        ListenableFuture<KeyStateWithEndorsementsAndValidations> complete = client.getKeyStateWithEndorsementsAndValidations(request);
         complete.addListener(() -> {
             if (timer != null) {
                 timer.stop();

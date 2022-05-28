@@ -57,6 +57,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
 import com.salesfoce.apollo.thoth.proto.Validation;
@@ -214,6 +215,27 @@ public class KerlDHT {
         }
 
         @Override
+        public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            return complete(k -> {
+                final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
+                k.getKeyStateWithAttachments(coordinates)
+                 .thenAcceptBoth(db_getValidations(coordinates), (ksa, validations) -> {
+                     fs.complete(KeyStateWithEndorsementsAndValidations.newBuilder()
+                                                                       .setState(ksa.getState())
+                                                                       .putAllEndorsements(ksa.getAttachment()
+                                                                                              .getEndorsementsMap())
+                                                                       .addAllValidations(validations.getValidationsList())
+                                                                       .build());
+                 })
+                 .exceptionally(t -> {
+                     fs.completeExceptionally(t);
+                     return null;
+                 });
+                return fs;
+            });
+        }
+
+        @Override
         public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
             return db_getValidations(coordinates);
         }
@@ -252,8 +274,7 @@ public class KerlDHT {
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();
     private final AtomicBoolean                                               started        = new AtomicBoolean();
-
-    private final TemporalAmount timeout;
+    private final TemporalAmount                                              timeout;
 
     public KerlDHT(Context<Member> context, SigningMember member, JdbcConnectionPool connectionPool,
                    DigestAlgorithm digestAlgorithm, Router communications, Executor executor, TemporalAmount timeout,
@@ -496,6 +517,27 @@ public class KerlDHT {
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
         new RingIterator<>(context, member, dhtComms,
                            executor).iterate(digest, (link, r) -> link.getKeyStateWithAttachments(coordinates),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
+                                                                                    "get attachment"));
+        return result;
+    }
+
+    public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        if (coordinates == null) {
+            return complete(null);
+        }
+        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        if (digest == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
+        HashMultiset<KeyStateWithEndorsementsAndValidations> gathered = HashMultiset.create();
+        new RingIterator<>(context, member, dhtComms,
+                           executor).iterate(digest,
+                                             (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
                                              (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
                                                                                     digest, isTimedOut, link,
                                                                                     "get attachment"));

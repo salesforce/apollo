@@ -27,6 +27,7 @@ import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtImplBase;
+import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesforce.apollo.comm.RoutableService;
@@ -43,6 +44,44 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class DhtServer extends KerlDhtImplBase {
+    @Override
+    public void getKeyStateWithEndorsementsAndValidations(EventContext request,
+                                                          StreamObserver<KeyStateWithEndorsementsAndValidations> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateCoordsService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateCoordsRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<KeyStateWithEndorsementsAndValidations> response = s.getKeyStateWithEndorsementsAndValidations(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyStateWithEndorsementsAndValidations.getDefaultInstance());
+                responseObserver.onCompleted();
+            }
+            response.whenComplete((state, t) -> {
+                if (timer != null) {
+                    timer.stop();
+                }
+                if (t != null) {
+                    responseObserver.onError(t);
+                } else {
+                    state = state == null ? KeyStateWithEndorsementsAndValidations.getDefaultInstance() : state;
+                    responseObserver.onNext(state);
+                    responseObserver.onCompleted();
+                    if (metrics != null) {
+                        final var serializedSize = state.getSerializedSize();
+                        metrics.outboundBandwidth().mark(serializedSize);
+                        metrics.outboundGetKeyStateCoordsResponse().mark(serializedSize);
+                    }
+                }
+            });
+        }), log));
+    }
+
     private final static Logger log = LoggerFactory.getLogger(DhtServer.class);
 
     private final Executor             exec;
