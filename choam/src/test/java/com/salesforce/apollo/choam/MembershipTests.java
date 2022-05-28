@@ -113,7 +113,6 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
@@ -138,7 +137,8 @@ public class MembershipTests {
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec, null);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality),
+                                       Executors.newSingleThreadExecutor(), null);
             comm.setMember(m);
             return comm;
         }));
@@ -171,7 +171,7 @@ public class MembershipTests {
                                                            .setCommunications(routers.get(m.getId()))
                                                            .setProcessor(processor)
                                                            .setContext(context)
-                                                           .setExec(exec)
+                                                           .setExec(Executors.newFixedThreadPool(2))
                                                            .setScheduler(scheduler)
                                                            .build()));
         }));

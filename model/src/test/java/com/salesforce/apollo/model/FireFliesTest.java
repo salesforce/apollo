@@ -89,7 +89,6 @@ public class FireFliesTest {
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
 
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
-        var exec = Executors.newCachedThreadPool();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
@@ -102,7 +101,7 @@ public class FireFliesTest {
                                                           .setFoundation(sealed)
                                                           .setScheduler(scheduler)
                                                           .setContext(context)
-                                                          .setExec(exec)
+                                                          .setExec(Executors.newFixedThreadPool(2))
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0));
             domains.add(node);
