@@ -86,8 +86,6 @@ public class FireFliesTest {
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
-
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
@@ -95,11 +93,11 @@ public class FireFliesTest {
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              Executors.newFixedThreadPool(1), null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(scheduler)
+                                                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(2))
                                                           .setCommunications(localRouter),
@@ -113,15 +111,15 @@ public class FireFliesTest {
 
     @Test
     public void smokin() throws Exception {
-        var exec = Executors.newFixedThreadPool(CARDINALITY);
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
                                  .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
                                  .toList()
                                  .subList(0, CARDINALITY - 2);
         domains.forEach(d -> {
-            d.getFoundation().start(exec, Duration.ofMillis(10), seeds, scheduler);
+            d.getFoundation()
+             .start(Executors.newSingleThreadExecutor(), Duration.ofMillis(10), seeds,
+                    Executors.newSingleThreadScheduledExecutor());
         });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()

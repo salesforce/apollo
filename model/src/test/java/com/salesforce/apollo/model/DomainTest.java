@@ -213,22 +213,20 @@ public class DomainTest {
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-        var exec = Executors.newFixedThreadPool(CARDINALITY);
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              Executors.newFixedThreadPool(1), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(scheduler)
+                                                            .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                             .setContext(context)
-                                                            .setExec(exec)
+                                                            .setExec(Executors.newSingleThreadExecutor())
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0));
             domains.add(domain);
