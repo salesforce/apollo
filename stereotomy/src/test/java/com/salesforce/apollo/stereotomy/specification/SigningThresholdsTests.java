@@ -73,7 +73,6 @@ public class SigningThresholdsTests {
     @Test
     public void test__unweighted() {
         assertThrows(IllegalArgumentException.class, () -> unweighted(-1));
-        assertThrows(IllegalArgumentException.class, () -> unweighted(0));
     }
 
     @Test

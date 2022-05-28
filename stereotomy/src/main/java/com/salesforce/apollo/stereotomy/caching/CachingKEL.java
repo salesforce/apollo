@@ -51,7 +51,7 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
 public class CachingKEL<K extends KEL> implements KEL {
     private static final Logger log = LoggerFactory.getLogger(CachingKEL.class);
 
-    private static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
+    public static Caffeine<EventCoordinates, KeyState> defaultKsCoordsBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
@@ -60,7 +60,7 @@ public class CachingKEL<K extends KEL> implements KEL {
                                                                           cause));
     }
 
-    private static Caffeine<Identifier, KeyState> defaultKsCurrentBuilder() {
+    public static Caffeine<Identifier, KeyState> defaultKsCurrentBuilder() {
         return Caffeine.newBuilder()
                        .maximumSize(10_000)
                        .expireAfterWrite(Duration.ofMinutes(10))
@@ -143,6 +143,11 @@ public class CachingKEL<K extends KEL> implements KEL {
     @Override
     public DigestAlgorithm getDigestAlgorithm() {
         return complete(kel -> kel.getDigestAlgorithm());
+    }
+
+    @Override
+    public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        return complete(kel -> kel.getKeyStateWithAttachments(coordinates));
     }
 
     @Override

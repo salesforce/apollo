@@ -9,7 +9,6 @@ package com.salesforce.apollo.thoth;
 
 import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
 import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
-import static com.salesforce.apollo.stereotomy.schema.tables.Receipt.RECEIPT;
 import static com.salesforce.apollo.thoth.schema.tables.Validation.VALIDATION;
 
 import java.io.PrintStream;
@@ -75,6 +74,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
@@ -216,16 +216,18 @@ public class KerlDHT {
 
         @Override
         public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            log.info("get key state with endorsements and attachments for coordinates on: {}", member.getId());
             return complete(k -> {
                 final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
                 k.getKeyStateWithAttachments(coordinates)
                  .thenAcceptBoth(db_getValidations(coordinates), (ksa, validations) -> {
-                     fs.complete(KeyStateWithEndorsementsAndValidations.newBuilder()
-                                                                       .setState(ksa.getState())
-                                                                       .putAllEndorsements(ksa.getAttachment()
-                                                                                              .getEndorsementsMap())
-                                                                       .addAllValidations(validations.getValidationsList())
-                                                                       .build());
+                     var result = KeyStateWithEndorsementsAndValidations.newBuilder()
+                                                                        .setState(ksa.getState())
+                                                                        .putAllEndorsements(ksa.getAttachment()
+                                                                                               .getEndorsementsMap())
+                                                                        .addAllValidations(validations.getValidationsList())
+                                                                        .build();
+                     fs.complete(result);
                  })
                  .exceptionally(t -> {
                      fs.completeExceptionally(t);
@@ -266,6 +268,7 @@ public class KerlDHT {
     private final CommonCommunications<DhtService, Dht>                       dhtComms;
     private final Executor                                                    executor;
     private final double                                                      fpr;
+    private final CachingKERL                                                 kerl;
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
     private final SigningMember                                               member;
@@ -299,6 +302,13 @@ public class KerlDHT {
         this.kerlSpace = new KerlSpace(connectionPool);
 
         initializeSchema();
+        kerl = new CachingKERL(f -> {
+            try (var k = kerlPool.create()) {
+                return f.apply(k);
+            } catch (Throwable e) {
+                return completeExceptionally(e);
+            }
+        });
     }
 
     public CompletableFuture<Void> append(KERL_ kerl) {
@@ -364,7 +374,7 @@ public class KerlDHT {
             return complete(null);
         }
         final var event = events.get(0);
-        Digest identifier = kerlPool.getDigestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
+        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -384,7 +394,7 @@ public class KerlDHT {
             return complete(null);
         }
         final var event = validations.get(0);
-        Digest identifier = kerlPool.getDigestAlgorithm().digest(event.getCoordinates().getIdentifier().toByteString());
+        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -403,7 +413,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest identifier = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -424,7 +434,7 @@ public class KerlDHT {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = extracted().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -444,7 +454,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -465,7 +475,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -486,7 +496,7 @@ public class KerlDHT {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = extracted().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -507,7 +517,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -527,7 +537,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -548,7 +558,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest identifier = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -583,11 +593,7 @@ public class KerlDHT {
     }
 
     private <T> CompletableFuture<T> complete(Function<ProtoKERLAdapter, CompletableFuture<T>> func) {
-        try (var k = kerlPool.create()) {
-            return func.apply(new ProtoKERLAdapter(k));
-        } catch (Throwable e) {
-            return completeExceptionally(e);
-        }
+        return func.apply(new ProtoKERLAdapter(kerl));
     }
 
     private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
@@ -668,7 +674,7 @@ public class KerlDHT {
         var builder = Validations.newBuilder().setCoordinates(coordinates);
 
         dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
-           .from(RECEIPT)
+           .from(VALIDATION)
            .join(IDENTIFIER)
            .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
            .where(VALIDATION.FOR.eq(resolved.value1()))
@@ -692,12 +698,11 @@ public class KerlDHT {
     }
 
     private Digest digestOf(InceptionEvent event) {
-        return kerlPool.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
+        return extracted().digest(event.getIdentifier().toByteString());
     }
 
     private Digest digestOf(InteractionEvent event) {
-        return kerlPool.getDigestAlgorithm()
-                       .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private Digest digestOf(final KeyEvent_ event) {
@@ -719,8 +724,11 @@ public class KerlDHT {
     }
 
     private Digest digestOf(RotationEvent event) {
-        return kerlPool.getDigestAlgorithm()
-                       .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+    }
+
+    private DigestAlgorithm extracted() {
+        return kerlPool.getDigestAlgorithm();
     }
 
     private void initializeSchema() {
@@ -754,8 +762,8 @@ public class KerlDHT {
             Digest end = ring.hash(member);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, kerlPool.getDigestAlgorithm().getLast()));
-                intervals.add(new KeyInterval(kerlPool.getDigestAlgorithm().getOrigin(), begin));
+                intervals.add(new KeyInterval(end, extracted().getLast()));
+                intervals.add(new KeyInterval(extracted().getOrigin(), begin));
             } else {
                 intervals.add(new KeyInterval(begin, end));
             }
