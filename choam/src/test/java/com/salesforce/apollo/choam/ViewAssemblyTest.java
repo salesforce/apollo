@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -71,7 +70,6 @@ public class ViewAssemblyTest {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
-        Executor exec = Executors.newCachedThreadPool();
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> Utils.getMember(i))
@@ -111,7 +109,8 @@ public class ViewAssemblyTest {
         CountDownLatch complete = new CountDownLatch(committee.size());
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, null);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(),
+                                              Executors.newSingleThreadExecutor(), null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -121,7 +120,8 @@ public class ViewAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, exec),
+                                                                                                        null, r,
+                                                                                                        Executors.newSingleThreadExecutor()),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -137,7 +137,7 @@ public class ViewAssemblyTest {
             params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee,
                                                params.build(RuntimeParameters.newBuilder()
-                                                                             .setExec(exec)
+                                                                             .setExec(Executors.newFixedThreadPool(2))
                                                                              .setScheduler(Executors.newScheduledThreadPool(cardinality))
                                                                              .setContext(base)
                                                                              .setMember(sm)

@@ -8,7 +8,6 @@ package com.salesforce.apollo.utils.bloomFilters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.security.SecureRandom;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
@@ -16,7 +15,7 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ConcurrentHashMultiset;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.Hash.BytesHasher;
 import com.salesforce.apollo.utils.bloomFilters.Hash.IntHasher;
 
@@ -36,18 +35,17 @@ public class HashTest {
     private void avalanche(Integer size) {
         ConcurrentHashMultiset<Integer> distribution = ConcurrentHashMultiset.create();
         ConcurrentHashMultiset<Integer> combined = ConcurrentHashMultiset.create();
-        long seed = Utils.secureEntropy().nextLong();
+        long seed = Entropy.nextSecureLong();
         BytesHasher hash = new Hash.BytesHasher();
         IntStream.range(0, 10_000_000).parallel().forEach(i -> {
-            SecureRandom entropy = Utils.secureEntropy();
             byte[] a = new byte[size / 8];
-            entropy.nextBytes(a);
+            Entropy.nextSecureBytes(a);
             BitSet vector = BitSet.valueOf(a);
             hash.process(vector.toByteArray(), seed);
             long aH1 = hash.h1;
             long aH2 = hash.h2;
 
-            vector.flip(entropy.nextInt(size));
+            vector.flip(Entropy.nextSecureInt(size));
 
             hash.process(vector.toByteArray(), seed);
             long bH1 = hash.h1;
@@ -89,13 +87,12 @@ public class HashTest {
         long seed = 0x1638;
 
         IntStream.range(0, m * 2).parallel().forEach(i -> {
-            SecureRandom entropy = Utils.secureEntropy();
             IntHasher hash = new Hash.IntHasher();
-            int[] hashes = hash.hashes(k, entropy.nextInt(), m, seed);
+            int[] hashes = hash.hashes(k, Entropy.nextSecureInt(), m, seed);
             IntStream.of(hashes).forEach(j -> frequency.add(j));
         });
         double missing = m - frequency.elementSet().size();
-        double pc = ((missing / (double) m) * 100.0);
+        double pc = ((missing / m) * 100.0);
         if (pc < 0.5 | missing < 2.0) {
             System.out.println(String.format("Missing: k: %s m: %s missing: %s : %s seed: %s", k, m, (int) missing, pc,
                                              seed));

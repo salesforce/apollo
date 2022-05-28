@@ -32,6 +32,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -53,12 +54,11 @@ public class Emulator {
     private final AtomicInteger           txnIndex = new AtomicInteger(0);
 
     public Emulator() throws IOException {
-        this(DigestAlgorithm.DEFAULT.getOrigin().prefix(Utils.bitStreamEntropy().nextLong()));
+        this(DigestAlgorithm.DEFAULT.getOrigin().prefix(Entropy.nextBitsStreamLong()));
     }
 
     public Emulator(Digest base) throws IOException {
-        this(new SqlStateMachine(String.format("jdbc:h2:mem:emulation-%s-%s", base,
-                                               Utils.bitStreamEntropy().nextLong()),
+        this(new SqlStateMachine(String.format("jdbc:h2:mem:emulation-%s-%s", base, Entropy.nextBitsStreamLong()),
                                  new Properties(), Files.createTempDirectory("emulation").toFile()),
              base);
     }

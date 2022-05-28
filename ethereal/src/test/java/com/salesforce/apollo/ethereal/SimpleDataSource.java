@@ -11,7 +11,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * 
@@ -24,7 +24,7 @@ public class SimpleDataSource implements DataSource {
     @Override
     public ByteString getData() {
         try {
-            Thread.sleep(Utils.bitStreamEntropy().nextLong(10));
+            Thread.sleep(Entropy.nextBitsStreamLong(10));
         } catch (InterruptedException e) {
         }
         return dataStack.pollFirst();

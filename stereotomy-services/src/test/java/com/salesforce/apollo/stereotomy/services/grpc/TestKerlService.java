@@ -14,7 +14,7 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -131,8 +131,9 @@ public class TestKerlService {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        serverRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
-        clientRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
+        final var exec = Executors.newFixedThreadPool(3);
+        serverRouter = new LocalRouter(prefix, builder, exec, null);
+        clientRouter = new LocalRouter(prefix, builder, exec, null);
 
         serverRouter.setMember(serverMember);
         clientRouter.setMember(clientMember);
@@ -142,9 +143,9 @@ public class TestKerlService {
 
         ProtoKERLService protoService = new ProtoKERLAdapter(kel);
 
-        serverRouter.create(serverMember, context, protoService, r -> new KERLServer(null, r), null, null);
+        serverRouter.create(serverMember, context, protoService, r -> new KERLServer(r, exec, null), null, null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new KERLServer(null, r),
+        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new KERLServer(r, exec, null),
                                               KERLClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

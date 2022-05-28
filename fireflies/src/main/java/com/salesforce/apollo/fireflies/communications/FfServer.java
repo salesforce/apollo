@@ -6,6 +6,11 @@
  */
 package com.salesforce.apollo.fireflies.communications;
 
+import java.util.concurrent.Executor;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
@@ -18,6 +23,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.fireflies.FireflyMetrics;
 import com.salesforce.apollo.fireflies.View.Service;
 import com.salesforce.apollo.protocols.ClientIdentity;
+import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.stub.StreamObserver;
 
@@ -26,14 +32,19 @@ import io.grpc.stub.StreamObserver;
  *
  */
 public class FfServer extends FirefliesImplBase {
+    private final static Logger log = LoggerFactory.getLogger(FfServer.class);
+
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
+    private final Executor                 exec;
 
-    public FfServer(Service system, ClientIdentity identity, FireflyMetrics metrics, RoutableService<Service> router) {
+    public FfServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
+                    FireflyMetrics metrics) {
         this.metrics = metrics;
         this.identity = identity;
         this.router = router;
+        this.exec = exec;
     }
 
     @Override
@@ -44,12 +55,12 @@ public class FfServer extends FirefliesImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundGossip().mark(serializedSize);
         }
-        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             Gossip gossip = s.rumors(request.getRing(), request.getGossip(), from, request.getFrom(),
                                      request.getNote());
             if (timer != null) {
@@ -60,18 +71,23 @@ public class FfServer extends FirefliesImplBase {
             }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
-        });
+        }), log));
     }
 
     @Override
     public void ping(Ping request, StreamObserver<Empty> responseObserver) {
-        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+        final var from = Digest.from(request.getContext());
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, from, s -> {
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
                 metrics.inboundPingRate().mark();
             }
-        });
+        }), log));
     }
 
     @Override
@@ -82,19 +98,19 @@ public class FfServer extends FirefliesImplBase {
             metrics.inboundBandwidth().mark(serializedSize);
             metrics.inboundUpdate().mark(serializedSize);
         }
-        router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            Digest from = identity.getFrom();
-            if (from == null) {
-                responseObserver.onError(new IllegalStateException("Member has been removed"));
-                return;
-            }
+        Digest from = identity.getFrom();
+        if (from == null) {
+            responseObserver.onError(new IllegalStateException("Member has been removed"));
+            return;
+        }
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             s.update(request.getRing(), request.getUpdate(), from);
             if (timer != null) {
                 timer.stop();
             }
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
-        });
+        }), log));
     }
 
 }

@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -32,6 +33,10 @@ import com.salesforce.apollo.crypto.Digest;
  * @since 220
  */
 public class Ring<T extends Member> implements Iterable<T> {
+    public enum IterateResult {
+        CONTINUE, FAIL, SUCCESS;
+    }
+
     private final BiFunction<T, Integer, Digest>    hasher;
     private final int                               index;
     private final ConcurrentNavigableMap<Digest, T> ring = new ConcurrentSkipListMap<>();
@@ -138,6 +143,46 @@ public class Ring<T extends Member> implements Iterable<T> {
 
     public Set<Digest> difference(Ring<T> r) {
         return Sets.difference(ring.keySet(), r.ring.keySet());
+    }
+
+    /**
+     * @param d         - the digest
+     * @param predicate - the test function.
+     * @return the first successor of d for which function evaluates to SUCCESS.
+     *         Answer null if function evaluates to FAIL.
+     */
+    public T findPredecessor(Digest d, Function<T, IterateResult> predicate) {
+        return pred(d, predicate);
+    }
+
+    /**
+     * @param m         - the member
+     * @param predicate - the test function.
+     * @return the first successor of m for which function evaluates to SUCCESS.
+     *         Answer null if function evaluates to FAIL.
+     */
+    public T findPredecessor(T m, Function<T, IterateResult> predicate) {
+        return pred(hash(m), predicate);
+    }
+
+    /**
+     * @param d         - the digest
+     * @param predicate - the test function.
+     * @return the first successor of d for which function evaluates to SUCCESS.
+     *         Answer null if function evaluates to FAIL.
+     */
+    public T findSuccessor(Digest d, Function<T, IterateResult> predicate) {
+        return succ(d, predicate);
+    }
+
+    /**
+     * @param m         - the member
+     * @param predicate - the test function.
+     * @return the first successor of m for which function evaluates to SUCCESS.
+     *         Answer null if function evaluates to FAIL.
+     */
+    public T findSuccessor(T m, Function<T, IterateResult> predicate) {
+        return succ(hash(m), predicate);
     }
 
     /**
@@ -454,6 +499,34 @@ public class Ring<T extends Member> implements Iterable<T> {
         };
     }
 
+    private T pred(Digest hash, Function<T, IterateResult> predicate) {
+        for (T member : ring.headMap(hash, false).descendingMap().values()) {
+            switch (predicate.apply(member)) {
+            case CONTINUE:
+                continue;
+            case FAIL:
+                return null;
+            case SUCCESS:
+                return member;
+            default:
+                throw new IllegalStateException();
+            }
+        }
+        for (T member : ring.tailMap(hash, false).descendingMap().values()) {
+            switch (predicate.apply(member)) {
+            case CONTINUE:
+                continue;
+            case FAIL:
+                return null;
+            case SUCCESS:
+                return member;
+            default:
+                throw new IllegalStateException();
+            }
+        }
+        return null;
+    }
+
     private T pred(Digest hash, Predicate<T> predicate) {
         for (T member : ring.headMap(hash, false).descendingMap().values()) {
             if (predicate.test(member)) {
@@ -509,6 +582,39 @@ public class Ring<T extends Member> implements Iterable<T> {
                 return iterator;
             }
         };
+    }
+
+    private T succ(Digest hash, Function<T, IterateResult> predicate) {
+        if (hash == null) {
+            return null;
+        }
+        for (T member : ring.tailMap(hash, false).values()) {
+            switch (predicate.apply(member)) {
+            case CONTINUE:
+                continue;
+            case FAIL:
+                return null;
+            case SUCCESS:
+                return member;
+            default:
+                throw new IllegalStateException();
+
+            }
+        }
+        for (T member : ring.headMap(hash, false).values()) {
+            switch (predicate.apply(member)) {
+            case CONTINUE:
+                continue;
+            case FAIL:
+                return null;
+            case SUCCESS:
+                return member;
+            default:
+                throw new IllegalStateException();
+
+            }
+        }
+        return null;
     }
 
     private T succ(Digest hash, Predicate<T> predicate) {

@@ -19,7 +19,7 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
  * @author hal.hildebrand
  *
  */
-public class KeyEventProcessor implements Validator, Verifier {
+public class KeyEventProcessor implements Validator, KeyEventVerifier {
     private final KERL                                     kerl;
     private final BiFunction<KeyState, KeyEvent, KeyState> keyStateProcessor;
 

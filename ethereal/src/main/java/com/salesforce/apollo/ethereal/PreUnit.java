@@ -24,7 +24,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Verifier;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -227,7 +227,7 @@ public interface PreUnit {
             if (creator >= verifiers.length) {
                 return false;
             }
-            return verifiers[creator].verify(signature, forSigning(creator, crown, data, rsData, salt));
+            return verifiers[creator].verify(signature, PreUnit.forSigning(creator, crown, data, rsData, salt));
         }
     }
 
@@ -310,7 +310,7 @@ public interface PreUnit {
         var height = crown.heights()[creator] + 1;
         var id = id(height, creator, epoch);
         var salt = new byte[algo.digestLength()];
-        Utils.secureEntropy().nextBytes(salt);
+        Entropy.nextSecureBytes(salt);
         var signature = sign(signer, id, crown, data, rsBytes, salt);
         var u = new freeUnit(new preUnit(creator, epoch, height, signature.toDigest(algo), crown, data, rsBytes,
                                          signature, salt),
@@ -321,7 +321,7 @@ public interface PreUnit {
     }
 
     static JohnHancock sign(Signer signer, long id, Crown crown, ByteString data, byte[] rsData, byte[] salt) {
-        return signer.sign(forSigning(id, crown, data, rsData, salt));
+        return signer.sign(PreUnit.forSigning(id, crown, data, rsData, salt));
     }
 
     short creator();

@@ -224,8 +224,8 @@ public class MemKERL implements KERL {
         var current = event;
         var result = new ArrayList<EventWithAttachments>();
         while (current != null) {
-            var coordinates = current.getCoordinates();
-            result.add(new EventWithAttachments(current, getAttachment(coordinates).orElse(null)));
+            final var attachment = getAttachment(current.getCoordinates());
+            result.add(new EventWithAttachments(current, attachment.orElse(null)));
             current = getKeyEvent(current.getPrevious()).orElse(null);
         }
         Collections.reverse(result);

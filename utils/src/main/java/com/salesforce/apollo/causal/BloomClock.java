@@ -20,7 +20,7 @@ import com.salesfoce.apollo.utils.proto.Clock;
 import com.salesfoce.apollo.utils.proto.StampedBloomeClock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.utils.BUZ;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.Hash;
 
 /**
@@ -49,7 +49,7 @@ public class BloomClock implements ClockValue {
 
     record Comparison(int compared, int sumA, int sumB) {}
 
-    public static long      DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
+    public static long      DEFAULT_GOOD_SEED = Entropy.nextBitsStreamLong();
     public final static int DEFAULT_K         = 3;
     public static final int DEFAULT_M         = 200;
     public static int       MASK              = 0x0F;
@@ -159,7 +159,7 @@ public class BloomClock implements ClockValue {
     static double falsePositiveRate(int sumA, int sumB, int m) {
         double X = sumB;
         double Y = sumA;
-        double M = (double) m;
+        double M = m;
         return Math.pow(1.0 - Math.pow(1.0 - (1.0 / M), X), Y);
     }
 
@@ -316,6 +316,7 @@ public class BloomClock implements ClockValue {
         return prefix;
     }
 
+    @Override
     public int hashCode() {
         final int prime = 31;
         int result = 1;

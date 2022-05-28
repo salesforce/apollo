@@ -8,9 +8,10 @@ package com.salesforce.apollo.membership;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * Simple iterator on a group of members, randomly shuffling the membership list
@@ -35,7 +36,7 @@ public class GroupIterator {
             var m = group.get(c);
             current = (c + 1) % group.size();
             if (current == 0) {
-                Collections.shuffle(group);
+                Entropy.secureShuffle(group);
             }
             return m;
         } finally {

@@ -45,9 +45,7 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.security.KeyPair;
-import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Collection;
@@ -65,8 +63,6 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-import org.apache.commons.math3.random.MersenneTwister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,24 +83,6 @@ public class Utils {
     private static enum ParsingState {
         BRACKET, DOLLAR, PASS_THROUGH
     }
-
-    private static ThreadLocal<BitsStreamGenerator> BIT_STREAM_ENTROPY = new ThreadLocal<>() {
-        @Override
-        protected BitsStreamGenerator initialValue() {
-            return new MersenneTwister();
-        }
-    };
-
-    private static ThreadLocal<SecureRandom> ENTROPY = new ThreadLocal<>() {
-        @Override
-        protected SecureRandom initialValue() {
-            try {
-                return SecureRandom.getInstance("SHA1PRNG");
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("Cannot create secure entropy", e);
-            }
-        }
-    };
 
     public static Object accessField(String fieldName, Object target) throws SecurityException, NoSuchFieldException,
                                                                       IllegalArgumentException, IllegalAccessException {
@@ -187,10 +165,6 @@ public class Utils {
         } catch (IOException e) {
         }
         return -1;
-    }
-
-    public static BitsStreamGenerator bitStreamEntropy() {
-        return BIT_STREAM_ENTROPY.get();
     }
 
     /**
@@ -656,8 +630,7 @@ public class Utils {
         }
         X509Certificate generated = Certificates.selfSign(false,
                                                           encode(id, localhost, allocatePort(), keyPair.getPublic()),
-                                                          secureEntropy(), keyPair, notBefore, notAfter,
-                                                          Collections.emptyList());
+                                                          keyPair, notBefore, notAfter, Collections.emptyList());
         return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
     }
 
@@ -1044,10 +1017,6 @@ public class Utils {
             return configFile.toURI().toURL();
         }
         return base.getResource(resource);
-    }
-
-    public static SecureRandom secureEntropy() {
-        return ENTROPY.get();
     }
 
     /**

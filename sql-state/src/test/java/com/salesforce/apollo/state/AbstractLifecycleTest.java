@@ -20,11 +20,12 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -52,6 +53,7 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -64,10 +66,8 @@ abstract public class AbstractLifecycleTest {
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
 
-    private static final ExecutorService          exec            = Executors.newCachedThreadPool();
-    private static final List<Transaction>        GENESIS_DATA;
-    private static final Digest                   GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-    private static final ScheduledExecutorService scheduler       = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final List<Transaction> GENESIS_DATA;
+    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
 
     static {
         var txns = MigrationTest.initializeBookSchema();
@@ -93,17 +93,17 @@ abstract public class AbstractLifecycleTest {
     }
 
     protected Map<Digest, AtomicInteger>         blocks;
-    protected CompletableFuture<Boolean>         checkpointOccurred;
+    protected final AtomicReference<ULong>       checkpointHeight = new AtomicReference<>();
+    protected CountDownLatch                     checkpointOccurred;
     protected Map<Digest, CHOAM>                 choams;
     protected List<SigningMember>                members;
     protected Map<Digest, Router>                routers;
     protected SigningMember                      testSubject;
     protected int                                toleranceLevel;
-    protected final Map<Member, SqlStateMachine> updaters = new HashMap<>();
-
-    private File                          baseDir;
-    private File                          checkpointDirBase;
-    private final Map<Member, Parameters> parameters = new HashMap<>();
+    protected final Map<Member, SqlStateMachine> updaters         = new HashMap<>();
+    private File                                 baseDir;
+    private File                                 checkpointDirBase;
+    private final Map<Member, Parameters>        parameters       = new HashMap<>();
 
     public AbstractLifecycleTest() {
         super();
@@ -127,10 +127,10 @@ abstract public class AbstractLifecycleTest {
 
     @BeforeEach
     public void before() {
-        checkpointOccurred = new CompletableFuture<>();
-        checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
+        checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
-        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
@@ -149,7 +149,8 @@ abstract public class AbstractLifecycleTest {
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec, null);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
+                                              Executors.newSingleThreadExecutor(), null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -185,9 +186,9 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(exec)
+                                                       .setExec(Executors.newFixedThreadPool(2))
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(scheduler)
+                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))
@@ -213,7 +214,8 @@ abstract public class AbstractLifecycleTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setGossipDuration(Duration.ofMillis(10))
-                               .setCheckpointBlockSize(checkpointBlockSize());
+                               .setCheckpointBlockDelta(checkpointBlockSize())
+                               .setCheckpointSegmentSize(128);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
@@ -251,7 +253,8 @@ abstract public class AbstractLifecycleTest {
         return l -> {
             try {
                 final var check = checkpointer.apply(l);
-                checkpointOccurred.complete(true);
+                checkpointOccurred.countDown();
+                checkpointHeight.compareAndSet(null, l.add(1));
                 return check;
             } catch (Throwable e) {
                 e.printStackTrace();

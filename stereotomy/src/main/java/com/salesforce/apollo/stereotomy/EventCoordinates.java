@@ -110,12 +110,11 @@ public class EventCoordinates {
         if (this == obj) {
             return true;
         }
-        if (!(obj instanceof EventCoordinates)) {
-            return false;
+        if (obj instanceof EventCoordinates other) {
+            return Objects.equals(sequenceNumber, other.sequenceNumber) && Objects.equals(ilk, other.ilk) &&
+                   Objects.equals(identifier, other.identifier) && Objects.equals(digest, other.digest);
         }
-        EventCoordinates other = (EventCoordinates) obj;
-        return Objects.equals(digest, other.digest) && Objects.equals(identifier, other.identifier) &&
-               Objects.equals(sequenceNumber, other.sequenceNumber);
+        return false;
     }
 
     public Digest getDigest() {

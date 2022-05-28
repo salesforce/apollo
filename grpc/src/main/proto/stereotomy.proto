@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.stereotomy.event.proto";
+option java_outer_classname = "StereotomyProto";
+option objc_class_prefix = "Stereo";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+import "util.proto";
+
+package stereotomy;
+
+// The KERI Identifier
+message Ident {
+    oneof type {
+        utils.PubKey basic = 1; 
+        utils.Digeste selfAddressing = 2;
+        utils.Sig selfSigning = 3;
+        bool NONE = 5;
+    }
+}
+
+// Coordinates of an event
+message EventCoords {
+    Ident identifier = 1;
+    uint64 sequenceNumber = 2;
+    string ilk = 3;
+    utils.Digeste digest = 4;
+}
+
+// Location of an event
+message EventLoc {
+    Ident identifier = 1;
+    uint64 sequenceNumber = 2;
+    utils.Digeste digest = 3;
+}
+
+// Coordinates of a key
+message KeyCoords {
+    EventCoords establishment = 1;
+    int32 keyIndex = 2;
+}
+
+// Sealed content for events
+message Sealed { 
+    oneof type {
+        EventCoords eventCoordinates = 1;
+        utils.Digeste digest = 2;
+        EventLoc event = 3;
+        bytes bits = 4;
+    }
+}
+
+// Common header for events
+message Header {
+    uint64 sequenceNumber = 1;
+    Ident identifier = 2;
+    utils.Digeste priorEventDigest = 3;
+    Version version = 4;
+    string ilk = 5;
+}
+
+// Common configuration, signature authentication and coordinates of the previous event
+message EventCommon {
+    utils.Digeste configuration = 2;
+    EventCoords previous = 3;
+    utils.Sig authentication = 4;
+}
+
+// Specification of an interaction
+message InteractionSpec {
+    Header header = 1;
+    repeated Sealed seals = 2;
+}
+
+// The establishment criteria and record of a key
+message Establishment {
+    SigningThreshold signingThreshold = 1;
+    repeated utils.PubKey keys = 2;
+    utils.Digeste nextKeysDigest = 3;
+    int32 witnessThreshold = 4;
+}
+
+// The specification of the rotation of a key
+message RotationSpec {
+    Header header = 1;
+    Establishment establishment = 2;
+    repeated Ident witnessesRemoved = 3;
+    repeated Ident witnessesAdded = 41;
+    repeated Sealed seals = 5;
+}
+
+// The specification of an identififer
+message IdentifierSpec {
+    Header header = 1;
+    Establishment establishment = 2;
+    repeated Ident witnesses = 3;
+    repeated string configuration = 4;
+}
+
+// The interaction specification and common event structure
+message InteractionEvent {
+    InteractionSpec specification = 1;
+    EventCommon common = 2;
+}
+
+// An attactment to an event in the KEL
+message AttachmentEvent {
+    Version version = 1;
+    EventCoords coordinates = 2;
+    Attachment attachment = 3;
+}
+
+// The rotation of a key
+message RotationEvent {
+    RotationSpec specification = 1; 
+    EventCommon common = 2;
+}
+
+// The birth of a key
+message InceptionEvent {
+    Ident identifier = 1;
+    IdentifierSpec specification = 2;
+    EventCommon common = 3;
+    Ident delegatingPrefix = 4; // Delegated inception event
+}
+
+message KeyEventWithAttachments {
+    oneof event {
+        InceptionEvent inception = 1;
+        RotationEvent rotation = 2;
+        InteractionEvent interaction = 3;
+    }
+    Attachment attachment = 4;
+}
+
+message KeyEvent_ {
+    oneof event {
+        InceptionEvent inception = 1;
+        RotationEvent rotation = 2;
+        InteractionEvent interaction = 3;
+    }
+}
+
+message Attachment {
+    map<int32, utils.Sig> endorsements = 1;
+    repeated Sealed seals = 2;
+}
+
+message KERL_ {
+    repeated KeyEventWithAttachments events = 1;
+}
+
+message Weight {
+    int32 denominator = 1;
+    int32 numerator = 2;
+}
+
+message Weights {
+    repeated Weight weights = 1;
+}
+
+message SigningThreshold {
+    int32 threshold = 1;
+    repeated Weights weights = 2;
+}
+
+message Version {
+    string format = 1;
+    int32 major = 2;
+    int32 minor = 3;
+}
+
+// KeyState represents the materialized state of an identifier
+// and corresponding public/private keys in the corresponding KEL/KERL
+message KeyState_ {
+    utils.Digeste digest = 1;
+    EventCoords coordinates = 2;
+    EventCoords lastEvent = 3;
+    EventCoords lastEstablishmentEvent = 4;
+    Ident delegatingIdentifier = 5;
+    repeated string configurationTraits = 6;
+    utils.Digeste nextKeyConfigurationDigest = 7;
+    repeated utils.PubKey keys = 8;
+    SigningThreshold signingThreshold = 9;
+    repeated Ident witnesses = 10;
+    int32 witnessThreshold = 11; 
+}
+
+message KeyStateWithAttachments_ {
+    KeyState_ state = 1;
+    Attachment attachment = 2;
+}
+
+// A bound value
+message Bound {
+    InceptionEvent identifier = 1;
+    string host = 2;
+    int32 port = 3;
+}
+
+// A signed bound value
+message Binding {
+    Bound value = 1;
+    utils.Sig signature = 2;
+}

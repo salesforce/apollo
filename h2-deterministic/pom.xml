@@ -1,0 +1,72 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.salesforce.apollo</groupId>
+        <artifactId>apollo.app</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+    <artifactId>h2-deterministic</artifactId>
+    <name>H2 Deterministic SQL</name>
+    <description>H2 modified to be a deterministic SQL DB</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <createDependencyReducedPom>true</createDependencyReducedPom>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <useDependencyReducedPomInJar>true</useDependencyReducedPomInJar>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"></transformer>
+                            </transformers>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.h2</pattern>
+                                    <shadedPattern>deterministic.org.h2</shadedPattern>
+                                    <excludes>
+                                        <exclude>org.h2.api.Aggregate</exclude>
+                                        <exclude>org.h2.api.AggregateFunction</exclude>
+                                        <exclude>org.h2.api.CredentialsValidator</exclude>
+                                        <exclude>org.h2.api.DatabaseEventListener</exclude>
+                                        <exclude>org.h2.api.ErrorCodes</exclude>
+                                        <exclude>org.h2.api.H2Type</exclude>
+                                        <exclude>org.h2.api.JavaObjectSerializer</exclude>
+                                        <exclude>org.h2.api.TableEngine</exclude>
+                                        <exclude>org.h2.api.Trigger</exclude>
+                                        <exclude>org.h2.api.UserToRolesMapper</exclude>
+                                    </excludes>
+                                </relocation>
+                            </relocations>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

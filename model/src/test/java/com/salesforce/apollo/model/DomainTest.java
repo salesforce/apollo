@@ -45,6 +45,7 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -194,7 +195,7 @@ public class DomainTest {
     @BeforeEach
     public void before() throws SQLException {
         final var prefix = UUID.randomUUID().toString();
-        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var params = params();
@@ -212,23 +213,20 @@ public class DomainTest {
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY);
-
-        var exec = Executors.newCachedThreadPool();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              Executors.newFixedThreadPool(1), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(scheduler)
+                                                            .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                             .setContext(context)
-                                                            .setExec(exec)
+                                                            .setExec(Executors.newSingleThreadExecutor())
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0));
             domains.add(domain);
@@ -261,7 +259,7 @@ public class DomainTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(200);
+                               .setCheckpointBlockDelta(200);
         params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;
     }

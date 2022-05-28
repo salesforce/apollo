@@ -139,6 +139,9 @@ public enum Earner implements Driven.Transitions {
             if (lastEpoch == epoch) {
                 return AWAIT_VIEW;
             }
+            if (epoch == 0) {
+                context().produceAssemble();
+            }
             return null;
         }
 

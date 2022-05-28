@@ -17,22 +17,22 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
-import org.h2.Driver;
-import org.h2.engine.SessionLocal;
-import org.h2.expression.Alias;
-import org.h2.expression.Expression;
-import org.h2.expression.ExpressionColumn;
-import org.h2.jdbc.JdbcConnection;
-import org.h2.message.DbException;
-import org.h2.result.LocalResult;
-import org.h2.result.ResultInterface;
-import org.h2.table.Column;
-import org.h2.util.Utils;
-import org.h2.value.DataType;
-import org.h2.value.TypeInfo;
-import org.h2.value.Value;
-import org.h2.value.ValueNull;
-import org.h2.value.ValueToObjectConverter;
+import deterministic.org.h2.Driver;
+import deterministic.org.h2.engine.SessionLocal;
+import deterministic.org.h2.expression.Alias;
+import deterministic.org.h2.expression.Expression;
+import deterministic.org.h2.expression.ExpressionColumn;
+import deterministic.org.h2.jdbc.JdbcConnection;
+import deterministic.org.h2.message.DbException;
+import deterministic.org.h2.result.LocalResult;
+import deterministic.org.h2.result.ResultInterface;
+import deterministic.org.h2.table.Column;
+import deterministic.org.h2.util.Utils;
+import deterministic.org.h2.value.DataType;
+import deterministic.org.h2.value.TypeInfo;
+import deterministic.org.h2.value.Value;
+import deterministic.org.h2.value.ValueNull;
+import deterministic.org.h2.value.ValueToObjectConverter;
 
 /**
  * There may be multiple Java methods that match a function name. Each method

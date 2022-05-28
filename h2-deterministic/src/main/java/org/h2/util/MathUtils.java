@@ -1,0 +1,254 @@
+/*
+ * Copyright 2004-2022 H2 Group. Multiple-Licensed under the MPL 2.0,
+ * and the EPL 1.0 (https://h2database.com/html/license.html).
+ * Initial Developer: H2 Group
+ */
+package org.h2.util;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * This is a utility class with mathematical helper functions.
+ */
+public class MathUtils {  
+    public static final ThreadLocal<SecureRandom> SECURE_RANDOM = new ThreadLocal<>();
+
+    private MathUtils() {
+        // utility class
+    }
+
+
+    /**
+     * Round the value up to the next block size. The block size must be a power
+     * of two. As an example, using the block size of 8, the following rounding
+     * operations are done: 0 stays 0; values 1..8 results in 8, 9..16 results
+     * in 16, and so on.
+     *
+     * @param x the value to be rounded
+     * @param blockSizePowerOf2 the block size
+     * @return the rounded value
+     */
+    public static int roundUpInt(int x, int blockSizePowerOf2) {
+        return (x + blockSizePowerOf2 - 1) & -blockSizePowerOf2;
+    }
+
+    /**
+     * Round the value up to the next block size. The block size must be a power
+     * of two. As an example, using the block size of 8, the following rounding
+     * operations are done: 0 stays 0; values 1..8 results in 8, 9..16 results
+     * in 16, and so on.
+     *
+     * @param x the value to be rounded
+     * @param blockSizePowerOf2 the block size
+     * @return the rounded value
+     */
+    public static long roundUpLong(long x, long blockSizePowerOf2) {
+        return (x + blockSizePowerOf2 - 1) & -blockSizePowerOf2;
+    }
+
+    private static synchronized SecureRandom getSecureRandom() {
+        return SECURE_RANDOM.get();
+    }
+
+    /**
+     * Generate a seed value, using as much unpredictable data as possible.
+     *
+     * @return the seed
+     */
+    public static byte[] generateAlternativeSeed() {
+        try {
+            ByteArrayOutputStream bout = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bout);
+
+            // milliseconds and nanoseconds
+            out.writeLong(System.currentTimeMillis());
+            out.writeLong(System.nanoTime());
+
+            // memory
+            out.writeInt(new Object().hashCode());
+            Runtime runtime = Runtime.getRuntime();
+            out.writeLong(runtime.freeMemory());
+            out.writeLong(runtime.maxMemory());
+            out.writeLong(runtime.totalMemory());
+
+            // environment
+            try {
+                String s = System.getProperties().toString();
+                // can't use writeUTF, as the string
+                // might be larger than 64 KB
+                out.writeInt(s.length());
+                out.write(s.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                warn("generateAlternativeSeed", e);
+            }
+
+            // host name and ip addresses (if any)
+            try {
+                // workaround for the Google App Engine: don't use InetAddress
+                Class<?> inetAddressClass = Class.forName(
+                        "java.net.InetAddress");
+                Object localHost = inetAddressClass.getMethod(
+                        "getLocalHost").invoke(null);
+                String hostName = inetAddressClass.getMethod(
+                        "getHostName").invoke(localHost).toString();
+                out.writeUTF(hostName);
+                Object[] list = (Object[]) inetAddressClass.getMethod(
+                        "getAllByName", String.class).invoke(null, hostName);
+                Method getAddress = inetAddressClass.getMethod(
+                        "getAddress");
+                for (Object o : list) {
+                    out.write((byte[]) getAddress.invoke(o));
+                }
+            } catch (Throwable e) {
+                // on some system, InetAddress is not supported
+                // on some system, InetAddress.getLocalHost() doesn't work
+                // for some reason (incorrect configuration)
+            }
+
+            // timing (a second thread is already running usually)
+            for (int j = 0; j < 16; j++) {
+                int i = 0;
+                long end = System.currentTimeMillis();
+                while (end == System.currentTimeMillis()) {
+                    i++;
+                }
+                out.writeInt(i);
+            }
+
+            out.close();
+            return bout.toByteArray();
+        } catch (IOException e) {
+            warn("generateAlternativeSeed", e);
+            return new byte[1];
+        }
+    }
+
+    /**
+     * Print a message to system output if there was a problem initializing the
+     * random number generator.
+     *
+     * @param s the message to print
+     * @param t the stack trace
+     */
+    static void warn(String s, Throwable t) {
+        // not a fatal problem, but maybe reduced security
+        System.out.println("Warning: " + s);
+        if (t != null) {
+            t.printStackTrace();
+        }
+    }
+
+    /**
+     * Get the value that is equal to or higher than this value, and that is a
+     * power of two.
+     *
+     * @param x the original value
+     * @return the next power of two value
+     * @throws IllegalArgumentException if x &lt; 0 or x &gt; 0x40000000
+     */
+    public static int nextPowerOf2(int x) throws IllegalArgumentException {
+        if (x + Integer.MIN_VALUE > (0x4000_0000 + Integer.MIN_VALUE)) {
+            throw new IllegalArgumentException("Argument out of range"
+                    + " [0x0-0x40000000]. Argument was: " + x);
+        }
+        return x <= 1 ? 1 : (-1 >>> Integer.numberOfLeadingZeros(x - 1)) + 1;
+    }
+
+    /**
+     * Convert a long value to an int value. Values larger than the biggest int
+     * value are converted to the biggest int value, and values smaller than the
+     * smallest int value are converted to the smallest int value.
+     *
+     * @param l the value to convert
+     * @return the converted int value
+     */
+    public static int convertLongToInt(long l) {
+        if (l <= Integer.MIN_VALUE) {
+            return Integer.MIN_VALUE;
+        } else if (l >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        } else {
+            return (int) l;
+        }
+    }
+
+    /**
+     * Convert an int value to a short value. Values larger than the biggest
+     * short value are converted to the biggest short value, and values smaller
+     * than the smallest short value are converted to the smallest short value.
+     *
+     * @param i the value to convert
+     * @return the converted short value
+     */
+    public static short convertIntToShort(int i) {
+        if (i <= Short.MIN_VALUE) {
+            return Short.MIN_VALUE;
+        } else if (i >= Short.MAX_VALUE) {
+            return Short.MAX_VALUE;
+        } else {
+            return (short) i;
+        }
+    }
+
+    /**
+     * Get a cryptographically secure pseudo random long value.
+     *
+     * @return the random long value
+     */
+    public static long secureRandomLong() {
+        return getSecureRandom().nextLong();
+    }
+
+    /**
+     * Get a number of pseudo random bytes.
+     *
+     * @param bytes the target array
+     */
+    public static void randomBytes(byte[] bytes) {
+        ThreadLocalRandom.current().nextBytes(bytes);
+    }
+
+    /**
+     * Get a number of cryptographically secure pseudo random bytes.
+     *
+     * @param len the number of bytes
+     * @return the random bytes
+     */
+    public static byte[] secureRandomBytes(int len) {
+        if (len <= 0) {
+            len = 1;
+        }
+        byte[] buff = new byte[len];
+        getSecureRandom().nextBytes(buff);
+        return buff;
+    }
+
+    /**
+     * Get a pseudo random int value between 0 (including and the given value
+     * (excluding). The value is not cryptographically secure.
+     *
+     * @param lowerThan the value returned will be lower than this value
+     * @return the random long value
+     */
+    public static int randomInt(int lowerThan) {
+        return ThreadLocalRandom.current().nextInt(lowerThan);
+    }
+
+    /**
+     * Get a cryptographically secure pseudo random int value between 0
+     * (including and the given value (excluding).
+     *
+     * @param lowerThan the value returned will be lower than this value
+     * @return the random long value
+     */
+    public static int secureRandomInt(int lowerThan) {
+        return getSecureRandom().nextInt(lowerThan);
+    }
+
+}

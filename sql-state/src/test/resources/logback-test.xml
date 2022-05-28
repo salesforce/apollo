@@ -21,7 +21,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="h2database" level="TRACE">
+    <logger name="h2database" level="trace">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -29,11 +29,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
-    <logger name="com.salesforce.apollo.ethereal.memberships.ContextGossiper" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ethereal.memberships" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -48,8 +44,8 @@
     <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-
-    <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info" additivity="false">
+ 
+    <logger name="com.salesforce.apollo.choam.support" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -57,7 +53,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.ViewReconfiguration" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -73,7 +69,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.state" level="INFO" additivity="false">
+    <logger name="com.salesforce.apollo.state" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

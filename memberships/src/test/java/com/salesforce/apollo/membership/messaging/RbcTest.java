@@ -20,7 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -50,6 +49,7 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -144,7 +144,6 @@ public class RbcTest {
         members.forEach(m -> context.activate(m));
 
         final var prefix = UUID.randomUUID().toString();
-        final var exec = Executors.newFixedThreadPool(100);
         messengers = members.stream().map(node -> {
             var comms = new LocalRouter(prefix,
                                         ServerConnectionCache.newBuilder()
@@ -154,12 +153,12 @@ public class RbcTest {
             communications.add(comms);
             comms.setMember(node);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms, metrics);
+            return new ReliableBroadcaster(context, node, parameters.build(), Executors.newFixedThreadPool(2), comms,
+                                           metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(50);
-        messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10), Executors.newScheduledThreadPool(1)));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);
@@ -177,7 +176,7 @@ public class RbcTest {
             var rnd = r;
             messengers.stream().forEach(view -> {
                 byte[] rand = new byte[32];
-                Utils.secureEntropy().nextBytes(rand);
+                Entropy.nextSecureBytes(rand);
                 ByteBuffer buf = ByteBuffer.wrap(new byte[36]);
                 buf.putInt(rnd);
                 buf.put(rand);

@@ -6,13 +6,14 @@
  */
 package com.salesforce.apollo.stereotomy.services.proto;
 
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
 import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.utils.proto.Digeste;
 
@@ -21,17 +22,18 @@ import com.salesfoce.apollo.utils.proto.Digeste;
  *
  */
 public interface ProtoKERLProvider {
+    CompletableFuture<Attachment> getAttachment(EventCoords coordinates);
 
-    Optional<Attachment> getAttachment(EventCoords coordinates);
+    CompletableFuture<KERL_> getKERL(Ident identifier);
 
-    Optional<KERL_> getKERL(Ident identifier);
+    CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest);
 
-    Optional<KeyEvent_> getKeyEvent(Digeste digest);
+    CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates);
 
-    Optional<KeyEvent_> getKeyEvent(EventCoords coordinates);
+    CompletableFuture<KeyState_> getKeyState(EventCoords coordinates);
 
-    Optional<KeyState_> getKeyState(EventCoords coordinates);
+    CompletableFuture<KeyState_> getKeyState(Ident identifier);
 
-    Optional<KeyState_> getKeyState(Ident identifier);
+    CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords);
 
 }

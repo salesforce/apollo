@@ -12,13 +12,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.Provider;
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -72,12 +70,13 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.event.EstablishmentEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.InceptionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -183,7 +182,7 @@ public class View {
          * @param toleranceLevel - t
          * @return the mask
          */
-        public static BitSet createInitialMask(int toleranceLevel, SecureRandom entropy) {
+        public static BitSet createInitialMask(int toleranceLevel) {
             int nbits = 2 * toleranceLevel + 1;
             BitSet mask = new BitSet(nbits);
             List<Boolean> random = new ArrayList<>();
@@ -193,7 +192,7 @@ public class View {
             for (int i = 0; i < toleranceLevel; i++) {
                 random.add(false);
             }
-            Collections.shuffle(random, entropy);
+            Entropy.secureShuffle(random);
             for (int i = 0; i < nbits; i++) {
                 if (random.get(i)) {
                     mask.set(i);
@@ -262,7 +261,7 @@ public class View {
         BitSet nextMask() {
             NoteWrapper current = note;
             if (current == null) {
-                BitSet mask = createInitialMask(context.toleranceLevel(), Utils.secureEntropy());
+                BitSet mask = createInitialMask(context.toleranceLevel());
                 assert View.isValidMask(mask, context.toleranceLevel()) : "Invalid initial mask: " + mask + "for node: "
                 + getId();
                 return mask;
@@ -293,7 +292,7 @@ public class View {
             } else {
                 // Fill the rest of the mask with randomly set index
                 while (mask.cardinality() > context.toleranceLevel() + 1) {
-                    int index = Utils.secureEntropy().nextInt(context.getRingCount());
+                    int index = Entropy.nextSecureInt(context.getRingCount());
                     if (mask.get(index)) {
                         mask.set(index, false);
                     }
@@ -574,13 +573,13 @@ public class View {
          */
         public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
-                log.warn("invalid ring {} from {}", ring, from);
-                return emptyGossip();
+                log.debug("invalid ring {} from {}", ring, from);
+                return Gossip.getDefaultInstance();
             }
             var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
             if (!from.equals(wrapper.identifier())) {
-                log.warn("invalid identity on ring {} from {}", ring, from);
-                return emptyGossip();
+                log.debug("invalid identity on ring {} from {}", ring, from);
+                return Gossip.getDefaultInstance();
             }
 
             Participant member = context.getMember(from);
@@ -588,8 +587,8 @@ public class View {
                 add(wrapper);
                 member = context.getMember(from);
                 if (member == null) {
-                    log.warn("No member on ring {} from {}", ring, from);
-                    return emptyGossip();
+                    log.debug("No member on ring {} from {}", ring, from);
+                    return Gossip.getDefaultInstance();
                 }
             }
 
@@ -597,12 +596,13 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                return emptyGossip();
+                log.debug("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
+                return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
                 redirectTo(member, ring, successor);
             }
-            long seed = Utils.secureEntropy().nextLong();
+            long seed = Entropy.nextSecureLong();
             return Gossip.newBuilder()
                          .setRedirect(false)
                          .setIdentities(processIdentityDigests(from, BloomFilter.from(digests.getIdentityBff()), seed,
@@ -629,7 +629,7 @@ public class View {
                  .forEach(m -> addSeed(m));
 
             long interval = d.toMillis();
-            int initialDelay = Utils.secureEntropy().nextInt((int) interval * 2);
+            int initialDelay = Entropy.nextSecureInt((int) interval * 2);
             futureGossip = scheduler.schedule(() -> {
                 exec.execute(Utils.wrapped(() -> {
                     try {
@@ -651,6 +651,20 @@ public class View {
          * @param from
          */
         public void update(int ring, Update update, Digest from) {
+            Participant member = context.getActiveMember(from);
+            if (member == null) {
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, from);
+                return;
+            }
+            Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
+            if (successor == null) {
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                return;
+            }
+            if (!successor.equals(node)) {
+                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                return;
+            }
             processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
         }
 
@@ -723,10 +737,6 @@ public class View {
     }
 
     private static Logger log = LoggerFactory.getLogger(View.class);
-
-    public static Gossip emptyGossip() {
-        return Gossip.getDefaultInstance();
-    }
 
     public static Identity identityFor(int epoch, InetSocketAddress endpoint, EstablishmentEvent event) {
         assert endpoint != null;
@@ -807,7 +817,7 @@ public class View {
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
-                FireflyMetrics metrics) {
+                FireflyMetrics metrics, Executor exec) {
         this.metrics = metrics;
         this.validation = validation;
         this.fpr = fpr;
@@ -816,8 +826,8 @@ public class View {
         var identity = identityFor(0, endpoint, member.getEvent());
         this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
         this.comm = communications.create(node, context.getId(), service,
-                                          r -> new FfServer(service, communications.getClientIdentityProvider(),
-                                                            metrics, r),
+                                          r -> new FfServer(service, communications.getClientIdentityProvider(), r,
+                                                            exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         add(node);
         log.info("View [{}]", node.getId());
@@ -1049,8 +1059,7 @@ public class View {
                                         .setNote(Note.newBuilder()
                                                      .setId(seed.getId().toDigeste())
                                                      .setEpoch(-1)
-                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel(),
-                                                                                                         Utils.secureEntropy())
+                                                     .setMask(ByteString.copyFrom(Node.createInitialMask(context.toleranceLevel())
                                                                                       .toByteArray())))
                                         .setSignature(SignatureAlgorithm.NULL_SIGNATURE.sign(null, new byte[0]).toSig())
                                         .build();
@@ -1089,7 +1098,7 @@ public class View {
      * @return the digests common for gossip with all neighbors
      */
     private Digests commonDigests() {
-        long seed = Utils.secureEntropy().nextLong();
+        long seed = Entropy.nextSecureLong();
         return Digests.newBuilder()
                       .setAccusationBff(getAccusationsBff(seed, fpr).toBff())
                       .setNoteBff(getNotesBff(seed, fpr).toBff())
@@ -1472,7 +1481,7 @@ public class View {
     private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
         identities.stream()
                   .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
-                  .filter(id -> validation.apply(id.event()))
+                  .filter(id -> validation.validate(id.event()))
                   .forEach(identity -> add(identity));
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
@@ -1517,7 +1526,7 @@ public class View {
         if (gossip.getIdentities().getUpdatesCount() == 1) {
             var id = gossip.getIdentities().getUpdates(0);
             IdentityWrapper identity = new IdentityWrapper(digestAlgo.digest(id.toByteString()), id);
-            if (validation.apply(identity.event())) {
+            if (validation.validate(identity.event())) {
                 add(identity);
                 SignedNote signed = gossip.getNotes().getUpdates(0);
                 NoteWrapper note = new NoteWrapper(signed, digestAlgo);

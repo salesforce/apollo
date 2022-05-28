@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,12 +57,12 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.Stereotomy;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -137,7 +138,7 @@ public class MtlsTest {
             }
         }
         var scheduler = Executors.newScheduledThreadPool(members.size());
-        var exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
 
         var builder = ServerConnectionCache.newBuilder().setTarget(2);
         var frist = new AtomicBoolean(true);
@@ -158,7 +159,7 @@ public class MtlsTest {
                                               Executors.newFixedThreadPool(3), clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
 
         var then = System.currentTimeMillis();

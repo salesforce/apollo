@@ -35,6 +35,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -51,14 +52,14 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
  */
 public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcaster.Parameters combine,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
-                         Digest genesisViewId, int checkpointBlockSize, DigestAlgorithm digestAlgorithm,
+                         Digest genesisViewId, int checkpointBlockDelta, DigestAlgorithm digestAlgorithm,
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
                          int regenerationCycles, Duration synchronizeTimeout, Parameters.BootstrapParameters bootstrap,
                          Parameters.ProducerParameters producer, Parameters.MvStoreBuilder mvBuilder,
-                         Parameters.LimiterBuilder txnLimiterBuilder) {
+                         Parameters.LimiterBuilder txnLimiterBuilder, int checkpointSegmentSize) {
 
     public int majority() {
-        return runtime.context.toleranceLevel() * (runtime.context.getBias() - 1);
+        return runtime.context.majority();
     }
 
     public static class MvStoreBuilder {
@@ -236,7 +237,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     public record RuntimeParameters(Context<Member> context, Router communications, SigningMember member,
                                     ScheduledExecutorService scheduler,
                                     Function<Map<Member, Join>, List<Transaction>> genesisData,
-                                    TransactionExecutor processor, BiConsumer<ULong, CheckpointState> restorer,
+                                    TransactionExecutor processor, BiConsumer<HashedBlock, CheckpointState> restorer,
                                     Function<ULong, File> checkpointer, ChoamMetrics metrics, Executor exec,
                                     Supplier<KERL_> kerl, FoundationSeal foundation) {
         public static class Builder implements Cloneable {
@@ -267,7 +268,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             private ChoamMetrics                                   metrics;
             private TransactionExecutor                            processor    = (i, h, t, f) -> {
                                                                                 };
-            private BiConsumer<ULong, CheckpointState>             restorer     = (height, checkpointState) -> {
+            private BiConsumer<HashedBlock, CheckpointState>       restorer     = (height, checkpointState) -> {
                                                                                 };
             private ScheduledExecutorService                       scheduler;
 
@@ -327,7 +328,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return processor;
             }
 
-            public BiConsumer<ULong, CheckpointState> getRestorer() {
+            public BiConsumer<HashedBlock, CheckpointState> getRestorer() {
                 return restorer;
             }
 
@@ -386,7 +387,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                 return this;
             }
 
-            public Builder setRestorer(BiConsumer<ULong, CheckpointState> biConsumer) {
+            public Builder setRestorer(BiConsumer<HashedBlock, CheckpointState> biConsumer) {
                 this.restorer = biConsumer;
                 return this;
             }
@@ -619,7 +620,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
     public static class Builder implements Cloneable {
 
         private BootstrapParameters            bootstrap             = BootstrapParameters.newBuilder().build();
-        private int                            checkpointBlockSize   = 8192;
+        private int                            checkpointBlockDelta  = 10;
+        private int                            checkpointSegmentSize = 8192;
         private ReliableBroadcaster.Parameters combine               = ReliableBroadcaster.Parameters.newBuilder()
                                                                                                      .build();
         private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
@@ -638,9 +640,9 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
-                                  checkpointBlockSize, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
+                                  checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
                                   synchronizeDuration, regenerationCycles, synchronizeTimeout, bootstrap, producer,
-                                  mvBuilder, txnLimiterBuilder);
+                                  mvBuilder, txnLimiterBuilder, checkpointSegmentSize);
         }
 
         @Override
@@ -656,8 +658,12 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return bootstrap;
         }
 
-        public int getCheckpointBlockSize() {
-            return checkpointBlockSize;
+        public int getCheckpointBlockDelta() {
+            return checkpointBlockDelta;
+        }
+
+        public int getCheckpointSegmentSize() {
+            return checkpointSegmentSize;
         }
 
         public ReliableBroadcaster.Parameters getCombine() {
@@ -725,8 +731,13 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
-        public Builder setCheckpointBlockSize(int checkpointBlockSize) {
-            this.checkpointBlockSize = checkpointBlockSize;
+        public Builder setCheckpointBlockDelta(int checkpointBlockDelta) {
+            this.checkpointBlockDelta = checkpointBlockDelta;
+            return this;
+        }
+
+        public Builder setCheckpointSegmentSize(int checkpointSegmentSize) {
+            this.checkpointSegmentSize = checkpointSegmentSize;
             return this;
         }
 
@@ -838,7 +849,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         return runtime.processor;
     }
 
-    public BiConsumer<ULong, CheckpointState> restorer() {
+    public BiConsumer<HashedBlock, CheckpointState> restorer() {
         return runtime.restorer;
     }
 

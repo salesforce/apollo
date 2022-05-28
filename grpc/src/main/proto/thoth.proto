@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.salesfoce.apollo.thoth.proto";
+option java_outer_classname = "ThothProto";
+option objc_class_prefix = "Tp";
+import "util.proto";
+import "stereotomy.proto";
+import "stereotomy-services.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
+package thoth;
+
+
+
+service KerlDht {
+    rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
+    rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns (google.protobuf.Empty) {}
+    
+    rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
+    rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
+    rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
+}
+
+service Reconciliation {
+    rpc reconcile ( Intervals ) returns (Update) {}
+    rpc update ( Updating ) returns (google.protobuf.Empty) {}
+}
+
+service Witness {
+
+}
+
+message Update {
+    repeated stereotomy.KeyEvent_ events = 1;
+    repeated Interval intervals = 2;
+    utils.Biff have = 3;
+}
+
+message Updating {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated stereotomy.KeyEvent_ events = 3; 
+}
+
+message Intervals {
+    utils.Digeste context = 1;
+    int32 ring = 2;
+    repeated Interval intervals = 3;
+    utils.Biff have = 4;
+} 
+
+message Get {
+    utils.Digeste context = 1;
+    utils.Digeste identifier = 2;
+} 
+
+message Interval {
+        utils.Digeste start = 1;
+        utils.Digeste end = 2;
+}

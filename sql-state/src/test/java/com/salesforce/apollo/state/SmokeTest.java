@@ -15,7 +15,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.zip.DeflaterOutputStream;
 
-import org.h2.jdbc.JdbcConnection;
+import deterministic.org.h2.jdbc.JdbcConnection;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.crypto.Digest;

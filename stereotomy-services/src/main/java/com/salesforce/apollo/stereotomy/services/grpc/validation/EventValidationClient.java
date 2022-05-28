@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy.services.grpc.validation;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -22,6 +23,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.stereotomy.services.proto.ProtoEventValidation;
 
 /**
  * @author hal.hildebrand
@@ -37,11 +39,30 @@ public class EventValidationClient implements EventValidationService {
 
     }
 
+    public static EventValidationService getLocalLoopback(ProtoEventValidation service, Member member) {
+        return new EventValidationService() {
+
+            @Override
+            public void close() throws IOException {
+            }
+
+            @Override
+            public Member getMember() {
+                return member;
+            }
+
+            @Override
+            public CompletableFuture<Boolean> validate(KeyEvent_ event) {
+                return service.validate(event);
+            }
+        };
+    }
+
     private final ManagedServerConnection channel;
     private final ValidatorFutureStub     client;
+    private final Digeste                 context;
     private final Member                  member;
     private final StereotomyMetrics       metrics;
-    private final Digeste                 context;
 
     public EventValidationClient(Digest context, ManagedServerConnection channel, Member member,
                                  StereotomyMetrics metrics) {

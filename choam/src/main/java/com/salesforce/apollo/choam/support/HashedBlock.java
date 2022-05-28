@@ -6,23 +6,16 @@
  */
 package com.salesforce.apollo.choam.support;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.joou.ULong;
 import org.joou.Unsigned;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import com.salesfoce.apollo.choam.proto.Block;
 import com.salesfoce.apollo.choam.proto.CertifiedBlock;
-import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -48,8 +41,6 @@ public class HashedBlock implements Comparable<HashedBlock> {
         }
     }
 
-    private static final Logger log = LoggerFactory.getLogger(HashedBlock.class);
-
     public static Header buildHeader(DigestAlgorithm digestAlgorithm, Message body, Digest previous, ULong height,
                                      ULong lastCheckpoint, Digest lastCheckpointHash, ULong lastReconfig,
                                      Digest lastReconfigHash) {
@@ -62,37 +53,6 @@ public class HashedBlock implements Comparable<HashedBlock> {
                      .setPrevious(previous.toDigeste())
                      .setBodyHash(digestAlgorithm.digest(body.toByteString().asReadOnlyByteBufferList()).toDigeste())
                      .build();
-    }
-
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
-        Digest stateHash = algo.getOrigin();
-        long length = 0;
-        if (state != null) {
-            try (FileInputStream fis = new FileInputStream(state)) {
-                stateHash = algo.digest(fis);
-            } catch (IOException e) {
-                log.error("Invalid checkpoint!", e);
-                return null;
-            }
-            length = state.length();
-        }
-        Checkpoint.Builder builder = Checkpoint.newBuilder()
-                                               .setByteSize(length)
-                                               .setSegmentSize(blockSize)
-                                               .setStateHash(stateHash.toDigeste());
-        if (state != null) {
-            byte[] buff = new byte[blockSize];
-            try (FileInputStream fis = new FileInputStream(state)) {
-                for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
-                    ByteString segment = ByteString.copyFrom(buff, 0, read);
-                    builder.addSegments(algo.digest(segment).toDigeste());
-                }
-            } catch (IOException e) {
-                log.error("Invalid checkpoint!", e);
-                return null;
-            }
-        }
-        return builder.build();
     }
 
     /** Canonical hash of block */

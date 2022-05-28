@@ -61,6 +61,7 @@ import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -116,9 +117,9 @@ public class CHOAMTest {
     @BeforeEach
     public void before() {
         registry = new MetricRegistry();
-        checkpointDirBase = new File("target/ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
-        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Utils.bitStreamEntropy().nextLong());
+        baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
         Random entropy = new Random();
@@ -136,7 +137,7 @@ public class CHOAMTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(2);
+                               .setCheckpointBlockDelta(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
 
@@ -169,7 +170,7 @@ public class CHOAMTest {
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 500 : 1;
+        final int clientCount = LARGE_TESTS ? 1_000 : 1;
         final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -191,60 +192,82 @@ public class CHOAMTest {
         });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(LARGE_TESTS ? 600 : 30, TimeUnit.SECONDS), "did not finish transactions: "
-        + countdown.getCount() + " txneers: " + transactioneers.stream().map(t -> t.completed()).toList());
-
-        final ULong target = updaters.values()
-                                     .stream()
-                                     .map(ssm -> ssm.getCurrentBlock())
-                                     .filter(cb -> cb != null)
-                                     .map(cb -> cb.height())
-                                     .max((a, b) -> a.compareTo(b))
-                                     .get();
+        final var finished = countdown.await(LARGE_TESTS ? 1200 : 30, TimeUnit.SECONDS);
+        assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
+        + transactioneers.stream().map(t -> t.completed()).toList());
 
         try {
-            Utils.waitForCondition(20_000, 1000,
-                                   () -> members.stream()
-                                                .map(m -> updaters.get(m))
-                                                .map(ssm -> ssm.getCurrentBlock())
-                                                .filter(cb -> cb != null)
-                                                .map(cb -> cb.height())
-                                                .filter(l -> l.compareTo(target) >= 0)
-                                                .count() == members.size());
-
-            record row(float price, int quantity) {}
-
-            System.out.println("Validating consistency");
-
-            Map<Member, Map<Integer, row>> manifested = new HashMap<>();
-
-            for (Member m : members) {
-                Connection connection = updaters.get(m).newConnection();
-                Statement statement = connection.createStatement();
-                ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
-                while (results.next()) {
-                    manifested.computeIfAbsent(m, k -> new HashMap<>())
-                              .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            assertTrue(Utils.waitForCondition(20_000, 1000, () -> {
+                if (transactioneers.stream()
+                                   .mapToInt(t -> t.inFlight())
+                                   .filter(t -> t == 0)
+                                   .count() != transactioneers.size()) {
+                    return false;
                 }
-                connection.close();
-            }
-
-            Map<Integer, row> standard = manifested.get(members.get(0));
-            for (Member m : members) {
-                var candidate = manifested.get(m);
-                for (var entry : standard.entrySet()) {
-                    assertTrue(candidate.containsKey(entry.getKey()));
-                    assertEquals(entry.getValue(), candidate.get(entry.getKey()));
-                }
-            }
+                final ULong target = updaters.values()
+                                             .stream()
+                                             .map(ssm -> ssm.getCurrentBlock())
+                                             .filter(cb -> cb != null)
+                                             .map(cb -> cb.height())
+                                             .max((a, b) -> a.compareTo(b))
+                                             .get();
+                return members.stream()
+                              .map(m -> updaters.get(m))
+                              .map(ssm -> ssm.getCurrentBlock())
+                              .filter(cb -> cb != null)
+                              .map(cb -> cb.height())
+                              .filter(l -> l.compareTo(target) == 0)
+                              .count() == members.size();
+            }), "members did not stabilize at same block: " + updaters.values()
+                                                                      .stream()
+                                                                      .map(ssm -> ssm.getCurrentBlock())
+                                                                      .filter(cb -> cb != null)
+                                                                      .map(cb -> cb.height())
+                                                                      .toList());
         } finally {
-            System.out.println("target: " + target + " results: "
-            + members.stream()
-                     .map(m -> updaters.get(m))
-                     .map(ssm -> ssm.getCurrentBlock())
-                     .filter(cb -> cb != null)
-                     .map(cb -> cb.height())
-                     .toList());
+            System.out.println("Final block height: " + members.stream()
+                                                               .map(m -> updaters.get(m))
+                                                               .map(ssm -> ssm.getCurrentBlock())
+                                                               .filter(cb -> cb != null)
+                                                               .map(cb -> cb.height())
+                                                               .toList());
+        }
+
+        // because there is a state replication predicate check, make darn sure all the
+        // systems are in sync
+        Thread.sleep(5_000);
+
+        choams.values().forEach(e -> e.stop());
+        routers.values().forEach(e -> e.close());
+
+        // because there is a state replication predicate check, make darn sure all the
+        // systems are in sync
+        Thread.sleep(1_000);
+
+        record row(float price, int quantity) {}
+
+        System.out.println("Validating consistency");
+
+        Map<Member, Map<Integer, row>> manifested = new HashMap<>();
+
+        for (Member m : members) {
+            Connection connection = updaters.get(m).newConnection();
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery("select ID, PRICE, QTY from books");
+            while (results.next()) {
+                manifested.computeIfAbsent(m, k -> new HashMap<>())
+                          .put(results.getInt("ID"), new row(results.getFloat("PRICE"), results.getInt("QTY")));
+            }
+            connection.close();
+        }
+
+        Map<Integer, row> standard = manifested.get(members.get(0));
+        for (Member m : members) {
+            var candidate = manifested.get(m);
+            for (var entry : standard.entrySet()) {
+                assertTrue(candidate.containsKey(entry.getKey()));
+                assertEquals(entry.getValue(), candidate.get(entry.getKey()));
+            }
         }
     }
 

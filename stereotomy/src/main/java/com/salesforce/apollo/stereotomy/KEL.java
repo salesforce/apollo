@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
@@ -27,6 +28,21 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public interface KEL {
+
+    record KeyStateWithAttachments(KeyState state, Attachment attachments) {
+        public KeyStateWithAttachments_ toEvente() {
+            final var builder = KeyStateWithAttachments_.newBuilder().setState(state.toKeyState_());
+            if (attachments != null) {
+                builder.setAttachment(attachments.toAttachemente());
+            }
+            return builder.build();
+        }
+
+        public static KeyStateWithAttachments from(KeyStateWithAttachments_ ksa) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+    }
 
     /**
      * Answer the Verifier using key state at the supplied key coordinates
@@ -87,4 +103,18 @@ public interface KEL {
      * Answer the current KeyState of an identifier
      */
     Optional<KeyState> getKeyState(Identifier identifier);
+
+    /**
+     * Answer the combined KeyState and Attachment for this state
+     * 
+     * @param coordinates
+     * @return the KeyStateWithAttachments for these coordinates
+     */
+    default Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+        var state = getKeyState(coordinates);
+        if (state.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new KeyStateWithAttachments(state.get(), getAttachment(coordinates).get()));
+    }
 }

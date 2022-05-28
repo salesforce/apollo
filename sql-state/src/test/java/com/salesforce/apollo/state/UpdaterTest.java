@@ -19,18 +19,18 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.state.SqlStateMachine.Event;
 
 /**
  * @author hal.hildebrand
@@ -93,16 +93,12 @@ public class UpdaterTest {
         assertTrue(events.next());
         assertTrue(events.next());
         assertFalse(events.next());
-        AtomicReference<JsonNode> result = new AtomicReference<>();
-        AtomicInteger count = new AtomicInteger();
-        updater.register("test", node -> {
-            result.set(node);
-            count.incrementAndGet();
-        });
+        AtomicReference<List<Event>> result = new AtomicReference<>();
+        updater.register(e -> result.set(e));
         updater.commit();
         assertNotNull(result.get());
-        assertEquals(2, count.get());
-        assertEquals("John", result.get().get("customer_name").asText());
+        assertEquals(2, result.get().size());
+        assertEquals("John", result.get().get(0).body().get("customer_name").asText());
     }
 
     @Test

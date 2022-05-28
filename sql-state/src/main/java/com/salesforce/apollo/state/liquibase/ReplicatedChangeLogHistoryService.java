@@ -6,7 +6,7 @@
  */
 package com.salesforce.apollo.state.liquibase;
 
-import org.h2.util.DateTimeUtils;
+import deterministic.org.h2.util.DateTimeUtils;
 
 import liquibase.Scope;
 import liquibase.change.ColumnConfig;

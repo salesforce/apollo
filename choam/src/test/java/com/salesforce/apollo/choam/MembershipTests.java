@@ -113,7 +113,6 @@ public class MembershipTests {
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
         var scheduler = Executors.newScheduledThreadPool(cardinality);
 
-        var exec = Executors.newCachedThreadPool();
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
@@ -127,7 +126,7 @@ public class MembershipTests {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(10_000)
                                                               .build())
-                               .setCheckpointBlockSize(checkpointBlockSize);
+                               .setCheckpointBlockDelta(checkpointBlockSize);
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
         members = IntStream.range(0, cardinality)
                            .mapToObj(i -> Utils.getMember(i))
@@ -138,13 +137,15 @@ public class MembershipTests {
         SigningMember testSubject = members.get(members.size() - 1); // hardwired
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality), exec, null);
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality),
+                                       Executors.newSingleThreadExecutor(), null);
             comm.setMember(m);
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
+
             final TransactionExecutor processor = new TransactionExecutor() {
                 @Override
                 public void endBlock(ULong height, Digest hash) {
@@ -170,7 +171,7 @@ public class MembershipTests {
                                                            .setCommunications(routers.get(m.getId()))
                                                            .setProcessor(processor)
                                                            .setContext(context)
-                                                           .setExec(exec)
+                                                           .setExec(Executors.newFixedThreadPool(2))
                                                            .setScheduler(scheduler)
                                                            .build()));
         }));

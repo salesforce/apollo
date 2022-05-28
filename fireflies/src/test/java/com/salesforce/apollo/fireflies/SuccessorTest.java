@@ -43,11 +43,11 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -110,7 +110,7 @@ public class SuccessorTest {
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)
                                                .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
-        Executor executor = Executors.newCachedThreadPool();
+        Executor executor = Executors.newFixedThreadPool(CARDINALITY);
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(prefix, builder, executor, metrics.limitsMetrics());
@@ -119,7 +119,7 @@ public class SuccessorTest {
             comms.start();
             Context<Participant> context = ctxBuilder.build();
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+                            DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toMap(v -> v.getNode().getId(), v -> v));
 
         views.values().forEach(view -> view.start(executor, Duration.ofMillis(10), seeds, scheduler));

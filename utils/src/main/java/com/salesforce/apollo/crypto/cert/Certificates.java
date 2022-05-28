@@ -12,7 +12,6 @@ import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PublicKey;
-import java.security.SecureRandom;
 import java.security.SignatureException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -32,6 +31,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -45,10 +45,9 @@ public class Certificates {
                     keyPair.getPublic());
     }
 
-    public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn, SecureRandom entropy,
-                                           KeyPair keyPair, Instant notBefore, Instant notAfter,
-                                           List<CertExtension> extensions) {
-        return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber(entropy), notBefore, notAfter, extensions, dn,
+    public static X509Certificate selfSign(boolean useSubjectKeyIdentifier, BcX500NameDnImpl dn, KeyPair keyPair,
+                                           Instant notBefore, Instant notAfter, List<CertExtension> extensions) {
+        return sign(useSubjectKeyIdentifier, dn, keyPair, serialNumber(), notBefore, notAfter, extensions, dn,
                     keyPair.getPublic());
     }
 
@@ -94,9 +93,9 @@ public class Certificates {
         }
     }
 
-    private static BigInteger serialNumber(SecureRandom entropy) {
+    private static BigInteger serialNumber() {
         byte[] sn = new byte[64];
-        entropy.nextBytes(sn);
+        Entropy.nextSecureBytes(sn);
         return new BigInteger(sn);
     }
 }

@@ -43,11 +43,11 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
+import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
-import com.salesforce.apollo.stereotomy.services.EventValidation;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -95,7 +95,7 @@ public class SwarmTest {
 
     @Test
     public void churn() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
         initialize(exec);
 
         List<View> testViews = new ArrayList<>();
@@ -185,7 +185,7 @@ public class SwarmTest {
 
     @Test
     public void swarm() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
+        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
         initialize(exec);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
         long then = System.currentTimeMillis();
@@ -278,7 +278,7 @@ public class SwarmTest {
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics);
+                            DigestAlgorithm.DEFAULT, metrics, exec);
         }).collect(Collectors.toList());
     }
 }

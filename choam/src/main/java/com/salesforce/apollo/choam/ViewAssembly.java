@@ -129,7 +129,7 @@ public class ViewAssembly implements Reconfiguration {
             pid++;
         }
         config.setPid(pid).setnProc((short) view.roster().size());
-        config.setEpochLength(3).setNumberOfEpochs(3);
+        config.setEpochLength(7).setNumberOfEpochs(3);
         config.setLabel("View Recon" + nextViewId + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> process(preblock, last), epoch -> {
@@ -170,10 +170,10 @@ public class ViewAssembly implements Reconfiguration {
     public void elect() {
         proposals.values()
                  .stream()
-                 .filter(p -> p.validations.size() > params().majority())
+                 .filter(p -> p.validations.size() >= params().majority())
                  .sorted(Comparator.comparing(p -> p.member.getId()))
                  .forEach(p -> slate.put(p.member(), joinOf(p)));
-        if (slate.size() > params().majority()) {
+        if (slate.size() >= params().majority()) {
             log.debug("Electing slate: {} of: {} state: {} on: {}", slate.size(), nextViewId,
                       transitions.fsm().getCurrentState(), params().member());
             transitions.complete();
@@ -320,7 +320,7 @@ public class ViewAssembly implements Reconfiguration {
             retryDelay.accumulateAndGet(Duration.ofMillis(100), (a, b) -> a.plus(b));
         }
 
-        if (count > params().majority()) {
+        if (count >= params().majority()) {
             if (countDown.decrementAndGet() >= 0) {
                 log.trace("Retrying, attempting full assembly of: {} gathered: {} desired: {} delay: {} state: {} on: {}",
                           nextViewId, proposals.keySet().stream().toList(), nextAssembly.size(), delay,

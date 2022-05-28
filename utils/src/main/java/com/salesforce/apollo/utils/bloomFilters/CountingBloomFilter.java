@@ -15,7 +15,7 @@ import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * 
@@ -28,7 +28,7 @@ public abstract class CountingBloomFilter<T extends Comparable<T>> {
 
     record Comparison(int compared, int sumA, int sumB) {}
 
-    public final static long DEFAULT_GOOD_SEED = Utils.bitStreamEntropy().nextLong();
+    public final static long DEFAULT_GOOD_SEED = Entropy.nextBitsStreamLong();
     public final static int  DEFAULT_K         = 3;
     public final static int  DEFAULT_M         = 200;
     public final static int  MASK              = 0x0F;

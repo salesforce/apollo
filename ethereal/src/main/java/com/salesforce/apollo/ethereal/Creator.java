@@ -198,11 +198,12 @@ public class Creator {
             if (timingUnit.epoch() == e) {
                 epochDone.set(true);
                 if (e == conf.numberOfEpochs() - 1) {
-                    log.trace("Finished, timing unit: {} level: {} on: {}", timingUnit, level, conf.logLabel());
-                    // the epoch we just finished is the last epoch we were supposed to produce
-                    return ByteString.EMPTY;
+                    log.trace("Finished, last epoch timing unit: {} level: {} on: {}", timingUnit, level,
+                              conf.logLabel());
+                    return epochProof.get().buildShare(timingUnit);
+                } else {
+                    log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
                 }
-                log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.trace("Ignored timing unit from epoch: {} current: {} on: {}", timingUnit.epoch(), e, conf.logLabel());
@@ -256,7 +257,11 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private built ready() {
-        final int l = candidates[conf.pid()].level();
+        final var unit = candidates[conf.pid()];
+        if (unit == null) {
+            return null; // we're not even ready
+        }
+        final int l = unit.level();
         final var current = level.get();
         boolean ready = !epochDone.get() && current > l;
         if (ready) {

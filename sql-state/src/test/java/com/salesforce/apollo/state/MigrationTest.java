@@ -23,7 +23,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.h2.jdbc.JdbcSQLSyntaxErrorException;
+import deterministic.org.h2.jdbc.JdbcSQLSyntaxErrorException;
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 

@@ -7,7 +7,6 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
@@ -22,6 +21,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -107,7 +107,7 @@ public class SliceIterator<Comm extends Link> {
         int c = (current.get() + 1) % slice.size();
         for (int i = 0; i < slice.size(); i++) {
             if (c == 0) {
-                Collections.shuffle(slice);
+                Entropy.secureShuffle(slice);
             }
             link = linkFor(c);
             if (link != null) {

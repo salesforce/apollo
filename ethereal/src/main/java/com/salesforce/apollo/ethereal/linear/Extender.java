@@ -55,8 +55,7 @@ public class Extender {
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         digestAlgorithm = conf.digestAlgorithm();
-        crpIterator = new CommonRandomPermutation(dag, rs, (short) (Dag.minimalTrusted(conf.nProc()) + 1),
-                                                  digestAlgorithm, conf.logLabel());
+        crpIterator = new CommonRandomPermutation(dag, rs, dag.nProc(), digestAlgorithm, conf.logLabel());
     }
 
     public TimingRound nextRound() {

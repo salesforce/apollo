@@ -24,7 +24,6 @@ public class DemoApplication extends Application<DemoConfiguration> {
 
     @Override
     public void run(DemoConfiguration configuration, Environment environment) throws Exception {
-        environment.jersey().register(new KERLResource(null, Duration.ofSeconds(2)));
         environment.jersey().register(new DelphiResource(null, Duration.ofSeconds(2)));
         environment.healthChecks().register("demo", new DemoHealthCheck());
     }

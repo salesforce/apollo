@@ -217,7 +217,7 @@ abstract public class Domain {
         return member;
     }
 
-    public boolean isMember(Member m) {
+    public boolean activate(Member m) {
         if (!active()) {
             return params.runtime()
                          .foundation()
@@ -228,7 +228,9 @@ abstract public class Domain {
                          .anyMatch(d -> m.getId().equals(d));
         }
         final var context = DSL.using(stateConnection, SQLDialect.H2);
-        return isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
+        final var activeMember = isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
+
+        return activeMember;
     }
 
     public void start() {

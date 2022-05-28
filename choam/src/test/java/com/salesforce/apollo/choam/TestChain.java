@@ -12,7 +12,6 @@ import com.salesfoce.apollo.choam.proto.Executions;
 import com.salesfoce.apollo.choam.proto.Genesis;
 import com.salesfoce.apollo.choam.proto.Header;
 import com.salesfoce.apollo.choam.proto.Reconfigure;
-import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.choam.support.Store;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -119,9 +118,8 @@ public class TestChain {
                                                                                                                .add(1)
                                                                                                                .longValue())
                                                                                            .setPrevious(lastBlock.hash.toDigeste()))
-                                                                          .setCheckpoint(HashedBlock.checkpoint(DigestAlgorithm.DEFAULT,
-                                                                                                                null,
-                                                                                                                0))
+                                                                          .setCheckpoint(CHOAM.checkpoint(DigestAlgorithm.DEFAULT,
+                                                                                                          null, 0))
                                                                           .build())
                                                            .build());
         store.put(lastBlock);

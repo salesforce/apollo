@@ -21,12 +21,17 @@
         <module>schemas</module>
         <module>demo</module>
         <module>stereotomy-services</module>
+        <!--
+        <module>comm-simulation</module> -->
+        <module>thoth</module>
+        <module>liquibase-deterministic</module>
+        <module>grpc</module>
     </modules>
 
     <properties>
         <jackson.version>2.13.2</jackson.version>
         <dropwizard.version>2.0.28</dropwizard.version>
-        <h2.version>2.1.210</h2.version>
+        <h2.version>2.1.212</h2.version>
         <jooq.version>3.16.6</jooq.version>
         <bc.version>1.70</bc.version>
         <logback.version>1.2.11</logback.version>
@@ -169,6 +174,31 @@
                 <artifactId>stereotomy-services</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>demo</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>thoth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>h2-deterministic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>liquibase-deterministic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.salesforce.apollo</groupId>
+                <artifactId>grpc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>io.dropwizard</groupId>
@@ -284,6 +314,18 @@
                 <version>0.9.14</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.knowm.xchart</groupId>
+                <artifactId>xchart</artifactId>
+                <version>3.8.1</version>
+            </dependency>
+            
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>3.1.0</version>
+            </dependency>
+
             <!-- Test dependencies only below this line! -->
             <dependency>
                 <groupId>org.apiguardian</groupId>
@@ -359,6 +401,17 @@
         </pluginRepository>
     </pluginRepositories>
 
+	<profiles>
+		<profile> 
+			<id>pre</id>
+			<activation>
+				<activeByDefault>false</activeByDefault>
+			</activation>
+			<modules>
+        		<module>h2-deterministic</module>
+			</modules>
+		</profile>
+	</profiles>
 
     <build>
         <extensions>
@@ -498,36 +551,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.2.4</version>
-                    <configuration>
-                        <createDependencyReducedPom>true</createDependencyReducedPom>
-                        <filters>
-                            <filter>
-                                <artifact>*:*</artifact>
-                                <excludes>
-                                    <exclude>META-INF/*.SF</exclude>
-                                    <exclude>META-INF/*.DSA</exclude>
-                                    <exclude>META-INF/*.RSA</exclude>
-                                </excludes>
-                            </filter>
-                        </filters>
-                        <shadedClassifierName>phat</shadedClassifierName>
-                        <shadedArtifactAttached>true</shadedArtifactAttached>
-                    </configuration>
-                    <executions>
-                        <execution>
-                            <phase>package</phase>
-                            <goals>
-                                <goal>shade</goal>
-                            </goals>
-                            <configuration>
-                                <transformers>
-                                    <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
-                                    <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"></transformer>
-                                </transformers>
-                            </configuration>
-                        </execution>
-                    </executions>
+                    <version>3.3.0</version>
                 </plugin>
                 <!--This plugin's configuration is used to store Eclipse m2e settings 
 					only. It has no influence on the Maven build itself. -->

@@ -98,7 +98,6 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.utils.RoundScheduler;
-import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 import io.grpc.StatusRuntimeException;
@@ -107,7 +106,7 @@ import io.grpc.StatusRuntimeException;
  * Combine Honnete Ober Advancer Mercantiles.
  * 
  * @author hal.hildebrand
- *
+ * 
  */
 public class CHOAM {
     public interface BlockProducer {
@@ -224,13 +223,6 @@ public class CHOAM {
         }
     }
 
-    public class TransSubmission implements Submitter {
-        @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.submit(request, from);
-        }
-    }
-
     public class Trampoline implements Concierge {
 
         @Override
@@ -274,6 +266,13 @@ public class CHOAM {
         }
     }
 
+    public class TransSubmission implements Submitter {
+        @Override
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
+        }
+    }
+
     record nextView(ViewMember member, KeyPair consensusKeyPair) {}
 
     /** abstract class to maintain the common state */
@@ -306,6 +305,8 @@ public class CHOAM {
         @Override
         public ViewMember join(JoinRequest request, Digest from) {
             if (!checkJoin(request, from)) {
+                log.debug("Join requested for invalid view: {} from: {} on: {}", Digest.from(request.getNextView()),
+                          from, params.member());
                 return ViewMember.getDefaultInstance();
             }
             final var c = next.get();
@@ -500,7 +501,6 @@ public class CHOAM {
     private class Synchronizer extends Administration {
         public Synchronizer(Map<Member, Verifier> validators) {
             super(validators, null);
-
         }
     }
 
@@ -514,7 +514,7 @@ public class CHOAM {
 
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
-    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int blockSize) {
+    public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize) {
         Digest stateHash = algo.getOrigin();
         long length = 0;
         if (state != null) {
@@ -528,10 +528,10 @@ public class CHOAM {
         }
         Checkpoint.Builder builder = Checkpoint.newBuilder()
                                                .setByteSize(length)
-                                               .setSegmentSize(blockSize)
+                                               .setSegmentSize(segmentSize)
                                                .setStateHash(stateHash.toDigeste());
         if (state != null) {
-            byte[] buff = new byte[blockSize];
+            byte[] buff = new byte[segmentSize];
             try (FileInputStream fis = new FileInputStream(state)) {
                 for (int read = fis.read(buff); read > 0; read = fis.read(buff)) {
                     ByteString segment = ByteString.copyFrom(buff, 0, read);
@@ -542,13 +542,15 @@ public class CHOAM {
                 return null;
             }
         }
+        log.info("Checkpoint length: {} segment size: {} count: {} stateHash: {}", length, segmentSize,
+                 builder.getSegmentsCount(), stateHash);
         return builder.build();
     }
 
     public static Block genesis(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
                                 HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint,
                                 Iterable<Transaction> initialization) {
-        var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockSize());
+        var reconfigure = reconfigure(id, joins, context, params, params.checkpointBlockDelta());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, ULong.valueOf(0),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -584,7 +586,7 @@ public class CHOAM {
         final Block lvc = lastViewChange.block;
         int lastTarget = lvc.hasGenesis() ? lvc.getGenesis().getInitialView().getCheckpointTarget()
                                           : lvc.getReconfigure().getCheckpointTarget();
-        int checkpointTarget = lastTarget == 0 ? params.checkpointBlockSize() : lastTarget - 1;
+        int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
         var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
@@ -620,7 +622,6 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
-    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final ExecutorService                                       executions;
     private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -636,6 +637,7 @@ public class CHOAM {
     private final Session                                               session;
     private final AtomicBoolean                                         started               = new AtomicBoolean();
     private final Store                                                 store;
+    private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final AtomicBoolean                                         synchronizing         = new AtomicBoolean(false);
     private final Combine.Transitions                                   transitions;
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
@@ -752,10 +754,6 @@ public class CHOAM {
                  params.member());
     }
 
-    private Bootstrapper bootstrapper(HashedCertifiedBlock anchor) {
-        return new Bootstrapper(anchor, params, store, comm);
-    }
-
     private void cancelSynchronization() {
         final ScheduledFuture<?> fs = futureSynchronization.get();
         if (fs != null) {
@@ -772,7 +770,7 @@ public class CHOAM {
     private boolean checkJoin(JoinRequest request, Digest from) {
         Member source = params.context().getActiveMember(from);
         if (source == null) {
-            log.warn("Request to join from non member: {} on: {}", from, params.member());
+            log.debug("Request to join from non member: {} on: {}", from, params.member());
             return false;
         }
         Digest nextView = new Digest(request.getNextView());
@@ -805,7 +803,7 @@ public class CHOAM {
             transitions.fail();
             return null;
         }
-        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointBlockSize());
+        Checkpoint cp = checkpoint(params.digestAlgorithm(), state, params.checkpointSegmentSize());
         if (cp == null) {
             transitions.fail();
             return null;
@@ -966,7 +964,7 @@ public class CHOAM {
         CheckpointSegments.Builder replication = CheckpointSegments.newBuilder();
 
         return replication.addAllSegments(state.fetchSegments(BloomFilter.from(request.getCheckpointSegments()),
-                                                              params.maxCheckpointSegments(), Utils.bitStreamEntropy()))
+                                                              params.maxCheckpointSegments()))
                           .build();
     }
 
@@ -1020,6 +1018,9 @@ public class CHOAM {
 
     private ViewMember join(JoinRequest request, Digest from) {
         final var c = current.get();
+        if (c == null) {
+            return ViewMember.getDefaultInstance();
+        }
         return c.join(request, from);
     }
 
@@ -1116,7 +1117,7 @@ public class CHOAM {
             }
             futureSynchronization.set(null);
         }
-        futureBootstrap.set(bootstrapper(anchor).synchronize().whenComplete((s, t) -> {
+        futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
                     synchronize(s);
@@ -1141,8 +1142,12 @@ public class CHOAM {
             log.info("No state to restore from on: {}", params.member().getId());
             return;
         }
-        genesis.set(new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))));
-        head.set(lastBlock);
+        HashedCertifiedBlock geni = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                             store.getCertifiedBlock(ULong.valueOf(0)));
+        genesis.set(geni);
+        head.set(geni);
+        checkpoint.set(geni);
+
         Header header = lastBlock.block.getHeader();
         HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
                                                                  store.getCertifiedBlock(ULong.valueOf(header.getLastReconfig())));
@@ -1153,20 +1158,18 @@ public class CHOAM {
         log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member());
         CertifiedBlock lastCheckpoint = store.getCertifiedBlock(ULong.valueOf(header.getLastCheckpoint()));
         if (lastCheckpoint != null) {
-            checkpoint.set(new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint));
+            HashedCertifiedBlock ckpt = new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint);
+            checkpoint.set(ckpt);
+            head.set(ckpt);
         }
 
-        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}",
-                 new HashedCertifiedBlock(params.digestAlgorithm(), store.getCertifiedBlock(ULong.valueOf(0))).hash,
-                 lastView.hash,
-                 lastCheckpoint == null ? "<missing>"
-                                        : new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint).hash,
-                 lastBlock.hash, params.member().getId());
+        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", geni.hash, lastView.hash,
+                 checkpoint.get().hash, lastBlock.hash, params.member().getId());
     }
 
     private void restoreFrom(HashedCertifiedBlock block, CheckpointState checkpoint) {
         cachedCheckpoints.put(block.height(), checkpoint);
-        params.restorer().accept(block.height(), checkpoint);
+        params.restorer().accept(block, checkpoint);
         restore();
     }
 
@@ -1272,7 +1275,7 @@ public class CHOAM {
             current1 = store.getCertifiedBlock(state.lastCheckpoint.height().add(1));
         }
         while (current1 != null) {
-            synchronizedProcess(current1, false);
+            synchronizedProcess(current1);
             current1 = store.getCertifiedBlock(height(current1.getBlock()).add(1));
         }
         synchronizing.set(false);
@@ -1280,13 +1283,13 @@ public class CHOAM {
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
                  params.member());
         try {
-            linear.execute(() -> combine());
+            linear.execute(() -> transitions.regenerated());
         } catch (RejectedExecutionException e) {
             // ignore
         }
     }
 
-    private void synchronizedProcess(CertifiedBlock certifiedBlock, boolean combine) {
+    private void synchronizedProcess(CertifiedBlock certifiedBlock) {
         if (!started.get()) {
             log.info("Not started on: {}", params.member());
             return;
@@ -1343,9 +1346,6 @@ public class CHOAM {
             }
         }
         pending.add(hcb);
-        if (combine) {
-            combine();
-        }
     }
 
     private Committee testQuorum() {

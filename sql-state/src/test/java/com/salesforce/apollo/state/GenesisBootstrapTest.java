@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
 import com.salesforce.apollo.membership.Member;
@@ -70,9 +69,13 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
         choam.start();
         routers.get(testSubject.getId()).start();
 
-        final ULong target = txneer.getCurrentBlock().height();
-
         assertTrue(Utils.waitForCondition(120_000, 100, () -> {
+            if (!(transactioneers.stream()
+                                 .mapToInt(t -> t.inFlight())
+                                 .filter(t -> t == 0)
+                                 .count() == transactioneers.size())) {
+                return false;
+            }
 
             var max = members.stream()
                              .map(m -> updaters.get(m))
@@ -86,7 +89,6 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                           .map(ssm -> ssm.getCurrentBlock())
                           .filter(cb -> cb != null)
                           .map(cb -> cb.height())
-                          .filter(l -> l.compareTo(target) >= 0)
                           .filter(l -> l.compareTo(max) == 0)
                           .count() == members.size();
         }), "state: " + members.stream()
@@ -95,13 +97,12 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                .filter(cb -> cb != null)
                                .map(cb -> cb.height())
                                .toList());
-        System.out.println("target: " + target + " results: "
-        + members.stream()
-                 .map(m -> updaters.get(m))
-                 .map(ssm -> ssm.getCurrentBlock())
-                 .filter(cb -> cb != null)
-                 .map(cb -> cb.height())
-                 .toList());
+        System.out.println("Final state: " + members.stream()
+                                                    .map(m -> updaters.get(m))
+                                                    .map(ssm -> ssm.getCurrentBlock())
+                                                    .filter(cb -> cb != null)
+                                                    .map(cb -> cb.height())
+                                                    .toList());
 
         System.out.println();
         System.out.println();

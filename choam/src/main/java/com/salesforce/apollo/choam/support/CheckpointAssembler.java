@@ -37,7 +37,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
 /**
@@ -84,7 +84,7 @@ public class CheckpointAssembler {
     }
 
     private CheckpointReplication buildRequest() {
-        long seed = Utils.bitStreamEntropy().nextLong();
+        long seed = Entropy.nextBitsStreamLong();
         BloomFilter<Integer> segmentsBff = new BloomFilter.IntBloomFilter(seed, checkpoint.getSegmentsCount(), fpr);
         IntStream.range(0, checkpoint.getSegmentsCount()).filter(i -> state.containsKey(i)).forEach(i -> {
             segmentsBff.add(i);
@@ -120,7 +120,7 @@ public class CheckpointAssembler {
             return;
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
-        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, exec);
+        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, exec, true);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        () -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
@@ -133,7 +133,7 @@ public class CheckpointAssembler {
             log.info("Ignoring loopback checkpoint assembly gossip on: {}", link.getMember(), member);
             return null;
         }
-        log.info("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
+        log.debug("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
         return link.fetch(buildRequest());
     }
 

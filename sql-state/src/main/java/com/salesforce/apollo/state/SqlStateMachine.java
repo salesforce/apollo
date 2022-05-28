@@ -20,9 +20,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -37,16 +35,6 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 
-import org.h2.api.ErrorCode;
-import org.h2.engine.SessionLocal;
-import org.h2.jdbc.JdbcConnection;
-import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
-import org.h2.jdbc.JdbcSQLNonTransientException;
-import org.h2.message.DbException;
-import org.h2.util.CloseWatcher;
-import org.h2.util.DateTimeUtils;
-import org.h2.util.JdbcUtils;
-import org.h2.value.Value;
 import org.joou.ULong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +58,7 @@ import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.support.CheckpointState;
+import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.QualifiedBase64;
 import com.salesforce.apollo.state.Mutator.BatchedTransactionException;
@@ -79,9 +68,21 @@ import com.salesforce.apollo.state.liquibase.NullResourceAccessor;
 import com.salesforce.apollo.state.liquibase.ReplicatedChangeLogHistoryService;
 import com.salesforce.apollo.state.liquibase.ThreadLocalScopeManager;
 import com.salesforce.apollo.utils.DelegatingJdbcConnector;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.Hash.DigestHasher;
 
+import deterministic.org.h2.api.ErrorCode;
+import deterministic.org.h2.engine.SessionLocal;
+import deterministic.org.h2.jdbc.JdbcConnection;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientConnectionException;
+import deterministic.org.h2.jdbc.JdbcSQLNonTransientException;
+import deterministic.org.h2.message.DbException;
+import deterministic.org.h2.util.BlockClock;
+import deterministic.org.h2.util.CloseWatcher;
+import deterministic.org.h2.util.DateTimeUtils;
+import deterministic.org.h2.util.JdbcUtils;
+import deterministic.org.h2.util.MathUtils;
+import deterministic.org.h2.value.Value;
 import liquibase.CatalogAndSchema;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
@@ -104,7 +105,7 @@ import liquibase.util.StringUtil;
  * <p>
  * Batch oriented, but low enough latency to make it worth the wait (with the
  * right system wide consensus/distribution, 'natch).
- * 
+ *
  * @author hal.hildebrand
  *
  */
@@ -128,21 +129,13 @@ public class SqlStateMachine {
 
     public record Current(ULong height, Digest blkHash) {}
 
-    public static class Event {
-        public final JsonNode body;
-        public final String   discriminator;
-
-        public Event(String discriminator, JsonNode body) {
-            this.discriminator = discriminator;
-            this.body = body;
-        }
-    }
+    public record Event(String discriminator, JsonNode body) {}
 
     public static class ReadOnlyConnector extends DelegatingJdbcConnector {
 
         private final CloseWatcher watcher;
 
-        public ReadOnlyConnector(Connection wrapped, org.h2.engine.Session session) throws SQLException {
+        public ReadOnlyConnector(Connection wrapped, deterministic.org.h2.engine.Session session) throws SQLException {
             super(wrapped);
             wrapped.setReadOnly(true);
             wrapped.setAutoCommit(false);
@@ -247,27 +240,24 @@ public class SqlStateMachine {
     }
 
     private static class EventTrampoline {
-        private final Map<String, Consumer<JsonNode>> handlers = new HashMap<>();
-        private final List<Event>                     pending  = new ArrayList<>();
+        private volatile Consumer<List<Event>> handler;
+        private volatile List<Event>           pending = new ArrayList<>();
 
-        private void deregister(String discriminator) {
-            handlers.remove(discriminator);
+        public void deregister() {
+            handler = null;
         }
 
         private void evaluate() {
             try {
-                for (Event event : pending) {
-                    Consumer<JsonNode> handler = handlers.get(event.discriminator);
-                    if (handler != null) {
-                        try {
-                            handler.accept(event.body);
-                        } catch (Throwable e) {
-                            log.trace("handler failed for {}", e);
-                        }
+                if (handler != null) {
+                    try {
+                        handler.accept(pending);
+                    } catch (Throwable e) {
+                        log.trace("handler failed for {}", e);
                     }
                 }
             } finally {
-                pending.clear();
+                pending = new ArrayList<>();
             }
         }
 
@@ -275,8 +265,8 @@ public class SqlStateMachine {
             pending.add(event);
         }
 
-        private void register(String discriminator, Consumer<JsonNode> handler) {
-            handlers.put(discriminator, handler);
+        private void register(Consumer<List<Event>> handler) {
+            this.handler = handler;
         }
     }
 
@@ -288,17 +278,16 @@ public class SqlStateMachine {
         }
     }
 
-    private static final String                    CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
-                                                                                                          SqlStateMachine.class.getCanonicalName());
-    private static final String                    DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
-    private static final RowSetFactory             factory;
-    private static final Logger                    log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
-    private static final ObjectMapper              MAPPER                                 = new ObjectMapper();
-    private static final String                    PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
-    private static final ThreadLocal<SecureRandom> secureRandom                           = new ThreadLocal<>();
-    private static final String                    SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
-    private static final String                    SQL_STATE_INTERNAL                     = "/sql-state/internal.xml";
-    private static final String                    UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
+    private static final String        CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH   = String.format("CREATE ALIAS apollo_internal.publish FOR \"%s.publish\"",
+                                                                                              SqlStateMachine.class.getCanonicalName());
+    private static final String        DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE = "DELETE FROM apollo_internal.trampoline";
+    private static final RowSetFactory factory;
+    private static final Logger        log                                    = LoggerFactory.getLogger(SqlStateMachine.class);
+    private static final ObjectMapper  MAPPER                                 = new ObjectMapper();
+    private static final String        PUBLISH_INSERT                         = "INSERT INTO apollo_internal.trampoline(channel, body) VALUES(?1, ?2 FORMAT JSON)";
+    private static final String        SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE = "SELECT * FROM apollo_internal.trampoline";
+    private static final String        SQL_STATE_INTERNAL                     = "/sql-state/internal.xml";
+    private static final String        UPDATE_CURRENT                         = "MERGE INTO apollo_internal.current(_u, height, block_hash, transaction, transaction_hash) KEY(_U) VALUES(1, ?1, ?2, ?3, ?4)";
 
     static {
         ThreadLocalScopeManager.initialize();
@@ -310,10 +299,6 @@ public class SqlStateMachine {
         } catch (SQLException e) {
             throw new IllegalStateException("Cannot create row set factory", e);
         }
-    }
-
-    public static SecureRandom getSecureRandom() {
-        return secureRandom.get();
     }
 
     public static boolean publish(Connection connection, String channel, String jsonBody) {
@@ -381,40 +366,46 @@ public class SqlStateMachine {
         }
     }
 
-    public void deregister(String discriminator) {
-        trampoline.deregister(discriminator);
+    public void deregisterHandler() {
+        trampoline.deregister();
     }
 
-    public BiConsumer<ULong, CheckpointState> getBootstrapper() {
-        return (height, state) -> {
-            String rndm = UUID.randomUUID().toString();
-            try (java.sql.Statement statement = connection().createStatement()) {
-                File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
-                try {
-                    state.assemble(temp);
-                } catch (IOException e) {
-                    log.error("unable to assemble checkpoint: {} into: {}", height, temp, e);
-                    return;
-                }
-                try {
-                    log.error("Restoring checkpoint: {} ", height);
-                    statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
-                    log.error("Restored from checkpoint: {}", height);
-                    statement.close();
+    public BiConsumer<HashedBlock, CheckpointState> getBootstrapper() {
+        return (block, state) -> {
+            begin(block.height(), block.hash);
+            withContext(() -> {
+                String rndm = UUID.randomUUID().toString();
+                try (java.sql.Statement statement = connection().createStatement()) {
+                    File temp = new File(checkpointDirectory,
+                                         String.format("checkpoint-%s--%s.sql", block.height(), rndm));
+                    try {
+                        state.assemble(temp);
+                    } catch (IOException e) {
+                        log.error("unable to assemble checkpoint: {} into: {}", block.height(), temp, e);
+                        return;
+                    }
+                    try {
+                        log.info("Restoring checkpoint: {} ", block.height());
+                        statement.execute(String.format("RUNSCRIPT FROM '%s'", temp.getAbsolutePath()));
+                        log.info("Restored from checkpoint: {}", block.height());
+                        statement.close();
+                        initializeStatements();
+                        endBlock(block.height(), block.hash);
+                    } catch (SQLException e) {
+                        log.error("unable to restore checkpoint: {}", block.height(), e);
+                        return;
+                    }
                 } catch (SQLException e) {
-                    log.error("unable to restore checkpoint: {}", height, e);
+                    log.error("unable to restore from checkpoint: {}", block.height(), e);
                     return;
                 }
-            } catch (SQLException e) {
-                log.error("unable to restore from checkpoint: {}", height, e);
-                return;
-            }
+            });
         };
     }
 
     public Function<ULong, File> getCheckpointer() {
         return height -> {
-            String rndm = Long.toString(Utils.bitStreamEntropy().nextLong());
+            String rndm = Long.toString(Entropy.nextBitsStreamLong());
             try (java.sql.Statement statement = connection().createStatement()) {
                 File temp = new File(checkpointDirectory, String.format("checkpoint-%s--%s.sql", height, rndm));
                 try {
@@ -428,6 +419,11 @@ public class SqlStateMachine {
                     log.error("Written file does not exist: {}", temp.getAbsolutePath());
                     return null;
                 }
+//                try (FileInputStream fis = new FileInputStream(temp)) {
+//                    System.out.println(Utils.getDocument(fis));
+//                } catch (IOException e1) {
+//                    throw new IllegalStateException(e1);
+//                }
                 File checkpoint = new File(checkpointDirectory, String.format("checkpoint-%s--%s.gzip", height, rndm));
                 try (FileInputStream fis = new FileInputStream(temp);
                      FileOutputStream fos = new FileOutputStream(checkpoint);
@@ -474,8 +470,8 @@ public class SqlStateMachine {
         }
     }
 
-    public void register(String discriminator, Consumer<JsonNode> handler) {
-        trampoline.register(discriminator, handler);
+    public void register(Consumer<List<Event>> handler) {
+        trampoline.register(handler);
     }
 
     // Test accessible
@@ -501,16 +497,14 @@ public class SqlStateMachine {
     // Test accessible
     void initializeState() {
         java.sql.Statement statement = null;
-
+        ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
         try (Liquibase liquibase = new Liquibase(SQL_STATE_INTERNAL, new ClassLoaderResourceAccessor(), database)) {
             liquibase.update((String) null);
             statement = connection().createStatement();
             statement.execute(CREATE_ALIAS_APOLLO_INTERNAL_PUBLISH);
-            deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-            getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
-            updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
+            initializeStatements();
         } catch (SQLException e) {
             throw new IllegalStateException("unable to initialize db state", e);
         } catch (LiquibaseException e) {
@@ -536,7 +530,7 @@ public class SqlStateMachine {
     }
 
     private List<Object> acceptBatchTransaction(BatchedTransaction txns) throws Exception {
-        List<Object> results = new ArrayList<Object>();
+        List<Object> results = new ArrayList<>();
         for (int i = 0; i < txns.getTransactionsCount(); i++) {
             try {
                 results.add(SqlStateMachine.this.execute(txns.getTransactions(i)));
@@ -625,6 +619,7 @@ public class SqlStateMachine {
 
     private Boolean acceptMigration(Migration migration) throws SQLException {
         try {
+            ChangeLogHistoryServiceFactory.getInstance().register(new ReplicatedChangeLogHistoryService());
             switch (migration.getCommandCase()) {
             case CHANGELOGSYNC:
                 changeLogSync(migration.getChangelogSync());
@@ -888,6 +883,12 @@ public class SqlStateMachine {
         };
     }
 
+    private void initializeStatements() throws SQLException {
+        deleteEvents = connection.prepareStatement(DELETE_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        getEvents = connection.prepareStatement(SELECT_FROM_APOLLO_INTERNAL_TRAMPOLINE);
+        updateCurrent = connection.prepareStatement(UPDATE_CURRENT);
+    }
+
     private baseAndAccessor liquibase(ChangeLog changeLog) throws IOException {
         final var database = new H2Database();
         database.setConnection(new liquibase.database.jvm.JdbcConnection(new LiquibaseConnection(connection())));
@@ -999,8 +1000,8 @@ public class SqlStateMachine {
     }
 
     private <T> T withContext(Callable<T> action) {
-        SecureRandom prev = secureRandom.get();
-        secureRandom.set(entropy.get());
+        SecureRandom prev = MathUtils.SECURE_RANDOM.get();
+        MathUtils.SECURE_RANDOM.set(entropy.get());
         BlockClock prevClock = DateTimeUtils.CLOCK.get();
         DateTimeUtils.CLOCK.set(clock);
         try {
@@ -1008,7 +1009,7 @@ public class SqlStateMachine {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {
-            secureRandom.set(prev);
+            MathUtils.SECURE_RANDOM.set(prev);
             DateTimeUtils.CLOCK.set(prevClock);
         }
     }

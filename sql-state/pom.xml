@@ -19,8 +19,8 @@
             <artifactId>choam</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>h2-deterministic</artifactId>
         </dependency>
         <dependency>
             <groupId>org.locationtech.jts</groupId>
@@ -40,8 +40,8 @@
             <artifactId>liquibase-slf4j</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
+            <groupId>com.salesforce.apollo</groupId>
+            <artifactId>liquibase-deterministic</artifactId>
         </dependency>
 
         <!-- Test only deps below this line -->
@@ -77,10 +77,6 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
             </plugin>
         </plugins>
         <pluginManagement>

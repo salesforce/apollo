@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -45,6 +44,7 @@ import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -69,7 +69,7 @@ public class FireFliesTest {
     @BeforeEach
     public void before() throws SQLException {
         final var prefix = UUID.randomUUID().toString();
-        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Utils.bitStreamEntropy().nextLong());
+        Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
         var params = params();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
@@ -86,23 +86,20 @@ public class FireFliesTest {
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
-        var scheduler = Executors.newScheduledThreadPool(CARDINALITY * 5);
-
         Digest group = DigestAlgorithm.DEFAULT.getOrigin();
-        var exec = Executors.newCachedThreadPool();
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              Executors.newFixedThreadPool(1), null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(scheduler)
+                                                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                           .setContext(context)
-                                                          .setExec(exec)
+                                                          .setExec(Executors.newFixedThreadPool(2))
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0));
             domains.add(node);
@@ -114,15 +111,15 @@ public class FireFliesTest {
 
     @Test
     public void smokin() throws Exception {
-        Executor exec = Executors.newCachedThreadPool();
-        var scheduler = Executors.newSingleThreadScheduledExecutor();
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
                                  .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
                                  .toList()
                                  .subList(0, CARDINALITY - 2);
         domains.forEach(d -> {
-            d.getFoundation().start(exec, Duration.ofMillis(10), seeds, scheduler);
+            d.getFoundation()
+             .start(Executors.newSingleThreadExecutor(), Duration.ofMillis(10), seeds,
+                    Executors.newSingleThreadScheduledExecutor());
         });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()
@@ -161,7 +158,7 @@ public class FireFliesTest {
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
-                               .setCheckpointBlockSize(200);
+                               .setCheckpointBlockDelta(200);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;

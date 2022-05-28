@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -56,8 +56,9 @@ public class TestResolver {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        serverRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
-        clientRouter = new LocalRouter(prefix, builder, ForkJoinPool.commonPool(), null);
+        final var exec = Executors.newFixedThreadPool(3);
+        serverRouter = new LocalRouter(prefix, builder, exec, null);
+        clientRouter = new LocalRouter(prefix, builder, exec, null);
 
         serverRouter.setMember(serverMember);
         clientRouter.setMember(clientMember);
@@ -73,9 +74,10 @@ public class TestResolver {
             }
         };
 
-        serverRouter.create(serverMember, context, protoService, r -> new ResolverServer(null, r), null, null);
+        serverRouter.create(serverMember, context, protoService, r -> new ResolverServer(r, exec, null), null, null);
 
-        var clientComms = clientRouter.create(clientMember, context, protoService, r -> new ResolverServer(null, r),
+        var clientComms = clientRouter.create(clientMember, context, protoService,
+                                              r -> new ResolverServer(r, exec, null),
                                               ResolverClient.getCreate(context, null), null);
 
         var client = clientComms.apply(serverMember, clientMember);

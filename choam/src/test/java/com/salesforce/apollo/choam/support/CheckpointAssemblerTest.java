@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.GZIPOutputStream;
 
-import org.apache.commons.math3.random.BitsStreamGenerator;
-import org.apache.commons.math3.random.MersenneTwister;
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +44,7 @@ import com.salesfoce.apollo.choam.proto.Checkpoint;
 import com.salesfoce.apollo.choam.proto.CheckpointReplication;
 import com.salesfoce.apollo.choam.proto.CheckpointSegments;
 import com.salesfoce.apollo.choam.proto.Slice;
+import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.comm.Concierge;
 import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -67,10 +66,9 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  */
 public class CheckpointAssemblerTest {
 
-    private static final int                              BLOCK_SIZE = 256;
+    private static final int                              CARDINALITY  = 10;
     private static Map<Digest, CertificateWithPrivateKey> certs;
-
-    private static final int CARDINALITY = 10;
+    private static final int                              SEGMENT_SIZE = 256;
 
     @BeforeAll
     public static void beforeClass() {
@@ -93,7 +91,6 @@ public class CheckpointAssemblerTest {
 
     @Test
     public void functional() throws Exception {
-        BitsStreamGenerator entropy = new MersenneTwister(0x1638);
         File checkpointDir = new File("target/checkpoint");
         Utils.clean(checkpointDir);
         checkpointDir.mkdirs();
@@ -120,7 +117,7 @@ public class CheckpointAssemblerTest {
                                            .peek(m -> context.activate(m))
                                            .collect(Collectors.toList());
 
-        Checkpoint checkpoint = HashedBlock.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, BLOCK_SIZE);
+        Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
 
         SigningMember bootstrapping = members.get(0);
 
@@ -147,7 +144,7 @@ public class CheckpointAssemblerTest {
             public ListenableFuture<CheckpointSegments> answer(InvocationOnMock invocation) throws Throwable {
                 SettableFuture<CheckpointSegments> futureSailor = SettableFuture.create();
                 CheckpointReplication rep = invocation.getArgument(0, CheckpointReplication.class);
-                List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 2, entropy);
+                List<Slice> fetched = state.fetchSegments(BloomFilter.from(rep.getCheckpointSegments()), 2);
                 System.out.println("Fetched: " + fetched.size());
                 futureSailor.set(CheckpointSegments.newBuilder().addAllSegments(fetched).build());
                 return futureSailor;
