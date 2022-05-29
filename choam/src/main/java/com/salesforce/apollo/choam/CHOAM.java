@@ -693,8 +693,7 @@ public class CHOAM {
     }
 
     public boolean active() {
-        final var c = current.get();
-        return !(c == null || c instanceof Formation);
+        return transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL;
     }
 
     public Context<Member> context() {

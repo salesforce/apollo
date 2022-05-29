@@ -148,7 +148,7 @@ public class FireFliesTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
+                               .setSynchronizationCycles(2)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(50))
