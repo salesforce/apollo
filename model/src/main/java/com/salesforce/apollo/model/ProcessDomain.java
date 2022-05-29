@@ -51,8 +51,8 @@ public class ProcessDomain extends Domain {
 
     public ProcessDomain(Digest group, ControlledIdentifier<SelfAddressingIdentifier> id, Builder builder, String dbURL,
                          Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
-                         InetSocketAddress endpoint) {
-        super(id, builder, dbURL, checkpointBaseDir, runtime);
+                         InetSocketAddress endpoint, TransactionConfiguration txnConfig) {
+        super(id, builder, dbURL, checkpointBaseDir, runtime, txnConfig);
         var base = Context.<Participant>newBuilder()
                           .setId(group)
                           .setCardinality(params.runtime().foundation().getFoundation().getMembershipCount())

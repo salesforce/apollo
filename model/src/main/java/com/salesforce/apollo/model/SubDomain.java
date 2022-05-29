@@ -23,18 +23,19 @@ public class SubDomain extends Domain {
     private final Domain parentDomain;
 
     public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params,
-                     RuntimeParameters.Builder runtime) {
-        this(id, params, "jdbc:h2:mem:", tempDirOf(id), runtime);
+                     RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+        this(id, params, "jdbc:h2:mem:", tempDirOf(id), runtime, txnConfig);
     }
 
     public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params, Path checkpointBaseDir,
-                     Parameters.RuntimeParameters.Builder runtime) {
-        this(id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime);
+                     Parameters.RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
+        this(id, params, "jdbc:h2:mem:", checkpointBaseDir, runtime, txnConfig);
     }
 
     public SubDomain(ControlledIdentifier<SelfAddressingIdentifier> id, Builder params, String dbURL,
-                     Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime) {
-        super(id, params, dbURL, checkpointBaseDir, runtime);
+                     Path checkpointBaseDir, Parameters.RuntimeParameters.Builder runtime,
+                     TransactionConfiguration txnConfig) {
+        super(id, params, dbURL, checkpointBaseDir, runtime, txnConfig);
         this.parentDomain = null;
     }
 }

@@ -40,6 +40,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -228,7 +229,9 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(Executors.newSingleThreadExecutor())
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0));
+                                           new InetSocketAddress(0),
+                                           new TransactionConfiguration(Executors.newSingleThreadExecutor(),
+                                                                        Executors.newSingleThreadScheduledExecutor()));
             domains.add(domain);
             localRouter.setMember(domain.getMember());
             localRouter.start();
