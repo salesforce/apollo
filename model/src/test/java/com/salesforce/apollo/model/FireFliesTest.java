@@ -133,7 +133,7 @@ public class FireFliesTest {
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
-        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
                    "Domains did not become active");
         System.out.println();
         System.out.println("******");

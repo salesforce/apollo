@@ -696,7 +696,8 @@ public class CHOAM {
 
     public boolean active() {
         final var c = current.get();
-        return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c instanceof Administration;
+        return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c != null &&
+               c instanceof Administration;
     }
 
     public Context<Member> context() {

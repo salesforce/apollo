@@ -178,7 +178,8 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(30_000, 1_000,
+                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
                    "System did not become active");
 
         updaters.entrySet().forEach(e -> {
