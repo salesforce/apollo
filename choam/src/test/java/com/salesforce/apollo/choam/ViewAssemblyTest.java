@@ -110,7 +110,7 @@ public class ViewAssemblyTest {
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(),
-                                              Executors.newSingleThreadExecutor(), null);
+                                              Executors.newFixedThreadPool(2), null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -138,7 +138,7 @@ public class ViewAssemblyTest {
             ViewContext view = new ViewContext(committee,
                                                params.build(RuntimeParameters.newBuilder()
                                                                              .setExec(Executors.newFixedThreadPool(2))
-                                                                             .setScheduler(Executors.newScheduledThreadPool(cardinality))
+                                                                             .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                                              .setContext(base)
                                                                              .setMember(sm)
                                                                              .setCommunications(router)

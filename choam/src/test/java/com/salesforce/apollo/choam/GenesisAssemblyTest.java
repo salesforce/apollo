@@ -75,8 +75,6 @@ public class GenesisAssemblyTest {
     public void genesis() throws Exception {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
-        var scheduler = Executors.newScheduledThreadPool(2);
-        var exec = Executors.newFixedThreadPool(cardinality * 2);
 
         List<Member> members = IntStream.range(0, cardinality)
                                         .mapToObj(i -> Utils.getMember(i))
@@ -127,7 +125,8 @@ public class GenesisAssemblyTest {
                                                                         .create(m, base.getId(), servers.get(m),
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
-                                                                                                        null, r, exec),
+                                                                                                        null, r,
+                                                                                                        Executors.newSingleThreadExecutor()),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -136,8 +135,8 @@ public class GenesisAssemblyTest {
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);
             var built = params.build(RuntimeParameters.newBuilder()
-                                                      .setExec(exec)
-                                                      .setScheduler(scheduler)
+                                                      .setExec(Executors.newFixedThreadPool(2))
+                                                      .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                       .setContext(base)
                                                       .setMember(sm)
                                                       .setCommunications(router)
