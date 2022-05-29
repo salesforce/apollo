@@ -218,6 +218,8 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
+        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
+                                                                          Executors.newSingleThreadScheduledExecutor());
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(1), null);
@@ -229,9 +231,7 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(Executors.newSingleThreadExecutor())
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0),
-                                           new TransactionConfiguration(Executors.newSingleThreadExecutor(),
-                                                                        Executors.newSingleThreadScheduledExecutor()));
+                                           new InetSocketAddress(0), txnConfig);
             domains.add(domain);
             localRouter.setMember(domain.getMember());
             localRouter.start();

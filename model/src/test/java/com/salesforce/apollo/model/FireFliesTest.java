@@ -91,6 +91,8 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
+                                                                          Executors.newSingleThreadScheduledExecutor());
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
@@ -102,9 +104,7 @@ public class FireFliesTest {
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(2))
                                                           .setCommunications(localRouter),
-                                         new InetSocketAddress(0),
-                                         new TransactionConfiguration(Executors.newSingleThreadExecutor(),
-                                                                      Executors.newSingleThreadScheduledExecutor()));
+                                         new InetSocketAddress(0), txnConfig);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.setMember(node.getMember());
