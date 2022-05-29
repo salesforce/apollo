@@ -32,7 +32,12 @@ service KerlDht {
 
 service Reconciliation {
     rpc reconcile ( Intervals ) returns (Update) {}
-    rpc update ( Updating ) returns (google.protobuf.Empty) {}
+    rpc update (Updating) returns (google.protobuf.Empty) {}
+}
+
+service Validator {
+	rpc validate (ValidateContext) returns (Validated) {}
+	rpc witness (WitnessContext) returns (Signatures) {}
 }
 
 service Witness {
@@ -87,4 +92,24 @@ message KeyStateWithEndorsementsAndValidations {
 	stereotomy.KeyState_ state = 1;
     map<int32, utils.Sig> endorsements = 2;
     repeated Validation validations = 3;
+}
+
+message Validated {
+	stereotomy.Ident validator = 1;
+	repeated utils.Sig signatures = 2;
+}
+
+message Signatures {
+	repeated utils.Sig signatures = 1;
+}
+
+message WitnessContext {
+    utils.Digeste context = 1;
+	stereotomy.Ident identifier = 2;
+    repeated stereotomy.KeyEvent_ events = 3;
+}
+
+message ValidateContext {
+    utils.Digeste context = 1;
+    repeated stereotomy.KeyEventWithAttachments events = 2;
 }
