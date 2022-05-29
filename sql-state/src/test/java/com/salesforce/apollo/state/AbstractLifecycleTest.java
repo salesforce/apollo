@@ -150,7 +150,7 @@ abstract public class AbstractLifecycleTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newSingleThreadExecutor(), null);
+                                              Executors.newFixedThreadPool(2), null);
             localRouter.setMember(m);
             return localRouter;
         }));
