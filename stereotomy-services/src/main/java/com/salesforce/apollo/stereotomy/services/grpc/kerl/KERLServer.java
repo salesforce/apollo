@@ -14,10 +14,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.Timer.Context;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
+import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventDigestContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
@@ -41,9 +44,9 @@ import io.grpc.stub.StreamObserver;
 public class KERLServer extends KERLServiceImplBase {
     private final static Logger log = LoggerFactory.getLogger(KERLServer.class);
 
+    private final Executor                          exec;
     private final StereotomyMetrics                 metrics;
     private final RoutableService<ProtoKERLService> routing;
-    private final Executor                          exec;
 
     public KERLServer(RoutableService<ProtoKERLService> router, Executor exec, StereotomyMetrics metrics) {
         this.metrics = metrics;
@@ -77,6 +80,34 @@ public class KERLServer extends KERLServiceImplBase {
                         responseObserver.onCompleted();
                         metrics.outboundBandwidth().mark(states.getSerializedSize());
                         metrics.outboundAppendEventsResponse().mark(states.getSerializedSize());
+                    }
+                });
+            }
+        }), log));
+    }
+
+    @Override
+    public void appendAttachments(AttachmentsContext request, StreamObserver<Empty> responseObserver) {
+        Context timer = metrics != null ? metrics.appendEventsService().time() : null;
+        if (metrics != null) {
+            metrics.inboundBandwidth().mark(request.getSerializedSize());
+            metrics.inboundAppendEventsRequest().mark(request.getSerializedSize());
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<Empty> result = s.appendAttachments(request.getAttachmentsList());
+            if (result == null) {
+                responseObserver.onNext(Empty.getDefaultInstance());
+                responseObserver.onCompleted();
+            } else {
+                result.whenComplete((e, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        responseObserver.onError(t);
+                    } else {
+                        responseObserver.onNext(e);
+                        responseObserver.onCompleted();
                     }
                 });
             }
@@ -370,6 +401,44 @@ public class KERLServer extends KERLServiceImplBase {
                     }
                 }
             });
+        }), log));
+    }
+
+    @Override
+    public void getKeyStateWithAttachments(EventContext request,
+                                           StreamObserver<KeyStateWithAttachments_> responseObserver) {
+        Context timer = metrics != null ? metrics.getKeyStateService().time() : null;
+        if (metrics != null) {
+            final var serializedSize = request.getSerializedSize();
+            metrics.inboundBandwidth().mark(serializedSize);
+            metrics.inboundGetKeyStateRequest().mark(serializedSize);
+        }
+        exec.execute(Utils.wrapped(() -> routing.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
+            CompletableFuture<KeyStateWithAttachments_> response = s.getKeyStateWithAttachments(request.getCoordinates());
+            if (response == null) {
+                if (timer != null) {
+                    timer.stop();
+                }
+                responseObserver.onNext(KeyStateWithAttachments_.getDefaultInstance());
+                responseObserver.onCompleted();
+            } else {
+                response.whenComplete((state, t) -> {
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    if (t != null) {
+                        responseObserver.onError(t);
+                    } else {
+                        state = state == null ? KeyStateWithAttachments_.getDefaultInstance() : state;
+                        responseObserver.onNext(state);
+                        responseObserver.onCompleted();
+                        if (metrics == null) {
+                            metrics.outboundBandwidth().mark(state.getSerializedSize());
+                            metrics.outboundGetKeyStateResponse().mark(state.getSerializedSize());
+                        }
+                    }
+                });
+            }
         }), log));
     }
 }

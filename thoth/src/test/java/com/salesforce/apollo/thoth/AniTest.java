@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,7 @@ public class AniTest extends AbstractDhtTest {
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         dht.append(Collections.singletonList(inception.toKeyEvent_())).get();
-        assertTrue(ani.validate(inception));
+        assertTrue(ani.validate(inception).get(10, TimeUnit.SECONDS));
+        assertTrue(ani.getValidation(Duration.ofSeconds(10)).validate(inception));
     }
 }

@@ -245,6 +245,12 @@ public class KerlDHT {
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
+    public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
+        var fs = new CompletableFuture<T>();
+        fs.completeExceptionally(t);
+        return fs;
+    }
+
     private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
         return majority.thenCompose(b -> {
             var fs = new CompletableFuture<T>();
@@ -255,12 +261,6 @@ public class KerlDHT {
             }
             return fs;
         });
-    }
-
-    private static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
-        var fs = new CompletableFuture<T>();
-        fs.completeExceptionally(t);
-        return fs;
     }
 
     private final JdbcConnectionPool                                          connectionPool;
@@ -911,5 +911,11 @@ public class KerlDHT {
             return false;
         }
         return true;
+    }
+
+    static <T> CompletableFuture<T> completeIt(T result) {
+        var fs = new CompletableFuture<T>();
+        fs.complete(result);
+        return fs;
     }
 }

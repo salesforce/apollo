@@ -269,7 +269,7 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var attachment = complete.get();
                 if (metrics != null) {
                     final var serializedSize = attachment.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
@@ -300,7 +300,7 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var kerl = client.getKERL(request).get();
+                var kerl = complete.get();
                 final var serializedSize = kerl.getSerializedSize();
                 if (metrics != null) {
                     metrics.inboundBandwidth().mark(serializedSize);
@@ -415,9 +415,9 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var ksa = complete.get();
                 if (metrics != null) {
-                    final var serializedSize = attachment.getSerializedSize();
+                    final var serializedSize = ksa.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.inboundGetAttachmentResponse().mark(serializedSize);
                 }
@@ -442,9 +442,9 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var ksav = complete.get();
                 if (metrics != null) {
-                    final var serializedSize = attachment.getSerializedSize();
+                    final var serializedSize = ksav.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.inboundGetAttachmentResponse().mark(serializedSize);
                 }
@@ -474,9 +474,9 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var v = complete.get();
                 if (metrics != null) {
-                    final var serializedSize = attachment.getSerializedSize();
+                    final var serializedSize = v.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.inboundGetAttachmentResponse().mark(serializedSize);
                 }

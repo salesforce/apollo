@@ -7,14 +7,16 @@
 
 package com.salesforce.apollo.thoth;
 
+import static com.salesforce.apollo.thoth.KerlDHT.completeIt;
+
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -23,9 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.github.benmanes.caffeine.cache.AsyncCacheLoader;
 import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
-import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesforce.apollo.crypto.JohnHancock;
@@ -47,7 +47,7 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  * @author hal.hildebrand
  *
  */
-public class Ani implements EventValidation {
+public class Ani {
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
     public static Caffeine<EventCoordinates, KeyEvent> defaultEventsBuilder() {
@@ -77,13 +77,13 @@ public class Ani implements EventValidation {
                                                                           cause));
     }
 
-    private final KerlDHT                                      dht;
-    private final LoadingCache<EventCoordinates, KeyEvent>     events;
-    private final AsyncLoadingCache<Identifier, KeyState>      keyStates;
-    private final SigningThreshold                             threshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean> validated;
-    private final Map<Identifier, Integer>                     validators;
-    private final Duration                                     timeout = Duration.ofSeconds(60);
+    private final KerlDHT                                       dht;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
+    private final AsyncLoadingCache<Identifier, KeyState>       keyStates;
+    private final SigningThreshold                              threshold;
+    private final Duration                                      timeout = Duration.ofSeconds(60);
+    private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
+    private final Map<Identifier, Integer>                      validators;
 
     public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht) {
         this(validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
@@ -92,9 +92,26 @@ public class Ani implements EventValidation {
     public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht,
                Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
                Caffeine<Identifier, KeyState> keyStatesBuilder) {
-        validated = validatedBuilder.buildAsync(AsyncCacheLoader.bulk(coords -> validateCoords(coords)));
-        events = eventsBuilder.build(CacheLoader.bulk(coords -> loadEvents(coords)));
-        keyStates = keyStatesBuilder.buildAsync(AsyncCacheLoader.bulk(coords -> loadKeyStates(coords)));
+        validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
+            @Override
+            public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
+                                                                  Executor executor) throws Exception {
+                return performValidation(key);
+            }
+        });
+        events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
+            @Override
+            public CompletableFuture<? extends KeyEvent> asyncLoad(EventCoordinates key,
+                                                                   Executor executor) throws Exception {
+                return dht.getKeyEvent(key.toEventCoords()).thenApply(ke -> ProtobufEventFactory.from(ke));
+            }
+        });
+        keyStates = keyStatesBuilder.buildAsync(new AsyncCacheLoader<>() {
+            @Override
+            public CompletableFuture<? extends KeyState> asyncLoad(Identifier id, Executor executor) throws Exception {
+                return dht.getKeyState(id.toIdent()).thenApply(ks -> new KeyStateImpl(ks));
+            }
+        });
         this.dht = dht;
         this.validators = new HashMap<>();
         for (int i = 0; i < validators.size(); i++) {
@@ -103,84 +120,46 @@ public class Ani implements EventValidation {
         this.threshold = threshold;
     }
 
-    @Override
-    public boolean validate(EstablishmentEvent event) {
-        events.put(event.getCoordinates(), event);
-        try {
-            return validated.get(event.getCoordinates()).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e);
-        } catch (TimeoutException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private Map<EventCoordinates, KeyEvent> loadEvents(Set<? extends EventCoordinates> coords) {
-        var loaded = new HashMap<EventCoordinates, KeyEvent>();
-        for (var coord : coords) {
-            try {
-                loaded.put(coord, ProtobufEventFactory.from(dht.getKeyEvent(coord.toEventCoords())
-                                                               .get(timeout.toMillis(), TimeUnit.MILLISECONDS)));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Collections.emptyMap();
-            } catch (ExecutionException e) {
-                log.error("Cannot load key event: {}", coords, e);
-                continue;
-            } catch (TimeoutException e) {
-                log.error("Cannot load key event: {}", coords, e);
+    public EventValidation getValidation(Duration timeout) {
+        return new EventValidation() {
+            @Override
+            public boolean validate(EstablishmentEvent event) {
+                try {
+                    return Ani.this.validate(event).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    log.error("Unable to validate: " + event.getCoordinates());
+                    return false;
+                } catch (TimeoutException e) {
+                    log.error("Timeout validating: " + event.getCoordinates());
+                    return false;
+                }
             }
-        }
-        return loaded;
+        };
     }
 
-    private Map<Identifier, KeyState> loadKeyStates(Set<? extends Identifier> identifier) {
-        var loaded = new HashMap<Identifier, KeyState>();
-        for (var id : identifier) {
-            try {
-                loaded.put(id, new KeyStateImpl(dht.getKeyState(id.toIdent())
-                                                   .get(timeout.toMillis(), TimeUnit.MILLISECONDS)));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Collections.emptyMap();
-            } catch (ExecutionException e) {
-                log.error("Cannot load key event: {}", id, e);
-                continue;
-            } catch (TimeoutException e) {
-                log.error("Cannot load key event: {}", id, e);
-            }
-        }
-        return loaded;
+    public CompletableFuture<Boolean> validate(KeyEvent event) {
+        events.put(event.getCoordinates(), completeIt(event));
+        return validated.get(event.getCoordinates());
     }
 
-    private boolean performValidation(EventCoordinates coord) {
-        final var ke = events.get(coord);
-        if (ke instanceof EstablishmentEvent event) {
-            return performValidation(event);
-        }
-        return false;
+    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord) {
+        var fs = new CompletableFuture<Boolean>();
+        events.get(coord)
+              .thenAcceptBoth(dht.getKeyStateWithEndorsementsAndValidations(coord.toEventCoords()),
+                              (event, ksa) -> validate(ksa, event).whenComplete((b, t) -> {
+                                  if (t != null) {
+                                      fs.completeExceptionally(t);
+                                  } else {
+                                      fs.complete(b);
+                                  }
+                              }));
+        return fs;
     }
 
-    private boolean performValidation(KeyEvent event) {
-        KeyStateWithEndorsementsAndValidations ksAttach;
-        try {
-            ksAttach = dht.getKeyStateWithEndorsementsAndValidations(event.getCoordinates().toEventCoords())
-                          .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause());
-        } catch (TimeoutException e) {
-            throw new IllegalStateException(e);
-        }
-        return validate(ksAttach, event);
-    }
-
-    private boolean validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
+    private CompletableFuture<Boolean> validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
         // TODO Multisig
         var state = new KeyStateImpl(ksAttach.getState());
         boolean witnessed = false;
@@ -237,14 +216,6 @@ public class Ani implements EventValidation {
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                     .toByteString()));
         }
-        return witnessed && validated;
-    }
-
-    private Map<EventCoordinates, Boolean> validateCoords(Set<? extends EventCoordinates> coords) {
-        Map<EventCoordinates, Boolean> valid = new HashMap<>();
-        for (EventCoordinates coord : coords) {
-            valid.put(coord, performValidation(coord));
-        }
-        return valid;
+        return completeIt(witnessed && validated);
     }
 }
