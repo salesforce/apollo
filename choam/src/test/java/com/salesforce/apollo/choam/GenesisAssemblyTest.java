@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam;
 
 import static com.salesforce.apollo.crypto.QualifiedBase64.bs;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -19,8 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -46,7 +46,6 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.choam.comm.TerminalClient;
 import com.salesforce.apollo.choam.comm.TerminalServer;
 import com.salesforce.apollo.choam.support.HashedBlock;
-import com.salesforce.apollo.choam.support.HashedCertifiedBlock;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -90,7 +89,6 @@ public class GenesisAssemblyTest {
                                                                              .setGossipDuration(Duration.ofMillis(100))
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(10));
-        List<HashedCertifiedBlock> published = new CopyOnWriteArrayList<>();
 
         Map<Member, GenesisAssembly> genii = new HashMap<>();
 
@@ -119,6 +117,7 @@ public class GenesisAssemblyTest {
             comm.setMember(m);
             return comm;
         }));
+        CountDownLatch complete = new CountDownLatch(committee.activeMembers().size());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
@@ -166,7 +165,7 @@ public class GenesisAssemblyTest {
 
                 @Override
                 public void publish(CertifiedBlock cb) {
-                    published.add(new HashedCertifiedBlock(DigestAlgorithm.DEFAULT, cb));
+                    complete.countDown();
                 }
 
                 @Override
@@ -190,10 +189,7 @@ public class GenesisAssemblyTest {
         try {
             communications.values().forEach(r -> r.start());
             genii.values().forEach(r -> r.start());
-            Thread.sleep(1_000); // why oh why
-
-            Utils.waitForCondition(120_000, () -> published.size() == committee.activeMembers().size());
-            assertEquals(published.size(), committee.activeMembers().size());
+            complete.await(15, TimeUnit.SECONDS);
         } finally {
             communications.values().forEach(r -> r.close());
             genii.values().forEach(r -> r.stop());
