@@ -84,10 +84,11 @@ public class ViewContext {
     }
 
     public Validate generateValidation(HashedBlock block) {
-        log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member());
+        log.trace("Signing block: {} height: {} on: {}", block.hash, block.height(), params.member().getId());
         JohnHancock signature = signer.sign(block.block.getHeader().toByteString());
         if (signature == null) {
-            log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(), params.member());
+            log.error("Unable to sign block: {} height: {} on: {}", block.hash, block.height(),
+                      params.member().getId());
             return null;
         }
         var validation = Validate.newBuilder()
@@ -103,12 +104,13 @@ public class ViewContext {
     public Validate generateValidation(ViewMember vm) {
         JohnHancock signature = signer.sign(vm.getSignature().toByteString());
         if (signature == null) {
-            log.error("Unable to sign view member: {} on: {}", print(vm, params.digestAlgorithm()), params.member());
+            log.error("Unable to sign view member: {} on: {}", print(vm, params.digestAlgorithm()),
+                      params.member().getId());
             return null;
         }
         if (log.isTraceEnabled()) {
             log.trace("Signed view member: {} with sig: {} on: {}", print(vm, params.digestAlgorithm()),
-                      params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member());
+                      params().digestAlgorithm().digest(signature.toSig().toByteString()), params.member().getId());
         }
         var validation = Validate.newBuilder()
                                  .setHash(vm.getId())
@@ -170,7 +172,7 @@ public class ViewContext {
             if (log.isDebugEnabled()) {
                 log.debug("Unable to validate view member: {} from validation: {} key: {} on: {}",
                           print(vm, params.digestAlgorithm()), print(validate, params.digestAlgorithm()),
-                          params.digestAlgorithm().digest(v.toString()), params.member());
+                          params.digestAlgorithm().digest(v.toString()), params.member().getId());
             }
         }
         return valid;
@@ -182,7 +184,7 @@ public class ViewContext {
         if (m == null) {
             if (log.isDebugEnabled()) {
                 log.debug("Unable to validate key by non existant validator: {} on: {}",
-                          print(validate, params.digestAlgorithm()), params.member());
+                          print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
         }
@@ -190,7 +192,7 @@ public class ViewContext {
         if (v == null) {
             if (log.isDebugEnabled()) {
                 log.debug("Unable to validate key by non existant validator: {} on: {}",
-                          print(validate, params.digestAlgorithm()), params.member());
+                          print(validate, params.digestAlgorithm()), params.member().getId());
             }
             return null;
         }

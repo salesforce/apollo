@@ -69,7 +69,7 @@ public class Producer {
             p.witnesses.put(params().member(), validation);
             ds.offer(validation);
             log.info("Reconfiguration block: {} height: {} produced on: {}", reconfiguration.hash,
-                     reconfiguration.height(), params().member());
+                     reconfiguration.height(), params().member().getId());
         }
 
         @Override
@@ -82,10 +82,10 @@ public class Producer {
 
         @Override
         public void checkpoint() {
-            log.info("Generating checkpoint block on: {}", params().member());
+            log.info("Generating checkpoint block on: {}", params().member().getId());
             Block ckpt = view.checkpoint();
             if (ckpt == null) {
-                log.error("Cannot generate checkpoint block on: {}", params().member());
+                log.error("Cannot generate checkpoint block on: {}", params().member().getId());
                 transitions.failed();
                 return;
             }
@@ -98,7 +98,7 @@ public class Producer {
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
             log.info("Produced checkpoint: {} height: {} for: {} on: {}", next.hash, next.height(), getViewId(),
-                     params().member());
+                     params().member().getId());
             transitions.checkpointed();
         }
 
@@ -111,7 +111,7 @@ public class Producer {
         public void drain() {
             draining.set(true);
             ds.drain();
-            log.info("Draining with: {} remaining batches on: {}", ds.getRemaining(), params().member());
+            log.info("Draining with: {} remaining batches on: {}", ds.getRemaining(), params().member().getId());
         }
 
         @Override
@@ -126,12 +126,12 @@ public class Producer {
 
         @Override
         public void reconfigure() {
-            log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member());
+            log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
             assembly = new ViewAssembly(nextViewId, view, comms) {
                 @Override
                 public void complete() {
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
-                              params().member());
+                              params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
                     super.complete();
@@ -143,7 +143,7 @@ public class Producer {
 
         @Override
         public void startProduction() {
-            log.debug("Starting production for: {} on: {}", getViewId(), params().member());
+            log.debug("Starting production for: {} on: {}", getViewId(), params().member().getId());
             controller.start();
             coordinator.start(params().producer().gossipDuration(), params().scheduler());
         }
@@ -190,7 +190,7 @@ public class Producer {
                               producerParams.batchInterval(), producerParams.maxBatchCount());
 
         log.trace("Producer max elements: {} reconfiguration epoch: {} on: {}", maxElements, lastEpoch,
-                  params.member());
+                  params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName("Producer" + getViewId() + params().member().getId().toString());
@@ -203,7 +203,7 @@ public class Producer {
         if (pid == null) {
             config.setPid((short) 0).setnProc((short) 1);
         } else {
-            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member());
+            log.trace("Pid: {} for: {} on: {}", pid, getViewId(), params().member().getId());
             config.setPid(pid).setnProc((short) view.roster().size());
         }
 
@@ -213,7 +213,7 @@ public class Producer {
                                   (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch));
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), params().exec(), producerMetrics);
-        log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member());
+        log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
     }
 
     public void assembled() {
@@ -243,7 +243,7 @@ public class Producer {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Closing producer for: {} on: {}", getViewId(), params().member());
+        log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
         controller.stop();
         coordinator.stop();
         final var c = assembly;
@@ -262,12 +262,12 @@ public class Producer {
     }
 
     private void create(PreBlock preblock, boolean last) {
-        log.debug("preblock produced, last: {} on: {}", last, params().member());
+        log.debug("preblock produced, last: {} on: {}", last, params().member().getId());
         var aggregate = preblock.data().stream().map(e -> {
             try {
                 return UnitData.parseFrom(e);
             } catch (InvalidProtocolBufferException ex) {
-                log.error("Error parsing unit data on: {}", params().member());
+                log.error("Error parsing unit data on: {}", params().member().getId());
                 return (UnitData) null;
             }
         }).filter(e -> e != null).toList();
@@ -297,7 +297,7 @@ public class Producer {
             pending.put(next.hash, p);
             p.witnesses.put(params().member(), validation);
             log.debug("Created block: {} height: {} prev: {} last: {} on: {}", next.hash, next.height(), lb.hash, last,
-                      params().member());
+                      params().member().getId());
         }
         if (last) {
             started.set(true);
@@ -310,7 +310,7 @@ public class Producer {
     }
 
     private void newEpoch(Integer epoch) {
-        log.trace("new epoch: {} on: {}", epoch, params().member());
+        log.trace("new epoch: {} on: {}", epoch, params().member().getId());
         transitions.newEpoch(epoch, lastEpoch);
     }
 
@@ -335,11 +335,11 @@ public class Producer {
         p.witnesses.put(params().member(), validation);
         ds.offer(validation);
         log.debug("View assembly: {} block: {} height: {} body: {} from: {} on: {}", nextViewId, assemble.hash,
-                  assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member());
+                  assemble.height(), assemble.block.getBodyCase(), getViewId(), params().member().getId());
     }
 
     private void publish(PendingBlock p) {
-        log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member());
+        log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member().getId());
         p.published.set(true);
         pending.remove(p.block.hash);
         final var cb = CertifiedBlock.newBuilder()
@@ -359,7 +359,7 @@ public class Producer {
             return null;
         }
         if (!view.validate(p.block, v)) {
-            log.trace("Invalid validate for: {} on: {}", hash, params().member());
+            log.trace("Invalid validate for: {} on: {}", hash, params().member().getId());
             return null;
         }
         p.witnesses.put(view.context().getMember(Digest.from(v.getWitness().getId())), v);

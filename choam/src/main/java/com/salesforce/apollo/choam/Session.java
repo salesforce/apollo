@@ -145,7 +145,7 @@ public class Session {
             return result;
         }
         var futureTimeout = scheduler.schedule(() -> {
-            log.debug("Timeout of txn: {} on: {}", hash, params.member());
+            log.debug("Timeout of txn: {} on: {}", hash, params.member().getId());
             final var to = new TimeoutException("Transaction timeout");
             result.completeExceptionally(to);
             if (params.metrics() != null) {
@@ -166,7 +166,7 @@ public class Session {
     SubmittedTransaction complete(Digest hash) {
         final SubmittedTransaction stxn = submitted.remove(hash);
         if (stxn != null) {
-            log.trace("Completed: {} on: {}", hash, params.member());
+            log.trace("Completed: {} on: {}", hash, params.member().getId());
         }
         return stxn;
     }
@@ -175,7 +175,7 @@ public class Session {
         submitted.remove(hash);
         if (timer != null) {
             timer.close();
-            log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member());
+            log.trace("Transaction lifecycle complete: {} error: {} on: {}", hash, t, params.member().getId());
             params.metrics().transactionComplete(t);
         }
     }
@@ -183,7 +183,7 @@ public class Session {
     private boolean submit(SubmittedTransaction stx) {
         var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
-            log.info("Transaction submission: {} rejected on: {}", stx.hash(), params.member());
+            log.info("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedFail();
             }
@@ -194,7 +194,7 @@ public class Session {
 
         if (result.getResult() == Result.PUBLISHED) {
             listener.get().onSuccess();
-            log.trace("Transaction submitted: {} on: {}", stx.hash(), params.member());
+            log.trace("Transaction submitted: {} on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedSuccess();
             }
