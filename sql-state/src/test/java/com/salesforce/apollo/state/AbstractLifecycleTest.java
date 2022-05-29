@@ -183,7 +183,7 @@ abstract public class AbstractLifecycleTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
+        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setExec(Executors.newFixedThreadPool(2))
