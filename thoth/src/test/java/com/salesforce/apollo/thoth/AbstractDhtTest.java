@@ -123,11 +123,11 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
-                                             Executors.newFixedThreadPool(3), null);
+                                             Executors.newFixedThreadPool(4), null);
         router.setMember(member);
         routers.put(member.getId(), router);
         dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                                             Executors.newFixedThreadPool(3), Duration.ofSeconds(1), 0.125, null));
+                                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2), 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
