@@ -23,6 +23,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>17</release>
+                	<compilerArgs></compilerArgs>
                 </configuration>
             </plugin>
             <plugin>
