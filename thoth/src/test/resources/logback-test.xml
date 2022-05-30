@@ -29,12 +29,12 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.comm.RingCommunications" level="info"
+    <logger name="com.salesforce.apollo.comm.RingCommunications" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.comm.RingIterator" level="info"
+    <logger name="com.salesforce.apollo.comm.RingIterator" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
@@ -49,7 +49,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.thoth" level="info"
+    <logger name="com.salesforce.apollo.thoth" level="trace"
         additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
