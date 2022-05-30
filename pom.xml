@@ -445,6 +445,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                	<argLine>-Xmx17g -Xms2g --enable-preview</argLine>
                     <forkCount>1</forkCount>
                     <reuseForks>false</reuseForks>
                 </configuration>
