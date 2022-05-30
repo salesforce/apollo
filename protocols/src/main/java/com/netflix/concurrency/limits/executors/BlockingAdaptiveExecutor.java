@@ -15,19 +15,16 @@
  */
 package com.netflix.concurrency.limits.executors;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.netflix.concurrency.limits.Limiter;
 import com.netflix.concurrency.limits.Limiter.Listener;
 import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
-import com.netflix.concurrency.limits.limiter.BlockingLimiter;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
-
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * {@link Executor} which uses a {@link Limiter} to determine the size of the
@@ -75,14 +72,7 @@ public final class BlockingAdaptiveExecutor implements Executor {
             }
 
             if (executor == null) {
-                executor = Executors.newCachedThreadPool(new ThreadFactory() {
-                    @Override
-                    public Thread newThread(Runnable r) {
-                        Thread thread = new Thread(r);
-                        thread.setDaemon(true);
-                        return thread;
-                    }
-                });
+                throw new IllegalStateException("Executor must be not null");
             }
 
             if (limiter == null) {
@@ -106,17 +96,6 @@ public final class BlockingAdaptiveExecutor implements Executor {
     private BlockingAdaptiveExecutor(Builder builder) {
         this.limiter = builder.limiter;
         this.executor = builder.executor;
-    }
-
-    @Deprecated
-    public BlockingAdaptiveExecutor(Limiter<Void> limiter) {
-        this(limiter, Executors.newCachedThreadPool());
-    }
-
-    @Deprecated
-    public BlockingAdaptiveExecutor(Limiter<Void> limiter, Executor executor) {
-        this.limiter = BlockingLimiter.wrap(limiter);
-        this.executor = executor;
     }
 
     @Override

@@ -222,14 +222,14 @@ public class DomainTest {
                                                                           Executors.newSingleThreadScheduledExecutor());
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(1), null);
+                                              Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
                                                             .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                             .setContext(context)
-                                                            .setExec(Executors.newSingleThreadExecutor())
+                                                            .setExec(Executors.newFixedThreadPool(3))
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), txnConfig);
             domains.add(domain);
@@ -262,7 +262,7 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockDelta(200);
-        params.getProducer().ethereal().setNumberOfEpochs(5);
+        params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }
 }

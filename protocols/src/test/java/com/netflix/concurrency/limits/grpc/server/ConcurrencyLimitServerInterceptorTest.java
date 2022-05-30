@@ -122,8 +122,13 @@ public class ConcurrencyLimitServerInterceptorTest {
         startServer((req, observer) -> {
             throw new RuntimeException("failure");
         });
-
+        System.out.println();
+        System.out.println();
+        System.out.println("********************************************");
         System.out.println("*** Expecting two exception stack traces ***");
+        System.out.println("********************************************");
+        System.out.println();
+        System.out.println();
         try {
             ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
             fail("Should have failed with UNKNOWN error");
@@ -135,6 +140,13 @@ public class ConcurrencyLimitServerInterceptorTest {
         Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();
 
         verifyCounts(0, 1, 0, 0);
+        System.out.println();
+        System.out.println();
+        System.out.println("******************************************");
+        System.out.println("*** 2 stack traces above were expected ***");
+        System.out.println("******************************************");
+        System.out.println();
+        System.out.println();
     }
 
     @Test

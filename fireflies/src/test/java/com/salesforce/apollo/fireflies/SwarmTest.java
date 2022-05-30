@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -95,8 +94,7 @@ public class SwarmTest {
 
     @Test
     public void churn() throws Exception {
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
-        initialize(exec);
+        initialize();
 
         List<View> testViews = new ArrayList<>();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
@@ -107,7 +105,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream()
@@ -136,7 +134,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(exec, Duration.ofMillis(10), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
@@ -148,7 +146,7 @@ public class SwarmTest {
             + testViews.stream()
                        .filter(e -> e.getContext().getActive().size() != testViews.size())
                        .map(v -> String.format("%s : %s", v.getContext().getId(),
-                                               v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
+                                               v.getContext().getOffline().size()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -184,12 +182,10 @@ public class SwarmTest {
     }
 
     @Test
-    public void swarm() throws Exception {
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
-        initialize(exec);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+    public void swarm() throws Exception { 
+        initialize(); 
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, Executors.newSingleThreadScheduledExecutor()));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;
@@ -242,7 +238,7 @@ public class SwarmTest {
                        .report();
     }
 
-    private void initialize(Executor exec) {
+    private void initialize() {
         Random entropy = new Random(0x666);
         registry = new MetricRegistry();
         node0Registry = new MetricRegistry();
@@ -273,12 +269,12 @@ public class SwarmTest {
                                                              .setTarget(2)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry
                                                                                                                                      : registry)),
-                                        exec, metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
             comms.setMember(node);
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics, exec);
+                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }
 }

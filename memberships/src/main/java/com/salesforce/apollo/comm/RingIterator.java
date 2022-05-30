@@ -145,7 +145,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                               member.getId());
                     exec.execute(proceed);
                 }
-            }, exec);
+            }, r -> r.run());
         } catch (IOException e) {
             log.debug("Error closing", e);
         }

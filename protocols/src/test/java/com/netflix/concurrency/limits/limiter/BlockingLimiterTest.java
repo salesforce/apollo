@@ -77,7 +77,9 @@ public class BlockingLimiterTest {
         Instant after = Instant.now();
 
         Duration delay = Duration.between(before, after);
-        assertTrue(delay.compareTo(timeout) >= 0, "Delay was " + delay.toMillis() + " millis");
+        var delta = timeout.minus(delay).abs().toMillis();
+        assertTrue(delta <= 5,
+                   "Delay was " + delay.toMillis() + " millis, expected: " + timeout.toMillis() + " millis");
     }
 
     @Test

@@ -122,7 +122,7 @@ public class SuccessorTest {
                             DigestAlgorithm.DEFAULT, metrics, executor);
         }).collect(Collectors.toMap(v -> v.getNode().getId(), v -> v));
 
-        views.values().forEach(view -> view.start(executor, Duration.ofMillis(10), seeds, scheduler));
+        views.values().forEach(view -> view.start(Duration.ofMillis(10), seeds, scheduler));
 
         try {
             Utils.waitForCondition(15_000, 1_000, () -> {

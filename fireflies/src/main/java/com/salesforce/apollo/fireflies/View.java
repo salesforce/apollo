@@ -613,7 +613,7 @@ public class View {
                          .build();
         }
 
-        public void start(Executor exec, Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
+        public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
             if (!started.compareAndSet(false, true)) {
                 return;
             }
@@ -766,54 +766,19 @@ public class View {
      */
     public static boolean isValidMask(BitSet mask, int toleranceLevel) {
         return mask.cardinality() == toleranceLevel + 1;
-    }
-
-    /**
-     * Communications with other members
-     */
-    private final CommonCommunications<Fireflies, Service> comm;
-
-    /**
-     * View context
-     */
+    } 
+    private final CommonCommunications<Fireflies, Service> comm; 
     private final Context<Participant> context;
-
-    private final DigestAlgorithm digestAlgo;
-
-    /**
-     * The false positive rate for the bloomfilters used for the antientropy
-     * protocol
-     */
-    private final double fpr;
-
-    private final FireflyMetrics metrics;
-
-    /**
-     * This member
-     */
-    private final Node node;
-
-    /**
-     * Pending rebutal timers by member identity
-     */
-    private final ConcurrentMap<Digest, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>();
-
-    /**
-     * Current gossip round
-     */
-    private final AtomicLong round = new AtomicLong(0);
-
-    /**
-     * Rebutals sorted by target round
-     */
+    private final DigestAlgorithm digestAlgo; 
+    private final double fpr; 
+    private final FireflyMetrics metrics; 
+    private final Node node; 
+    private final ConcurrentMap<Digest, FutureRebutal> pendingRebutals = new ConcurrentHashMap<>(); 
+    private final AtomicLong round = new AtomicLong(0); 
     private final ConcurrentSkipListSet<FutureRebutal> scheduledRebutals = new ConcurrentSkipListSet<>();
-
-    /**
-     * The gossip service
-     */
     private final Service service = new Service();
-
     private final EventValidation validation;
+    private final Executor exec;
 
     public View(Context<Participant> context, ControlledIdentifierMember member, InetSocketAddress endpoint,
                 EventValidation validation, Router communications, double fpr, DigestAlgorithm digestAlgo,
@@ -829,6 +794,7 @@ public class View {
                                           r -> new FfServer(service, communications.getClientIdentityProvider(), r,
                                                             exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
+        this.exec = exec;
         add(node);
         log.info("View [{}]", node.getId());
     }
@@ -844,8 +810,8 @@ public class View {
     /**
      * Start the View
      */
-    public void start(Executor exec, Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
-        service.start(exec, d, seeds, scheduler);
+    public void start(Duration d, List<Identity> seeds, ScheduledExecutorService scheduler) {
+        service.start(d, seeds, scheduler);
     }
 
     /**

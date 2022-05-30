@@ -164,7 +164,7 @@ public class MtlsTest {
 
         var then = System.currentTimeMillis();
         communications.forEach(e -> e.start());
-        views.forEach(view -> view.start(exec, Duration.ofMillis(200), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(200), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
@@ -195,7 +195,7 @@ public class MtlsTest {
         views.forEach(view -> view.stop());
 
         System.out.println("Restarting views");
-        views.forEach(view -> view.start(exec, Duration.ofMillis(1000), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(1000), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
