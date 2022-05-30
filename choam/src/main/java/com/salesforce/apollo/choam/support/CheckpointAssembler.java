@@ -53,13 +53,14 @@ public class CheckpointAssembler {
     private final Context<Member>                           context;
     private final DigestAlgorithm                           digestAlgorithm;
     private final double                                    fpr;
+    private final Duration                                  frequency;
     private final List<Digest>                              hashes    = new ArrayList<>();
     private final ULong                                     height;
     private final SigningMember                             member;
     private final MVMap<Integer, byte[]>                    state;
 
-    public CheckpointAssembler(ULong height, Checkpoint checkpoint, SigningMember member, Store store,
-                               CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
+    public CheckpointAssembler(Duration frequency, ULong height, Checkpoint checkpoint, SigningMember member,
+                               Store store, CommonCommunications<Terminal, Concierge> comms, Context<Member> context,
                                double falsePositiveRate, DigestAlgorithm digestAlgorithm) {
         this.height = height;
         this.member = member;
@@ -68,6 +69,7 @@ public class CheckpointAssembler {
         this.context = context;
         this.fpr = falsePositiveRate;
         this.digestAlgorithm = digestAlgorithm;
+        this.frequency = frequency;
         state = store.createCheckpoint(height);
         checkpoint.getSegmentsList().stream().map(bs -> new Digest(bs)).forEach(hash -> hashes.add(hash));
     }
@@ -123,7 +125,7 @@ public class CheckpointAssembler {
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
                  member.getId());
-        RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, exec, true);
+        RingIterator<Terminal> ringer = new RingIterator<>(frequency, context, member, comms, exec, true, scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        () -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),

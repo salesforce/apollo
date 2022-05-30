@@ -122,6 +122,7 @@ public class BootstrapperTest {
         Bootstrapper boot = new Bootstrapper(testChain.getAnchor(),
                                              Parameters.newBuilder()
                                                        .setSynchronizeDuration(Duration.ofMillis(1000))
+                                                       .setGossipDuration(Duration.ofMillis(10))
                                                        .build(RuntimeParameters.newBuilder()
                                                                                .setContext(context)
                                                                                .setMember(member)

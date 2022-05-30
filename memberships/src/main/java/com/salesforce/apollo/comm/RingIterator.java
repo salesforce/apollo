@@ -7,10 +7,13 @@
 package com.salesforce.apollo.comm;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -25,6 +28,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring.IterateResult;
 import com.salesforce.apollo.membership.SigningMember;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -33,30 +37,39 @@ import com.salesforce.apollo.membership.SigningMember;
 public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private static final Logger log = LoggerFactory.getLogger(RingIterator.class);
 
-    private final boolean    ignoreSelf;
-    private volatile boolean majorityFailed  = false;
-    private volatile boolean majoritySucceed = false;
+    private volatile boolean               complete        = false;
+    private final Duration                 frequency;
+    private final boolean                  ignoreSelf;
+    private volatile boolean               majorityFailed  = false;
+    private volatile boolean               majoritySucceed = false;
+    private final ScheduledExecutorService scheduler;
 
-    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                        Executor exec) {
-        this(context, member, comm, exec, false);
-    }
-
-    public RingIterator(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
-                        Executor exec, boolean ignoreSelf) {
+    public RingIterator(Duration frequency, Context<Member> context, SigningMember member,
+                        CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
+                        ScheduledExecutorService scheduler) {
         super(context, member, comm, exec);
         this.ignoreSelf = ignoreSelf;
+        this.scheduler = scheduler;
+        this.frequency = frequency;
     }
 
-    public RingIterator(Direction direction, Context<Member> context, SigningMember member,
-                        CommonCommunications<Comm, ?> comm, Executor exec) {
-        this(direction, context, member, comm, exec, false);
+    public RingIterator(Duration frequency, Context<Member> context, SigningMember member,
+                        ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
+        this(frequency, context, member, comm, exec, false, scheduler);
     }
 
-    public RingIterator(Direction direction, Context<Member> context, SigningMember member,
-                        CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf) {
+    public RingIterator(Duration frequency, Direction direction, Context<Member> context, SigningMember member,
+                        CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
+                        ScheduledExecutorService scheduler) {
         super(direction, context, member, comm, exec);
         this.ignoreSelf = ignoreSelf;
+        this.scheduler = scheduler;
+        this.frequency = frequency;
+    }
+
+    public RingIterator(Duration frequency, Direction direction, Context<Member> context, SigningMember member,
+                        ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
+        this(frequency, direction, context, member, comm, exec, false, scheduler);
     }
 
     public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
@@ -102,26 +115,26 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         });
         try (Comm link = next.link()) {
             final int current = lastRingIndex();
-            boolean finalIteration = current == ringCount - 1;
+            boolean completed = complete;
+            complete = current == ringCount - 1;
+            log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} complete: {} on: {}", current, tally.get(),
+                      digest, context.getId(), next.ring(), completed, member.getId());
 
-            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally,
-                                                         finalIteration, onComplete);
-            if (finalIteration) {
-                traversed.clear();
-            }
+            Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally, completed,
+                                                         onComplete);
             if (link == null) {
-//                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
-//                          member);
+                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
+                          member);
                 final boolean allow = handler.handle(tally, Optional.empty(), link, current);
                 allowed.accept(allow);
-                if (!finalIteration && allow) {
+                if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
                               member.getId());
-                    exec.execute(proceed);
+                    schedule(proceed);
                 }
                 return;
             }
-            log.trace("Iteration: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", current, tally.get(), digest,
+            log.trace("Continuation: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", current, tally.get(), digest,
                       context.getId(), next.ring(), link.getMember() == null ? null : link.getMember().getId(),
                       member.getId());
             ListenableFuture<T> futureSailor = round.apply(link, next.ring());
@@ -130,22 +143,22 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
                           current, link.getMember() == null ? null : link.getMember().getId(), member.getId());
                 final boolean allow = handler.handle(tally, Optional.empty(), link, next.ring());
                 allowed.accept(allow);
-                if (!finalIteration && allow) {
+                if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
                               member.getId());
-                    exec.execute(proceed);
+                    schedule(proceed);
                 }
                 return;
             }
             futureSailor.addListener(() -> {
                 final var allow = handler.handle(tally, Optional.of(futureSailor), link, next.ring());
                 allowed.accept(allow);
-                if (!finalIteration && allow) {
+                if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
                               member.getId());
-                    exec.execute(proceed);
+                    schedule(proceed);
                 }
-            }, r -> r.run());
+            }, exec);
         } catch (IOException e) {
             log.debug("Error closing", e);
         }
@@ -182,5 +195,10 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         } else if (!allow) {
             log.trace("Termination on: {} for: {} tally: {} on: {}", key, context.getId(), tally.get(), member.getId());
         }
+    }
+
+    private void schedule(Runnable proceed) {
+        scheduler.schedule(Utils.wrapped(() -> exec.execute(Utils.wrapped(proceed, log)), log), frequency.toNanos(),
+                           TimeUnit.NANOSECONDS);
     }
 }

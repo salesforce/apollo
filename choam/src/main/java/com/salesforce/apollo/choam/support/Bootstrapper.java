@@ -113,7 +113,7 @@ public class Bootstrapper {
     }
 
     private void anchor(AtomicReference<ULong> start, ULong end) {
-        new RingIterator<>(params.context(), params.member(), comms,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
                            params.exec()).iterate(randomCut(params.digestAlgorithm()),
                                                   (link, ring) -> anchor(link, start, end),
                                                   (tally, futureSailor, link, ring) -> completeAnchor(futureSailor,
@@ -150,9 +150,10 @@ public class Bootstrapper {
         log.info("Assembling from checkpoint: {}:{} on: {}", checkpoint.height(), checkpoint.hash,
                  params.member().getId());
 
-        CheckpointAssembler assembler = new CheckpointAssembler(checkpoint.height(), checkpoint.block.getCheckpoint(),
-                                                                params.member(), store, comms, params.context(),
-                                                                threshold, params.digestAlgorithm());
+        CheckpointAssembler assembler = new CheckpointAssembler(params.gossipDuration(), checkpoint.height(),
+                                                                checkpoint.block.getCheckpoint(), params.member(),
+                                                                store, comms, params.context(), threshold,
+                                                                params.digestAlgorithm());
 
         // assemble the checkpoint
         checkpointAssembled = assembler.assemble(params.scheduler(), params.synchronizeDuration(), params.exec())
@@ -205,7 +206,7 @@ public class Bootstrapper {
     }
 
     private void completeViewChain(AtomicReference<ULong> start, ULong end) {
-        new RingIterator<>(params.context(), params.member(), comms,
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
                            params.exec()).iterate(randomCut(params.digestAlgorithm()),
                                                   (link, ring) -> completeViewChain(link, start, end),
                                                   (tally, futureSailor, link,
@@ -407,10 +408,11 @@ public class Bootstrapper {
                                    .setHeight(anchor.height().longValue())
                                    .build();
         final var randomCut = randomCut(params.digestAlgorithm());
-        new RingIterator<>(params.context(), params.member(), comms, params.exec(),
-                           true).iterate(randomCut, (link, ring) -> synchronize(s, link),
-                                         (tally, futureSailor, link, ring) -> synchronize(futureSailor, votes, link),
-                                         () -> computeGenesis(votes));
+        new RingIterator<>(params.gossipDuration(), params.context(), params.member(), comms, params.exec(), true,
+                           params.scheduler()).iterate(randomCut, (link, ring) -> synchronize(s, link),
+                                                       (tally, futureSailor, link, ring) -> synchronize(futureSailor,
+                                                                                                        votes, link),
+                                                       () -> computeGenesis(votes));
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {

@@ -126,8 +126,10 @@ public class AbstractDhtTest {
                                              Executors.newFixedThreadPool(4), null);
         router.setMember(member);
         routers.put(member.getId(), router);
-        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2), 0.125, null));
+        dhts.put(member.getId(),
+                 new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
+                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2),
+                             Executors.newSingleThreadScheduledExecutor(), 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,
