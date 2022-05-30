@@ -119,10 +119,6 @@ public class ConcurrencyLimitServerInterceptorTest {
 
     @Test
     public void releaseOnUncaughtException() throws IOException {
-        // Setup server
-        startServer((req, observer) -> {
-            throw new RuntimeException("failure");
-        });
         StringBuilder builder = new StringBuilder().append('\n')
                                                    .append('\n')
                                                    .append("********************************************")
@@ -134,6 +130,10 @@ public class ConcurrencyLimitServerInterceptorTest {
                                                    .append('\n')
                                                    .append('\n');
         LoggerFactory.getLogger(getClass()).warn(builder.toString());
+        // Setup server
+        startServer((req, observer) -> {
+            throw new RuntimeException("failure");
+        });
         try {
             ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
             fail("Should have failed with UNKNOWN error");

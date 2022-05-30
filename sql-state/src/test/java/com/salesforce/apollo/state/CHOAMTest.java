@@ -26,7 +26,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -127,7 +126,7 @@ public class CHOAMTest {
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
+                               .setSynchronizeTimeout(Duration.ofMillis(200))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
@@ -149,18 +148,15 @@ public class CHOAMTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newSingleThreadExecutor(r -> new Thread(r,
-                                                                                                "Comm[" + m.getId()
-                                                                                                + "]")),
+                                              Executors.newFixedThreadPool(2,
+                                                                           r -> new Thread(r,
+                                                                                           "Comm[" + m.getId() + "]")),
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var ei = new AtomicInteger();
-            return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec[" + m.getId() + ":"
-                               + ei.incrementAndGet() + "]")));
+            return createCHOAM(entropy, params, m, context, metrics);
         }));
     }
 
@@ -272,7 +268,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics, Executor exec) {
+                              ChoamMetrics metrics) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -280,6 +276,7 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
+        var ei = new AtomicInteger();
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setGenesisData(view -> GENESIS_DATA)
@@ -290,7 +287,11 @@ public class CHOAMTest {
                                                                                                                       + "]")))
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(exec)
+                                                       .setExec(Executors.newFixedThreadPool(2,
+                                                                                             r -> new Thread(r, "Exec["
+                                                                                             + m.getId() + ":"
+                                                                                             + ei.incrementAndGet()
+                                                                                             + "]")))
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {
