@@ -40,6 +40,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -217,6 +218,8 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
+        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
+                                                                          Executors.newSingleThreadScheduledExecutor());
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
                                               Executors.newFixedThreadPool(1), null);
@@ -228,7 +231,7 @@ public class DomainTest {
                                                             .setContext(context)
                                                             .setExec(Executors.newSingleThreadExecutor())
                                                             .setCommunications(localRouter),
-                                           new InetSocketAddress(0));
+                                           new InetSocketAddress(0), txnConfig);
             domains.add(domain);
             localRouter.setMember(domain.getMember());
             localRouter.start();
@@ -249,7 +252,6 @@ public class DomainTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))

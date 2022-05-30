@@ -39,6 +39,7 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.ContextImpl;
+import com.salesforce.apollo.model.Domain.TransactionConfiguration;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
@@ -90,6 +91,8 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
+        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
+                                                                          Executors.newSingleThreadScheduledExecutor());
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
@@ -101,7 +104,7 @@ public class FireFliesTest {
                                                           .setContext(context)
                                                           .setExec(Executors.newFixedThreadPool(2))
                                                           .setCommunications(localRouter),
-                                         new InetSocketAddress(0));
+                                         new InetSocketAddress(0), txnConfig);
             domains.add(node);
             routers.put(node, localRouter);
             localRouter.setMember(node.getMember());
@@ -133,7 +136,7 @@ public class FireFliesTest {
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
-        assertTrue(Utils.waitForCondition(30_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> domains.stream().filter(c -> !c.active()).count() == 0),
                    "Domains did not become active");
         System.out.println();
         System.out.println("******");
@@ -148,7 +151,6 @@ public class FireFliesTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(50))
@@ -160,7 +162,7 @@ public class FireFliesTest {
                                                               .build())
                                .setCheckpointBlockDelta(200);
 
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setNumberOfEpochs(5);
         return params;
     }
 }

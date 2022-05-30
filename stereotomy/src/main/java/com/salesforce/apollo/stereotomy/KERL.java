@@ -66,8 +66,7 @@ public interface KERL extends KEL {
         }
     }
 
-    CompletableFuture<Void> append(AttachmentEvent event);
+    CompletableFuture<Void> append(List<AttachmentEvent> events);
 
     Optional<List<EventWithAttachments>> kerl(Identifier identifier);
-
 }

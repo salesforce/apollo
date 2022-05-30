@@ -22,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -59,9 +60,9 @@ import com.salesforce.apollo.utils.Utils;
 public class RbcTest {
 
     class Receiver implements MessageHandler {
-        final Set<Digest>       counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
-        final AtomicInteger     current;
-        volatile CountDownLatch round;
+        final Set<Digest>                     counted = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final AtomicInteger                   current;
+        final AtomicReference<CountDownLatch> round   = new AtomicReference<>();
 
         Receiver(int cardinality, AtomicInteger current) {
             this.current = current;
@@ -83,7 +84,7 @@ public class RbcTest {
                             System.out.println();
                         }
                         if (counted.size() == certs.size() - 1) {
-                            round.countDown();
+                            round.get().countDown();
                         }
                     }
                 }
@@ -91,7 +92,7 @@ public class RbcTest {
         }
 
         public void setRound(CountDownLatch round) {
-            this.round = round;
+            this.round.set(round);
         }
 
         void reset() {

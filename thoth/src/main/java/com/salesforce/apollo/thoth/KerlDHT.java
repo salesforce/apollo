@@ -7,7 +7,12 @@
 
 package com.salesforce.apollo.thoth;
 
+import static com.salesforce.apollo.stereotomy.schema.tables.Coordinates.COORDINATES;
+import static com.salesforce.apollo.stereotomy.schema.tables.Identifier.IDENTIFIER;
+import static com.salesforce.apollo.thoth.schema.tables.Validation.VALIDATION;
+
 import java.io.PrintStream;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +31,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.DSLContext;
+import org.jooq.SQLDialect;
+import org.jooq.impl.DSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +42,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.stereotomy.event.proto.Attachment;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.EventCoords;
@@ -47,10 +56,14 @@ import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
 import com.salesfoce.apollo.stereotomy.event.proto.RotationEvent;
 import com.salesfoce.apollo.thoth.proto.Intervals;
+import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
 import com.salesfoce.apollo.thoth.proto.Update;
 import com.salesfoce.apollo.thoth.proto.Updating;
+import com.salesfoce.apollo.thoth.proto.Validation;
+import com.salesfoce.apollo.thoth.proto.Validations;
 import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
+import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RingCommunications;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
@@ -61,11 +74,11 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.Ring;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.stereotomy.KERL;
+import com.salesforce.apollo.stereotomy.caching.CachingKERL;
 import com.salesforce.apollo.stereotomy.db.UniKERLDirectPooled;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
+import com.salesforce.apollo.thoth.grpc.Dht;
 import com.salesforce.apollo.thoth.grpc.DhtClient;
 import com.salesforce.apollo.thoth.grpc.DhtServer;
 import com.salesforce.apollo.thoth.grpc.DhtService;
@@ -128,82 +141,134 @@ public class KerlDHT {
         }
     }
 
-    private class Service implements ProtoKERLService {
+    private class Service implements Dht {
 
         @Override
         public CompletableFuture<List<KeyState_>> append(KERL_ kerl_) {
             log.info("appending kerl on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(kerl_));
+            return complete(k -> k.append(kerl_));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events) {
             log.info("appending events on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(events));
+            return complete(k -> k.append(events));
         }
 
         @Override
         public CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
             log.info("appending events and attachments on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).append(events, attachments));
+            return complete(k -> k.append(events, attachments));
+        }
+
+        @Override
+        public CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+            log.info("append attachments on: {}", member.getId());
+            return complete(k -> k.appendAttachments(attachments));
+        }
+
+        @Override
+        public CompletableFuture<Empty> appendValidations(List<Validations> validations) {
+            return db_appendValidations(validations);
         }
 
         @Override
         public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
             log.info("get attachments for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getAttachment(coordinates));
+            return complete(k -> k.getAttachment(coordinates));
         }
 
         @Override
         public CompletableFuture<KERL_> getKERL(Ident identifier) {
             log.info("get kerl for identifier on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKERL(identifier));
+            return complete(k -> k.getKERL(identifier));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
             log.info("get key event for digest on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(digest));
+            return complete(k -> k.getKeyEvent(digest));
         }
 
         @Override
         public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
             log.info("get key event for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyEvent(coordinates));
+            return complete(k -> k.getKeyEvent(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
             log.info("get key state for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyState(coordinates));
+            return complete(k -> k.getKeyState(coordinates));
         }
 
         @Override
         public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
             log.info("get key state for identifier on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyState(identifier));
+            return complete(k -> k.getKeyState(identifier));
         }
 
         @Override
         public CompletableFuture<KeyStateWithAttachments_> getKeyStateWithAttachments(EventCoords coords) {
             log.info("get key state with attachments for coordinates on: {}", member.getId());
-            return complete(k -> new ProtoKERLAdapter(k).getKeyStateWithAttachments(coords));
+            return complete(k -> k.getKeyStateWithAttachments(coords));
+        }
+
+        @Override
+        public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+            log.info("get key state with endorsements and attachments for coordinates on: {}", member.getId());
+            return complete(k -> {
+                final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
+                k.getKeyStateWithAttachments(coordinates)
+                 .thenAcceptBoth(db_getValidations(coordinates), (ksa, validations) -> {
+                     var result = KeyStateWithEndorsementsAndValidations.newBuilder()
+                                                                        .setState(ksa.getState())
+                                                                        .putAllEndorsements(ksa.getAttachment()
+                                                                                               .getEndorsementsMap())
+                                                                        .addAllValidations(validations.getValidationsList())
+                                                                        .build();
+                     fs.complete(result);
+                 })
+                 .exceptionally(t -> {
+                     fs.completeExceptionally(t);
+                     return null;
+                 });
+                return fs;
+            });
+        }
+
+        @Override
+        public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+            return db_getValidations(coordinates);
         }
     }
 
     private final static Logger log = LoggerFactory.getLogger(KerlDHT.class);
 
-    private static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
+    public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         var fs = new CompletableFuture<T>();
         fs.completeExceptionally(t);
         return fs;
     }
 
+    private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
+        return majority.thenCompose(b -> {
+            var fs = new CompletableFuture<T>();
+            if (!b) {
+                fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
+            } else {
+                fs.complete(result);
+            }
+            return fs;
+        });
+    }
+
     private final JdbcConnectionPool                                          connectionPool;
     private final Context<Member>                                             context;
-    private final CommonCommunications<DhtService, ProtoKERLService>          dhtComms;
+    private final CommonCommunications<DhtService, Dht>                       dhtComms;
     private final Executor                                                    executor;
     private final double                                                      fpr;
+    private final CachingKERL                                                 kerl;
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
     private final SigningMember                                               member;
@@ -231,12 +296,19 @@ public class KerlDHT {
                                                ReconciliationClient.getCreate(context.getId(), metrics),
                                                ReconciliationClient.getLocalLoopback(reconciliation, member));
         this.connectionPool = connectionPool;
-        this.kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
+        kerlPool = new UniKERLDirectPooled(connectionPool, digestAlgorithm);
         this.executor = executor;
         this.reconcile = new RingCommunications<>(context, member, reconcileComms, executor);
         this.kerlSpace = new KerlSpace(connectionPool);
 
         initializeSchema();
+        kerl = new CachingKERL(f -> {
+            try (var k = kerlPool.create()) {
+                return f.apply(k);
+            } catch (Throwable e) {
+                return completeExceptionally(e);
+            }
+        });
     }
 
     public CompletableFuture<Void> append(KERL_ kerl) {
@@ -297,11 +369,51 @@ public class KerlDHT {
         return complete(majority, null);
     }
 
+    public CompletableFuture<Void> appendAttachments(List<AttachmentEvent> events) {
+        if (events.isEmpty()) {
+            return complete(null);
+        }
+        final var event = events.get(0);
+        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        CompletableFuture<Boolean> majority = new CompletableFuture<>();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.appendAttachments(events), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
+                                                    "append attachments"), () -> majority.complete(true));
+        final CompletableFuture<Void> complete = complete(majority, null);
+        return complete;
+    }
+
+    public CompletableFuture<Void> appendValidations(List<Validations> validations) {
+        if (validations.isEmpty()) {
+            return complete(null);
+        }
+        final var event = validations.get(0);
+        Digest identifier = extracted().digest(event.getCoordinates().getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        CompletableFuture<Boolean> majority = new CompletableFuture<>();
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier, () -> {
+        }, (link, r) -> link.appendValidations(validations), () -> {
+        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
+                                                    "append validations"), () -> majority.complete(true));
+        final CompletableFuture<Void> complete = complete(majority, null);
+        return complete;
+    }
+
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest identifier = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
         if (identifier == null) {
             return complete(null);
         }
@@ -322,7 +434,7 @@ public class KerlDHT {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = extracted().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -342,7 +454,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -363,7 +475,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -384,7 +496,7 @@ public class KerlDHT {
         if (identifier == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(identifier.toByteString());
+        Digest digest = extracted().digest(identifier.toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -405,7 +517,7 @@ public class KerlDHT {
         if (coordinates == null) {
             return complete(null);
         }
-        Digest digest = kerlPool.getDigestAlgorithm().digest(coordinates.getIdentifier().toByteString());
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
         if (digest == null) {
             return complete(null);
         }
@@ -417,6 +529,48 @@ public class KerlDHT {
                            executor).iterate(digest, (link, r) -> link.getKeyStateWithAttachments(coordinates),
                                              (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
                                                                                     digest, isTimedOut, link,
+                                                                                    "get attachment"));
+        return result;
+    }
+
+    public CompletableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        if (coordinates == null) {
+            return complete(null);
+        }
+        Digest digest = extracted().digest(coordinates.getIdentifier().toByteString());
+        if (digest == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
+        HashMultiset<KeyStateWithEndorsementsAndValidations> gathered = HashMultiset.create();
+        new RingIterator<>(context, member, dhtComms,
+                           executor).iterate(digest,
+                                             (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
+                                                                                    digest, isTimedOut, link,
+                                                                                    "get attachment"));
+        return result;
+    }
+
+    public CompletableFuture<Validations> getValidations(EventCoords coordinates) {
+        if (coordinates == null) {
+            return complete(null);
+        }
+        Digest identifier = extracted().digest(coordinates.getIdentifier().toByteString());
+        if (identifier == null) {
+            return complete(null);
+        }
+        Instant timedOut = Instant.now().plus(timeout);
+        Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
+        var result = new CompletableFuture<Validations>();
+        HashMultiset<Validations> gathered = HashMultiset.create();
+        new RingIterator<>(context, member, dhtComms, executor).iterate(identifier,
+                                                                        (link, r) -> link.getValidations(coordinates),
+                                                                        (tally, futureSailor, link,
+                                                                         r) -> read(result, gathered, futureSailor,
+                                                                                    identifier, isTimedOut, link,
                                                                                     "get attachment"));
         return result;
     }
@@ -438,33 +592,117 @@ public class KerlDHT {
         reconcileComms.deregister(context.getId());
     }
 
-    private <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
-        return majority.thenCompose(b -> {
-            var fs = new CompletableFuture<T>();
-            if (!b) {
-                fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
-            } else {
-                fs.complete(result);
-            }
-            return fs;
-        });
+    private <T> CompletableFuture<T> complete(Function<ProtoKERLAdapter, CompletableFuture<T>> func) {
+        return func.apply(new ProtoKERLAdapter(kerl));
     }
 
-    private <T> CompletableFuture<T> complete(Function<KERL, CompletableFuture<T>> func) {
-        try (var k = kerlPool.create()) {
-            return func.apply(k);
-        } catch (Throwable e) {
+    private CompletableFuture<Empty> db_appendValidations(List<Validations> validations) {
+        Connection connection;
+        try {
+            connection = connectionPool.getConnection();
+        } catch (SQLException e) {
             return completeExceptionally(e);
         }
+        CompletableFuture<Empty> complete = new CompletableFuture<>();
+
+        try {
+            DSL.using(connection, SQLDialect.H2).transaction(ctx -> {
+                validations.forEach(v -> {
+                    var dsl = DSL.using(ctx);
+                    var coordinates = v.getCoordinates();
+
+                    final var id = dsl.select(COORDINATES.ID)
+                                      .from(COORDINATES)
+                                      .join(IDENTIFIER)
+                                      .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                                      .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                                      .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                                      .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                                      .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                                      .fetchOne();
+                    if (id == null) {
+                        return;
+                    }
+                    for (var entry : v.getValidationsList()) {
+                        dsl.mergeInto(VALIDATION)
+                           .usingDual()
+                           .on(VALIDATION.FOR.eq(id.value1()).and(VALIDATION.VALIDATOR.eq(IDENTIFIER.ID)))
+                           .whenNotMatchedThenInsert()
+                           .set(VALIDATION.FOR, id.value1())
+                           .set(VALIDATION.VALIDATOR,
+                                dsl.select(IDENTIFIER.ID)
+                                   .from(IDENTIFIER)
+                                   .where(IDENTIFIER.PREFIX.eq(entry.getValidator().toByteArray())))
+                           .set(VALIDATION.SIGNATURE, entry.getSignature().toByteArray())
+                           .execute();
+                    }
+                });
+                complete.complete(Empty.getDefaultInstance());
+            });
+        } catch (Exception e) {
+            complete.completeExceptionally(e);
+        }
+
+        return complete;
+    }
+
+    private CompletableFuture<Validations> db_getValidations(EventCoords coordinates) {
+        Connection connection;
+        try {
+            connection = connectionPool.getConnection();
+        } catch (SQLException e) {
+            return completeExceptionally(e);
+        }
+        DSLContext dsl = DSL.using(connection, SQLDialect.H2);
+        CompletableFuture<Validations> complete = new CompletableFuture<>();
+        var resolved = dsl.select(COORDINATES.ID)
+                          .from(COORDINATES)
+                          .join(IDENTIFIER)
+                          .on(IDENTIFIER.PREFIX.eq(coordinates.getIdentifier().toByteArray()))
+                          .where(COORDINATES.IDENTIFIER.eq(IDENTIFIER.ID))
+                          .and(COORDINATES.DIGEST.eq(coordinates.getDigest().toByteArray()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                          .and(COORDINATES.ILK.eq(coordinates.getIlk()))
+                          .and(COORDINATES.SEQUENCE_NUMBER.eq(coordinates.getSequenceNumber()))
+                          .fetchOne();
+        if (resolved == null) {
+            complete.complete(Validations.getDefaultInstance());
+            return complete;
+        }
+
+        record validation(Ident identifier, Sig signature) {}
+        var builder = Validations.newBuilder().setCoordinates(coordinates);
+
+        dsl.select(IDENTIFIER.PREFIX, VALIDATION.SIGNATURE)
+           .from(VALIDATION)
+           .join(IDENTIFIER)
+           .on(IDENTIFIER.ID.eq(VALIDATION.VALIDATOR))
+           .where(VALIDATION.FOR.eq(resolved.value1()))
+           .fetch()
+           .stream()
+           .map(r -> {
+               try {
+                   return new validation(Ident.parseFrom(r.value1()), Sig.parseFrom(r.value2()));
+               } catch (InvalidProtocolBufferException e) {
+                   log.error("Error deserializing signature witness: {}", e);
+                   return null;
+               }
+           })
+           .filter(s -> s != null)
+           .forEach(e -> builder.addValidations(Validation.newBuilder()
+                                                          .setValidator(e.identifier)
+                                                          .setSignature(e.signature)
+                                                          .build()));
+        complete.complete(builder.build());
+        return complete;
     }
 
     private Digest digestOf(InceptionEvent event) {
-        return this.kerlPool.getDigestAlgorithm().digest(event.getIdentifier().toByteString());
+        return extracted().digest(event.getIdentifier().toByteString());
     }
 
     private Digest digestOf(InteractionEvent event) {
-        return this.kerlPool.getDigestAlgorithm()
-                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
     }
 
     private Digest digestOf(final KeyEvent_ event) {
@@ -486,8 +724,11 @@ public class KerlDHT {
     }
 
     private Digest digestOf(RotationEvent event) {
-        return this.kerlPool.getDigestAlgorithm()
-                            .digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+        return extracted().digest(event.getSpecification().getHeader().getIdentifier().toByteString());
+    }
+
+    private DigestAlgorithm extracted() {
+        return kerlPool.getDigestAlgorithm();
     }
 
     private void initializeSchema() {
@@ -521,8 +762,8 @@ public class KerlDHT {
             Digest end = ring.hash(member);
 
             if (begin.compareTo(end) > 0) { // wrap around the origin of the ring
-                intervals.add(new KeyInterval(end, kerlPool.getDigestAlgorithm().getLast()));
-                intervals.add(new KeyInterval(kerlPool.getDigestAlgorithm().getOrigin(), begin));
+                intervals.add(new KeyInterval(end, extracted().getLast()));
+                intervals.add(new KeyInterval(extracted().getOrigin(), begin));
             } else {
                 intervals.add(new KeyInterval(begin, end));
             }
@@ -670,5 +911,11 @@ public class KerlDHT {
             return false;
         }
         return true;
+    }
+
+    static <T> CompletableFuture<T> completeIt(T result) {
+        var fs = new CompletableFuture<T>();
+        fs.complete(result);
+        return fs;
     }
 }

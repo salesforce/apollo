@@ -35,7 +35,7 @@ public class CachingKERL extends CachingKEL<KERL> implements KERL {
     }
 
     @Override
-    public CompletableFuture<Void> append(AttachmentEvent event) {
+    public CompletableFuture<Void> append(List<AttachmentEvent> event) {
         return complete(kerl -> kerl.append(event));
     }
 

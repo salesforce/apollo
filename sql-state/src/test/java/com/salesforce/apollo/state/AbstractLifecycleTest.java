@@ -150,7 +150,7 @@ abstract public class AbstractLifecycleTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newSingleThreadExecutor(), null);
+                                              Executors.newFixedThreadPool(2), null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -183,7 +183,7 @@ abstract public class AbstractLifecycleTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
-        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 1)
+        return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setExec(Executors.newFixedThreadPool(2))

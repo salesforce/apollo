@@ -17,8 +17,8 @@ import java.util.stream.Stream;
 import org.apache.commons.math3.fraction.Fraction;
 
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight;
-import com.salesforce.apollo.crypto.SigningThreshold.Weighted.WeightedImpl;
 import com.salesforce.apollo.crypto.SigningThreshold.Weighted.Weight.WeightImpl;
+import com.salesforce.apollo.crypto.SigningThreshold.Weighted.WeightedImpl;
 
 /**
  * @author hal.hildebrand
@@ -175,8 +175,8 @@ public interface SigningThreshold {
     }
 
     public static SigningThreshold.Unweighted unweighted(int threshold) {
-        if (threshold <= 0) {
-            throw new IllegalArgumentException("threshold must be greater than 0");
+        if (threshold < 0) {
+            throw new IllegalArgumentException("threshold must be >= 0");
         }
 
         return new Unweighted() {

@@ -23,20 +23,23 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyStateWithAttachments_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyState_;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.AttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.EventContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.IdentifierContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KERLContext;
-import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWitAttachmentsContext;
+import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventWithAttachmentsContext;
 import com.salesfoce.apollo.stereotomy.services.grpc.proto.KeyEventsContext;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc;
 import com.salesfoce.apollo.thoth.proto.KerlDhtGrpc.KerlDhtFutureStub;
+import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
+import com.salesfoce.apollo.thoth.proto.Validations;
+import com.salesfoce.apollo.thoth.proto.ValidationsContext;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesforce.apollo.comm.ServerConnectionCache.CreateClientCommunications;
 import com.salesforce.apollo.comm.ServerConnectionCache.ManagedServerConnection;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
-import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
 
 /**
  * @author hal.hildebrand
@@ -50,7 +53,7 @@ public class DhtClient implements DhtService {
         };
     }
 
-    public static DhtService getLocalLoopback(ProtoKERLService service, Member member) {
+    public static DhtService getLocalLoopback(Dht service, Member member) {
         return new DhtService() {
 
             @Override
@@ -66,6 +69,16 @@ public class DhtClient implements DhtService {
             @Override
             public ListenableFuture<Empty> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
                 return wrap(service.append(events, attachments).thenApply(ks -> Empty.getDefaultInstance()));
+            }
+
+            @Override
+            public ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments) {
+                return wrap(service.appendAttachments(attachments));
+            }
+
+            @Override
+            public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+                return wrap(service.appendValidations(validations));
             }
 
             @Override
@@ -103,8 +116,18 @@ public class DhtClient implements DhtService {
             }
 
             @Override
+            public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+                return wrap(service.getKeyStateWithEndorsementsAndValidations(coordinates));
+            }
+
+            @Override
             public Member getMember() {
                 return member;
+            }
+
+            @Override
+            public ListenableFuture<Validations> getValidations(EventCoords coordinates) {
+                return wrap(service.getValidations(coordinates));
             }
         };
     }
@@ -175,16 +198,50 @@ public class DhtClient implements DhtService {
     @Override
     public ListenableFuture<Empty> append(List<KeyEvent_> eventsList, List<AttachmentEvent> attachmentsList) {
         Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
-        var request = KeyEventWitAttachmentsContext.newBuilder()
-                                                   .addAllEvents(eventsList)
-                                                   .addAllAttachments(attachmentsList)
-                                                   .setContext(context)
-                                                   .build();
+        var request = KeyEventWithAttachmentsContext.newBuilder()
+                                                    .addAllEvents(eventsList)
+                                                    .addAllAttachments(attachmentsList)
+                                                    .setContext(context)
+                                                    .build();
         if (metrics != null) {
             metrics.outboundBandwidth().mark(request.getSerializedSize());
             metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
         }
         var result = client.appendWithAttachments(request);
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Empty> appendAttachments(List<AttachmentEvent> attachmentsList) {
+        Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
+        var request = AttachmentsContext.newBuilder().addAllAttachments(attachmentsList).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        var result = client.appendAttachments(request);
+        result.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+        }, r -> r.run());
+        return result;
+    }
+
+    @Override
+    public ListenableFuture<Empty> appendValidations(List<Validations> validations) {
+        Context timer = metrics == null ? null : metrics.appendWithAttachmentsClient().time();
+        var request = ValidationsContext.newBuilder().addAllValidations(validations).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundAppendWithAttachmentsRequest().mark(request.getSerializedSize());
+        }
+        var result = client.appendValidations(request);
         result.addListener(() -> {
             if (timer != null) {
                 timer.stop();
@@ -212,7 +269,7 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var attachment = complete.get();
                 if (metrics != null) {
                     final var serializedSize = attachment.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
@@ -243,7 +300,7 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var kerl = client.getKERL(request).get();
+                var kerl = complete.get();
                 final var serializedSize = kerl.getSerializedSize();
                 if (metrics != null) {
                     metrics.inboundBandwidth().mark(serializedSize);
@@ -358,9 +415,36 @@ public class DhtClient implements DhtService {
                 timer.stop();
             }
             try {
-                var attachment = client.getAttachment(request).get();
+                var ksa = complete.get();
                 if (metrics != null) {
-                    final var serializedSize = attachment.getSerializedSize();
+                    final var serializedSize = ksa.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                }
+            } catch (InterruptedException e) {
+            } catch (ExecutionException e) {
+            }
+        }, r -> r.run());
+        return complete;
+    }
+
+    @Override
+    public ListenableFuture<KeyStateWithEndorsementsAndValidations> getKeyStateWithEndorsementsAndValidations(EventCoords coordinates) {
+        Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
+        }
+        ListenableFuture<KeyStateWithEndorsementsAndValidations> complete = client.getKeyStateWithEndorsementsAndValidations(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var ksav = complete.get();
+                if (metrics != null) {
+                    final var serializedSize = ksav.getSerializedSize();
                     metrics.inboundBandwidth().mark(serializedSize);
                     metrics.inboundGetAttachmentResponse().mark(serializedSize);
                 }
@@ -374,5 +458,32 @@ public class DhtClient implements DhtService {
     @Override
     public Member getMember() {
         return member;
+    }
+
+    @Override
+    public ListenableFuture<Validations> getValidations(EventCoords coordinates) {
+        Context timer = metrics == null ? null : metrics.getAttachmentClient().time();
+        EventContext request = EventContext.newBuilder().setCoordinates(coordinates).setContext(context).build();
+        if (metrics != null) {
+            metrics.outboundBandwidth().mark(request.getSerializedSize());
+            metrics.outboundGetAttachmentRequest().mark(request.getSerializedSize());
+        }
+        ListenableFuture<Validations> complete = client.getValidations(request);
+        complete.addListener(() -> {
+            if (timer != null) {
+                timer.stop();
+            }
+            try {
+                var v = complete.get();
+                if (metrics != null) {
+                    final var serializedSize = v.getSerializedSize();
+                    metrics.inboundBandwidth().mark(serializedSize);
+                    metrics.inboundGetAttachmentResponse().mark(serializedSize);
+                }
+            } catch (InterruptedException e) {
+            } catch (ExecutionException e) {
+            }
+        }, r -> r.run());
+        return complete;
     }
 }

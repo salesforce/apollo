@@ -98,12 +98,14 @@ public interface Committee {
     }
 
     default SubmitResult submit(SubmitTransaction request) {
-        log().debug("Cannot submit txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
+        log().debug("Cannot submit txn, inactive committee: {} on: {}", getClass().getSimpleName(),
+                    params().member().getId());
         return SubmitResult.newBuilder().setResult(Result.INACTIVE).build();
     }
 
     default SubmitResult submitTxn(Transaction transaction) {
-        log().debug("Cannot process txn, inactive committee: {} on: {}", getClass().getSimpleName(), params().member());
+        log().debug("Cannot process txn, inactive committee: {} on: {}", getClass().getSimpleName(),
+                    params().member().getId());
         return SubmitResult.newBuilder().setResult(Result.UNAVAILABLE).build();
     }
 
@@ -115,23 +117,23 @@ public interface Committee {
         var witness = params.context().getMember(wid);
         if (witness == null) {
             log().debug("Witness does not exist: {} in: {} validating: {} on: {}", wid, params.context().getId(), hb,
-                        params.member());
+                        params.member().getId());
             return false;
         }
         var verify = validators.get(witness);
         if (verify == null) {
             log().debug("Witness: {} is not a validator for: {} validating: {} on: {}", wid, params.context().getId(),
-                        hb, params.member());
+                        hb, params.member().getId());
             return false;
         }
 
         final boolean verified = verify.verify(new JohnHancock(c.getSignature()), hb.block.getHeader().toByteString());
         if (!verified) {
             log().debug("Failed verification: {} using: {} key: {} on: {}", verified, witness.getId(),
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member());
+                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
         } else {
             log().trace("Verified: {} using: {} key: {} on: {}", verified, witness,
-                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member());
+                        DigestAlgorithm.DEFAULT.digest(verify.toString()), params.member().getId());
         }
         return verified;
     }
@@ -141,19 +143,19 @@ public interface Committee {
 
         log().trace("Validating block: {} height: {} certs: {} on: {}", hb.hash, hb.height(),
                     hb.certifiedBlock.getCertificationsList().stream().map(c -> new Digest(c.getId())).toList(),
-                    params.member());
+                    params.member().getId());
         int valid = 0;
         for (var w : hb.certifiedBlock.getCertificationsList()) {
             if (!validate(hb, w, validators)) {
                 log().debug("Failed to validate: {} height: {} by: {} on: {}}", hb.hash, hb.height(),
-                            new Digest(w.getId()), params.member());
+                            new Digest(w.getId()), params.member().getId());
             } else {
                 valid++;
             }
         }
         final int toleranceLevel = params.majority();
-        log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid,
-                    toleranceLevel, params.member());
+        log().trace("Validate: {} height: {} count: {} needed: {} on: {}}", hb.hash, hb.height(), valid, toleranceLevel,
+                    params.member().getId());
         return valid >= toleranceLevel;
     }
 

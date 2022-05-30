@@ -62,7 +62,7 @@ message KeyEventsContext {
     repeated KeyEvent_ keyEvent = 2;
 }
 
-message KeyEventWitAttachmentsContext {
+message KeyEventWithAttachmentsContext {
     utils.Digeste context = 1;
     repeated KeyEvent_ events = 2;
     repeated AttachmentEvent attachments = 3;
@@ -75,13 +75,15 @@ message AttachmentEvents {
 service KERLService {
     rpc append (KeyEventsContext) returns(KeyStates) {}
     rpc appendKERL (KERLContext) returns(KeyStates) {}
-    rpc appendWithAttachments (KeyEventWitAttachmentsContext) returns(KeyStates) {}
-    
+    rpc appendWithAttachments (KeyEventWithAttachmentsContext) returns(KeyStates) {}
+    rpc appendAttachments (AttachmentsContext) returns(google.protobuf.Empty) {}
+
     rpc getAttachment (EventContext) returns(Attachment) {}
     rpc getKeyEvent (EventDigestContext) returns(KeyEvent_) {}
     rpc getKeyEventCoords (EventContext) returns(KeyEvent_) {}
     rpc getKeyState (IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (EventContext) returns (stereotomy.KeyState_) {}
+    rpc getKeyStateWithAttachments (EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
     rpc getKERL (IdentifierContext) returns (stereotomy.KERL_) {}
 }
 

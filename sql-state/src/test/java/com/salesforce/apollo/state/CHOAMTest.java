@@ -127,7 +127,6 @@ public class CHOAMTest {
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
@@ -178,7 +177,8 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(30_000, 1_000,
+                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
                    "System did not become active");
 
         updaters.entrySet().forEach(e -> {

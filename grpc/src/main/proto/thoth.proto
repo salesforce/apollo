@@ -7,7 +7,6 @@ option objc_class_prefix = "Tp";
 import "util.proto";
 import "stereotomy.proto";
 import "stereotomy-services.proto";
-import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 
 package thoth;
@@ -17,19 +16,28 @@ package thoth;
 service KerlDht {
     rpc append (stereotomy.services.KeyEventsContext) returns (google.protobuf.Empty) {}
     rpc appendKERL (stereotomy.services.KERLContext) returns (google.protobuf.Empty) {}
-    rpc appendWithAttachments (stereotomy.services.KeyEventWitAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendWithAttachments (stereotomy.services.KeyEventWithAttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendAttachments (stereotomy.services.AttachmentsContext) returns (google.protobuf.Empty) {}
+    rpc appendValidations (ValidationsContext) returns (google.protobuf.Empty) {}
     
     rpc getAttachment (stereotomy.services.EventContext) returns (stereotomy.Attachment) {}
     rpc getKeyEventCoords (stereotomy.services.EventContext) returns (stereotomy.KeyEvent_) {}
     rpc getKeyState (stereotomy.services.IdentifierContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateCoords (stereotomy.services.EventContext) returns (stereotomy.KeyState_) {}
     rpc getKeyStateWithAttachments (stereotomy.services.EventContext) returns (stereotomy.KeyStateWithAttachments_) {}
+    rpc getKeyStateWithEndorsementsAndValidations (stereotomy.services.EventContext) returns (KeyStateWithEndorsementsAndValidations) {}
     rpc getKERL (stereotomy.services.IdentifierContext) returns (stereotomy.KERL_) {}
+    rpc getValidations (stereotomy.services.EventContext) returns (Validations) {}
 }
 
 service Reconciliation {
     rpc reconcile ( Intervals ) returns (Update) {}
-    rpc update ( Updating ) returns (google.protobuf.Empty) {}
+    rpc update (Updating) returns (google.protobuf.Empty) {}
+}
+
+service Validator {
+	rpc validate (ValidateContext) returns (Validated) {}
+	rpc witness (WitnessContext) returns (Signatures) {}
 }
 
 service Witness {
@@ -63,4 +71,45 @@ message Get {
 message Interval {
         utils.Digeste start = 1;
         utils.Digeste end = 2;
+}
+
+message ValidationsContext {
+	utils.Digeste context = 1;
+	repeated Validations validations = 2;
+}
+
+message Validations {
+	stereotomy.EventCoords coordinates = 1;
+	repeated Validation validations = 2;
+}
+
+message Validation {
+	stereotomy.Ident validator = 1;
+	utils.Sig signature = 2;
+}
+
+message KeyStateWithEndorsementsAndValidations {
+	stereotomy.KeyState_ state = 1;
+    map<int32, utils.Sig> endorsements = 2;
+    repeated Validation validations = 3;
+}
+
+message Validated {
+	stereotomy.Ident validator = 1;
+	repeated utils.Sig signatures = 2;
+}
+
+message Signatures {
+	repeated utils.Sig signatures = 1;
+}
+
+message WitnessContext {
+    utils.Digeste context = 1;
+	stereotomy.Ident identifier = 2;
+    repeated stereotomy.KeyEvent_ events = 3;
+}
+
+message ValidateContext {
+    utils.Digeste context = 1;
+    repeated stereotomy.KeyEventWithAttachments events = 2;
 }

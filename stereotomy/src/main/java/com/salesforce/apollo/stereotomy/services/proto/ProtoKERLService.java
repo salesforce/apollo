@@ -9,6 +9,7 @@ package com.salesforce.apollo.stereotomy.services.proto;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.stereotomy.event.proto.AttachmentEvent;
 import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesfoce.apollo.stereotomy.event.proto.KeyEvent_;
@@ -26,4 +27,5 @@ public interface ProtoKERLService extends ProtoKERLProvider {
 
     CompletableFuture<List<KeyState_>> append(List<KeyEvent_> events, List<AttachmentEvent> attachments);
 
+    CompletableFuture<Empty> appendAttachments(List<AttachmentEvent> attachments);
 }

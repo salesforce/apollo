@@ -93,7 +93,6 @@ public class TestCHOAM {
         Random entropy = new Random();
 
         var params = Parameters.newBuilder()
-                               .setSynchronizationCycles(1)
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(200))
@@ -191,7 +190,8 @@ public class TestCHOAM {
             }
         });
 
-        assertTrue(Utils.waitForCondition(30_000, () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
+        assertTrue(Utils.waitForCondition(30_000, 1_000,
+                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
                    "System did not become active");
 
         transactioneers.stream().forEach(e -> e.start());

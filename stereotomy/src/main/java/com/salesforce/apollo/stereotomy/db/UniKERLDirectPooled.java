@@ -39,7 +39,8 @@ public class UniKERLDirectPooled {
 
     public class ClosableKERL implements Closeable, KERL {
         private final Connection connection;
-        private final KERL       kerl;
+
+        private final KERL kerl;
 
         public ClosableKERL(Connection connection) {
             this.connection = connection;
@@ -52,17 +53,17 @@ public class UniKERLDirectPooled {
         }
 
         @Override
-        public CompletableFuture<Void> append(AttachmentEvent event) {
-            return kerl.append(event);
-        }
-
-        @Override
         public CompletableFuture<KeyState> append(KeyEvent event) {
             return kerl.append(event);
         }
 
         @Override
         public CompletableFuture<List<KeyState>> append(KeyEvent... event) {
+            return kerl.append(event);
+        }
+
+        @Override
+        public CompletableFuture<Void> append(List<AttachmentEvent> event) {
             return kerl.append(event);
         }
 
@@ -108,6 +109,11 @@ public class UniKERLDirectPooled {
         @Override
         public Optional<KeyState> getKeyState(Identifier identifier) {
             return kerl.getKeyState(identifier);
+        }
+
+        @Override
+        public Optional<KeyStateWithAttachments> getKeyStateWithAttachments(EventCoordinates coordinates) {
+            return kerl.getKeyStateWithAttachments(coordinates);
         }
 
         @Override

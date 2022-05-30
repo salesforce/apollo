@@ -4,8 +4,6 @@ option java_multiple_files = true;
 option java_package = "com.salesfoce.apollo.state.proto";
 option java_outer_classname = "SqlState";
 option objc_class_prefix = "Ss";
-import "google/protobuf/any.proto";
-import "google/protobuf/empty.proto";
 
 package apollo.sqlState;
 

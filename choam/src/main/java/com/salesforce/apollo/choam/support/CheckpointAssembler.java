@@ -75,7 +75,8 @@ public class CheckpointAssembler {
     public CompletableFuture<CheckpointState> assemble(ScheduledExecutorService scheduler, Duration duration,
                                                        Executor exec) {
         if (checkpoint.getSegmentsCount() == 0) {
-            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
+            log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                     member.getId());
             assembled.complete(new CheckpointState(checkpoint, state));
         } else {
             gossip(scheduler, duration, exec);
@@ -103,14 +104,15 @@ public class CheckpointAssembler {
         try {
             if (process(futureSailor.get().get())) {
                 CheckpointState cs = new CheckpointState(checkpoint, state);
-                log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
+                log.info("Assembled checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                         member.getId());
                 assembled.complete(cs);
                 return false;
             }
         } catch (InterruptedException e) {
-            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e);
+            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member.getId(), e);
         } catch (ExecutionException e) {
-            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member, e.getCause());
+            log.trace("Failed to retrieve checkpoint {} segments from {} on: {}", height, member.getId(), e.getCause());
         }
         return true;
     }
@@ -119,7 +121,8 @@ public class CheckpointAssembler {
         if (assembled.isDone()) {
             return;
         }
-        log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(), member);
+        log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
+                 member.getId());
         RingIterator<Terminal> ringer = new RingIterator<>(context, member, comms, exec, true);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
@@ -130,10 +133,10 @@ public class CheckpointAssembler {
 
     private ListenableFuture<CheckpointSegments> gossip(Terminal link) {
         if (member.equals(link.getMember())) {
-            log.info("Ignoring loopback checkpoint assembly gossip on: {}", link.getMember(), member);
+            log.trace("Ignoring loopback checkpoint assembly gossip on: {}", link.getMember(), member.getId());
             return null;
         }
-        log.debug("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member);
+        log.debug("Checkpoint assembly gossip with: {} on: {}", link.getMember(), member.getId());
         return link.fetch(buildRequest());
     }
 

@@ -26,6 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
@@ -79,6 +81,8 @@ abstract public class Domain {
             return name().toLowerCase();
         }
     }
+
+    public record TransactionConfiguration(Executor executor, ScheduledExecutorService scheduler) {}
 
     private static final Logger log = LoggerFactory.getLogger(Domain.class);
 
@@ -148,11 +152,10 @@ abstract public class Domain {
     protected final Oracle                                         oracle;
     protected final Parameters                                     params;
     protected final SqlStateMachine                                sqlStateMachine;
-
-    protected final Connection stateConnection;
+    protected final Connection                                     stateConnection;
 
     public Domain(ControlledIdentifier<SelfAddressingIdentifier> id, Parameters.Builder params, String dbURL,
-                  Path checkpointBaseDir, RuntimeParameters.Builder runtime) {
+                  Path checkpointBaseDir, RuntimeParameters.Builder runtime, TransactionConfiguration txnConfig) {
         var paramsClone = params.clone();
         var runtimeClone = runtime.clone();
         this.member = new ControlledIdentifierMember(id);
@@ -180,11 +183,26 @@ abstract public class Domain {
         choam = new CHOAM(this.params);
         mutator = sqlStateMachine.getMutator(choam.getSession());
         stateConnection = sqlStateMachine.newConnection();
-        this.oracle = new ShardedOracle(stateConnection, mutator, runtimeClone.getScheduler(),
-                                        params.getSubmitTimeout(), runtimeClone.getExec());
-        this.commonKERL = new ShardedKERL(stateConnection, mutator, runtimeClone.getScheduler(),
-                                          params.getSubmitTimeout(), params.getDigestAlgorithm(),
-                                          runtimeClone.getExec());
+        this.oracle = new ShardedOracle(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
+                                        txnConfig.executor());
+        this.commonKERL = new ShardedKERL(stateConnection, mutator, txnConfig.scheduler(), params.getSubmitTimeout(),
+                                          params.getDigestAlgorithm(), txnConfig.executor());
+    }
+
+    public boolean activate(Member m) {
+        if (!active()) {
+            return params.runtime()
+                         .foundation()
+                         .getFoundation()
+                         .getMembershipList()
+                         .stream()
+                         .map(d -> Digest.from(d))
+                         .anyMatch(d -> m.getId().equals(d));
+        }
+        final var context = DSL.using(stateConnection, SQLDialect.H2);
+        final var activeMember = isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
+
+        return activeMember;
     }
 
     public boolean active() {
@@ -215,22 +233,6 @@ abstract public class Domain {
 
     public ControlledIdentifierMember getMember() {
         return member;
-    }
-
-    public boolean activate(Member m) {
-        if (!active()) {
-            return params.runtime()
-                         .foundation()
-                         .getFoundation()
-                         .getMembershipList()
-                         .stream()
-                         .map(d -> Digest.from(d))
-                         .anyMatch(d -> m.getId().equals(d));
-        }
-        final var context = DSL.using(stateConnection, SQLDialect.H2);
-        final var activeMember = isActiveMember(context, new SelfAddressingIdentifier(m.getId()));
-
-        return activeMember;
     }
 
     public void start() {

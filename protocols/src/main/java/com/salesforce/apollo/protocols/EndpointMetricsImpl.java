@@ -31,7 +31,7 @@ public class EndpointMetricsImpl implements EdpointMetrics {
 
     @Override
     public LimitsRegistry limitsMetrics() {
-        return limits;
+        return null;
     }
 
     @Override
