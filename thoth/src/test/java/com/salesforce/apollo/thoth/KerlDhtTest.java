@@ -25,9 +25,11 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  */
 public class KerlDhtTest extends AbstractDhtTest {
 
+    @SuppressWarnings("preview")
     @Test
     public void smokin() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
+                                                                              Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
 

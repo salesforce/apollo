@@ -459,6 +459,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>19</release>
+                	<compilerArgs>--enable-preview</compilerArgs>
                 </configuration>
             </plugin>
             <plugin>

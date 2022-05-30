@@ -14,6 +14,7 @@ import com.netflix.concurrency.limits.limit.WindowedLimit;
 
 public class PartitionedExample {
 
+    @SuppressWarnings("preview")
     public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
         final Gradient2Limit limit = Gradient2Limit.newBuilder().build();
 
@@ -67,7 +68,7 @@ public class PartitionedExample {
         final AtomicInteger counter = new AtomicInteger(0);
         System.out.println("iteration, limit, live, batch, live, batch, latency, shortRtt, longRtt");
 //        System.out.println("iteration, limit, 70%, 20%, 10%, 70%, 20%, 10%, latency, shortRtt, longRtt");
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
             System.out.println(MessageFormat.format("{0,number,#}, {1,number,#}, {2,number,#}, {3,number,#}, {4,number,#}, {5,number,#}, {6,number,#}, {7,number,#}, {8,number,#}",
                                                     counter.incrementAndGet(), limit.getLimit(),
                                                     driver1.getAndResetSuccessCount(),

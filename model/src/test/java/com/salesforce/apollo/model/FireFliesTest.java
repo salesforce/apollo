@@ -67,8 +67,11 @@ public class FireFliesTest {
         routers.clear();
     }
 
+    @SuppressWarnings("preview")
     @BeforeEach
     public void before() throws SQLException {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
@@ -91,18 +94,18 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
-                                                                          Executors.newSingleThreadScheduledExecutor());
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
+                                                                          scheduler);
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(1), null);
+                                              exec, null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
-                                                          .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                          .setScheduler(scheduler)
                                                           .setContext(context)
-                                                          .setExec(Executors.newFixedThreadPool(2))
+                                                          .setExec(exec)
                                                           .setCommunications(localRouter),
                                          new InetSocketAddress(0), txnConfig);
             domains.add(node);
@@ -112,8 +115,11 @@ public class FireFliesTest {
         });
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void smokin() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
                                  .map(n -> View.identityFor(0, new InetSocketAddress(0), n.getMember().getEvent()))
@@ -121,8 +127,8 @@ public class FireFliesTest {
                                  .subList(0, CARDINALITY - 2);
         domains.forEach(d -> {
             d.getFoundation()
-             .start(Executors.newSingleThreadExecutor(), Duration.ofMillis(10), seeds,
-                    Executors.newSingleThreadScheduledExecutor());
+             .start(exec, Duration.ofMillis(10), seeds,
+                    scheduler);
         });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()

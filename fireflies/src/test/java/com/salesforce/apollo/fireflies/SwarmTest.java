@@ -93,13 +93,14 @@ public class SwarmTest {
         communications.clear();
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void churn() throws Exception {
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
+        Executor exec = Executors.newVirtualThreadPerTaskExecutor();
         initialize(exec);
 
         List<View> testViews = new ArrayList<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
 
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
@@ -183,11 +184,12 @@ public class SwarmTest {
                        .report();
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void swarm() throws Exception {
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
+        Executor exec = Executors.newVirtualThreadPerTaskExecutor();
         initialize(exec);
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
         long then = System.currentTimeMillis();
         views.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
 

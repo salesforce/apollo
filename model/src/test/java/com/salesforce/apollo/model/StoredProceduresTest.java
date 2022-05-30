@@ -33,12 +33,13 @@ import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
  */
 public class StoredProceduresTest {
 
+    @SuppressWarnings("preview")
     @Test
     public void membership() throws Exception {
         var entropy = new Random(0x1638);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(100);
-        Executor exec = Executors.newSingleThreadExecutor();
+        Executor exec = Executors.newVirtualThreadPerTaskExecutor();
         Emulator emmy = new Emulator();
         emmy.start(Domain.boostrapMigration());
 

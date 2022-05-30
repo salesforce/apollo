@@ -27,9 +27,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -90,6 +91,10 @@ public class CHOAMTest {
     private MetricRegistry                     registry;
     private Map<Digest, Router>                routers;
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    @SuppressWarnings("preview")
+    private ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
+    @SuppressWarnings("preview")
+    private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
 
     @AfterEach
     public void after() throws Exception {
@@ -149,21 +154,17 @@ public class CHOAMTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newSingleThreadExecutor(r -> new Thread(r,
-                                                                                                "Comm[" + m.getId()
-                                                                                                + "]")),
+                                              exec,
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
-        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var ei = new AtomicInteger();
+        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> { 
             return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec[" + m.getId() + ":"
-                               + ei.incrementAndGet() + "]")));
+                               exec);
         }));
     }
-
+ 
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
@@ -182,12 +183,10 @@ public class CHOAMTest {
                    "System did not become active");
 
         updaters.entrySet().forEach(e -> {
-            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-            var txScheduler = Executors.newScheduledThreadPool(1);
-            var exec = Executors.newFixedThreadPool(2);
+            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()); 
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
-                                                       countdown, txScheduler));
+                                                       countdown, scheduler));
             }
         });
         System.out.println("Starting txns");
@@ -283,11 +282,7 @@ public class CHOAMTest {
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(Executors.newScheduledThreadPool(1,
-                                                                                                      r -> new Thread(r,
-                                                                                                                      "Sched["
-                                                                                                                      + m.getId()
-                                                                                                                      + "]")))
+                                                       .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setExec(exec)

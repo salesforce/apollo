@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -71,10 +72,12 @@ public class AbstractDhtTest {
         dhts.clear();
     }
 
+    @SuppressWarnings("preview")
     @BeforeEach
     public void before() {
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
                                             new SecureRandom());
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         identities = IntStream.range(0, getCardinality())
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
@@ -88,7 +91,7 @@ public class AbstractDhtTest {
         String prefix = UUID.randomUUID().toString();
         Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         majority = context.majority();
-        identities.values().forEach(ident -> instantiate(ident, context, prefix));
+        identities.values().forEach(ident -> instantiate(ident, context, prefix, exec));
 
         System.out.println();
         System.out.println();
@@ -115,7 +118,7 @@ public class AbstractDhtTest {
     }
 
     protected void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
-                               String prefix) {
+                               String prefix, Executor exec) {
         SigningMember member = new ControlledIdentifierMember(identifier);
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
@@ -123,11 +126,11 @@ public class AbstractDhtTest {
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
         LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
-                                             Executors.newFixedThreadPool(4), null);
+                                             exec, null);
         router.setMember(member);
         routers.put(member.getId(), router);
         dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2), 0.125, null));
+                                             exec, Duration.ofSeconds(2), 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

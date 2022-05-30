@@ -30,6 +30,7 @@ import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
  */
 public class AniTest extends AbstractDhtTest {
 
+    @SuppressWarnings("preview")
     @Test
     public void smokin() throws Exception {
         List<? extends Identifier> validators = new ArrayList<>();
@@ -39,7 +40,7 @@ public class AniTest extends AbstractDhtTest {
                                     .collect(Collectors.toMap(e -> e.getKey(),
                                                               e -> new Ani(validators, threshold, e.getValue())));
         routers.values().forEach(lr -> lr.start());
-        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
+        dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()), Duration.ofSeconds(1)));
 
         var dht = dhts.values().stream().findFirst().get();
         var ani = anis.values().stream().findFirst().get();

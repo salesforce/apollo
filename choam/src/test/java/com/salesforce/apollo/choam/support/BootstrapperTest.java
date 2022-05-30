@@ -67,8 +67,11 @@ public class BootstrapperTest {
                                                    cert -> cert));
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void smoke() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
 
         Store bootstrapStore = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
@@ -125,7 +128,7 @@ public class BootstrapperTest {
                                                        .build(RuntimeParameters.newBuilder()
                                                                                .setContext(context)
                                                                                .setMember(member)
-                                                                               .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                                               .setScheduler(scheduler)
                                                                                .build()),
                                              store, comms);
 

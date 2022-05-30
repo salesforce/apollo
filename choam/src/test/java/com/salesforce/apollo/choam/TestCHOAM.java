@@ -86,6 +86,8 @@ public class TestCHOAM {
 
     @BeforeEach
     public void before() {
+        @SuppressWarnings("preview")
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
@@ -118,17 +120,13 @@ public class TestCHOAM {
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              Executors.newFixedThreadPool(1,
-                                                                           r -> new Thread(r,
-                                                                                           "Comm Exec[" + m.getId()
-                                                                                           + "]")),
+                                              exec,
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
-        }));
-        final var si = new AtomicInteger();
-        final var scheduler = Executors.newScheduledThreadPool(5, r -> new Thread(r, "Scheduler[" + si.incrementAndGet()
-        + "]"));
+        })); 
+        @SuppressWarnings("preview")
+        final var scheduler = Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory());
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -151,23 +149,24 @@ public class TestCHOAM {
             } catch (IOException e1) {
                 fail(e1);
             }
-//            params.getMvBuilder().setFileName(fn);
-            var nExec = new AtomicInteger();
+//            params.getMvBuilder().setFileName(fn); 
             return new CHOAM(params.build(runtime.setMember(m)
                                                  .setMetrics(metrics)
                                                  .setCommunications(routers.get(m.getId()))
                                                  .setProcessor(processor)
                                                  .setCheckpointer(wrap(runtime.getCheckpointer()))
                                                  .setContext(context)
-                                                 .setExec(Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec["
-                                                 + nExec.incrementAndGet() + ":" + m.getId() + "]")))
+                                                 .setExec(exec)
                                                  .setScheduler(scheduler)
                                                  .build()));
         }));
     }
 
+    @SuppressWarnings("preview")
     @Test
-    public void submitMultiplTxn() throws Exception {
+    public void submitMultiplTxn() throws Exception { 
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var txScheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
@@ -178,15 +177,10 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 1_000 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
-        var cnt = new AtomicInteger();
-        choams.values().forEach(c -> {
-            final var txnCompletion = Executors.newFixedThreadPool(2, r -> new Thread(r, "Completion["
-            + cnt.incrementAndGet() + "]"));
-            final var txnExecutor = Executors.newFixedThreadPool(1, r -> new Thread(r, "txn exec"));
-            final var txScheduler = Executors.newScheduledThreadPool(1, r -> new Thread(r, "txn sched"));
+        choams.values().forEach(c -> {  
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(), txnCompletion, timeout, max, txScheduler,
-                                                       countdown, txnExecutor));
+                transactioneers.add(new Transactioneer(c.getSession(), exec, timeout, max, txScheduler,
+                                                       countdown, exec));
             }
         });
 

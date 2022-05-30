@@ -16,9 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -59,8 +57,10 @@ public class EtherealTest {
         }
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void context() throws Exception {
+        var executor = Executors.newVirtualThreadPerTaskExecutor();
 
         final var gossipPeriod = Duration.ofMillis(5);
 
@@ -72,11 +72,8 @@ public class EtherealTest {
         List<Ethereal> controllers = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
         List<ChRbcGossip> gossipers = new ArrayList<>();
-        List<Router> comms = new ArrayList<>();
-        var schedN = new AtomicInteger();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc,
-                                                                              r -> new Thread(r, "gossip scheduler"
-                                                                              + schedN.incrementAndGet()));
+        List<Router> comms = new ArrayList<>(); 
+        var scheduler = Executors.newScheduledThreadPool(nProc, Thread.ofVirtual().factory());
 
         List<SigningMember> members = IntStream.range(0, nProc)
                                                .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
@@ -97,7 +94,6 @@ public class EtherealTest {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
-        List<ExecutorService> executors = new ArrayList<>();
         var level = new AtomicInteger();
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
@@ -105,10 +101,6 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            var execN = new AtomicInteger();
-            var executor = Executors.newFixedThreadPool(2, r -> new Thread(r, "system executor: "
-            + execN.incrementAndGet() + " for: " + pid));
-            executors.add(executor);
             var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
             comms.add(com);
             final var member = members.get(i);
@@ -148,15 +140,6 @@ public class EtherealTest {
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
             comms.forEach(e -> e.close());
-            executors.forEach(executor -> {
-                executor.shutdown();
-                try {
-                    executor.awaitTermination(1, TimeUnit.SECONDS);
-                } catch (InterruptedException e1) {
-                }
-            });
-            scheduler.shutdown();
-            scheduler.awaitTermination(1, TimeUnit.SECONDS);
         }
         final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
         assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());

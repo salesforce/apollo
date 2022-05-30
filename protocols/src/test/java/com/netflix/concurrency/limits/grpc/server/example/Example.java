@@ -11,6 +11,7 @@ import com.netflix.concurrency.limits.limit.Gradient2Limit;
 import com.netflix.concurrency.limits.limit.WindowedLimit;
 
 public class Example {
+    @SuppressWarnings("preview")
     public static void main(String[] args) throws IOException {
         final Gradient2Limit limit = Gradient2Limit.newBuilder().build();
 
@@ -41,7 +42,7 @@ public class Example {
         // Report progress
         final AtomicInteger counter = new AtomicInteger(0);
         System.out.println("iteration, limit, success, drop, latency, shortRtt, longRtt");
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
             try {
                 System.out.println(MessageFormat.format("{0,number,#}, {1,number,#}, {2,number,#}, {3,number,#}, {4,number,#}, {5,number,#}, {6,number,#}",
                                                         counter.incrementAndGet(), limit.getLimit(),

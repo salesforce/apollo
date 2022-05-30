@@ -193,8 +193,11 @@ public class DomainTest {
         routers.clear();
     }
 
+    @SuppressWarnings("preview")
     @BeforeEach
     public void before() throws SQLException {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
@@ -218,18 +221,18 @@ public class DomainTest {
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
         final var group = DigestAlgorithm.DEFAULT.getOrigin();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(Executors.newFixedThreadPool(2),
-                                                                          Executors.newSingleThreadScheduledExecutor());
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
+                                                                          scheduler);
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(1), null);
+                                              exec, null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
-                                                            .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                            .setScheduler(scheduler)
                                                             .setContext(context)
-                                                            .setExec(Executors.newSingleThreadExecutor())
+                                                            .setExec(exec)
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), txnConfig);
             domains.add(domain);

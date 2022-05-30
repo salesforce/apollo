@@ -124,6 +124,7 @@ public class TestKerlService {
         assertEquals(kel.getKeyState(i.getIdentifier()).get(), keyState.get());
     }
 
+    @SuppressWarnings("preview")
     private KERLService setup(Digest context) {
         var prefix = UUID.randomUUID().toString();
 
@@ -131,7 +132,7 @@ public class TestKerlService {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3);
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         serverRouter = new LocalRouter(prefix, builder, exec, null);
         clientRouter = new LocalRouter(prefix, builder, exec, null);
 

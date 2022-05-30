@@ -46,6 +46,7 @@ public class TestEventValidation {
         }
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void validation() throws Exception {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
@@ -55,7 +56,7 @@ public class TestEventValidation {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3);
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         serverRouter = new LocalRouter(prefix, builder, exec, null);
         clientRouter = new LocalRouter(prefix, builder, exec, null);
 

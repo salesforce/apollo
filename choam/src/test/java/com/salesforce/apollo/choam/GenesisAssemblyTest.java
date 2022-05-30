@@ -70,8 +70,11 @@ public class GenesisAssemblyTest {
         });
     }
 
+    @SuppressWarnings("preview")
     @Test
-    public void genesis() throws Exception {
+    public void genesis() throws Exception { 
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
 
@@ -112,7 +115,7 @@ public class GenesisAssemblyTest {
 
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
-            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), Executors.newSingleThreadExecutor(),
+            var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec,
                                        null);
             comm.setMember(m);
             return comm;
@@ -125,17 +128,17 @@ public class GenesisAssemblyTest {
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
                                                                                                         null, r,
-                                                                                                        Executors.newSingleThreadExecutor()),
+                                                                                                        exec),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
         committee.activeMembers().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            params.getProducer().ethereal().setSigner(sm);
+            params.getProducer().ethereal().setSigner(sm); 
             var built = params.build(RuntimeParameters.newBuilder()
-                                                      .setExec(Executors.newFixedThreadPool(2))
-                                                      .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                      .setExec(exec)
+                                                      .setScheduler(scheduler)
                                                       .setContext(base)
                                                       .setMember(sm)
                                                       .setCommunications(router)

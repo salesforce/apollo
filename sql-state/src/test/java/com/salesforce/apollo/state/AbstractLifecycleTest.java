@@ -63,8 +63,10 @@ import com.salesforce.apollo.utils.Utils;
 abstract public class AbstractLifecycleTest {
     protected static final int                      CARDINALITY = 5;
     protected static final Random                   entropy     = new Random();
-    protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
-    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+    @SuppressWarnings("preview")
+    protected static final Executor                 txExecutor  = Executors.newVirtualThreadPerTaskExecutor();
+    @SuppressWarnings("preview")
+    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -125,8 +127,11 @@ abstract public class AbstractLifecycleTest {
         members = null;
     }
 
+    @SuppressWarnings("preview")
     @BeforeEach
     public void before() {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -150,13 +155,13 @@ abstract public class AbstractLifecycleTest {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(2), null);
+                                              exec, null);
             localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream()
                         .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
-                                                                                   m.equals(testSubject), context)));
+                                                                                   m.equals(testSubject), context, exec, scheduler)));
         members.stream().filter(m -> !m.equals(testSubject)).forEach(m -> context.activate(m));
     }
 
@@ -174,7 +179,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     private CHOAM createChoam(Random entropy, Builder params, SigningMember m, boolean testSubject,
-                              Context<Member> context) {
+                              Context<Member> context, Executor exec, ScheduledExecutorService scheduler) {
         blocks.put(m.getId(), new AtomicInteger());
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
@@ -186,9 +191,9 @@ abstract public class AbstractLifecycleTest {
         return new CHOAM(params.setSynchronizationCycles(testSubject ? 100 : 10)
                                .build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
-                                                       .setExec(Executors.newFixedThreadPool(2))
+                                                       .setExec(exec)
                                                        .setGenesisData(view -> GENESIS_DATA)
-                                                       .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                       .setScheduler(scheduler)
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
                                                        .setCheckpointer(wrap(up))

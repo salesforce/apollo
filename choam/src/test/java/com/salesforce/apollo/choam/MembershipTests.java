@@ -73,6 +73,8 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
+        @SuppressWarnings("preview")
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         SigningMember testSubject = initialize(2000, 11);
         System.out.println("Test subject: " + testSubject);
         routers.entrySet()
@@ -85,16 +87,17 @@ public class MembershipTests {
               .forEach(ch -> ch.getValue().start());
 
         final Duration timeout = Duration.ofSeconds(30);
-        final var scheduler = Executors.newScheduledThreadPool(1);
+        @SuppressWarnings("preview")
+        final var scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
 
         var txneer = choams.get(members.get(0).getId());
 
         assertTrue(Utils.waitForCondition(120_00, 1_000, () -> txneer.active()),
                    "Transactioneer did not become active");
 
-        final var countdown = new CountDownLatch(1);
-        var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
-                                                scheduler, countdown, Executors.newSingleThreadExecutor());
+        final var countdown = new CountDownLatch(1); 
+        var transactioneer = new Transactioneer(txneer.getSession(), exec, timeout, 1,
+                                                scheduler, countdown, exec);
 
         transactioneer.start();
         assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");
@@ -109,9 +112,12 @@ public class MembershipTests {
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) {
+        @SuppressWarnings("preview")
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
         blocks = new ConcurrentHashMap<>();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
-        var scheduler = Executors.newScheduledThreadPool(cardinality);
+        @SuppressWarnings("preview")
+        var scheduler = Executors.newScheduledThreadPool(cardinality, Thread.ofVirtual().factory());
 
         var params = Parameters.newBuilder()
                                .setSynchronizeTimeout(Duration.ofSeconds(1))
@@ -138,7 +144,7 @@ public class MembershipTests {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                       Executors.newSingleThreadExecutor(), null);
+                                       exec, null);
             comm.setMember(m);
             return comm;
         }));
@@ -171,7 +177,7 @@ public class MembershipTests {
                                                            .setCommunications(routers.get(m.getId()))
                                                            .setProcessor(processor)
                                                            .setContext(context)
-                                                           .setExec(Executors.newFixedThreadPool(2))
+                                                           .setExec(exec)
                                                            .setScheduler(scheduler)
                                                            .build()));
         }));

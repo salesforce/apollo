@@ -110,6 +110,7 @@ public class TestServer {
     private final Semaphore semaphore;
     private final Server    server;
 
+    @SuppressWarnings("preview")
     private TestServer(final Builder builder) throws IOException {
         this.semaphore = new Semaphore(builder.concurrency, true);
 
@@ -117,7 +118,7 @@ public class TestServer {
             volatile int segment = 0;
 
             {
-                Executors.newSingleThreadExecutor().execute(() -> {
+                Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()).execute(() -> {
                     while (true) {
                         Segment s = builder.segments.get(0);
                         Uninterruptibles.sleepUninterruptibly(s.duration(), TimeUnit.NANOSECONDS);

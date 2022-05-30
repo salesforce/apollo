@@ -644,23 +644,16 @@ public class CHOAM {
     private final Combine.Transitions                                   transitions;
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
+    @SuppressWarnings("preview")
     public CHOAM(Parameters params) {
         this.store = new Store(params.digestAlgorithm(), params.mvBuilder().build());
         this.params = params;
-        executions = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Executions " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        executions = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         nextView();
         combine = new ReliableBroadcaster(params.context(), params.member(), params.combine(), params.exec(),
                                           params.communications(),
                                           params.metrics() == null ? null : params.metrics().getCombineMetrics());
-        linear = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "Linear " + params.member().getId());
-            thread.setDaemon(true);
-            return thread;
-        });
+        linear = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
         combine.registerHandler((ctx, messages) -> {
             try {
                 linear.execute(() -> combine(messages));

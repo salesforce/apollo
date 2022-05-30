@@ -62,8 +62,11 @@ public class ViewAssemblyTest {
         });
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void assembly() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         Digest nextViewId = viewId.prefix(0x666);
         int cardinality = 5;
@@ -106,7 +109,7 @@ public class ViewAssemblyTest {
         final var prefix = UUID.randomUUID().toString();
         Map<Member, Router> communications = members.stream().collect(Collectors.toMap(m -> m, m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder(),
-                                              Executors.newFixedThreadPool(2), null);
+                                              exec, null);
             localRouter.setMember(m);
             return localRouter;
         }));
@@ -117,7 +120,7 @@ public class ViewAssemblyTest {
                                                                                 r -> new TerminalServer(communications.get(m)
                                                                                                                       .getClientIdentityProvider(),
                                                                                                         null, r,
-                                                                                                        Executors.newSingleThreadExecutor()),
+                                                                                                        exec),
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
@@ -133,8 +136,8 @@ public class ViewAssemblyTest {
             params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee,
                                                params.build(RuntimeParameters.newBuilder()
-                                                                             .setExec(Executors.newFixedThreadPool(2))
-                                                                             .setScheduler(Executors.newSingleThreadScheduledExecutor())
+                                                                             .setExec(exec)
+                                                                             .setScheduler(scheduler)
                                                                              .setContext(base)
                                                                              .setMember(sm)
                                                                              .setCommunications(router)

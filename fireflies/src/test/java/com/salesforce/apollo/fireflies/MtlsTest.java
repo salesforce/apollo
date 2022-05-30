@@ -121,6 +121,7 @@ public class MtlsTest {
         }
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void smoke() throws Exception {
         var registry = new MetricRegistry();
@@ -137,8 +138,8 @@ public class MtlsTest {
                 seeds.add(id);
             }
         }
-        var scheduler = Executors.newScheduledThreadPool(members.size());
-        Executor exec = Executors.newFixedThreadPool(CARDINALITY);
+        var scheduler = Executors.newScheduledThreadPool(members.size(),Thread.ofVirtual().factory());
+        Executor exec = Executors.newVirtualThreadPerTaskExecutor();
 
         var builder = ServerConnectionCache.newBuilder().setTarget(2);
         var frist = new AtomicBoolean(true);
@@ -156,7 +157,7 @@ public class MtlsTest {
             builder.setMetrics(new ServerConnectionCacheMetricsImpl(frist.getAndSet(false) ? node0Registry : registry));
             CertificateWithPrivateKey certWithKey = certs.get(node.getId());
             MtlsRouter comms = new MtlsRouter(builder, ep, serverContextSupplier(certWithKey),
-                                              Executors.newFixedThreadPool(3), clientContextSupplier);
+                                              exec, clientContextSupplier);
             communications.add(comms);
             return new View(context, node, endpoints.get(node.getId()), EventValidation.NONE, comms, 0.0125,
                             DigestAlgorithm.DEFAULT, metrics, exec);

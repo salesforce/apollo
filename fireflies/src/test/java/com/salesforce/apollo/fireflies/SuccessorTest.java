@@ -83,6 +83,7 @@ public class SuccessorTest {
         communications.clear();
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void allSuccessors() throws Exception {
         Random entropy = new Random(0x666);
@@ -105,12 +106,12 @@ public class SuccessorTest {
             }
         }
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(members.size(), Thread.ofVirtual().factory());
 
         Builder builder = ServerConnectionCache.newBuilder()
                                                .setTarget(30)
                                                .setMetrics(new ServerConnectionCacheMetricsImpl(registry));
-        Executor executor = Executors.newFixedThreadPool(CARDINALITY);
+        Executor executor = Executors.newVirtualThreadPerTaskExecutor();
         final var prefix = UUID.randomUUID().toString();
         Map<Digest, View> views = members.stream().map(node -> {
             LocalRouter comms = new LocalRouter(prefix, builder, executor, metrics.limitsMetrics());

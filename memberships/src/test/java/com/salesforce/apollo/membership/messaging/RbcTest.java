@@ -127,8 +127,11 @@ public class RbcTest {
         communications.forEach(e -> e.close());
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void broadcast() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(certs.size(), Thread.ofVirtual().factory());
         MetricRegistry registry = new MetricRegistry();
 
         List<SigningMember> members = certs.values()
@@ -150,16 +153,16 @@ public class RbcTest {
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
+                                        exec, metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();
-            return new ReliableBroadcaster(context, node, parameters.build(), Executors.newFixedThreadPool(2), comms,
+            return new ReliableBroadcaster(context, node, parameters.build(), exec, comms,
                                            metrics);
         }).collect(Collectors.toList());
 
         System.out.println("Messaging with " + messengers.size() + " members");
-        messengers.forEach(view -> view.start(Duration.ofMillis(10), Executors.newScheduledThreadPool(1)));
+        messengers.forEach(view -> view.start(Duration.ofMillis(10), scheduler));
 
         Map<Member, Receiver> receivers = new HashMap<>();
         AtomicInteger current = new AtomicInteger(-1);

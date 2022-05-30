@@ -57,7 +57,8 @@ public class SessionTest {
 
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        @SuppressWarnings("preview")
+        ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
@@ -89,10 +90,11 @@ public class SessionTest {
         assertEquals(0, session.submitted());
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void scalingTest() throws Exception {
-        var exec = Executors.newFixedThreadPool(2);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()

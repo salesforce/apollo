@@ -143,8 +143,9 @@ public class Driver {
         return dropCounter.getAndSet(0);
     }
 
+    @SuppressWarnings("preview")
     public CompletableFuture<Void> runAsync() {
-        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor());
+        return CompletableFuture.runAsync(this::run, Executors.newSingleThreadExecutor(Thread.ofVirtual().factory()));
     }
 
     public void run() {

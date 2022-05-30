@@ -43,12 +43,13 @@ public class BlockingLimiterTest {
         limiter.acquire(null);
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void testMultipleBlockedThreads() throws InterruptedException, ExecutionException, TimeoutException {
         int numThreads = 80;
         SettableLimit limit = SettableLimit.startingAt(1);
         BlockingLimiter<Void> limiter = BlockingLimiter.wrap(SimpleLimiter.newBuilder().limit(limit).build());
-        ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(numThreads,Thread.ofVirtual().factory());
         try {
             for (Future<?> future : IntStream.range(0, numThreads)
                                              .mapToObj(x -> executorService.submit(() -> limiter.acquire(null)

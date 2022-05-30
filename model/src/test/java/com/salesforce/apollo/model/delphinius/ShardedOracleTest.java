@@ -29,11 +29,12 @@ import com.salesforce.apollo.state.Emulator;
  */
 public class ShardedOracleTest {
 
+    @SuppressWarnings("preview")
     @Test
     public void func() throws Exception {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
         Duration timeout = Duration.ofSeconds(1);
-        Executor exec = Executors.newSingleThreadExecutor();
+        Executor exec = Executors.newVirtualThreadPerTaskExecutor();
         Emulator emmy = new Emulator();
 
         emmy.start(Domain.boostrapMigration());

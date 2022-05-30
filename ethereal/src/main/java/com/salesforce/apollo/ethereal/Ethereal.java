@@ -135,6 +135,7 @@ public class Ethereal {
         this(conf, maxSerializedSize, ds, blocker(blocker, conf), newEpochAction, rsf);
     }
 
+    @SuppressWarnings("preview")
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
                     Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
         this.config = conf;
@@ -153,11 +154,7 @@ public class Ethereal {
                 mx.unlock();
             }
         }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
-        executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
+        executor = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
     }
 
     public Processor processor() {

@@ -48,6 +48,7 @@ public class TestEventObserver {
         }
     }
 
+    @SuppressWarnings("preview")
     @Test
     public void observer() throws Exception {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
@@ -57,7 +58,7 @@ public class TestEventObserver {
         var clientMember = new SigningMemberImpl(Utils.getMember(1));
 
         var builder = ServerConnectionCache.newBuilder();
-        final var exec = Executors.newFixedThreadPool(3);
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         serverRouter = new LocalRouter(prefix, builder, exec, null);
         clientRouter = new LocalRouter(prefix, builder, exec, null);
 

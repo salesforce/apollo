@@ -157,7 +157,8 @@ public class CheckpointAssemblerTest {
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
         CheckpointAssembler boot = new CheckpointAssembler(ULong.valueOf(0), checkpoint, bootstrapping, store2, comm,
                                                            context, 0.00125, DigestAlgorithm.DEFAULT);
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        @SuppressWarnings("preview")
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, Thread.ofVirtual().factory());
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());
         CheckpointState assembledCs;

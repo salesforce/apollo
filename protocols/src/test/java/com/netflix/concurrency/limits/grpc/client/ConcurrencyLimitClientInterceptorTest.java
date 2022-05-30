@@ -29,6 +29,7 @@ public class ConcurrencyLimitClientInterceptorTest {
                                                                                               .build();
 
 //    @Test
+    @SuppressWarnings("preview")
     public void simulation() throws IOException {
         Semaphore sem = new Semaphore(20, true);
         Server server = NettyServerBuilder.forPort(0)
@@ -59,7 +60,7 @@ public class ConcurrencyLimitClientInterceptorTest {
                                              .build();
 
         AtomicLong counter = new AtomicLong();
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+        Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory()).scheduleAtFixedRate(() -> {
             System.out.println(" " + counter.getAndSet(0) + " : " + limiter.toString());
         }, 1, 1, TimeUnit.SECONDS);
 
