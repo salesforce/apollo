@@ -224,7 +224,7 @@ abstract public class AbstractLifecycleTest {
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
 
-        params.getProducer().ethereal().setEpochLength(10);
+        params.getProducer().ethereal().setPrefixLength((short) 4).setEpochLength(10);
         return params;
     }
 
