@@ -91,7 +91,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         try {
             fs.complete(kerl.getAttachment(EventCoordinates.from(coordinates))
                             .map(attch -> attch.toAttachemente())
-                            .get());
+                            .orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -106,7 +106,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KERL_> getKERL(Ident identifier) {
         var fs = new CompletableFuture<KERL_>();
         try {
-            fs.complete(kerl.kerl(Identifier.from(identifier)).map(kerl -> kerl(kerl)).get());
+            fs.complete(kerl.kerl(Identifier.from(identifier)).map(kerl -> kerl(kerl)).orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -117,7 +117,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyEvent_> getKeyEvent(Digeste digest) {
         var fs = new CompletableFuture<KeyEvent_>();
         try {
-            fs.complete(kerl.getKeyEvent(Digest.from(digest)).map(event -> event.toKeyEvent_()).get());
+            fs.complete(kerl.getKeyEvent(Digest.from(digest)).map(event -> event.toKeyEvent_()).orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -128,7 +128,9 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyEvent_> getKeyEvent(EventCoords coordinates) {
         var fs = new CompletableFuture<KeyEvent_>();
         try {
-            fs.complete(kerl.getKeyEvent(EventCoordinates.from(coordinates)).map(event -> event.toKeyEvent_()).get());
+            fs.complete(kerl.getKeyEvent(EventCoordinates.from(coordinates))
+                            .map(event -> event.toKeyEvent_())
+                            .orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -139,7 +141,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyState_> getKeyState(EventCoords coordinates) {
         var fs = new CompletableFuture<KeyState_>();
         try {
-            fs.complete(kerl.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState_()).get());
+            fs.complete(kerl.getKeyState(EventCoordinates.from(coordinates)).map(ks -> ks.toKeyState_()).orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -150,7 +152,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
     public CompletableFuture<KeyState_> getKeyState(Ident identifier) {
         var fs = new CompletableFuture<KeyState_>();
         try {
-            fs.complete(kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_()).get());
+            fs.complete(kerl.getKeyState(Identifier.from(identifier)).map(ks -> ks.toKeyState_()).orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
@@ -163,7 +165,7 @@ public class ProtoKERLAdapter implements ProtoKERLService {
         try {
             fs.complete(kerl.getKeyStateWithAttachments(EventCoordinates.from(coords))
                             .map(ksa -> ksa.toEvente())
-                            .get());
+                            .orElse(null));
         } catch (Exception e) {
             fs.completeExceptionally(e);
         }
