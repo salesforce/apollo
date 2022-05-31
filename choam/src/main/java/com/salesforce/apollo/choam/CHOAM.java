@@ -17,7 +17,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -500,17 +499,45 @@ public class CHOAM {
     }
 
     /** a synchronizer of the current committee */
-    private class Synchronizer extends Administration {
-        public Synchronizer(Map<Member, Verifier> validators) {
-            super(validators, null);
-        }
-    }
+    private class Synchronizer implements Committee {
+        private final Map<Member, Verifier> validators;
 
-    /** a no op committee during synchronization */
-    @SuppressWarnings("unused")
-    private class Synchronizing extends Administration {
-        public Synchronizing() {
-            super(Collections.emptyMap(), null);
+        public Synchronizer(Map<Member, Verifier> validators) {
+            this.validators = validators;
+        }
+
+        @Override
+        public void accept(HashedCertifiedBlock next) {
+            process();
+        }
+
+        @Override
+        public void complete() {
+        }
+
+        @Override
+        public boolean isMember() {
+            return false;
+        }
+
+        @Override
+        public ViewMember join(JoinRequest request, Digest from) {
+            return ViewMember.getDefaultInstance();
+        }
+
+        @Override
+        public Logger log() {
+            return log;
+        }
+
+        @Override
+        public Parameters params() {
+            return params;
+        }
+
+        @Override
+        public boolean validate(HashedCertifiedBlock hb) {
+            return validate(hb, validators);
         }
     }
 
@@ -709,7 +736,7 @@ public class CHOAM {
     }
 
     public Digest getId() {
-        return params.context().getId();
+        return params.member().getId();
     }
 
     public Session getSession() {
@@ -1153,23 +1180,24 @@ public class CHOAM {
         genesis.set(geni);
         head.set(geni);
         checkpoint.set(geni);
-
-        Header header = lastBlock.block.getHeader();
-        HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
-                                                                 store.getCertifiedBlock(ULong.valueOf(header.getLastReconfig())));
-        Reconfigure reconfigure = lastView.block.getReconfigure();
-        view.set(lastView);
-        var validators = validatorsOf(reconfigure, params.context());
-        current.set(new Synchronizer(validators));
-        log.info("Reconfigured to view: {} on: {}", new Digest(reconfigure.getId()), params.member().getId());
-        CertifiedBlock lastCheckpoint = store.getCertifiedBlock(ULong.valueOf(header.getLastCheckpoint()));
+        CertifiedBlock lastCheckpoint = store.getCertifiedBlock(ULong.valueOf(lastBlock.block.getHeader()
+                                                                                             .getLastCheckpoint()));
         if (lastCheckpoint != null) {
             HashedCertifiedBlock ckpt = new HashedCertifiedBlock(params.digestAlgorithm(), lastCheckpoint);
             checkpoint.set(ckpt);
             head.set(ckpt);
+            HashedCertifiedBlock lastView = new HashedCertifiedBlock(params.digestAlgorithm(),
+                                                                     store.getCertifiedBlock(ULong.valueOf(ckpt.block.getHeader()
+                                                                                                                     .getLastReconfig())));
+            Reconfigure reconfigure = lastView.block.getReconfigure();
+            view.set(lastView);
+            var validators = validatorsOf(reconfigure, params.context());
+            current.set(new Synchronizer(validators));
+            log.info("Reconfigured to checkpoint view: {} on: {}", new Digest(reconfigure.getId()),
+                     params.member().getId());
         }
 
-        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", geni.hash, lastView.hash,
+        log.info("Restored to: {} lastView: {} lastCheckpoint: {} lastBlock: {} on: {}", geni.hash, view.get().hash,
                  checkpoint.get().hash, lastBlock.hash, params.member().getId());
     }
 

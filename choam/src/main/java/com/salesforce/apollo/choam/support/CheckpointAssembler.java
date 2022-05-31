@@ -128,8 +128,8 @@ public class CheckpointAssembler {
         RingIterator<Terminal> ringer = new RingIterator<>(frequency, context, member, comms, exec, true, scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
-                       () -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
-                                                TimeUnit.MILLISECONDS));
+                       t -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),
+                                               TimeUnit.MILLISECONDS));
 
     }
 

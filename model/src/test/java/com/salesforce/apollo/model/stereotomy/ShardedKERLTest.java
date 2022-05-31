@@ -114,7 +114,7 @@ public class ShardedKERLTest {
         var ks = new MemKeyStore();
         Stereotomy controller = new StereotomyImpl(ks, kerl, secureRandom);
 
-        Optional<ControlledIdentifier<? extends Identifier>> opti = controller.newIdentifier();
+        Optional<ControlledIdentifier<SelfAddressingIdentifier>> opti = controller.newIdentifier();
         ControlledIdentifier<? extends Identifier> base = opti.get();
 
         var opti2 = base.newIdentifier(IdentifierSpecification.newBuilder());

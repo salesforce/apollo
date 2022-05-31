@@ -89,12 +89,11 @@ public class CRPTest {
 
         AtomicBoolean called = new AtomicBoolean(false);
 
-        var result = crpIt.iterate(0, dag.unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, dag.unitsOnLevel(0), null, u -> {
             called.set(true);
             return true;
         });
         assertFalse(called.get());
-        assertFalse(result);
     }
 
     @Test
@@ -111,12 +110,11 @@ public class CRPTest {
 
         var perm = new HashMap<Digest, Boolean>();
         var called = new AtomicInteger();
-        var result = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             perm.put(u.hash(), true);
             called.incrementAndGet();
             return true;
         });
-        assertTrue(result);
         assertEquals(nProc, perm.size());
         assertEquals(nProc, called.get());
     }
@@ -133,11 +131,10 @@ public class CRPTest {
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
-        var ok = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             permutation.add(u);
             return true;
         });
-        assertTrue(ok);
         assertEquals(4, permutation.size());
     }
 
@@ -234,12 +231,10 @@ public class CRPTest {
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
-        var result = crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
+        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
             called.set(true);
             return true;
         });
-
-        assertTrue(result);
     }
 
     private void checkIfDifferentWithProvidedTimingUnit(Dag dag, CommonRandomPermutation crpIt, RandomSourceMock rs) {

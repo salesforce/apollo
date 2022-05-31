@@ -72,17 +72,13 @@ public class AbstractDhtTest {
     }
 
     @BeforeEach
-    public void before() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public void before() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, getCardinality())
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();

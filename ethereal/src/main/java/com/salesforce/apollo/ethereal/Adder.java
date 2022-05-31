@@ -726,7 +726,7 @@ public class Adder {
         var heights = wp.pu().view().heights();
         int count = 0;
         for (short creator = 0; creator < heights.length; creator++) {
-            if (heights[creator] == wp.height() - 1) {
+            if (heights[creator] <= wp.height() - 1) {
                 count++;
             }
         }

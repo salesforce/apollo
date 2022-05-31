@@ -94,7 +94,7 @@ public class Extender {
         }
 
         var decided = new AtomicBoolean();
-        if (!crpIterator.iterate(level, units, previousTU, uc -> {
+        crpIterator.iterate(level, units, previousTU, uc -> {
             SuperMajorityDecider decider = getDecider(uc, crpIterator.crpFixedPrefix());
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
@@ -113,11 +113,7 @@ public class Extender {
                 return false;
             }
             return true;
-        })) {
-            log.trace("No round, dag mxLvl: {} level: {} count: {} could not match permutation on: {}", dagMaxLevel,
-                      level, count, dag.pid());
-            return null;
-        }
+        });
         if (!decided.get()) {
             log.trace("No round decided, dag mxLvl: {} level: {} count: {} on: {}", dagMaxLevel, level, count,
                       dag.pid());

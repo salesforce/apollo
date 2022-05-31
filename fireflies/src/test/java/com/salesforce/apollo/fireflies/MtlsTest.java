@@ -85,17 +85,13 @@ public class MtlsTest {
 
     @BeforeAll
     public static void beforeClass() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         String localhost = InetAddress.getLocalHost().getHostName();
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
         identities.entrySet().forEach(e -> {

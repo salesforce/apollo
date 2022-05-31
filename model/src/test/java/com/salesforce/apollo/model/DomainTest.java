@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,9 +40,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -194,23 +191,19 @@ public class DomainTest {
     }
 
     @BeforeEach
-    public void before() throws SQLException {
+    public void before() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var params = params();
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
-                                            new SecureRandom());
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
                                   .parallel()
                                   .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .map(ci -> {
-                                      @SuppressWarnings("unchecked")
-                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                      return casted;
-                                  })
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 

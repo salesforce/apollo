@@ -10,6 +10,7 @@ package com.salesforce.apollo.ethereal;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,8 +41,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 
 /**
  * 
@@ -78,8 +81,14 @@ public class EtherealTest {
                                                                               r -> new Thread(r, "gossip scheduler"
                                                                               + schedN.incrementAndGet()));
 
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
         List<SigningMember> members = IntStream.range(0, nProc)
-                                               .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(i)))
+                                               .mapToObj(i -> stereotomy.newIdentifier().get())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
                                                .toList();
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), members.size(), 0.1, 3);

@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import static com.salesforce.apollo.state.Mutator.batch;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +53,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
@@ -126,7 +130,7 @@ abstract public class AbstractLifecycleTest {
     }
 
     @BeforeEach
-    public void before() {
+    public void before() throws Exception {
         checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
@@ -134,17 +138,20 @@ abstract public class AbstractLifecycleTest {
         Utils.clean(baseDir);
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
-        Random entropy = new Random();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();
 
         var params = parameters(context);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .toList();
+        members.forEach(m -> context.activate(m));
         testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();

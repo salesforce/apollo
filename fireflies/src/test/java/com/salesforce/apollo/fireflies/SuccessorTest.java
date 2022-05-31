@@ -60,17 +60,13 @@ public class SuccessorTest {
     private static final int                                                   CARDINALITY = 10;
 
     @BeforeAll
-    public static void beforeClass() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public static void beforeClass() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
     }

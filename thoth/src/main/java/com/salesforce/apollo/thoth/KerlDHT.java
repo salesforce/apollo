@@ -109,11 +109,11 @@ import liquibase.ui.UIService;
  *
  */
 public class KerlDHT {
-    public static class MajorityWriteFail extends Exception {
+    public static class CompletionException extends Exception {
 
         private static final long serialVersionUID = 1L;
 
-        public MajorityWriteFail(String message) {
+        public CompletionException(String message) {
             super(message);
         }
 
@@ -251,11 +251,11 @@ public class KerlDHT {
         return fs;
     }
 
-    private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> majority, T result) {
-        return majority.thenCompose(b -> {
+    private static <T> CompletableFuture<T> complete(CompletableFuture<Boolean> complete, T result) {
+        return complete.thenCompose(b -> {
             var fs = new CompletableFuture<T>();
             if (!b) {
-                fs.completeExceptionally(new MajorityWriteFail("Unable to complete majority write"));
+                fs.completeExceptionally(new CompletionException("Unable to complete"));
             } else {
                 fs.complete(result);
             }
@@ -327,10 +327,13 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).iterate(identifier, () -> {
-        }, (link, r) -> link.append(kerl), () -> {
-        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
-                                                    "append kerl"), () -> majority.complete(true));
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
+                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
+                                                                                      isTimedOut, tally, link,
+                                                                                      "append kerl"),
+                                             null);
         return complete(majority, null);
     }
 
@@ -346,12 +349,15 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).iterate(identifier, () -> {
-        }, (link, r) -> link.append(events), () -> {
-        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
-                                                    "append events"), () -> majority.complete(true));
-        final CompletableFuture<Void> complete = complete(majority, null);
-        return complete;
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).iterate(identifier, () -> majority.complete(true),
+                                             (link, r) -> link.append(events),
+                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
+                                                                                      isTimedOut, tally, link,
+                                                                                      "append events"),
+                                             null);
+        return complete(majority, null);
     }
 
     public CompletableFuture<Void> append(List<KeyEvent_> events, List<AttachmentEvent> attachments) {
@@ -366,10 +372,14 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).iterate(identifier, () -> {
-        }, (link, r) -> link.append(events, attachments), () -> {
-        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
-                                                    "append events"), () -> majority.complete(true));
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).iterate(identifier, () -> majority.complete(true),
+                                             (link, r) -> link.append(events, attachments),
+                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
+                                                                                      isTimedOut, tally, link,
+                                                                                      "append events"),
+                                             null);
         return complete(majority, null);
     }
 
@@ -385,12 +395,15 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).iterate(identifier, () -> {
-        }, (link, r) -> link.appendAttachments(events), () -> {
-        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
-                                                    "append attachments"), () -> majority.complete(true));
-        final CompletableFuture<Void> complete = complete(majority, null);
-        return complete;
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).iterate(identifier, () -> majority.complete(true),
+                                             (link, r) -> link.appendAttachments(events),
+                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
+                                                                                      isTimedOut, tally, link,
+                                                                                      "append attachments"),
+                                             null);
+        return complete(majority, null);
     }
 
     public CompletableFuture<Void> appendValidations(List<Validations> validations) {
@@ -405,12 +418,15 @@ public class KerlDHT {
         CompletableFuture<Boolean> majority = new CompletableFuture<>();
         Instant timedOut = Instant.now().plus(timeout);
         Supplier<Boolean> isTimedOut = () -> Instant.now().isAfter(timedOut);
-        new RingIterator<>(frequency, context, member, scheduler, dhtComms, executor).iterate(identifier, () -> {
-        }, (link, r) -> link.appendValidations(validations), () -> {
-        }, (tally, futureSailor, link, r) -> mutate(futureSailor, identifier, isTimedOut, tally, link,
-                                                    "append validations"), () -> majority.complete(true));
-        final CompletableFuture<Void> complete = complete(majority, null);
-        return complete;
+        new RingIterator<>(frequency, context, member, scheduler, dhtComms,
+                           executor).iterate(identifier, () -> majority.complete(true),
+                                             (link, r) -> link.appendValidations(validations),
+                                             () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
+                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
+                                                                                      isTimedOut, tally, link,
+                                                                                      "append validations"),
+                                             null);
+        return complete(majority, null);
     }
 
     public CompletableFuture<Attachment> getAttachment(EventCoords coordinates) {
@@ -426,10 +442,12 @@ public class KerlDHT {
         var result = new CompletableFuture<Attachment>();
         HashMultiset<Attachment> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(identifier, (link, r) -> link.getAttachment(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    identifier, isTimedOut, link,
-                                                                                    "get attachment"));
+                           executor).iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, identifier,
+                                                                                    isTimedOut, link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -446,10 +464,12 @@ public class KerlDHT {
         var result = new CompletableFuture<KERL_>();
         HashMultiset<KERL_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKERL(identifier),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get kerl"));
+                           executor).iterate(digest, null, (link, r) -> link.getKERL(identifier),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get kerl"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -466,10 +486,12 @@ public class KerlDHT {
         var result = new CompletableFuture<KeyEvent_>();
         HashMultiset<KeyEvent_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKeyEvent(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get key event"));
+                           executor).iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get key event"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -486,10 +508,12 @@ public class KerlDHT {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKeyState(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get attachment"));
+                           executor).iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -506,10 +530,12 @@ public class KerlDHT {
         var result = new CompletableFuture<KeyState_>();
         HashMultiset<KeyState_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKeyState(identifier),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get attachment"));
+                           executor).iterate(digest, null, (link, r) -> link.getKeyState(identifier),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -526,10 +552,12 @@ public class KerlDHT {
         var result = new CompletableFuture<KeyStateWithAttachments_>();
         HashMultiset<KeyStateWithAttachments_> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest, (link, r) -> link.getKeyStateWithAttachments(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get attachment"));
+                           executor).iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -546,11 +574,13 @@ public class KerlDHT {
         var result = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
         HashMultiset<KeyStateWithEndorsementsAndValidations> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(digest,
+                           executor).iterate(digest, null,
                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    digest, isTimedOut, link,
-                                                                                    "get attachment"));
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, digest, isTimedOut,
+                                                                                    link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
     }
 
@@ -567,11 +597,17 @@ public class KerlDHT {
         var result = new CompletableFuture<Validations>();
         HashMultiset<Validations> gathered = HashMultiset.create();
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
-                           executor).iterate(identifier, (link, r) -> link.getValidations(coordinates),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, futureSailor,
-                                                                                    identifier, isTimedOut, link,
-                                                                                    "get attachment"));
+                           executor).iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
+                                             () -> completeExceptionally(result),
+                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
+                                                                                    futureSailor, identifier,
+                                                                                    isTimedOut, link, "get attachment"),
+                                             t -> completeExceptionally(result));
         return result;
+    }
+
+    private boolean completeExceptionally(CompletableFuture<?> result) {
+        return result.completeExceptionally(new CompletionException("Unable to achieve majority read"));
     }
 
     public void start(ScheduledExecutorService scheduler, Duration duration) {
@@ -580,7 +616,7 @@ public class KerlDHT {
         }
         dhtComms.register(context.getId(), service);
         reconcileComms.register(context.getId(), reconciliation);
-        reconcile(scheduler, duration);
+//        reconcile(scheduler, duration);
     }
 
     public void stop() {
@@ -808,7 +844,7 @@ public class KerlDHT {
         return biff.toBff();
     }
 
-    private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered,
+    private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<ListenableFuture<T>> futureSailor, Digest identifier,
                              Supplier<Boolean> isTimedOut, DhtService link, String action) {
         if (futureSailor.isEmpty()) {
@@ -836,17 +872,19 @@ public class KerlDHT {
         if (content != null || (content != null && content.equals(Attachment.getDefaultInstance()))) {
             log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             gathered.add(content);
-            var winner = gathered.entrySet()
-                                 .stream()
-                                 .filter(e -> e.getCount() >= context.majority())
-                                 .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
-                                 .orElse(null);
-            if (winner != null) {
-                result.complete(winner.getElement());
-                return false;
-            } else {
-                return true;
+            var max = gathered.entrySet()
+                              .stream()
+                              .max(Ordering.natural().onResultOf(Multiset.Entry::getCount))
+                              .orElse(null);
+            if (max != null) {
+                if (max.getCount() >= context.majority()) {
+                    result.complete(max.getElement());
+                    return false;
+                } else {
+                    tally.set(max.getCount());
+                }
             }
+            return !isTimedOut.get();
         } else {
             log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             return !isTimedOut.get();

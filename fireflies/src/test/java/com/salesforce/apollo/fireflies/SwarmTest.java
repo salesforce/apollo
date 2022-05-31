@@ -59,17 +59,13 @@ public class SwarmTest {
     private static final int                                                   CARDINALITY = 100;
 
     @BeforeAll
-    public static void beforeClass() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public static void beforeClass() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
     }
@@ -145,8 +141,7 @@ public class SwarmTest {
             assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
             + testViews.stream()
                        .filter(e -> e.getContext().getActive().size() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getContext().getId(),
-                                               v.getContext().getOffline().size()))
+                       .map(v -> String.format("%s : %s", v.getContext().getId(), v.getContext().getOffline().size()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -182,8 +177,8 @@ public class SwarmTest {
     }
 
     @Test
-    public void swarm() throws Exception { 
-        initialize(); 
+    public void swarm() throws Exception {
+        initialize();
         long then = System.currentTimeMillis();
         views.forEach(view -> view.start(Duration.ofMillis(100), seeds, Executors.newSingleThreadScheduledExecutor()));
 

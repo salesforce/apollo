@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -39,8 +40,10 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 
 import io.grpc.StatusRuntimeException;
 
@@ -59,10 +62,15 @@ public class SessionTest {
     public void func() throws Exception {
         ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 2);
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
-                                                              .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                              .setMember(new ControlledIdentifierMember(new StereotomyImpl(new MemKeyStore(),
+                                                                                                                           new MemKERL(DigestAlgorithm.DEFAULT),
+                                                                                                                           entropy).newIdentifier()
+                                                                                                                                   .get()))
                                                               .build());
         @SuppressWarnings("unchecked")
         Function<SubmittedTransaction, SubmitResult> service = stx -> {
@@ -94,10 +102,14 @@ public class SessionTest {
         var exec = Executors.newFixedThreadPool(2);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), 9, 0.2, 3);
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         Parameters params = Parameters.newBuilder()
                                       .build(RuntimeParameters.newBuilder()
                                                               .setContext(context)
-                                                              .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                              .setMember(new ControlledIdentifierMember(stereotomy.newIdentifier()
+                                                                                                                  .get()))
                                                               .build());
 
         @SuppressWarnings("unchecked")

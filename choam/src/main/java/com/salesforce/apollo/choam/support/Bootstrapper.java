@@ -118,7 +118,7 @@ public class Bootstrapper {
                                                   (link, ring) -> anchor(link, start, end),
                                                   (tally, futureSailor, link, ring) -> completeAnchor(futureSailor,
                                                                                                       start, end, link),
-                                                  () -> scheduleAnchorCompletion(start, end));
+                                                  t -> scheduleAnchorCompletion(start, end));
     }
 
     private ListenableFuture<Blocks> anchor(Terminal link, AtomicReference<ULong> start, ULong end) {
@@ -211,7 +211,7 @@ public class Bootstrapper {
                                                   (link, ring) -> completeViewChain(link, start, end),
                                                   (tally, futureSailor, link,
                                                    ring) -> completeViewChain(futureSailor, start, end, link),
-                                                  () -> scheduleViewChainCompletion(start, end));
+                                                  t -> scheduleViewChainCompletion(start, end));
     }
 
     private boolean completeViewChain(Optional<ListenableFuture<Blocks>> futureSailor, AtomicReference<ULong> start,
@@ -412,7 +412,7 @@ public class Bootstrapper {
                            params.scheduler()).iterate(randomCut, (link, ring) -> synchronize(s, link),
                                                        (tally, futureSailor, link, ring) -> synchronize(futureSailor,
                                                                                                         votes, link),
-                                                       () -> computeGenesis(votes));
+                                                       t -> computeGenesis(votes));
     }
 
     private void scheduleAnchorCompletion(AtomicReference<ULong> start, ULong anchorTo) {
