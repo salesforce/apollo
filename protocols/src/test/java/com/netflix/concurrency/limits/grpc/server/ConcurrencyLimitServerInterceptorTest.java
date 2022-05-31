@@ -118,7 +118,7 @@ public class ConcurrencyLimitServerInterceptorTest {
     }
 
     @Test
-    public void releaseOnUncaughtException() throws IOException {
+    public void releaseOnUncaughtException() throws Exception {
         StringBuilder builder = new StringBuilder().append('\n')
                                                    .append('\n')
                                                    .append("********************************************")
@@ -130,6 +130,7 @@ public class ConcurrencyLimitServerInterceptorTest {
                                                    .append('\n')
                                                    .append('\n');
         LoggerFactory.getLogger(getClass()).warn(builder.toString());
+        Thread.sleep(500);
         // Setup server
         startServer((req, observer) -> {
             throw new RuntimeException("failure");
@@ -140,11 +141,7 @@ public class ConcurrencyLimitServerInterceptorTest {
         } catch (StatusRuntimeException e) {
             assertEquals(Status.Code.UNKNOWN, e.getStatus().getCode());
         }
-        // Verify
-        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
-        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();
-
-        verifyCounts(0, 1, 0, 0);
+        Thread.sleep(500);
         builder = new StringBuilder().append('\n')
                                      .append('\n')
                                      .append("******************************************")
@@ -155,6 +152,11 @@ public class ConcurrencyLimitServerInterceptorTest {
                                      .append('\n')
                                      .append('\n');
         LoggerFactory.getLogger(getClass()).warn(builder.toString());
+        // Verify
+        Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
+        Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();
+
+        verifyCounts(0, 1, 0, 0);
     }
 
     @Test
