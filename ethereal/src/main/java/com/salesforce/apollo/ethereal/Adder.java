@@ -730,6 +730,10 @@ public class Adder {
                 count++;
             }
         }
-        return count > 2 * threshold;
+        boolean result = count > 2 * threshold;
+        if (!result) {
+            log.error("Failed validation: {} heights: {} on: {}", wp, heights, conf.logLabel());
+        }
+        return result;
     }
 }
