@@ -444,9 +444,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, identifier,
-                                                                                    isTimedOut, link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, identifier, isTimedOut,
+                                                         link, "get attachment", Attachment.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -466,9 +466,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKERL(identifier),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get kerl"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get kerl", KERL_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -488,9 +488,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get key event"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get key event", KeyEvent_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -510,9 +510,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get key state for coordinates",
+                                                         KeyState_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -532,9 +533,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyState(identifier),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get current key state", KeyState_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -554,9 +555,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get key state with attachments",
+                                                         KeyStateWithAttachments_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -577,9 +579,10 @@ public class KerlDHT {
                            executor).iterate(digest, null,
                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, digest, isTimedOut,
-                                                                                    link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
+                                                         link, "get key state with endorsements",
+                                                         KeyStateWithEndorsementsAndValidations.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -599,9 +602,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link, r) -> read(result, gathered, tally,
-                                                                                    futureSailor, identifier,
-                                                                                    isTimedOut, link, "get attachment"),
+                                             (tally, futureSailor, link,
+                                              r) -> read(result, gathered, tally, futureSailor, identifier, isTimedOut,
+                                                         link, "get validations", Validations.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -846,11 +849,11 @@ public class KerlDHT {
 
     private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<ListenableFuture<T>> futureSailor, Digest identifier,
-                             Supplier<Boolean> isTimedOut, DhtService link, String action) {
+                             Supplier<Boolean> isTimedOut, DhtService link, String action, T empty) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
-        T content;
+        T content = null;
         try {
             content = futureSailor.get().get();
         } catch (InterruptedException e) {
@@ -864,12 +867,15 @@ public class KerlDHT {
                     log.trace("Error {}: {} server not found: {} on: {}", action, identifier, link.getMember().getId(),
                               member.getId());
                     return !isTimedOut.get();
+                } else if (sre.getStatus() == Status.UNKNOWN) {
+                    content = empty;
                 }
+            } else {
+                log.debug("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e.getCause());
+                return !isTimedOut.get();
             }
-            log.debug("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e.getCause());
-            return !isTimedOut.get();
         }
-        if (content != null || (content != null && content.equals(Attachment.getDefaultInstance()))) {
+        if (content != null) {
             log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
             gathered.add(content);
             var max = gathered.entrySet()
