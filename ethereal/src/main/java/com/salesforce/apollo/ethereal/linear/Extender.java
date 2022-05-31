@@ -55,8 +55,7 @@ public class Extender {
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         digestAlgorithm = conf.digestAlgorithm();
-        crpIterator = new CommonRandomPermutation(dag.nProc(), rs, conf.prefixLength(), digestAlgorithm,
-                                                  conf.logLabel());
+        crpIterator = new CommonRandomPermutation(dag.nProc(), rs, digestAlgorithm, conf.logLabel());
     }
 
     public TimingRound nextRound() {
@@ -81,7 +80,7 @@ public class Extender {
 
         var decided = new AtomicBoolean();
         crpIterator.iterate(level, units, previousTU, uc -> {
-            SuperMajorityDecider decider = getDecider(uc, crpIterator.prefix());
+            SuperMajorityDecider decider = getDecider(uc, zeroVoteRoundForCommonVote);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
                 final List<Unit> ltus = lastTUs.get();
@@ -110,10 +109,10 @@ public class Extender {
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
-    private SuperMajorityDecider getDecider(Unit uc, short prefix) {
+    private SuperMajorityDecider getDecider(Unit uc, int zeroRound) {
         return deciders.computeIfAbsent(uc.hash(),
                                         h -> new SuperMajorityDecider(new UnanimousVoter(dag, randomSource, uc,
                                                                                          zeroVoteRoundForCommonVote,
-                                                                                         prefix, new HashMap<>())));
+                                                                                         zeroRound, new HashMap<>())));
     }
 }

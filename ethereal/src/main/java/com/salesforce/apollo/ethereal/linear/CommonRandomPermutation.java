@@ -27,8 +27,8 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 
-public record CommonRandomPermutation(short nProc, RandomSource randomSource, short prefix,
-                                      DigestAlgorithm digestAlgorithm, String logLabel) {
+public record CommonRandomPermutation(short nProc, RandomSource randomSource, DigestAlgorithm digestAlgorithm,
+                                      String logLabel) {
 
     private static final Logger log = LoggerFactory.getLogger(CommonRandomPermutation.class);
 
@@ -38,28 +38,23 @@ public record CommonRandomPermutation(short nProc, RandomSource randomSource, sh
      * or the contents run out.
      */
     public void iterate(int level, SlottedUnits unitsOnLevel, Unit previousTU, Function<Unit, Boolean> work) {
-        List<Unit> permutation = randomPermutation(level, pidOrder(prefix, level, previousTU), unitsOnLevel,
-                                                   previousTU);
+        List<Unit> permutation = randomPermutation(level, pidOrder(level, previousTU), unitsOnLevel, previousTU);
         permutation.stream().map(work).filter(r -> !r).findFirst().orElse(true);
     }
 
-    private List<Short> pidOrder(short prefixLen, int level, Unit tu) {
-        assert prefixLen >= 0;
-        if (prefixLen > nProc) {
-            prefixLen = nProc;
-        }
+    private List<Short> pidOrder(int level, Unit tu) {
         var pids = new ArrayList<Short>();
         for (int pid = 0; pid < nProc; pid++) {
             pids.add((short) ((pid + level) % nProc));
         }
         if (tu == null) {
-            return pids.subList(0, prefixLen);
+            return pids;
 
         }
         for (short pid : new ArrayList<>(pids)) {
             pids.set(pid, (short) ((pids.get(pid) + tu.creator()) % nProc));
         }
-        return pids.subList(0, prefixLen);
+        return pids;
 
     }
 

@@ -23,9 +23,9 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  *
  */
 public record Config(String label, short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote,
-                     int firstDecidedRound, int orderStartLevel, Signer signer, short prefixLength,
-                     DigestAlgorithm digestAlgorithm, int lastLevel, boolean canSkipLevel, int numberOfEpochs,
-                     WeakThresholdKey WTKey, Clock clock, double bias, Verifier[] verifiers, double fpr) {
+                     int firstDecidedRound, int orderStartLevel, Signer signer, DigestAlgorithm digestAlgorithm,
+                     int lastLevel, boolean canSkipLevel, int numberOfEpochs, WeakThresholdKey WTKey, Clock clock,
+                     double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -69,13 +69,14 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
         private int              orderStartLevel = 6;
         private double           pByz            = -1;
         private short            pid;
-        private short            prefixLength    = -1;
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
         private int              zeroVoteRoundForCommonVote;
 
         public Builder() {
+            requiredByLinear();
+            addConsensusConfig();
         }
 
         public Builder(Config config) {
@@ -114,9 +115,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
         }
 
         public Config build() {
-            if (prefixLength <= 0) {
-                prefixLength = Dag.minimalTrusted(nProc);
-            }
             if (pByz <= -1) {
                 pByz = 1.0 / bias;
             }
@@ -130,8 +128,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
                 addLastLevel();
             }
             return new Config(label, nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound,
-                              orderStartLevel, signer, prefixLength, digestAlgorithm, lastLevel, canSkipLevel,
-                              numberOfEpochs, wtk, clock, bias, verifiers, fpr);
+                              orderStartLevel, signer, digestAlgorithm, lastLevel, canSkipLevel, numberOfEpochs, wtk,
+                              clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -193,10 +191,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public short getPid() {
             return pid;
-        }
-
-        public short getPrefixLength() {
-            return prefixLength;
         }
 
         public Signer getSigner() {
@@ -292,11 +286,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Builder setPid(short pid) {
             this.pid = pid;
-            return this;
-        }
-
-        public Builder setPrefixLength(short prefixLength) {
-            this.prefixLength = prefixLength;
             return this;
         }
 

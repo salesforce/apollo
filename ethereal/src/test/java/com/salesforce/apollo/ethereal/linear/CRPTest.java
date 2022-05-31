@@ -83,8 +83,7 @@ public class CRPTest {
         short nProc = 4;
         Dag dag = new DagFactory.TestDagFactory().createDag(nProc);
         var rs = new RandomSourceMock();
-        short crpFixedPrefix = nProc;
-        var crpIt = new CommonRandomPermutation(dag.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(dag.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
@@ -104,8 +103,7 @@ public class CRPTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
-        short crpFixedPrefix = nProc;
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var perm = new HashMap<Digest, Boolean>();
@@ -117,54 +115,6 @@ public class CRPTest {
         });
         assertEquals(nProc, perm.size());
         assertEquals(nProc, called.get());
-    }
-
-    @Test
-    public void missingRandomBytesButDeterministicProvided() throws Exception {
-        Dag d = null;
-        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
-            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
-        }
-        var rs = new DeterministicRandomSource(new HashMap<>());
-        short crpFixedPrefix = 4;
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
-        assertNotNull(crpIt);
-
-        var permutation = new ArrayList<Unit>();
-        crpIt.iterate(0, d.unitsOnLevel(0), null, u -> {
-            permutation.add(u);
-            return true;
-        });
-        assertEquals(crpFixedPrefix, permutation.size());
-    }
-
-    @Test
-    public void returnDifferentPermutations() throws Exception {
-        short nProc = 4;
-        Dag d = null;
-        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
-            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
-        }
-        var rs = new RandomSourceMock();
-        short crpFixedPrefix = (short) (nProc - 2);
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
-        assertNotNull(crpIt);
-
-        checkIfDifferentWithProvidedTimingUnit(d, crpIt, rs);
-    }
-
-    @Test
-    public void returnSamePermutations() throws Exception {
-        Dag d = null;
-        try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
-            d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
-        }
-        var rs = new RandomSourceMock();
-        short crpFixedPrefix = 0;
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
-        assertNotNull(crpIt);
-
-        checkIfSameWithProvidedTimingUnit(d, crpIt, rs);
     }
 
 //    @Test
@@ -182,8 +132,7 @@ public class CRPTest {
         }
         var rs = new DeterministicRandomSource(rsData);
 
-        var crpFixedPrefix = (short) 1;
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
@@ -203,7 +152,7 @@ public class CRPTest {
         }
         rs = new DeterministicRandomSource(rsData);
 
-        crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation2 = new ArrayList<Unit>();
@@ -226,8 +175,7 @@ public class CRPTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
-        short crpFixedPrefix = 1;
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, crpFixedPrefix, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
@@ -235,46 +183,5 @@ public class CRPTest {
             called.set(true);
             return true;
         });
-    }
-
-    private void checkIfDifferentWithProvidedTimingUnit(Dag dag, CommonRandomPermutation crpIt, RandomSourceMock rs) {
-        checkWithProvidedTimingUnit(dag, crpIt, rs, false);
-    }
-
-    private void checkIfSameWithProvidedTimingUnit(Dag dag, CommonRandomPermutation crpIt, RandomSourceMock rs) {
-        checkWithProvidedTimingUnit(dag, crpIt, rs, true);
-    }
-
-    private void checkWithProvidedTimingUnit(Dag dag, CommonRandomPermutation crpIt, RandomSourceMock rs,
-                                             boolean shouldBeEqual) {
-        var permutation = new ArrayList<Unit>();
-
-        crpIt.iterate(2, dag.unitsOnLevel(2), null, u -> {
-            permutation.add(u);
-            return true;
-        });
-
-        var tu = dag.unitsOnLevel(1).get((short) 1).get(0);
-        var permutation2 = new ArrayList<Unit>();
-        crpIt.iterate(2, dag.unitsOnLevel(2), tu, u -> {
-            permutation2.add(u);
-            return true;
-        });
-
-        tu = dag.unitsOnLevel(1).get((short) 2).get(0);
-        var permutation3 = new ArrayList<Unit>();
-        crpIt.iterate(2, dag.unitsOnLevel(2), tu, u -> {
-            permutation3.add(u);
-            return true;
-        });
-
-        if (shouldBeEqual) {
-            assertEquals(permutation2, permutation);
-            assertEquals(permutation3, permutation2);
-        } else {
-            assertNotEquals(permutation2, permutation);
-            assertNotEquals(permutation3, permutation);
-            assertNotEquals(permutation3, permutation2);
-        }
     }
 }
