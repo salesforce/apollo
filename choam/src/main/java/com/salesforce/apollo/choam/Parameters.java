@@ -53,10 +53,10 @@ import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcaster.Parameters combine,
                          Duration gossipDuration, int maxCheckpointSegments, Duration submitTimeout,
                          Digest genesisViewId, int checkpointBlockDelta, DigestAlgorithm digestAlgorithm,
-                         SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, Duration synchronizeDuration,
-                         int regenerationCycles, Duration synchronizeTimeout, Parameters.BootstrapParameters bootstrap,
-                         Parameters.ProducerParameters producer, Parameters.MvStoreBuilder mvBuilder,
-                         Parameters.LimiterBuilder txnLimiterBuilder, int checkpointSegmentSize) {
+                         SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
+                         Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
+                         Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
+                         int checkpointSegmentSize) {
 
     public int majority() {
         return runtime.context.majority();
@@ -633,16 +633,14 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private int                            regenerationCycles    = 20;
         private Duration                       submitTimeout         = Duration.ofSeconds(30);
         private int                            synchronizationCycles = 10;
-        private Duration                       synchronizeDuration   = Duration.ofMillis(500);
-        private Duration                       synchronizeTimeout    = Duration.ofSeconds(30);
         private LimiterBuilder                 txnLimiterBuilder     = new LimiterBuilder();
         private SignatureAlgorithm             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
-                                  synchronizeDuration, regenerationCycles, synchronizeTimeout, bootstrap, producer,
-                                  mvBuilder, txnLimiterBuilder, checkpointSegmentSize);
+                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder,
+                                  checkpointSegmentSize);
         }
 
         @Override
@@ -704,14 +702,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public int getSynchronizationCycles() {
             return synchronizationCycles;
-        }
-
-        public Duration getSynchronizeDuration() {
-            return synchronizeDuration;
-        }
-
-        public Duration getSynchronizeTimeout() {
-            return synchronizeTimeout;
         }
 
         public Duration getTransactonTimeout() {
@@ -788,16 +778,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setSynchronizationCycles(int synchronizationCycles) {
             this.synchronizationCycles = synchronizationCycles;
-            return this;
-        }
-
-        public Builder setSynchronizeDuration(Duration synchronizeDuration) {
-            this.synchronizeDuration = synchronizeDuration;
-            return this;
-        }
-
-        public Builder setSynchronizeTimeout(Duration synchronizeTimeout) {
-            this.synchronizeTimeout = synchronizeTimeout;
             return this;
         }
 

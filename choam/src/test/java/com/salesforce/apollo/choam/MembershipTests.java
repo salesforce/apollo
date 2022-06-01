@@ -118,10 +118,8 @@ public class MembershipTests {
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
         blocks = new ConcurrentHashMap<>();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
-        var scheduler = Executors.newScheduledThreadPool(cardinality);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(20))
                                                                 .build())
@@ -149,7 +147,7 @@ public class MembershipTests {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                       Executors.newSingleThreadExecutor(), null);
+                                       Executors.newFixedThreadPool(2), null);
             comm.setMember(m);
             return comm;
         }));
@@ -184,7 +182,6 @@ public class MembershipTests {
                                                            .setProcessor(processor)
                                                            .setContext(context)
                                                            .setExec(Executors.newFixedThreadPool(2))
-                                                           .setScheduler(scheduler)
                                                            .build()));
         }));
         return testSubject;

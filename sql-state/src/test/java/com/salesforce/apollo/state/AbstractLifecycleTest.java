@@ -34,14 +34,11 @@ import java.util.stream.IntStream;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.LoggerFactory;
 
-import com.chiralbehaviors.tron.Fsm;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.CHOAM;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
-import com.salesforce.apollo.choam.GenesisAssembly;
 import com.salesforce.apollo.choam.Parameters;
 import com.salesforce.apollo.choam.Parameters.BootstrapParameters;
 import com.salesforce.apollo.choam.Parameters.Builder;
@@ -63,8 +60,6 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
-import ch.qos.logback.classic.Level;
-
 /**
  * @author hal.hildebrand
  *
@@ -84,11 +79,11 @@ abstract public class AbstractLifecycleTest {
         GENESIS_DATA = CHOAM.toGenesisData(txns);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
-        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
-        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
     private static Txn initialInsert() {
@@ -219,7 +214,6 @@ abstract public class AbstractLifecycleTest {
                                                                 .setMaxSyncBlocks(1000)
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
-                               .setSynchronizeDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100))

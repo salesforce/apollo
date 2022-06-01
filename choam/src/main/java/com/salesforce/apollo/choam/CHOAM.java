@@ -27,7 +27,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -667,7 +666,6 @@ public class CHOAM {
     private final AtomicBoolean                                         started               = new AtomicBoolean();
     private final Store                                                 store;
     private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
-    private final AtomicBoolean                                         synchronizing         = new AtomicBoolean(false);
     private final Combine.Transitions                                   transitions;
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
@@ -1162,11 +1160,7 @@ public class CHOAM {
                 log.error("Synchronization failed on: {}", params.member().getId(), t);
                 transitions.fail();
             }
-        }).exceptionally(t -> {
-            log.error("Synchronization failed on: {}", params.member().getId(), t);
-            transitions.fail();
-            return null;
-        }).orTimeout(params.synchronizeTimeout().toMillis(), TimeUnit.MILLISECONDS));
+        }));
     }
 
     private void restore() throws IllegalStateException {
@@ -1297,7 +1291,6 @@ public class CHOAM {
     }
 
     private void synchronize(SynchronizedState state) {
-        synchronizing.set(true);
         transitions.synchronizing();
         CertifiedBlock current1;
         if (state.lastCheckpoint == null) {
@@ -1312,7 +1305,6 @@ public class CHOAM {
             synchronizedProcess(current1);
             current1 = store.getCertifiedBlock(height(current1.getBlock()).add(1));
         }
-        synchronizing.set(false);
         log.info("Synchronized, resuming view: {} deferred blocks: {} on: {}",
                  state.lastCheckpoint != null ? state.lastCheckpoint.hash : state.genesis.hash, pending.size(),
                  params.member().getId());

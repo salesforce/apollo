@@ -97,7 +97,6 @@ public class TestCHOAM {
         entropy.setSeed(new byte[] { 6, 6, 6 });
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(200))
                                .setProducer(ProducerParameters.newBuilder()
@@ -124,7 +123,7 @@ public class TestCHOAM {
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              Executors.newFixedThreadPool(1,
+                                              Executors.newFixedThreadPool(2,
                                                                            r -> new Thread(r,
                                                                                            "Comm Exec[" + m.getId()
                                                                                            + "]")),
@@ -132,9 +131,6 @@ public class TestCHOAM {
             localRouter.setMember(m);
             return localRouter;
         }));
-        final var si = new AtomicInteger();
-        final var scheduler = Executors.newScheduledThreadPool(5, r -> new Thread(r, "Scheduler[" + si.incrementAndGet()
-        + "]"));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var recording = new AtomicInteger();
             blocks.put(m.getId(), recording);
@@ -167,7 +163,9 @@ public class TestCHOAM {
                                                  .setContext(context)
                                                  .setExec(Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec["
                                                  + nExec.incrementAndGet() + ":" + m.getId() + "]")))
-                                                 .setScheduler(scheduler)
+                                                 .setScheduler(Executors.newSingleThreadScheduledExecutor(r -> new Thread(r,
+                                                                                                                          "Sched"
+                                                                                                                          + m.getId())))
                                                  .build()));
         }));
     }

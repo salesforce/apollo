@@ -245,7 +245,6 @@ public class DomainTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()

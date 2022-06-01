@@ -156,7 +156,7 @@ public class Bootstrapper {
                                                                 params.digestAlgorithm());
 
         // assemble the checkpoint
-        checkpointAssembled = assembler.assemble(params.scheduler(), params.synchronizeDuration(), params.exec())
+        checkpointAssembled = assembler.assemble(params.scheduler(), params.gossipDuration(), params.exec())
                                        .whenComplete((cps, t) -> {
                                            log.info("Restored checkpoint: {} on: {}", checkpoint.height(),
                                                     params.member().getId());
@@ -421,8 +421,8 @@ public class Bootstrapper {
         if (sync.isDone()) {
             return;
         }
-        log.info("Scheduling Anchor completion ({} to {}) duration: {} millis on: {}", start, anchorTo,
-                 params.synchronizeDuration().toMillis(), params.member().getId());
+        log.info("Scheduling Anchor completion ({} to {}) duration: {} on: {}", start, anchorTo,
+                 params.gossipDuration(), params.member().getId());
         params.scheduler().schedule(() -> {
             try {
                 anchor(start, anchorTo);
@@ -430,7 +430,7 @@ public class Bootstrapper {
                 log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
-        }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
+        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void scheduleSample() {
@@ -451,7 +451,7 @@ public class Bootstrapper {
                 log.error("Unable to sample sync state on: {}", params.member().getId(), e);
                 sync.completeExceptionally(e);
             }
-        }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
+        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void scheduleViewChainCompletion(AtomicReference<ULong> start, ULong to) {
@@ -461,8 +461,8 @@ public class Bootstrapper {
             log.trace("View chain complete on: {}", params.member().getId());
             return;
         }
-        log.info("Scheduling view chain completion ({} to {}) duration: {} millis on: {}", start, to,
-                 params.synchronizeDuration().toMillis(), params.member().getId());
+        log.info("Scheduling view chain completion ({} to {}) duration: {} on: {}", start, to, params.gossipDuration(),
+                 params.member().getId());
         params.scheduler().schedule(() -> {
             try {
                 completeViewChain(start, to);
@@ -470,7 +470,7 @@ public class Bootstrapper {
                 log.error("Cannot execute completeViewChain on: {}", params.member().getId());
                 sync.completeExceptionally(e);
             }
-        }, params.synchronizeDuration().toMillis(), TimeUnit.MILLISECONDS);
+        }, params.gossipDuration().toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private boolean synchronize(Optional<ListenableFuture<Initial>> futureSailor, HashMap<Digest, Initial> votes,

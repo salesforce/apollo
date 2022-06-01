@@ -131,7 +131,6 @@ public class CHOAMTest {
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofMillis(200))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
