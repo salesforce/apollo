@@ -49,6 +49,17 @@ public class Creator {
 
     private static final Logger log = LoggerFactory.getLogger(Creator.class);
 
+    public static int parentsOnPreviousLevel(PreUnit pu) {
+        var heights = pu.view().heights();
+        int count = 0;
+        for (short creator = 0; creator < heights.length; creator++) {
+            if (heights[creator] < pu.height()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /**
      * MakeConsistent ensures that the set of parents follows "parent consistency
      * rule". Modifies the provided parents in place. Parent consistency rule means
@@ -85,7 +96,8 @@ public class Creator {
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
     private final RsData                               rsData;
-    private final Consumer<Unit>                       send;
+
+    private final Consumer<Unit> send;
 
     public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -150,11 +162,25 @@ public class Creator {
         }
     }
 
+    private int count(int level) {
+        var count = 0;
+        for (int i = 0; i < candidates.length; i++) {
+            Unit u = candidates[i];
+            for (; u != null && u.level() >= level; u = u.predecessor())
+                ;
+            if (u != null && u.level() == level - 1) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void createUnit(Unit[] parents, int level, ByteString data) {
         assert parents.length == conf.nProc();
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm(), conf.signer());
+        assert parentsOnPreviousLevel(u) >= quorum;
         if (log.isTraceEnabled()) {
             log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.logLabel());
         } else {
@@ -202,19 +228,6 @@ public class Creator {
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
-    }
-
-    private int count(int level) {
-        var count = 0;
-        for (int i = 0; i < candidates.length; i++) {
-            Unit u = candidates[i];
-            for (; u != null && u.level() >= level; u = u.predecessor())
-                ;
-            if (u != null && u.level() == level - 1) {
-                count++;
-            }
-        }
-        return count;
     }
 
     /**
