@@ -193,6 +193,7 @@ public class CHOAM {
 
         @Override
         public void recover(HashedCertifiedBlock anchor) {
+            log.info("Anchor discovered: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
             current.set(new Formation());
             CHOAM.this.recover(anchor);
         }
@@ -261,13 +262,6 @@ public class CHOAM {
         void execute(int index, Digest hash, Transaction tx, CompletableFuture onComplete);
 
         default void genesis(Digest hash, List<Transaction> initialization) {
-        }
-    }
-
-    public class TransSubmission implements Submitter {
-        @Override
-        public SubmitResult submit(SubmitTransaction request, Digest from) {
-            return CHOAM.this.submit(request, from);
         }
     }
 
@@ -540,6 +534,13 @@ public class CHOAM {
         }
     }
 
+    private class TransSubmission implements Submitter {
+        @Override
+        public SubmitResult submit(SubmitTransaction request, Digest from) {
+            return CHOAM.this.submit(request, from);
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(CHOAM.class);
 
     public static Checkpoint checkpoint(DigestAlgorithm algo, File state, int segmentSize) {
@@ -667,6 +668,7 @@ public class CHOAM {
     private final Store                                                 store;
     private final CommonCommunications<TxnSubmission, Submitter>        submissionComm;
     private final Combine.Transitions                                   transitions;
+    private final TransSubmission                                       txnSubmission         = new TransSubmission();
     private final AtomicReference<HashedCertifiedBlock>                 view                  = new AtomicReference<>();
 
     public CHOAM(Parameters params) {
@@ -703,13 +705,12 @@ public class CHOAM {
                                                      params.metrics(), r, params.exec()),
                              TerminalClient.getCreate(params.metrics()),
                              Terminal.getLocalLoopback(params.member(), service));
-        final Submitter txnSubmissionService = new TransSubmission();
         submissionComm = params.communications()
-                               .create(params.member(), params.context().getId(), txnSubmissionService,
+                               .create(params.member(), params.context().getId(), txnSubmission,
                                        r -> new TxnSubmitServer(params.communications().getClientIdentityProvider(),
                                                                 params.metrics(), r, params.exec()),
                                        TxnSubmitClient.getCreate(params.metrics()),
-                                       TxnSubmission.getLocalLoopback(params.member(), txnSubmissionService));
+                                       TxnSubmission.getLocalLoopback(params.member(), txnSubmission));
         var fsm = Fsm.construct(new Combiner(), Combine.Transitions.class, Merchantile.INITIAL, true);
         fsm.setName("CHOAM" + params.member().getId() + params.context().getId());
         transitions = fsm.getTransitions();
@@ -1075,16 +1076,16 @@ public class CHOAM {
     }
 
     private void process() {
+        final var c = current.get();
         final HashedCertifiedBlock h = head.get();
+        log.info("Begin block: {} height: {} committee: {} on: {}", h.hash, h.height(), c.getClass().getSimpleName(),
+                 params.member().getId());
         switch (h.block.getBodyCase()) {
         case ASSEMBLE: {
             params.processor().beginBlock(h.height(), h.hash);
             nextViewId.set(Digest.from(h.block.getAssemble().getNextView()));
             log.info("Next view id: {} on: {}", nextViewId.get(), params.member().getId());
-            final var c = current.get();
-            if (c != null) {
-                c.assembled();
-            }
+            c.assembled();
             break;
         }
         case RECONFIGURE: {
@@ -1141,9 +1142,11 @@ public class CHOAM {
     }
 
     private void recover(HashedCertifiedBlock anchor) {
+        log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
         if (futureSynchronization != null) {
             final var c = futureSynchronization.get();
             if (c != null) {
+                log.info("Cancelling existing synchronization on: {}", params.member().getId());
                 c.cancel(true);
             }
             futureSynchronization.set(null);
@@ -1237,8 +1240,6 @@ public class CHOAM {
             log.debug("No committee to submit txn from: {} on: {}", from, params.member().getId());
             return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
         }
-//        log.trace("Submiting received txn: {} from: {} on: {}",
-//                  hashOf(request.getTransaction(), params.digestAlgorithm()), from, params.member().getId());
         return c.submit(request);
     }
 
@@ -1322,8 +1323,8 @@ public class CHOAM {
         }
         HashedCertifiedBlock hcb = new HashedCertifiedBlock(params.digestAlgorithm(), certifiedBlock);
         Block block = hcb.block;
-        log.debug("Processing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
-                  params.member().getId());
+        log.info("Synchronizing block {} : {} height: {} on: {}", hcb.hash, block.getBodyCase(), hcb.height(),
+                 params.member().getId());
         final HashedCertifiedBlock previousBlock = head.get();
         Header header = block.getHeader();
         if (previousBlock != null) {

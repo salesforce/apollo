@@ -119,17 +119,6 @@ public class ConcurrencyLimitServerInterceptorTest {
 
     @Test
     public void releaseOnUncaughtException() throws Exception {
-        StringBuilder builder = new StringBuilder().append('\n')
-                                                   .append('\n')
-                                                   .append("********************************************")
-                                                   .append('\n')
-                                                   .append("*** Expecting two exception stack traces ***")
-                                                   .append('\n')
-                                                   .append("********************************************")
-                                                   .append('\n')
-                                                   .append('\n')
-                                                   .append('\n');
-        LoggerFactory.getLogger(getClass()).warn(builder.toString());
         Thread.sleep(500);
         // Setup server
         startServer((req, observer) -> {
@@ -142,15 +131,15 @@ public class ConcurrencyLimitServerInterceptorTest {
             assertEquals(Status.Code.UNKNOWN, e.getStatus().getCode());
         }
         Thread.sleep(500);
-        builder = new StringBuilder().append('\n')
-                                     .append('\n')
-                                     .append("******************************************")
-                                     .append('\n')
-                                     .append("*** 2 stack traces above were expected ***")
-                                     .append('\n')
-                                     .append("******************************************")
-                                     .append('\n')
-                                     .append('\n');
+        var builder = new StringBuilder().append('\n')
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append("*** 2 stack traces above were expected ***")
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append('\n');
         LoggerFactory.getLogger(getClass()).warn(builder.toString());
         // Verify
         Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
