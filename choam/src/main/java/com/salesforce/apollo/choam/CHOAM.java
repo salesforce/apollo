@@ -151,7 +151,7 @@ public class CHOAM {
             log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
                      params.member().getId());
             roundScheduler.schedule(AWAIT_REGEN, () -> {
-                futureSynchronization.set(null);
+                cancelSynchronization();
                 awaitRegeneration();
             }, params.regenerationCycles());
         }
@@ -167,17 +167,8 @@ public class CHOAM {
                 transitions.bootstrap(anchor);
                 return;
             }
-            log.info("No anchor to synchronize, waiting: {} cycles on: {}", params.synchronizationCycles(),
-                     params.member().getId());
             roundScheduler.schedule(AWAIT_SYNC, () -> {
-                futureSynchronization.set(null);
-                final var c = current.get();
-                if (c != null) {
-                    synchronizationFailed();
-                } else {
-                    testQuorum();
-                    awaitSynchronization();
-                }
+                synchronizationFailed();
             }, params.synchronizationCycles());
         }
 
@@ -204,20 +195,33 @@ public class CHOAM {
         }
 
         private void synchronizationFailed() {
-            var c = current.get();
-
-            if (c == null) {
-                c = testQuorum();
-            }
-
-            if (c != null && c.isMember()) {
-                log.info("Synchronization failed and initial member, regenerating: {} on: {}",
-                         c.getClass().getSimpleName(), params.member().getId());
-                transitions.regenerate();
+            cancelSynchronization();
+            var activeCount = params.context().activeCount();
+            if (activeCount >= params.majority()) {
+                var existed = new AtomicBoolean();
+                current.updateAndGet(cmt -> {
+                    if (cmt == null) {
+                        log.info("Ouorum achieved, have: {} need: {} forming Genesis committe on: {}", activeCount,
+                                 params.majority(), params.member().getId());
+                        Formation formation = new Formation();
+                        return formation;
+                    } else {
+                        log.info("Quorum achieved, have: {} need: {} existing committee: {} on: {}", activeCount,
+                                 params.majority(), cmt.getClass().getSimpleName(), params.member().getId());
+                        existed.set(true);
+                        return cmt;
+                    }
+                });
+                if (!existed.get()) {
+                    log.info("Triggering regeneration on: {}", params.member().getId());
+                    transitions.regenerate();
+                }
             } else {
-                log.info("Synchronization failed, no anchor to recover from: {} on: {}",
-                         c == null ? "no formation" : c.getClass().getSimpleName(), params.member().getId());
-                transitions.synchronizationFailed();
+                final var c = current.get();
+                log.info("Synchronization failed, no quorum available, have: {} need: {}, no anchor to recover from: {} on: {}",
+                         activeCount, params.majority(), c == null ? "no formation" : c.getClass().getSimpleName(),
+                         params.member().getId());
+                awaitSynchronization();
             }
         }
     }
@@ -789,11 +793,6 @@ public class CHOAM {
             fs.cancel(true);
             futureSynchronization.set(null);
         }
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap.set(null);
-        }
     }
 
     private boolean checkJoin(JoinRequest request, Digest from) {
@@ -1095,6 +1094,7 @@ public class CHOAM {
         }
         case GENESIS: {
             cancelSynchronization();
+            cancelBootstrap();
             transitions.regenerated();
             genesisInitialization(h, h.block.getGenesis().getInitializeList());
             reconfigure(h.block.getGenesis().getInitialView());
@@ -1142,15 +1142,10 @@ public class CHOAM {
     }
 
     private void recover(HashedCertifiedBlock anchor) {
+        cancelBootstrap();
         log.info("Recovering from: {} height: {} on: {}", anchor.hash, anchor.height(), params.member().getId());
-        if (futureSynchronization != null) {
-            final var c = futureSynchronization.get();
-            if (c != null) {
-                log.info("Cancelling existing synchronization on: {}", params.member().getId());
-                c.cancel(true);
-            }
-            futureSynchronization.set(null);
-        }
+        cancelSynchronization();
+        cancelBootstrap();
         futureBootstrap.set(new Bootstrapper(anchor, params, store, comm).synchronize().whenComplete((s, t) -> {
             if (t == null) {
                 try {
@@ -1164,6 +1159,14 @@ public class CHOAM {
                 transitions.fail();
             }
         }));
+    }
+
+    private void cancelBootstrap() {
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap.set(null);
+        }
     }
 
     private void restore() throws IllegalStateException {
@@ -1374,16 +1377,5 @@ public class CHOAM {
             }
         }
         pending.add(hcb);
-    }
-
-    private Committee testQuorum() {
-        var activeCount = params.context().activeCount();
-        log.info("Active count: {} on: {}", activeCount, params.member().getId());
-        if (activeCount >= params.context().getRingCount()) {
-            var c = new Formation();
-            current.set(c);
-            return c;
-        }
-        return null;
     }
 }

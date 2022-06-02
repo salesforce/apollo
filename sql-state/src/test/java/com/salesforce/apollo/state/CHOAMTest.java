@@ -170,7 +170,7 @@ public class CHOAMTest {
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 1_000 : 1;
+        final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -234,16 +234,8 @@ public class CHOAMTest {
                                                                .toList());
         }
 
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(5_000);
-
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
-
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(1_000);
 
         record row(float price, int quantity) {}
 
