@@ -24,7 +24,7 @@ import com.netflix.concurrency.limits.limit.SettableLimit;
 public class LifoBlockingLimiterTest {
 
     private LifoBlockingLimiter<Integer> blockingLimiter;
-    private final Executor               executor = Executors.newCachedThreadPool();
+    private final Executor               executor = Executors.newFixedThreadPool(20);
     private SettableLimit                limit;
     private SimpleLimiter<Integer>       simpleLimiter;
 

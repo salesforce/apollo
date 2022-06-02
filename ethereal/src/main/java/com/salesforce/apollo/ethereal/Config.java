@@ -75,6 +75,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
         private int              zeroVoteRoundForCommonVote;
 
         public Builder() {
+            requiredByLinear();
+            addConsensusConfig();
         }
 
         public Builder(Config config) {

@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,10 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -74,7 +78,8 @@ public class MembershipTests {
     @Test
     public void genesisBootstrap() throws Exception {
         SigningMember testSubject = initialize(2000, 11);
-        System.out.println("Test subject: " + testSubject);
+        System.out.println("Test subject: " + testSubject.getId() + " membership: "
+        + members.stream().map(e -> e.getId()).toList());
         routers.entrySet()
                .stream()
                .filter(e -> !e.getKey().equals(testSubject.getId()))
@@ -89,8 +94,10 @@ public class MembershipTests {
 
         var txneer = choams.get(members.get(0).getId());
 
-        assertTrue(Utils.waitForCondition(120_00, 1_000, () -> txneer.active()),
-                   "Transactioneer did not become active");
+        System.out.println("Transactioneer: " + txneer.getId());
+
+        assertTrue(Utils.waitForCondition(12_000, 1_000, () -> txneer.active()),
+                   "Transactioneer did not become active: " + txneer.getId());
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
@@ -108,13 +115,11 @@ public class MembershipTests {
 
     }
 
-    public SigningMember initialize(int checkpointBlockSize, int cardinality) {
+    public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
         blocks = new ConcurrentHashMap<>();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
-        var scheduler = Executors.newScheduledThreadPool(cardinality);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(20))
                                                                 .build())
@@ -127,10 +132,14 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(checkpointBlockSize);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
+        params.getProducer().ethereal().setEpochLength(10);
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
         members = IntStream.range(0, cardinality)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .peek(m -> context.activate(m))
                            .toList();
@@ -138,7 +147,7 @@ public class MembershipTests {
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var comm = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(cardinality),
-                                       Executors.newSingleThreadExecutor(), null);
+                                       Executors.newFixedThreadPool(2), null);
             comm.setMember(m);
             return comm;
         }));
@@ -169,10 +178,10 @@ public class MembershipTests {
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                            .setMember(m)
                                                            .setCommunications(routers.get(m.getId()))
+                                                           .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                            .setProcessor(processor)
                                                            .setContext(context)
                                                            .setExec(Executors.newFixedThreadPool(2))
-                                                           .setScheduler(scheduler)
                                                            .build()));
         }));
         return testSubject;

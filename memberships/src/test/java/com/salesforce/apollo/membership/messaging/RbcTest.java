@@ -9,6 +9,7 @@ package com.salesforce.apollo.membership.messaging;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,7 +28,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.ConsoleReporter;
@@ -38,20 +38,21 @@ import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.comm.ServerConnectionCacheMetricsImpl;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetrics;
 import com.salesforce.apollo.membership.messaging.rbc.RbcMetricsImpl;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.MessageHandler;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Msg;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster.Parameters;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -83,7 +84,7 @@ public class RbcTest {
                         if (totalCount % 80_000 == 0) {
                             System.out.println();
                         }
-                        if (counted.size() == certs.size() - 1) {
+                        if (counted.size() == messengers.size() - 1) {
                             round.get().countDown();
                         }
                     }
@@ -100,20 +101,10 @@ public class RbcTest {
         }
     }
 
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final Parameters.Builder               parameters = Parameters.newBuilder()
-                                                                                 .setMaxMessages(100)
-                                                                                 .setFalsePositiveRate(0.0125)
-                                                                                 .setBufferSize(500);
-
-    @BeforeAll
-    public static void beforeClass() {
-        certs = IntStream.range(1, 101)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert -> cert));
-    }
+    private static final Parameters.Builder parameters = Parameters.newBuilder()
+                                                                   .setMaxMessages(100)
+                                                                   .setFalsePositiveRate(0.0125)
+                                                                   .setBufferSize(500);
 
     private final List<Router>        communications = new ArrayList<>();
     private final AtomicInteger       totalReceived  = new AtomicInteger(0);
@@ -131,14 +122,15 @@ public class RbcTest {
     public void broadcast() throws Exception {
         MetricRegistry registry = new MetricRegistry();
 
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(cert -> new SigningMemberImpl(Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                                              cert.getX509Certificate(),
-                                                                              cert.getPrivateKey(),
-                                                                              new SignerImpl(cert.getPrivateKey()),
-                                                                              cert.getX509Certificate().getPublicKey()))
-                                           .collect(Collectors.toList());
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
+        List<SigningMember> members = IntStream.range(0, 100)
+                                               .mapToObj(i -> stereotomy.newIdentifier().get())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
+                                               .toList();
 
         Context<Member> context = Context.newBuilder().setCardinality(members.size()).build();
         RbcMetrics metrics = new RbcMetricsImpl(context.getId(), "test", registry);
@@ -150,7 +142,7 @@ public class RbcTest {
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();

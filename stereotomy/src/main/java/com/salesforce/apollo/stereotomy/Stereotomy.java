@@ -24,6 +24,7 @@ import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.stereotomy.event.Version;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 
 /**
@@ -132,10 +133,11 @@ public interface Stereotomy {
     Optional<Verifier> getVerifier(KeyCoordinates coordinates);
 
     /**
-     * Answer a new ControlledIdentifier created from the default specification
-     * prototype and Identifier.NONE as the base identifier
+     * Answer a new ControlledIdentifier created from the
+     * {@link SelfAddressingIdentifier} prototype and Identifier.NONE as the base
+     * identifier
      */
-    Optional<ControlledIdentifier<? extends Identifier>> newIdentifier();
+    Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier();
 
     /**
      * Answer a new ControlledIdentifier created from the supplied specification

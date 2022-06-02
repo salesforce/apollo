@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -26,7 +27,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,7 +60,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
@@ -115,19 +118,19 @@ public class CHOAMTest {
     }
 
     @BeforeEach
-    public void before() {
+    public void before() throws Exception {
         registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        Random entropy = new Random();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
@@ -139,28 +142,26 @@ public class CHOAMTest {
                                .setCheckpointBlockDelta(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
                            .toList();
+        members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newSingleThreadExecutor(r -> new Thread(r,
-                                                                                                "Comm[" + m.getId()
-                                                                                                + "]")),
+                                              Executors.newFixedThreadPool(2,
+                                                                           r -> new Thread(r,
+                                                                                           "Comm[" + m.getId() + "]")),
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var ei = new AtomicInteger();
-            return createCHOAM(entropy, params, m, context, metrics,
-                               Executors.newFixedThreadPool(2, r -> new Thread(r, "Exec[" + m.getId() + ":"
-                               + ei.incrementAndGet() + "]")));
+            return createCHOAM(entropy, params, m, context, metrics);
         }));
     }
 
@@ -169,7 +170,7 @@ public class CHOAMTest {
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 1_000 : 1;
+        final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -233,16 +234,8 @@ public class CHOAMTest {
                                                                .toList());
         }
 
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(5_000);
-
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
-
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(1_000);
 
         record row(float price, int quantity) {}
 
@@ -272,7 +265,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics, Executor exec) {
+                              ChoamMetrics metrics) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),
@@ -280,6 +273,7 @@ public class CHOAMTest {
         updaters.put(m, up);
 
         params.getProducer().ethereal().setSigner(m);
+        var ei = new AtomicInteger();
         return new CHOAM(params.build(RuntimeParameters.newBuilder()
                                                        .setContext(context)
                                                        .setGenesisData(view -> GENESIS_DATA)
@@ -290,7 +284,11 @@ public class CHOAMTest {
                                                                                                                       + "]")))
                                                        .setMember(m)
                                                        .setCommunications(routers.get(m.getId()))
-                                                       .setExec(exec)
+                                                       .setExec(Executors.newFixedThreadPool(2,
+                                                                                             r -> new Thread(r, "Exec["
+                                                                                             + m.getId() + ":"
+                                                                                             + ei.incrementAndGet()
+                                                                                             + "]")))
                                                        .setCheckpointer(up.getCheckpointer())
                                                        .setMetrics(metrics)
                                                        .setProcessor(new TransactionExecutor() {

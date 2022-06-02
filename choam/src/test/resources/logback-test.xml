@@ -12,11 +12,14 @@
 			</Pattern>
         </encoder>
     </appender>
+    <logger name="com.salesforce.apollo.stereotomy" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
 
     <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
@@ -37,6 +40,9 @@
     </logger>
 
     <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.ethereal.memberships" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

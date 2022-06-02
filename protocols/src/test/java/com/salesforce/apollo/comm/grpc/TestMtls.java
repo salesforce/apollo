@@ -10,9 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.security.KeyPair;
 import java.security.Provider;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.util.Collections;
 import java.util.concurrent.ForkJoinPool;
 
 import org.junit.jupiter.api.Test;
@@ -21,7 +25,10 @@ import com.google.protobuf.Any;
 import com.salesfoce.apollo.test.proto.TestItGrpc;
 import com.salesfoce.apollo.test.proto.TestItGrpc.TestItImplBase;
 import com.salesforce.apollo.crypto.Digest;
+import com.salesforce.apollo.crypto.DigestAlgorithm;
+import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
+import com.salesforce.apollo.crypto.cert.Certificates;
 import com.salesforce.apollo.crypto.ssl.CertificateValidator;
 import com.salesforce.apollo.utils.Utils;
 
@@ -76,7 +83,30 @@ public class TestMtls {
     }
 
     private CertificateWithPrivateKey clientIdentity() {
-        return Utils.getMember(0);
+        return getMember(0);
+    }
+
+    public static CertificateWithPrivateKey getMember(Digest id) {
+        KeyPair keyPair = SignatureAlgorithm.ED_25519.generateKeyPair();
+        var notBefore = Instant.now();
+        var notAfter = Instant.now().plusSeconds(10_000);
+        String localhost;
+        try {
+            localhost = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("Cannot resolve local host name", e);
+        }
+        X509Certificate generated = Certificates.selfSign(false,
+                                                          Utils.encode(id, localhost, Utils.allocatePort(),
+                                                                       keyPair.getPublic()),
+                                                          keyPair, notBefore, notAfter, Collections.emptyList());
+        return new CertificateWithPrivateKey(generated, keyPair.getPrivate());
+    }
+
+    public static CertificateWithPrivateKey getMember(int index) {
+        byte[] hash = new byte[32];
+        hash[0] = (byte) index;
+        return getMember(new Digest(DigestAlgorithm.DEFAULT, hash));
     }
 
     private MtlsServer server(InetSocketAddress serverAddress) {
@@ -100,7 +130,7 @@ public class TestMtls {
     }
 
     private CertificateWithPrivateKey serverIdentity() {
-        return Utils.getMember(1);
+        return getMember(1);
     }
 
     private CertificateValidator validator() {

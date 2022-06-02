@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -117,19 +118,29 @@ public class ConcurrencyLimitServerInterceptorTest {
     }
 
     @Test
-    public void releaseOnUncaughtException() throws IOException {
+    public void releaseOnUncaughtException() throws Exception {
+        Thread.sleep(500);
         // Setup server
         startServer((req, observer) -> {
             throw new RuntimeException("failure");
         });
-
-        System.out.println("*** Expecting two exception stack traces ***");
         try {
             ClientCalls.blockingUnaryCall(channel, METHOD_DESCRIPTOR, CallOptions.DEFAULT, "foo");
             fail("Should have failed with UNKNOWN error");
         } catch (StatusRuntimeException e) {
             assertEquals(Status.Code.UNKNOWN, e.getStatus().getCode());
         }
+        Thread.sleep(500);
+        var builder = new StringBuilder().append('\n')
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append("*** 2 stack traces above were expected ***")
+                                         .append('\n')
+                                         .append("******************************************")
+                                         .append('\n')
+                                         .append('\n');
+        LoggerFactory.getLogger(getClass()).warn(builder.toString());
         // Verify
         Mockito.verify(limiter, Mockito.times(1)).acquire(Mockito.isA(GrpcServerRequestContext.class));
         Mockito.verify(listener.getResult().get(), Mockito.timeout(1000).times(1)).onIgnore();

@@ -72,17 +72,13 @@ public class AbstractDhtTest {
     }
 
     @BeforeEach
-    public void before() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public void before() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, getCardinality())
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();
@@ -126,8 +122,10 @@ public class AbstractDhtTest {
                                              Executors.newFixedThreadPool(4), null);
         router.setMember(member);
         routers.put(member.getId(), router);
-        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2), 0.125, null));
+        dhts.put(member.getId(),
+                 new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
+                             Executors.newFixedThreadPool(4), Duration.ofSeconds(2),
+                             Executors.newSingleThreadScheduledExecutor(), 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

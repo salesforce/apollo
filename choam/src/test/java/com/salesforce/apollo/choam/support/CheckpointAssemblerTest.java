@@ -18,22 +18,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.GZIPOutputStream;
 
 import org.h2.mvstore.MVStore;
 import org.joou.ULong;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -50,13 +48,14 @@ import com.salesforce.apollo.choam.comm.Terminal;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.crypto.Signer.SignerImpl;
-import com.salesforce.apollo.crypto.cert.CertificateWithPrivateKey;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -66,18 +65,8 @@ import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
  */
 public class CheckpointAssemblerTest {
 
-    private static final int                              CARDINALITY  = 10;
-    private static Map<Digest, CertificateWithPrivateKey> certs;
-    private static final int                              SEGMENT_SIZE = 256;
-
-    @BeforeAll
-    public static void beforeClass() {
-        certs = IntStream.range(0, CARDINALITY)
-                         .parallel()
-                         .mapToObj(i -> Utils.getMember(i))
-                         .collect(Collectors.toMap(cert -> Member.getMemberIdentifier(cert.getX509Certificate()),
-                                                   cert -> cert));
-    }
+    private static final int CARDINALITY  = 10;
+    private static final int SEGMENT_SIZE = 256;
 
     private CompletableFuture<CheckpointState> assembled;
 
@@ -108,14 +97,16 @@ public class CheckpointAssemblerTest {
         }
 
         Context<Member> context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
-        List<SigningMember> members = certs.values()
-                                           .stream()
-                                           .map(c -> new SigningMemberImpl(Member.getMemberIdentifier(c.getX509Certificate()),
-                                                                           c.getX509Certificate(), c.getPrivateKey(),
-                                                                           new SignerImpl(c.getPrivateKey()),
-                                                                           c.getX509Certificate().getPublicKey()))
-                                           .peek(m -> context.activate(m))
-                                           .collect(Collectors.toList());
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
+        List<SigningMember> members = IntStream.range(0, CARDINALITY)
+                                               .mapToObj(i -> stereotomy.newIdentifier().get())
+                                               .map(cpk -> new ControlledIdentifierMember(cpk))
+                                               .map(e -> (SigningMember) e)
+                                               .toList();
+        members.forEach(m -> context.activate(m));
 
         Checkpoint checkpoint = CHOAM.checkpoint(DigestAlgorithm.DEFAULT, chkptFile, SEGMENT_SIZE);
 
@@ -155,8 +146,9 @@ public class CheckpointAssemblerTest {
         when(comm.apply(any(), any())).thenReturn(client);
 
         Store store2 = new Store(DigestAlgorithm.DEFAULT, new MVStore.Builder().open());
-        CheckpointAssembler boot = new CheckpointAssembler(ULong.valueOf(0), checkpoint, bootstrapping, store2, comm,
-                                                           context, 0.00125, DigestAlgorithm.DEFAULT);
+        CheckpointAssembler boot = new CheckpointAssembler(Duration.ofMillis(10), ULong.valueOf(0), checkpoint,
+                                                           bootstrapping, store2, comm, context, 0.00125,
+                                                           DigestAlgorithm.DEFAULT);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         assembled = boot.assemble(scheduler, Duration.ofMillis(10), r -> r.run());

@@ -149,17 +149,11 @@ public class Ani {
         var fs = new CompletableFuture<Boolean>();
         events.get(coord)
               .thenAcceptBoth(dht.getKeyStateWithEndorsementsAndValidations(coord.toEventCoords()),
-                              (event, ksa) -> validate(ksa, event).whenComplete((b, t) -> {
-                                  if (t != null) {
-                                      fs.completeExceptionally(t);
-                                  } else {
-                                      fs.complete(b);
-                                  }
-                              }));
+                              (event, ksa) -> fs.complete(validate(ksa, event)));
         return fs;
     }
 
-    private CompletableFuture<Boolean> validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
+    private boolean validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
         // TODO Multisig
         var state = new KeyStateImpl(ksAttach.getState());
         boolean witnessed = false;
@@ -216,6 +210,6 @@ public class Ani {
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                     .toByteString()));
         }
-        return completeIt(witnessed && validated);
+        return (witnessed && validated);
     }
 }

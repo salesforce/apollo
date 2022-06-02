@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,9 +40,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.delphinius.Oracle.Assertion;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -194,23 +191,19 @@ public class DomainTest {
     }
 
     @BeforeEach
-    public void before() throws SQLException {
+    public void before() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var params = params();
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
-                                            new SecureRandom());
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
                                   .parallel()
                                   .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .map(ci -> {
-                                      @SuppressWarnings("unchecked")
-                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                      return casted;
-                                  })
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
@@ -222,14 +215,14 @@ public class DomainTest {
                                                                           Executors.newSingleThreadScheduledExecutor());
         identities.forEach((member, id) -> {
             var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              Executors.newFixedThreadPool(1), null);
+                                              Executors.newFixedThreadPool(2), null);
             routers.add(localRouter);
             var domain = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                            RuntimeParameters.newBuilder()
                                                             .setFoundation(sealed)
                                                             .setScheduler(Executors.newSingleThreadScheduledExecutor())
                                                             .setContext(context)
-                                                            .setExec(Executors.newSingleThreadExecutor())
+                                                            .setExec(Executors.newFixedThreadPool(3))
                                                             .setCommunications(localRouter),
                                            new InetSocketAddress(0), txnConfig);
             domains.add(domain);
@@ -252,7 +245,6 @@ public class DomainTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
@@ -262,7 +254,7 @@ public class DomainTest {
                                                               .setMaxBatchCount(3000)
                                                               .build())
                                .setCheckpointBlockDelta(200);
-        params.getProducer().ethereal().setNumberOfEpochs(5);
+        params.getProducer().ethereal().setNumberOfEpochs(4);
         return params;
     }
 }

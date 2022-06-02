@@ -8,6 +8,8 @@ package com.salesforce.apollo.state;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.util.Arrays;
 import java.util.Properties;
@@ -31,9 +33,11 @@ import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * Single node emulation of the SQL State Machine for testing, development, etc.
@@ -67,9 +71,19 @@ public class Emulator {
         this.ssm = ssm;
         txnExec = this.ssm.getExecutor();
         hash = new AtomicReference<>(base);
+        SecureRandom entropy;
+        try {
+            entropy = SecureRandom.getInstance("SHA1PRNG");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         params = Parameters.newBuilder()
                            .build(RuntimeParameters.newBuilder()
-                                                   .setMember(new SigningMemberImpl(Utils.getMember(0)))
+                                                   .setMember(new ControlledIdentifierMember(new StereotomyImpl(new MemKeyStore(),
+                                                                                                                new MemKERL(DigestAlgorithm.DEFAULT),
+                                                                                                                entropy).newIdentifier()
+                                                                                                                        .get()))
                                                    .setContext(new ContextImpl<>(base, 5, 0.01, 3))
                                                    .build());
         var algorithm = base.getAlgorithm();

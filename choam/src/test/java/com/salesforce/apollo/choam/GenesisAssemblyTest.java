@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.security.KeyPair;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,8 +57,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 
 /**
  * @author hal.hildebrand
@@ -74,10 +77,13 @@ public class GenesisAssemblyTest {
     public void genesis() throws Exception {
         Digest viewId = DigestAlgorithm.DEFAULT.getOrigin().prefix(2);
         int cardinality = 5;
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         List<Member> members = IntStream.range(0, cardinality)
-                                        .mapToObj(i -> Utils.getMember(i))
-                                        .map(cpk -> new SigningMemberImpl(cpk))
+                                        .mapToObj(i -> stereotomy.newIdentifier().get())
+                                        .map(cpk -> new ControlledIdentifierMember(cpk))
                                         .map(e -> (Member) e)
                                         .toList();
         Context<Member> base = new ContextImpl<>(viewId, members.size(), 0.2, 3);
