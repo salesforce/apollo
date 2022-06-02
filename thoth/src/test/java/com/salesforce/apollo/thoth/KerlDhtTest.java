@@ -10,6 +10,7 @@ package com.salesforce.apollo.thoth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.Executors;
@@ -30,13 +31,15 @@ public class KerlDhtTest extends AbstractDhtTest {
     public void smokin() throws Exception {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(getCardinality(),
                                                                               Thread.ofVirtual().factory());
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         routers.values().forEach(r -> r.start());
         dhts.values().forEach(dht -> dht.start(scheduler, Duration.ofSeconds(1)));
 
         // inception
         var specification = IdentifierSpecification.newBuilder();
-        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
-        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
+        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         var dht = dhts.values().stream().findFirst().get();

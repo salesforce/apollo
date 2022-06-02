@@ -9,6 +9,7 @@ package com.salesforce.apollo.state;
 import static com.salesforce.apollo.state.Mutator.batch;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +53,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
@@ -66,7 +70,9 @@ abstract public class AbstractLifecycleTest {
     @SuppressWarnings("preview")
     protected static final Executor                 txExecutor  = Executors.newVirtualThreadPerTaskExecutor();
     @SuppressWarnings("preview")
-    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
+    protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY,
+                                                                                                   Thread.ofVirtual()
+                                                                                                         .factory());
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -129,7 +135,7 @@ abstract public class AbstractLifecycleTest {
 
     @SuppressWarnings("preview")
     @BeforeEach
-    public void before() {
+    public void before() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         checkpointOccurred = new CountDownLatch(CARDINALITY - 1);
@@ -139,30 +145,35 @@ abstract public class AbstractLifecycleTest {
         Utils.clean(baseDir);
         baseDir.mkdirs();
         blocks = new ConcurrentHashMap<>();
-        Random entropy = new Random();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         toleranceLevel = context.toleranceLevel();
 
         var params = parameters(context);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
                            .toList();
+        members.forEach(m -> context.activate(m));
         testSubject = members.get(CARDINALITY - 1);
         members.stream().filter(s -> s != testSubject).forEach(s -> context.activate(s));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              exec, null);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec, null);
             localRouter.setMember(m);
             return localRouter;
         }));
         choams = members.stream()
-                        .collect(Collectors.toMap(m -> m.getId(), m -> createChoam(entropy, params, m,
-                                                                                   m.equals(testSubject), context, exec, scheduler)));
+                        .collect(Collectors.toMap(m -> m.getId(),
+                                                  m -> createChoam(entropy, params, m, m.equals(testSubject), context,
+                                                                   exec, scheduler)));
         members.stream().filter(m -> !m.equals(testSubject)).forEach(m -> context.activate(m));
+        System.out.println("test subject: " + testSubject.getId() + "\nmembers: "
+        + members.stream().map(e -> e.getId()).toList());
     }
 
     protected abstract int checkpointBlockSize();
@@ -205,13 +216,11 @@ abstract public class AbstractLifecycleTest {
     private Builder parameters(Context<Member> context) {
         var params = Parameters.newBuilder()
                                .setGenesisViewId(GENESIS_VIEW_ID)
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setBootstrap(BootstrapParameters.newBuilder()
                                                                 .setGossipDuration(Duration.ofMillis(10))
                                                                 .setMaxSyncBlocks(1000)
                                                                 .setMaxViewBlocks(1000)
                                                                 .build())
-                               .setSynchronizeDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
                                                               .setBatchInterval(Duration.ofMillis(100))
@@ -222,7 +231,7 @@ abstract public class AbstractLifecycleTest {
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
 
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setEpochLength(10);
         return params;
     }
 

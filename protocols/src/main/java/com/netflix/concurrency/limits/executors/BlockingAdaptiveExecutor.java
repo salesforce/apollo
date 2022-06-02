@@ -16,7 +16,6 @@
 package com.netflix.concurrency.limits.executors;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -25,7 +24,6 @@ import com.netflix.concurrency.limits.Limiter.Listener;
 import com.netflix.concurrency.limits.MetricRegistry;
 import com.netflix.concurrency.limits.internal.EmptyMetricRegistry;
 import com.netflix.concurrency.limits.limit.AIMDLimit;
-import com.netflix.concurrency.limits.limiter.BlockingLimiter;
 import com.netflix.concurrency.limits.limiter.SimpleLimiter;
 
 /**
@@ -75,7 +73,7 @@ public final class BlockingAdaptiveExecutor implements Executor {
             }
 
             if (executor == null) {
-                executor = Executors.newVirtualThreadPerTaskExecutor();
+                throw new IllegalStateException("Executor must be not null");
             }
 
             if (limiter == null) {
@@ -99,18 +97,6 @@ public final class BlockingAdaptiveExecutor implements Executor {
     private BlockingAdaptiveExecutor(Builder builder) {
         this.limiter = builder.limiter;
         this.executor = builder.executor;
-    }
-
-    @SuppressWarnings("preview")
-    @Deprecated
-    public BlockingAdaptiveExecutor(Limiter<Void> limiter) {
-        this(limiter, Executors.newVirtualThreadPerTaskExecutor());
-    }
-
-    @Deprecated
-    public BlockingAdaptiveExecutor(Limiter<Void> limiter, Executor executor) {
-        this.limiter = BlockingLimiter.wrap(limiter);
-        this.executor = executor;
     }
 
     @Override

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -74,24 +75,21 @@ public class AbstractDhtTest {
 
     @SuppressWarnings("preview")
     @BeforeEach
-    public void before() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public void before() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(getCardinality(), Thread.ofVirtual().factory());
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, getCardinality())
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
         String prefix = UUID.randomUUID().toString();
         Context<Member> context = Context.<Member>newBuilder().setpByz(PBYZ).setCardinality(getCardinality()).build();
         majority = context.majority();
-        identities.values().forEach(ident -> instantiate(ident, context, prefix, exec));
+        identities.values().forEach(ident -> instantiate(ident, context, prefix, exec, scheduler));
 
         System.out.println();
         System.out.println();
@@ -118,19 +116,19 @@ public class AbstractDhtTest {
     }
 
     protected void instantiate(ControlledIdentifier<SelfAddressingIdentifier> identifier, Context<Member> context,
-                               String prefix, Executor exec) {
+                               String prefix, Executor exec, ScheduledExecutorService scheduler) {
         SigningMember member = new ControlledIdentifierMember(identifier);
         context.activate(member);
         final var url = String.format("jdbc:h2:mem:%s-%s;DB_CLOSE_DELAY=-1", member.getId(), prefix);
 //        System.out.println("URL: " + url);
         context.activate(member);
         JdbcConnectionPool connectionPool = JdbcConnectionPool.create(url, "", "");
-        LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2),
-                                             exec, null);
+        LocalRouter router = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(2), exec, null);
         router.setMember(member);
         routers.put(member.getId(), router);
-        dhts.put(member.getId(), new KerlDHT(context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
-                                             exec, Duration.ofSeconds(2), 0.125, null));
+        dhts.put(member.getId(),
+                 new KerlDHT(Duration.ofMillis(10), context, member, connectionPool, DigestAlgorithm.DEFAULT, router,
+                             exec, Duration.ofSeconds(2), scheduler, 0.125, null));
     }
 
     protected RotationEvent rotation(KeyPair prevNext, final Digest prevDigest, EstablishmentEvent prev,

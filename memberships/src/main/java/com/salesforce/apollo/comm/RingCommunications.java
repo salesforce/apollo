@@ -126,7 +126,6 @@ public class RingCommunications<Comm extends Link> {
     }
 
     linkAndRing<Comm> nextRing(Digest digest, Function<Member, IterateResult> test) {
-        linkAndRing<Comm> link = null;
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
@@ -135,20 +134,11 @@ public class RingCommunications<Comm extends Link> {
             Entropy.secureShuffle(order);
             traversalOrder.set(order);
         }
-        for (int i = 0; i < rings; i++) {
-            link = linkFor(digest, current, test);
-            if (link.link() != null) {
-                break;
-            }
-            current = (current + 1) % rings;
-        }
         lastRingIndex = current;
-        assert link != null : "link is null";
-        return link;
+        return linkFor(digest, current, test);
     }
 
     linkAndRing<Comm> nextRing(Member member) {
-        linkAndRing<Comm> link = null;
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
@@ -157,15 +147,8 @@ public class RingCommunications<Comm extends Link> {
             Entropy.secureShuffle(order);
             traversalOrder.set(order);
         }
-        for (int i = 0; i < rings; i++) {
-            link = linkFor(current);
-            if (link != null) {
-                break;
-            }
-            current = (current + 1) % rings;
-        }
         lastRingIndex = current;
-        return link == null ? new linkAndRing<>(null, current) : link;
+        return linkFor(current);
     }
 
     private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler, Comm link,
@@ -198,8 +181,6 @@ public class RingCommunications<Comm extends Link> {
         Ring<Member> ring = context.ring(r);
         Member successor = direction.retrieve(ring, digest, test);
         if (successor == null) {
-//            log.debug("No successor to digest: {} on ring: {} members: {} traversed: {} on: {}", digest == null ? member.getId() : digest, r,
-//                      ring.size(), member.getId());
             return new linkAndRing<>(null, r);
         }
         try {
@@ -221,8 +202,6 @@ public class RingCommunications<Comm extends Link> {
             return IterateResult.SUCCESS;
         });
         if (successor == null) {
-//            log.debug("No successor to member: {} on ring: {} members: {} on: {}", member.getId(), r, ring.size(),
-//                      member.getId());
             return new linkAndRing<>(null, r);
         }
         try {

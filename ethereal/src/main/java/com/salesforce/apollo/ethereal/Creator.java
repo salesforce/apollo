@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,11 +49,22 @@ public class Creator {
 
     private static final Logger log = LoggerFactory.getLogger(Creator.class);
 
+    public static int parentsOnPreviousLevel(PreUnit pu) {
+        var heights = pu.view().heights();
+        int count = 0;
+        for (short creator = 0; creator < heights.length; creator++) {
+            if (heights[creator] < pu.height()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /**
      * MakeConsistent ensures that the set of parents follows "parent consistency
-     * rule". Modifies the provided unit slice in place. Parent consistency rule
-     * means that unit's i-th parent cannot be lower (in a level sense) than i-th
-     * parent of any other of that units parents. In other words, units seen from U
+     * rule". Modifies the provided parents in place. Parent consistency rule means
+     * that unit's i-th parent cannot be lower (in a level sense) than i-th parent
+     * of any other of that units parents. In other words, units seen from U
      * "directly" (as parents) cannot be below the ones seen "indirectly" (as
      * parents of parents).
      */
@@ -84,7 +96,8 @@ public class Creator {
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
     private final RsData                               rsData;
-    private final Consumer<Unit>                       send;
+
+    private final Consumer<Unit> send;
 
     public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -136,22 +149,26 @@ public class Creator {
 
     private built buildParents() {
         var l = candidates[conf.pid()].level() + 1;
-        final Unit[] parents = getParentsForLevel(l);
-        final var count = count(parents);
+        int count = count(l);
         if (count >= quorum) {
-            log.trace("Parents ready: {} level: {} on: {}", parents, level, conf.logLabel());
+            log.trace("Parents ready: {} level: {} on: {}", quorum, level, conf.logLabel());
+            Unit[] parents = Arrays.copyOf(candidates, candidates.length);
+            makeConsistent(parents);
             return new built(parents, l);
         } else {
-            log.trace("Parents not ready: {} level: {} current: {} required: {}  on: {}", parents, level, count, quorum,
+            log.trace("Parents not ready level: {} current: {} required: {}  on: {}", level, count, quorum,
                       conf.logLabel());
             return null;
         }
     }
 
-    private int count(Unit[] parents) {
-        int count = 0;
-        for (int i = 0; i < parents.length; i++) {
-            if (parents[i] != null) {
+    private int count(int level) {
+        var count = 0;
+        for (int i = 0; i < candidates.length; i++) {
+            Unit u = candidates[i];
+            for (; u != null && u.level() >= level; u = u.predecessor())
+                ;
+            if (u != null && u.level() == level - 1) {
                 count++;
             }
         }
@@ -163,6 +180,7 @@ public class Creator {
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm(), conf.signer());
+        assert parentsOnPreviousLevel(u) >= quorum;
         if (log.isTraceEnabled()) {
             log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.logLabel());
         } else {
@@ -210,30 +228,6 @@ public class Creator {
             timingUnit = lastTiming.poll();
         }
         return ByteString.EMPTY;
-    }
-
-    /**
-     * getParentsForLevel returns a set of candidates such that their level is at
-     * most level-1.
-     */
-    private Unit[] getParentsForLevel(int level) {
-        var result = new Unit[conf.nProc()];
-        for (int i = 0; i < candidates.length; i++) {
-            Unit u = candidates[i];
-            for (; u != null && u.level() >= level; u = u.predecessor())
-                ;
-            if (u != null && u.level() == level - 1) {
-                result[u.creator()] = u;
-            }
-        }
-        makeConsistent(result);
-        for (int i = 0; i < result.length; i++) {
-            var u = result[i];
-            if (u != null && u.level() != level - 1) {
-                result[i] = null;
-            }
-        }
-        return result;
     }
 
     /**

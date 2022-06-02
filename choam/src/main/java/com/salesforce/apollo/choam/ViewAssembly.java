@@ -489,11 +489,11 @@ public class ViewAssembly implements Reconfiguration {
                       params().member().getId());
         }
         switch (re.getAssemblyCase()) {
-        case VALIDATIONS:
-            re.getValidations().getValidationsList().stream().forEach(e -> validate(e));
-            break;
         case VIEWMEMBERS:
             re.getViewMembers().getMembersList().forEach(e -> join(e));
+            break;
+        case VALIDATIONS:
+            re.getValidations().getValidationsList().stream().forEach(e -> validate(e));
             break;
         default:
             break;

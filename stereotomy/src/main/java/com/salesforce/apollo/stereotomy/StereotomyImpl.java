@@ -51,6 +51,7 @@ import com.salesforce.apollo.stereotomy.event.Seal.EventSeal;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.InteractionSpecification;
 import com.salesforce.apollo.stereotomy.identifier.spec.RotationSpecification;
@@ -397,9 +398,10 @@ public class StereotomyImpl implements Stereotomy {
         return Optional.of(new Verifier.DefaultVerifier(state.get().getKeys().get(coordinates.getKeyIndex())));
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Optional<ControlledIdentifier<? extends Identifier>> newIdentifier() {
-        return newIdentifier(IdentifierSpecification.newBuilder());
+    public Optional<ControlledIdentifier<SelfAddressingIdentifier>> newIdentifier() {
+        return newIdentifier(IdentifierSpecification.newBuilder()).map(id -> (ControlledIdentifier<SelfAddressingIdentifier>) id);
     }
 
     @Override

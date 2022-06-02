@@ -12,8 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,13 +22,16 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
-import com.salesforce.apollo.utils.Utils;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 
 /**
  * @author hal.hildebrand
@@ -42,15 +44,21 @@ public class RbcAdderTest {
     private HashMap<Short, Map<Integer, List<Unit>>> units;
 
     @BeforeEach
-    public void before() throws IOException, FileNotFoundException {
+    public void before() throws Exception {
         Dag d = null;
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         units = DagTest.collectUnits(d);
         var context = Context.newBuilder().setCardinality(10).build();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
         members = IntStream.range(0, 4)
-                           .mapToObj(i -> (SigningMember) new SigningMemberImpl(Utils.getMember(0)))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
+                           .map(e -> (SigningMember) e)
                            .toList();
         members.forEach(m -> context.activate(m));
         config = Config.deterministic()

@@ -64,7 +64,7 @@ public class ExtenderTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
+        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
         var ordering = new Extender(d, rs, cnf);
 
         for (int level = 0; level < 8; level++) {
@@ -80,7 +80,7 @@ public class ExtenderTest {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
         var rs = new RandomSourceMock();
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
+        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
         var ordering = new Extender(d, rs, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();

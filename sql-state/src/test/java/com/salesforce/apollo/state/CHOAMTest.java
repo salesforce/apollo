@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -61,7 +62,10 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.Utils;
 
@@ -90,11 +94,13 @@ public class CHOAMTest {
     private List<SigningMember>                members;
     private MetricRegistry                     registry;
     private Map<Digest, Router>                routers;
-    private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
+    private final Map<Member, SqlStateMachine> updaters  = new ConcurrentHashMap<>();
     @SuppressWarnings("preview")
-    private ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor();
+    private ExecutorService                    exec      = Executors.newVirtualThreadPerTaskExecutor();
     @SuppressWarnings("preview")
-    private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
+    private ScheduledExecutorService           scheduler = Executors.newScheduledThreadPool(CARDINALITY,
+                                                                                            Thread.ofVirtual()
+                                                                                                  .factory());
 
     @AfterEach
     public void after() throws Exception {
@@ -119,20 +125,23 @@ public class CHOAMTest {
         registry = null;
     }
 
+    @SuppressWarnings("preview")
     @BeforeEach
-    public void before() {
+    public void before() throws Exception {
+        var exec = Executors.newVirtualThreadPerTaskExecutor();
+        var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         registry = new MetricRegistry();
         checkpointDirBase = new File("target/ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase);
         baseDir = new File(System.getProperty("user.dir"), "target/cluster-" + Entropy.nextBitsStreamLong());
         Utils.clean(baseDir);
         baseDir.mkdirs();
-        Random entropy = new Random();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(10))
                                .setProducer(ProducerParameters.newBuilder()
@@ -144,33 +153,34 @@ public class CHOAMTest {
                                .setCheckpointBlockDelta(2);
 
         params.getProducer().ethereal().setNumberOfEpochs(4);
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
                            .toList();
+        members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              exec,
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec,
                                               metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
         }));
-        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> { 
-            return createCHOAM(entropy, params, m, context, metrics,
-                               exec);
+        choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
+            return createCHOAM(entropy, params, m, context, metrics, exec, scheduler);
         }));
     }
- 
+
     @Test
     public void submitMultiplTxn() throws Exception {
+        @SuppressWarnings("preview")
+        final var exec = Executors.newVirtualThreadPerTaskExecutor();
         final Random entropy = new Random();
         final Duration timeout = Duration.ofSeconds(6);
         var transactioneers = new ArrayList<Transactioneer>();
-        final int clientCount = LARGE_TESTS ? 1_000 : 1;
+        final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;
         final CountDownLatch countdown = new CountDownLatch(choams.size() * clientCount);
 
@@ -183,7 +193,7 @@ public class CHOAMTest {
                    "System did not become active");
 
         updaters.entrySet().forEach(e -> {
-            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession()); 
+            var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
             for (int i = 0; i < clientCount; i++) {
                 transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, max, exec,
                                                        countdown, scheduler));
@@ -232,16 +242,8 @@ public class CHOAMTest {
                                                                .toList());
         }
 
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(5_000);
-
         choams.values().forEach(e -> e.stop());
         routers.values().forEach(e -> e.close());
-
-        // because there is a state replication predicate check, make darn sure all the
-        // systems are in sync
-        Thread.sleep(1_000);
 
         record row(float price, int quantity) {}
 
@@ -271,7 +273,7 @@ public class CHOAMTest {
     }
 
     private CHOAM createCHOAM(Random entropy, Builder params, SigningMember m, Context<Member> context,
-                              ChoamMetrics metrics, Executor exec) {
+                              ChoamMetrics metrics, Executor exec, ScheduledExecutorService scheduler) {
         String url = String.format("jdbc:h2:mem:test_engine-%s-%s", m.getId(), entropy.nextLong());
         System.out.println("DB URL: " + url);
         SqlStateMachine up = new SqlStateMachine(url, new Properties(),

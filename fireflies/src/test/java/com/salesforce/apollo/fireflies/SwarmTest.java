@@ -60,17 +60,13 @@ public class SwarmTest {
     private static final int                                                   CARDINALITY = 100;
 
     @BeforeAll
-    public static void beforeClass() {
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT),
-                                            new SecureRandom());
+    public static void beforeClass() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         identities = IntStream.range(0, CARDINALITY)
                               .parallel()
                               .mapToObj(i -> stereotomy.newIdentifier().get())
-                              .map(ci -> {
-                                  @SuppressWarnings("unchecked")
-                                  var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                  return casted;
-                              })
                               .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                         controlled -> controlled));
     }
@@ -100,7 +96,7 @@ public class SwarmTest {
         initialize(exec);
 
         List<View> testViews = new ArrayList<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(100, Thread.ofVirtual().factory());
 
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
@@ -108,7 +104,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
                 return testViews.stream()
@@ -137,7 +133,7 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(exec, Duration.ofMillis(10), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
             boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
@@ -148,8 +144,7 @@ public class SwarmTest {
             assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
             + testViews.stream()
                        .filter(e -> e.getContext().getActive().size() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getContext().getId(),
-                                               v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
+                       .map(v -> String.format("%s : %s", v.getContext().getId(), v.getContext().getOffline().size()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -191,7 +186,7 @@ public class SwarmTest {
         initialize(exec);
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10, Thread.ofVirtual().factory());
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(exec, Duration.ofMillis(100), seeds, scheduler));
+        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;

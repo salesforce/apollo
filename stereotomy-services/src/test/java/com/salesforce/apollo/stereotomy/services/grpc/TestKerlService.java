@@ -24,7 +24,7 @@ import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.KERL;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -44,7 +44,6 @@ import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLServer;
 import com.salesforce.apollo.stereotomy.services.grpc.kerl.KERLService;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLAdapter;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoKERLService;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -125,11 +124,14 @@ public class TestKerlService {
     }
 
     @SuppressWarnings("preview")
-    private KERLService setup(Digest context) {
+    private KERLService setup(Digest context) throws Exception {
         var prefix = UUID.randomUUID().toString();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        var serverMember = new SigningMemberImpl(Utils.getMember(0));
-        var clientMember = new SigningMemberImpl(Utils.getMember(1));
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newVirtualThreadPerTaskExecutor();

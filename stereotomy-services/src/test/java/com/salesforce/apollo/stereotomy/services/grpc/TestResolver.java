@@ -8,6 +8,7 @@ package com.salesforce.apollo.stereotomy.services.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.security.SecureRandom;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -20,11 +21,13 @@ import com.salesfoce.apollo.stereotomy.event.proto.Ident;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverClient;
 import com.salesforce.apollo.stereotomy.services.grpc.resolver.ResolverServer;
 import com.salesforce.apollo.stereotomy.services.proto.ProtoResolver;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
@@ -52,9 +55,12 @@ public class TestResolver {
     public void resolver() throws Exception {
         var context = DigestAlgorithm.DEFAULT.getOrigin();
         var prefix = UUID.randomUUID().toString();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        var serverMember = new SigningMemberImpl(Utils.getMember(0));
-        var clientMember = new SigningMemberImpl(Utils.getMember(1));
+        var serverMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
+        var clientMember = new ControlledIdentifierMember(stereotomy.newIdentifier().get());
 
         var builder = ServerConnectionCache.newBuilder();
         final var exec = Executors.newVirtualThreadPerTaskExecutor();

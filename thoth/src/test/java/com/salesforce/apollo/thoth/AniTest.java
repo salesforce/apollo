@@ -8,6 +8,7 @@ package com.salesforce.apollo.thoth;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +34,8 @@ public class AniTest extends AbstractDhtTest {
     @SuppressWarnings("preview")
     @Test
     public void smokin() throws Exception {
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         List<? extends Identifier> validators = new ArrayList<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);
         Map<Digest, Ani> anis = dhts.entrySet()
@@ -47,8 +50,8 @@ public class AniTest extends AbstractDhtTest {
 
         // inception
         var specification = IdentifierSpecification.newBuilder();
-        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
-        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair();
+        var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
         var inception = inception(specification, initialKeyPair, factory, nextKeyPair);
 
         dht.append(Collections.singletonList(inception.toKeyEvent_())).get();

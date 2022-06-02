@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,7 +48,10 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.SigningMember;
-import com.salesforce.apollo.membership.impl.SigningMemberImpl;
+import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
+import com.salesforce.apollo.stereotomy.StereotomyImpl;
+import com.salesforce.apollo.stereotomy.mem.MemKERL;
+import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -85,17 +88,17 @@ public class TestCHOAM {
     }
 
     @BeforeEach
-    public void before() {
+    public void before() throws Exception {
         @SuppressWarnings("preview")
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), CARDINALITY, 0.2, 3);
         registry = new MetricRegistry();
         var metrics = new ChoamMetricsImpl(context.getId(), registry);
         blocks = new ConcurrentHashMap<>();
-        Random entropy = new Random();
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
 
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
                                .setGossipDuration(Duration.ofMillis(200))
                                .setProducer(ProducerParameters.newBuilder()
@@ -108,23 +111,24 @@ public class TestCHOAM {
         params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
 
         checkpointOccurred = new CompletableFuture<>();
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
+
         members = IntStream.range(0, CARDINALITY)
-                           .mapToObj(i -> Utils.getMember(i))
-                           .map(cpk -> new SigningMemberImpl(cpk))
+                           .mapToObj(i -> stereotomy.newIdentifier().get())
+                           .map(cpk -> new ControlledIdentifierMember(cpk))
                            .map(e -> (SigningMember) e)
-                           .peek(m -> context.activate(m))
                            .toList();
+        members.forEach(m -> context.activate(m));
         final var prefix = UUID.randomUUID().toString();
         routers = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
             var localRouter = new LocalRouter(prefix,
                                               ServerConnectionCache.newBuilder()
                                                                    .setMetrics(new ServerConnectionCacheMetricsImpl(registry))
                                                                    .setTarget(CARDINALITY),
-                                              exec,
-                                              metrics.limitsMetrics());
+                                              exec, metrics.limitsMetrics());
             localRouter.setMember(m);
             return localRouter;
-        })); 
+        }));
         @SuppressWarnings("preview")
         final var scheduler = Executors.newScheduledThreadPool(5, Thread.ofVirtual().factory());
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
@@ -164,7 +168,7 @@ public class TestCHOAM {
 
     @SuppressWarnings("preview")
     @Test
-    public void submitMultiplTxn() throws Exception { 
+    public void submitMultiplTxn() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var txScheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
         routers.values().forEach(r -> r.start());
@@ -177,10 +181,10 @@ public class TestCHOAM {
         final var max = LARGE_TESTS ? 1_000 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
-        choams.values().forEach(c -> {  
+        choams.values().forEach(c -> {
             for (int i = 0; i < clientCount; i++) {
-                transactioneers.add(new Transactioneer(c.getSession(), exec, timeout, max, txScheduler,
-                                                       countdown, exec));
+                transactioneers.add(new Transactioneer(c.getSession(), exec, timeout, max, txScheduler, countdown,
+                                                       exec));
             }
         });
 

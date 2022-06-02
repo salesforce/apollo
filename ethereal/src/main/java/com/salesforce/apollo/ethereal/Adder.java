@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import static com.salesforce.apollo.ethereal.Creator.parentsOnPreviousLevel;
 import static com.salesforce.apollo.ethereal.PreUnit.id;
 
 import java.util.ArrayList;
@@ -723,13 +724,13 @@ public class Adder {
     }
 
     private boolean validateParents(Waiting wp) {
-        var heights = wp.pu().view().heights();
-        int count = 0;
-        for (short creator = 0; creator < heights.length; creator++) {
-            if (heights[creator] == wp.height() - 1) {
-                count++;
-            }
+        int count = parentsOnPreviousLevel(wp.pu());
+        int minimumTrusted = 2 * threshold;
+        boolean result = count > minimumTrusted;
+        if (!result) {
+            log.error("Failed validation: {} expected: {} found: {} heights: {} on: {}", wp, count, minimumTrusted + 1,
+                      wp.pu().view().heights(), conf.logLabel());
         }
-        return count > 2 * threshold;
+        return result;
     }
 }

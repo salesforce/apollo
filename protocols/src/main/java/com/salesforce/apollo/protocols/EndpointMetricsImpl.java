@@ -15,6 +15,7 @@ import com.codahale.metrics.MetricRegistry;
  */
 public class EndpointMetricsImpl implements EdpointMetrics {
     private final Meter          inboundBandwidth;
+    @SuppressWarnings("unused")
     private final LimitsRegistry limits;
     private final Meter          outboundBandwidth;
 

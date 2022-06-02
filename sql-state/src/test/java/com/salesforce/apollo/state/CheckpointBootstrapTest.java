@@ -84,7 +84,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         System.out.println("Starting txns");
 
         transactioneers.stream().forEach(e -> e.start());
-        assertTrue(countdown.await(120, TimeUnit.SECONDS), "Did not complete transactions");
+        assertTrue(countdown.await(30, TimeUnit.SECONDS), "Did not complete transactions");
         assertTrue(checkpointOccurred.await(30, TimeUnit.SECONDS), "Checkpoints did not complete");
 
         ULong chkptHeight = checkpointHeight.get();

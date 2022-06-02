@@ -216,7 +216,7 @@ public class RingTest {
             for (int card = 4; card < 10_000; card++) {
                 try {
                     var t = Context.minMajority(pByz, card, epsilon, 3);
-                    if (t != tPrev && t % 2 > 0) {
+                    if (t != tPrev) {
                         System.out.println(String.format("Bias: 3 T: %s K: %s Pbyz: %s Cardinality: %s", t, (3 * t) + 1,
                                                          pByz, card));
                     }

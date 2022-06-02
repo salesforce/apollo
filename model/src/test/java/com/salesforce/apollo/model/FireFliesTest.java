@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,9 +39,7 @@ import com.salesforce.apollo.delphinius.Oracle;
 import com.salesforce.apollo.fireflies.View;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.model.Domain.TransactionConfiguration;
-import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
-import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 import com.salesforce.apollo.utils.Entropy;
@@ -69,24 +66,20 @@ public class FireFliesTest {
 
     @SuppressWarnings("preview")
     @BeforeEach
-    public void before() throws SQLException {
+    public void before() throws Exception {
         var exec = Executors.newVirtualThreadPerTaskExecutor();
         var scheduler = Executors.newScheduledThreadPool(CARDINALITY, Thread.ofVirtual().factory());
+        var entropy = SecureRandom.getInstance("SHA1PRNG");
+        entropy.setSeed(new byte[] { 6, 6, 6 });
         final var prefix = UUID.randomUUID().toString();
         Path checkpointDirBase = Path.of("target", "ct-chkpoints-" + Entropy.nextBitsStreamLong());
         Utils.clean(checkpointDirBase.toFile());
         var params = params();
-        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()),
-                                            new SecureRandom());
+        var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(params.getDigestAlgorithm()), entropy);
 
         var identities = IntStream.range(0, CARDINALITY)
                                   .parallel()
                                   .mapToObj(i -> stereotomy.newIdentifier().get())
-                                  .map(ci -> {
-                                      @SuppressWarnings("unchecked")
-                                      var casted = (ControlledIdentifier<SelfAddressingIdentifier>) ci;
-                                      return casted;
-                                  })
                                   .collect(Collectors.toMap(controlled -> controlled.getIdentifier().getDigest(),
                                                             controlled -> controlled));
 
@@ -94,12 +87,10 @@ public class FireFliesTest {
         var foundation = Foundation.newBuilder();
         identities.keySet().forEach(d -> foundation.addMembership(d.toDigeste()));
         var sealed = FoundationSeal.newBuilder().setFoundation(foundation).build();
-        TransactionConfiguration txnConfig = new TransactionConfiguration(exec,
-                                                                          scheduler);
+        TransactionConfiguration txnConfig = new TransactionConfiguration(exec, scheduler);
         identities.forEach((digest, id) -> {
             var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getLast(), CARDINALITY, 0.2, 3);
-            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30),
-                                              exec, null);
+            var localRouter = new LocalRouter(prefix, ServerConnectionCache.newBuilder().setTarget(30), exec, null);
             var node = new ProcessDomain(group, id, params, "jdbc:h2:mem:", checkpointDirBase,
                                          RuntimeParameters.newBuilder()
                                                           .setFoundation(sealed)
@@ -126,9 +117,7 @@ public class FireFliesTest {
                                  .toList()
                                  .subList(0, CARDINALITY - 2);
         domains.forEach(d -> {
-            d.getFoundation()
-             .start(exec, Duration.ofMillis(10), seeds,
-                    scheduler);
+            d.getFoundation().start(Duration.ofMillis(10), seeds, scheduler);
         });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()
@@ -157,7 +146,6 @@ public class FireFliesTest {
 
     private Builder params() {
         var params = Parameters.newBuilder()
-                               .setSynchronizeTimeout(Duration.ofSeconds(1))
                                .setGenesisViewId(GENESIS_VIEW_ID)
                                .setGossipDuration(Duration.ofMillis(50))
                                .setProducer(ProducerParameters.newBuilder()
