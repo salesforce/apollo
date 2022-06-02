@@ -142,7 +142,7 @@ public class RbcTest {
                                         ServerConnectionCache.newBuilder()
                                                              .setTarget(30)
                                                              .setMetrics(new ServerConnectionCacheMetricsImpl(registry)),
-                                        Executors.newFixedThreadPool(1), metrics.limitsMetrics());
+                                        Executors.newFixedThreadPool(2), metrics.limitsMetrics());
             communications.add(comms);
             comms.setMember(node);
             comms.start();
