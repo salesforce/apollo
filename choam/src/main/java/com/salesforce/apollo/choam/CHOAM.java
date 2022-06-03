@@ -1135,7 +1135,7 @@ public class CHOAM {
         log.info("Reconfigured to view: {} validators: {} on: {}", new Digest(reconfigure.getId()),
                  validators.entrySet()
                            .stream()
-                           .map(e -> String.format("id: %s key: %s", e.getKey(),
+                           .map(e -> String.format("id: %s key: %s", e.getKey().getId(),
                                                    params.digestAlgorithm().digest(e.toString())))
                            .toList(),
                  params.member().getId());

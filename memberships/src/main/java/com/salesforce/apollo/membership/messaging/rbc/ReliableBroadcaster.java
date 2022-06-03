@@ -468,7 +468,7 @@ public class ReliableBroadcaster {
         }
         Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamInt((int) Math.max(1,
                                                                                              duration.toMillis() * 2)));
-        log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member);
+        log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
         scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -477,7 +477,7 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.info("Stopping Reliable Broadcaster[{}] for {}", context.getId(), member);
+        log.info("Stopping Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         buffer.clear();
         gossiper.reset();
         comm.deregister(context.getId());
@@ -487,12 +487,12 @@ public class ReliableBroadcaster {
         if (newMsgs.isEmpty()) {
             return;
         }
-        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), context.getId(), member);
+        log.debug("Delivering: {} msgs for context: {} on: {} ", newMsgs.size(), context.getId(), member.getId());
         channelHandlers.values().forEach(handler -> {
             try {
                 handler.message(context.getId(), newMsgs);
             } catch (Throwable e) {
-                log.warn("Error in message handler on: {}", member, e);
+                log.warn("Error in message handler on: {}", member.getId(), e);
             }
         });
     }
@@ -509,8 +509,8 @@ public class ReliableBroadcaster {
                                          .setDigests(buffer.forReconcilliation().toBff())
                                          .build());
         } catch (Throwable e) {
-            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member, link.getMember(), ring,
-                      e);
+            log.trace("rbc gossiping[{}] failed from {} with {} on {}", buffer.round(), member.getId(),
+                      link.getMember().getId(), ring, e);
             return null;
         }
     }
@@ -557,7 +557,7 @@ public class ReliableBroadcaster {
                     try {
                         l.accept(gossipRound);
                     } catch (Throwable e) {
-                        log.error("error sending round() to listener: " + l, e);
+                        log.error("error sending round() to listener on: {}", member.getId(), e);
                     }
                 });
             }
