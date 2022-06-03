@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.thoth;
 
+import java.security.KeyPair;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,11 +18,12 @@ import com.salesfoce.apollo.thoth.proto.Validated;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.stereotomy.ControlledIdentifier;
 import com.salesforce.apollo.stereotomy.event.protobuf.InteractionEventImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.BasicIdentifier;
-import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 
 /**
  * The witness and validation service in Thoth
@@ -30,16 +32,16 @@ import com.salesforce.apollo.stereotomy.identifier.Identifier;
  *
  */
 public class Sakshi {
-    private final ControlledIdentifier<? super Identifier> validator;
-    private final ControlledIdentifier<BasicIdentifier>    witness;
+    private final ControlledIdentifier<SelfAddressingIdentifier> validator;
+    private final KeyPair                                        witness;
 
-    public Sakshi(ControlledIdentifier<? super Identifier> validator, ControlledIdentifier<BasicIdentifier> witness) {
+    public Sakshi(ControlledIdentifier<SelfAddressingIdentifier> validator, KeyPair keyPair) {
         this.validator = validator;
-        this.witness = witness;
+        this.witness = keyPair;
     }
 
     public Ident getWitness() {
-        return witness.getIdentifier().toIdent();
+        return new BasicIdentifier(witness.getPublic()).toIdent();
     }
 
     public Validated validate(List<KeyEventWithAttachments> events) {
@@ -56,14 +58,11 @@ public class Sakshi {
     }
 
     public Optional<Sig> witness(KeyEvent_ evente, Ident identifier) {
-        if (!witness.getIdentifier().toIdent().equals(identifier)) {
+        if (!getWitness().equals(identifier)) {
             return Optional.empty();
         }
-        Optional<Signer> signer = witness.getSigner();
-        if (signer.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.of(signer.get().sign(evente.toByteString()).toSig());
+        var signer = new SignerImpl(witness.getPrivate());
+        return Optional.of(signer.sign(evente.toByteString()).toSig());
     }
 
     private Optional<JohnHancock> validate(KeyEventWithAttachments kea) {

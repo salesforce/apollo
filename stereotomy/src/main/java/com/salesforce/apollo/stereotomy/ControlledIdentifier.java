@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.stereotomy;
 
+import java.security.KeyPair;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -44,6 +45,12 @@ public interface ControlledIdentifier<D extends Identifier> extends BoundIdentif
      * @return the Signer for the key state binding
      */
     Optional<Signer> getSigner();
+
+    /**
+     * 
+     * @return a new ephemeral BasicIdentifier
+     */
+    Optional<KeyPair> newEphemeral();
 
     /**
      * Create a new delegated identifier using the receiver as the base.

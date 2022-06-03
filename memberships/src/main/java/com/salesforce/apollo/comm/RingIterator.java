@@ -119,7 +119,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             Consumer<Boolean> allowed = allow -> proceed(digest, allow, onMajority, failedMajority, tally, completed,
                                                          onComplete);
             if (link == null) {
-                log.error("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
+                log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
                 final boolean allow = handler.handle(tally, Optional.empty(), link, current);
                 allowed.accept(allow);

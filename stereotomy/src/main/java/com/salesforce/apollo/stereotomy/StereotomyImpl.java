@@ -281,6 +281,12 @@ public class StereotomyImpl implements Stereotomy {
         }
 
         @Override
+        public Optional<KeyPair> newEphemeral() {
+            IdentifierSpecification.Builder<BasicIdentifier> builder = IdentifierSpecification.newBuilder().setBasic();
+            return Optional.ofNullable(builder.getSignatureAlgorithm().generateKeyPair(entropy));
+        }
+
+        @Override
         public <I extends Identifier> Optional<ControlledIdentifier<I>> newIdentifier(IdentifierSpecification.Builder<I> spec) {
             return StereotomyImpl.this.newIdentifier(this, spec);
         }
@@ -424,7 +430,6 @@ public class StereotomyImpl implements Stereotomy {
         log.info("New {} identifier: {} coordinates: {}", spec.getWitnesses().isEmpty() ? "Private" : "Public",
                  cid.getIdentifier(), cid.getCoordinates());
         return Optional.of(cid);
-
     }
 
     private Optional<KeyPair> getKeyPair(KeyCoordinates keyCoords) {
@@ -465,19 +470,26 @@ public class StereotomyImpl implements Stereotomy {
         IdentifierSpecification.Builder<D> specification = spec.clone();
 
         var initialKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
-        var nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
+        KeyPair nextKeyPair = null;
+
+        nextKeyPair = specification.getSignatureAlgorithm().generateKeyPair(entropy);
 
         specification.addKey(initialKeyPair.getPublic())
                      .setSigningThreshold(unweighted(1))
-                     .setNextKeys(List.of(nextKeyPair.getPublic()))
                      .setSigner(new Signer.SignerImpl(initialKeyPair.getPrivate()));
+
+        if (nextKeyPair != null) {
+            specification.setNextKeys(List.of(nextKeyPair.getPublic()));
+        }
 
         InceptionEvent event = eventFactory.inception(delegatingIdentifier, specification.build());
 
         KeyCoordinates keyCoordinates = KeyCoordinates.of(event, 0);
 
         keyStore.storeKey(keyCoordinates, initialKeyPair);
-        keyStore.storeNextKey(keyCoordinates, nextKeyPair);
+        if (nextKeyPair != null) {
+            keyStore.storeNextKey(keyCoordinates, nextKeyPair);
+        }
         return event;
     }
 

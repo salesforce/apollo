@@ -29,9 +29,14 @@ import com.github.benmanes.caffeine.cache.AsyncLoadingCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.salesfoce.apollo.thoth.proto.KeyStateWithEndorsementsAndValidations;
+import com.salesforce.apollo.comm.Router;
+import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.SigningThreshold;
+import com.salesforce.apollo.membership.Context;
+import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.EventCoordinates;
 import com.salesforce.apollo.stereotomy.EventValidation;
 import com.salesforce.apollo.stereotomy.KeyState;
@@ -40,6 +45,10 @@ import com.salesforce.apollo.stereotomy.event.KeyEvent;
 import com.salesforce.apollo.stereotomy.event.protobuf.KeyStateImpl;
 import com.salesforce.apollo.stereotomy.event.protobuf.ProtobufEventFactory;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
+import com.salesforce.apollo.stereotomy.services.grpc.StereotomyMetrics;
+import com.salesforce.apollo.thoth.grpc.ValidatorClient;
+import com.salesforce.apollo.thoth.grpc.ValidatorServer;
+import com.salesforce.apollo.thoth.grpc.ValidatorService;
 import com.salesforce.apollo.utils.BbBackedInputStream;
 
 /**
@@ -78,21 +87,29 @@ public class Ani {
                                                                           cause));
     }
 
-    private final KerlDHT                                       dht;
-    private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
-    private final AsyncLoadingCache<Identifier, KeyState>       keyStates;
-    private final SigningThreshold                              threshold;
-    private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
-    private final Map<Identifier, Integer>                      validators;
+    private final KerlDHT                                        dht;
+    private final AsyncLoadingCache<EventCoordinates, KeyEvent>  events;
+    private final AsyncLoadingCache<Identifier, KeyState>        keyStates;
+    private final SigningThreshold                               threshold;
+    private final AsyncLoadingCache<EventCoordinates, Boolean>   validated;
+    private final Map<Identifier, Integer>                       validators;
+    @SuppressWarnings("unused")
+    private final CommonCommunications<ValidatorService, Sakshi> comms;
+    private final Sakshi                                         sakshi;
+    @SuppressWarnings("unused")
+    private final Context<Member>                                context;
 
-    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht, Duration timeout) {
-        this(validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder(),
-             timeout);
+    public Ani(SigningMember member, Context<Member> context, Sakshi sakshi, List<? extends Identifier> validators,
+               SigningThreshold threshold, KerlDHT dht, Duration timeout, Router communications,
+               StereotomyMetrics metrics, Executor executor) {
+        this(member, context, sakshi, validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(),
+             defaultKeyStatesBuilder(), timeout, communications, metrics, executor);
     }
 
-    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht,
-               Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
-               Caffeine<Identifier, KeyState> keyStatesBuilder, Duration timeout) {
+    public Ani(SigningMember member, Context<Member> context, Sakshi sakshi, List<? extends Identifier> validators,
+               SigningThreshold threshold, KerlDHT dht, Caffeine<EventCoordinates, Boolean> validatedBuilder,
+               Caffeine<EventCoordinates, KeyEvent> eventsBuilder, Caffeine<Identifier, KeyState> keyStatesBuilder,
+               Duration timeout, Router communications, StereotomyMetrics metrics, Executor executor) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
@@ -119,9 +136,15 @@ public class Ani {
             this.validators.put(validators.get(i), i);
         }
         this.threshold = threshold;
+        this.sakshi = sakshi;
+        comms = communications.create(member, context.getId(), this.sakshi,
+                                      r -> new ValidatorServer(r, executor, metrics),
+                                      ValidatorClient.getCreate(context.getId(), metrics),
+                                      ValidatorClient.getLocalLoopback(this.sakshi, member));
+        this.context = context;
     }
 
-    public EventValidation getValidation(Duration timeout) {
+    public EventValidation eventValidation(Duration timeout) {
         return new EventValidation() {
             @Override
             public boolean validate(EstablishmentEvent event) {
@@ -200,7 +223,7 @@ public class Ani {
                                          .orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS)
                                          .exceptionallyCompose(t -> null)
                                          .thenApply(ks -> new resolved(e, ks)))
-                      .map(res -> res.getNow(null))
+                      .map(res -> res.join())
                       .filter(res -> res != null)
                       .forEach(res -> validations[res.entry.getValue()] = res.keyState.getKeys().get(0));
             validated = new JohnHancock(algo, signatures).verify(threshold, validations,
