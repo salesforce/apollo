@@ -10,9 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -26,6 +25,7 @@ import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.stereotomy.identifier.Identifier;
 import com.salesforce.apollo.stereotomy.identifier.spec.IdentifierSpecification;
+import com.salesforce.apollo.thoth.Ani.AniParameters;
 
 /**
  * @author hal.hildebrand
@@ -43,16 +43,20 @@ public class AniTest extends AbstractDhtTest {
         var validator = stereotomy.newIdentifier().get();
         Sakshi sakshi = new Sakshi(validator, validator.newEphemeral().get());
 
-        List<? extends Identifier> validators = new ArrayList<>();
+        Map<Identifier, Integer> validators = new HashMap<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);
+
         Map<SigningMember, Ani> anis = dhts.entrySet()
                                            .stream()
                                            .collect(Collectors.toMap(e -> e.getKey(),
-                                                                     e -> new Ani(e.getKey(), context, sakshi,
-                                                                                  validators, threshold, e.getValue(),
-                                                                                  timeout, routers.get(e.getKey()),
-                                                                                  null,
-                                                                                  Executors.newSingleThreadExecutor())));
+                                                                     e -> new Ani(new AniParameters(e.getKey(), context,
+                                                                                                    threshold,
+                                                                                                    validators, timeout,
+                                                                                                    sakshi,
+                                                                                                    Executors.newSingleThreadExecutor(),
+                                                                                                    dhts.get(e.getKey()),
+                                                                                                    routers.get(e.getKey()),
+                                                                                                    null))));
         routers.values().forEach(lr -> lr.start());
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 

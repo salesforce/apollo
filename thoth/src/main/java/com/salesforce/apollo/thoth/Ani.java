@@ -11,8 +11,6 @@ import static com.salesforce.apollo.thoth.KerlDHT.completeIt;
 
 import java.security.PublicKey;
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
@@ -58,6 +56,10 @@ import com.salesforce.apollo.utils.BbBackedInputStream;
  *
  */
 public class Ani {
+    public record AniParameters(SigningMember member, Context<Member> context, SigningThreshold threshold,
+                                Map<Identifier, Integer> validators, Duration validationTimeout, Sakshi sakshi,
+                                Executor executor, KerlDHT dht, Router communications, StereotomyMetrics metrics) {}
+
     private static final Logger log = LoggerFactory.getLogger(Ani.class);
 
     public static Caffeine<EventCoordinates, KeyEvent> defaultEventsBuilder() {
@@ -87,34 +89,30 @@ public class Ani {
                                                                           cause));
     }
 
+    @SuppressWarnings("unused")
+    private final CommonCommunications<ValidatorService, Sakshi> comms;
+    @SuppressWarnings("unused")
+    private final Context<Member>                                context;
     private final KerlDHT                                        dht;
     private final AsyncLoadingCache<EventCoordinates, KeyEvent>  events;
     private final AsyncLoadingCache<Identifier, KeyState>        keyStates;
+    private final SigningMember                                  member;
+    private final Sakshi                                         sakshi;
     private final SigningThreshold                               threshold;
     private final AsyncLoadingCache<EventCoordinates, Boolean>   validated;
     private final Map<Identifier, Integer>                       validators;
-    @SuppressWarnings("unused")
-    private final CommonCommunications<ValidatorService, Sakshi> comms;
-    private final Sakshi                                         sakshi;
-    @SuppressWarnings("unused")
-    private final Context<Member>                                context;
 
-    public Ani(SigningMember member, Context<Member> context, Sakshi sakshi, List<? extends Identifier> validators,
-               SigningThreshold threshold, KerlDHT dht, Duration timeout, Router communications,
-               StereotomyMetrics metrics, Executor executor) {
-        this(member, context, sakshi, validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(),
-             defaultKeyStatesBuilder(), timeout, communications, metrics, executor);
+    public Ani(AniParameters parameters) {
+        this(parameters, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
     }
 
-    public Ani(SigningMember member, Context<Member> context, Sakshi sakshi, List<? extends Identifier> validators,
-               SigningThreshold threshold, KerlDHT dht, Caffeine<EventCoordinates, Boolean> validatedBuilder,
-               Caffeine<EventCoordinates, KeyEvent> eventsBuilder, Caffeine<Identifier, KeyState> keyStatesBuilder,
-               Duration timeout, Router communications, StereotomyMetrics metrics, Executor executor) {
+    public Ani(AniParameters parameters, Caffeine<EventCoordinates, Boolean> validatedBuilder,
+               Caffeine<EventCoordinates, KeyEvent> eventsBuilder, Caffeine<Identifier, KeyState> keyStatesBuilder) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
                                                                   Executor executor) throws Exception {
-                return performValidation(key, timeout);
+                return performValidation(key, parameters.validationTimeout);
             }
         });
         events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
@@ -130,18 +128,17 @@ public class Ani {
                 return dht.getKeyState(id.toIdent()).thenApply(ks -> new KeyStateImpl(ks));
             }
         });
-        this.dht = dht;
-        this.validators = new HashMap<>();
-        for (int i = 0; i < validators.size(); i++) {
-            this.validators.put(validators.get(i), i);
-        }
-        this.threshold = threshold;
-        this.sakshi = sakshi;
-        comms = communications.create(member, context.getId(), this.sakshi,
-                                      r -> new ValidatorServer(r, executor, metrics),
-                                      ValidatorClient.getCreate(context.getId(), metrics),
-                                      ValidatorClient.getLocalLoopback(this.sakshi, member));
-        this.context = context;
+        this.member = parameters.member;
+        this.dht = parameters.dht;
+        this.validators = parameters.validators;
+        this.threshold = parameters.threshold;
+        this.sakshi = parameters.sakshi;
+        comms = parameters.communications.create(member, parameters.context.getId(), this.sakshi,
+                                                 r -> new ValidatorServer(r, parameters.executor, parameters.metrics),
+                                                 ValidatorClient.getCreate(parameters.context.getId(),
+                                                                           parameters.metrics),
+                                                 ValidatorClient.getLocalLoopback(this.sakshi, member));
+        this.context = parameters.context;
     }
 
     public EventValidation eventValidation(Duration timeout) {
@@ -154,10 +151,10 @@ public class Ani {
                     Thread.currentThread().interrupt();
                     return false;
                 } catch (ExecutionException e) {
-                    log.error("Unable to validate: " + event.getCoordinates());
+                    log.error("Unable to validate: {} on: {}", event.getCoordinates(), member, e.getCause());
                     return false;
                 } catch (TimeoutException e) {
-                    log.error("Timeout validating: " + event.getCoordinates());
+                    log.error("Timeout validating: {} on: {} ", event.getCoordinates(), member);
                     return false;
                 }
             }
