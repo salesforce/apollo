@@ -176,7 +176,7 @@ public class RbcTest {
                 buf.flip();
                 view.publish(ByteString.copyFrom(buf), true);
             });
-            boolean success = round.await(20, TimeUnit.SECONDS);
+            boolean success = round.await(30, TimeUnit.SECONDS);
             assertTrue(success, "Did not complete round: " + r + " waiting for: " + round.getCount());
 
             current.incrementAndGet();
