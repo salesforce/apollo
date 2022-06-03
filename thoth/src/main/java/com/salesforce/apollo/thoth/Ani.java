@@ -194,18 +194,15 @@ public class Ani {
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
 
             record resolved(Entry<Identifier, Integer> entry, KeyState keyState) {}
-
-            for (var res : validators.entrySet()
-                                     .stream()
-                                     .map(e -> keyStates.get(e.getKey())
-                                                        .orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS)
-                                                        .exceptionallyCompose(t -> null)
-                                                        .thenApply(ks -> new resolved(e, ks)))
-                                     .map(res -> res.getNow(null))
-                                     .filter(res -> res != null)
-                                     .toList()) {
-                validations[res.entry.getValue()] = res.keyState.getKeys().get(0);
-            }
+            validators.entrySet()
+                      .stream()
+                      .map(e -> keyStates.get(e.getKey())
+                                         .orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                         .exceptionallyCompose(t -> null)
+                                         .thenApply(ks -> new resolved(e, ks)))
+                      .map(res -> res.getNow(null))
+                      .filter(res -> res != null)
+                      .forEach(res -> validations[res.entry.getValue()] = res.keyState.getKeys().get(0));
             validated = new JohnHancock(algo, signatures).verify(threshold, validations,
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
                                                                                                     .toByteString()));
