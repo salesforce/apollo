@@ -103,7 +103,7 @@ public class RbcTest {
 
     private static final Parameters.Builder parameters = Parameters.newBuilder()
                                                                    .setMaxMessages(100)
-                                                                   .setFalsePositiveRate(0.0125)
+                                                                   .setFalsePositiveRate(0.00125)
                                                                    .setBufferSize(500);
 
     private final List<Router>        communications = new ArrayList<>();
