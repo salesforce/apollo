@@ -33,14 +33,15 @@ public class AniTest extends AbstractDhtTest {
 
     @Test
     public void smokin() throws Exception {
+        var timeout = Duration.ofSeconds(10);
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         List<? extends Identifier> validators = new ArrayList<>();
         SigningThreshold threshold = SigningThreshold.unweighted(0);
         Map<Digest, Ani> anis = dhts.entrySet()
                                     .stream()
-                                    .collect(Collectors.toMap(e -> e.getKey(),
-                                                              e -> new Ani(validators, threshold, e.getValue())));
+                                    .collect(Collectors.toMap(e -> e.getKey(), e -> new Ani(validators, threshold,
+                                                                                            e.getValue(), timeout)));
         routers.values().forEach(lr -> lr.start());
         dhts.values().forEach(e -> e.start(Executors.newSingleThreadScheduledExecutor(), Duration.ofSeconds(1)));
 

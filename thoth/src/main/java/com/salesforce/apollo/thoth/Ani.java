@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -81,22 +82,22 @@ public class Ani {
     private final AsyncLoadingCache<EventCoordinates, KeyEvent> events;
     private final AsyncLoadingCache<Identifier, KeyState>       keyStates;
     private final SigningThreshold                              threshold;
-    private final Duration                                      timeout = Duration.ofSeconds(60);
     private final AsyncLoadingCache<EventCoordinates, Boolean>  validated;
     private final Map<Identifier, Integer>                      validators;
 
-    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht) {
-        this(validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder());
+    public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht, Duration timeout) {
+        this(validators, threshold, dht, defaultValidatedBuilder(), defaultEventsBuilder(), defaultKeyStatesBuilder(),
+             timeout);
     }
 
     public Ani(List<? extends Identifier> validators, SigningThreshold threshold, KerlDHT dht,
                Caffeine<EventCoordinates, Boolean> validatedBuilder, Caffeine<EventCoordinates, KeyEvent> eventsBuilder,
-               Caffeine<Identifier, KeyState> keyStatesBuilder) {
+               Caffeine<Identifier, KeyState> keyStatesBuilder, Duration timeout) {
         validated = validatedBuilder.buildAsync(new AsyncCacheLoader<>() {
             @Override
             public CompletableFuture<? extends Boolean> asyncLoad(EventCoordinates key,
                                                                   Executor executor) throws Exception {
-                return performValidation(key);
+                return performValidation(key, timeout);
             }
         });
         events = eventsBuilder.buildAsync(new AsyncCacheLoader<>() {
@@ -145,15 +146,15 @@ public class Ani {
         return validated.get(event.getCoordinates());
     }
 
-    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord) {
+    private CompletableFuture<? extends Boolean> performValidation(EventCoordinates coord, Duration timeout) {
         var fs = new CompletableFuture<Boolean>();
         events.get(coord)
               .thenAcceptBoth(dht.getKeyStateWithEndorsementsAndValidations(coord.toEventCoords()),
-                              (event, ksa) -> fs.complete(validate(ksa, event)));
+                              (event, ksa) -> fs.complete(validate(timeout, ksa, event)));
         return fs;
     }
 
-    private boolean validate(KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
+    private boolean validate(Duration timeout, KeyStateWithEndorsementsAndValidations ksAttach, KeyEvent event) {
         // TODO Multisig
         var state = new KeyStateImpl(ksAttach.getState());
         boolean witnessed = false;
@@ -191,20 +192,19 @@ public class Ani {
             }
             var validations = new PublicKey[state.getWitnesses().size()];
             SignatureAlgorithm algo = SignatureAlgorithm.lookup(validations[0]);
-            for (var entry : validators.entrySet()) {
-                try {
-                    validations[entry.getValue()] = keyStates.get(entry.getKey())
-                                                             .get(timeout.toMillis(), TimeUnit.MILLISECONDS)
-                                                             .getKeys()
-                                                             .get(0);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    continue;
-                } catch (ExecutionException e) {
-                    log.error("Error retreiving key state: {}", entry.getKey(), e);
-                } catch (TimeoutException e) {
-                    log.error("Error retreiving key state: {}", entry.getKey(), e);
-                }
+
+            record resolved(Entry<Identifier, Integer> entry, KeyState keyState) {}
+
+            for (var res : validators.entrySet()
+                                     .stream()
+                                     .map(e -> keyStates.get(e.getKey())
+                                                        .orTimeout(timeout.toNanos(), TimeUnit.NANOSECONDS)
+                                                        .exceptionallyCompose(t -> null)
+                                                        .thenApply(ks -> new resolved(e, ks)))
+                                     .map(res -> res.getNow(null))
+                                     .filter(res -> res != null)
+                                     .toList()) {
+                validations[res.entry.getValue()] = res.keyState.getKeys().get(0);
             }
             validated = new JohnHancock(algo, signatures).verify(threshold, validations,
                                                                  BbBackedInputStream.aggregate(event.toKeyEvent_()
