@@ -1096,6 +1096,7 @@ public class View {
         timer.close();
         if (futureSailor.isEmpty()) {
             scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+            return;
         }
 
         try {

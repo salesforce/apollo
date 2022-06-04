@@ -269,7 +269,7 @@ public class SwarmTest {
             comms.start();
             communications.add(comms);
             return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
-                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
+                            DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(3));
         }).collect(Collectors.toList());
     }
 }
