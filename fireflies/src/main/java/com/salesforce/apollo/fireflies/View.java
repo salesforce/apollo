@@ -602,8 +602,8 @@ public class View {
     private final Executor                                    exec;
     private final double                                      fpr;
     private final RingCommunications<Participant, Fireflies>  gossiper;
-    private final RingCommunications<Participant, Fireflies>  monitor;
     private final FireflyMetrics                              metrics;
+    private final RingCommunications<Participant, Fireflies>  monitor;
     private final Node                                        node;
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals = new ConcurrentSkipListMap<>();
     private final TickableRoundScheduler                      roundTimers;
@@ -1091,6 +1091,58 @@ public class View {
         return link.gossip(context.getId(), signedNote, ring, outbound, node);
     }
 
+    private void gossip(Optional<ListenableFuture<Gossip>> futureSailor, Fireflies link, int ring, Duration duration,
+                        ScheduledExecutorService scheduler, Timer.Context timer) {
+        timer.close();
+        if (futureSailor.isEmpty()) {
+            scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+        }
+
+        try {
+            Gossip gossip = futureSailor.get().get();
+            if (log.isTraceEnabled()) {
+                log.trace("inbound: redirect: {} updates: identities: {}, notes: {}, accusations: {} on: {}",
+                          gossip.getRedirect(), gossip.getIdentities().getUpdatesCount(),
+                          gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(), node.getId());
+            }
+            if (gossip.getRedirect()) {
+                redirect((Participant) link.getMember(), gossip, ring);
+            } else {
+                Update update = response(gossip);
+                if (!isEmpty(update)) {
+                    link.update(context.getId(), ring, update);
+                }
+            }
+        } catch (StatusRuntimeException e) {
+            if (e.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
+                e.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
+                e.getStatus().getCode() == Status.UNKNOWN.getCode()) {
+                log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
+            } else {
+                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
+            }
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            if (cause instanceof StatusRuntimeException sre) {
+                if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
+                    sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
+                    sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
+                    log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
+                } else {
+                    log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e.getCause());
+                }
+            } else {
+                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), cause);
+            }
+        } catch (Throwable e) {
+            log.warn("Exception gossiping with {} on: {}", link != null ? link.getMember() : "<no member>",
+                     node.getId(), e);
+        }
+
+        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+
+    }
+
     /**
      * If member currently is accused on ring, keep the new accusation only if it is
      * from a closer predecessor.
@@ -1126,6 +1178,50 @@ public class View {
 
     private boolean isEmpty(Update update) {
         return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
+    }
+
+    private void monitor(Duration duration, ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
+
+        exec.execute(Utils.wrapped(() -> {
+            var timer = metrics == null ? null : metrics.outboundPingRate().time();
+            monitor.execute((link, ring) -> link.ping(context.getId(), ring),
+                            (futureSailor, link, ring) -> monitor(futureSailor, link, ring, duration, scheduler,
+                                                                  timer));
+        }, log));
+    }
+
+    private void monitor(Optional<ListenableFuture<Empty>> futureSailor, Fireflies link, int ring, Duration duration,
+                         ScheduledExecutorService scheduler, com.codahale.metrics.Timer.Context timer) {
+        timer.close();
+        if (!futureSailor.isEmpty()) {
+            try {
+                futureSailor.get().get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (ExecutionException e) {
+                log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
+                accuseOn((Participant) link.getMember(), ring);
+            }
+        }
+        scheduler.schedule(() -> monitor(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+    }
+
+    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
+
+        exec.execute(Utils.wrapped(() -> {
+            roundTimers.tick();
+            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+            gossiper.execute((link, ring) -> gossip(link, ring),
+                             (futureSailor, link, ring) -> gossip(futureSailor, link, ring, duration, scheduler,
+                                                                  timer));
+        }, log));
     }
 
     /**
@@ -1222,101 +1318,6 @@ public class View {
     private void processUpdates(Gossip gossip) {
         processUpdates(gossip.getIdentities().getUpdatesList(), gossip.getNotes().getUpdatesList(),
                        gossip.getAccusations().getUpdatesList(), gossip.getAlerts().getUpdatesList());
-    }
-
-    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
-
-        exec.execute(Utils.wrapped(() -> {
-            roundTimers.tick();
-            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-            gossiper.execute((link, ring) -> gossip(link, ring),
-                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
-        }, log));
-    }
-
-    private void monitor(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
-
-        exec.execute(Utils.wrapped(() -> {
-            var timer = metrics == null ? null : metrics.outboundPingRate().time();
-            monitor.execute((link, ring) -> link.ping(context.getId(), ring),
-                            (futureSailor, link, ring) -> monitor(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
-        }, log));
-    }
-
-    private void monitor(Optional<ListenableFuture<Empty>> futureSailor, Fireflies link, int ring, Duration duration,
-                         ScheduledExecutorService scheduler, com.codahale.metrics.Timer.Context timer) {
-        timer.close();
-        if (!futureSailor.isEmpty()) {
-            try {
-                futureSailor.get().get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (ExecutionException e) {
-                log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
-                accuseOn((Participant) link.getMember(), ring);
-            }
-        }
-        scheduler.schedule(() -> monitor(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
-    }
-
-    private void handle(Optional<ListenableFuture<Gossip>> futureSailor, Fireflies link, int ring, Duration duration,
-                        ScheduledExecutorService scheduler, Timer.Context timer) {
-        timer.close();
-        if (futureSailor.isEmpty()) {
-            scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
-        }
-
-        try {
-            Gossip gossip = futureSailor.get().get();
-            if (log.isTraceEnabled()) {
-                log.trace("inbound: redirect: {} updates: identities: {}, notes: {}, accusations: {} on: {}",
-                          gossip.getRedirect(), gossip.getIdentities().getUpdatesCount(),
-                          gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(), node.getId());
-            }
-            if (gossip.getRedirect()) {
-                redirect((Participant) link.getMember(), gossip, ring);
-            } else {
-                Update update = response(gossip);
-                if (!isEmpty(update)) {
-                    link.update(context.getId(), ring, update);
-                }
-            }
-        } catch (StatusRuntimeException e) {
-            if (e.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
-                e.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
-                e.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
-            } else {
-                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
-            }
-        } catch (ExecutionException e) {
-            var cause = e.getCause();
-            if (cause instanceof StatusRuntimeException sre) {
-                if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
-                    sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
-                    sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                    log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
-                } else {
-                    log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e.getCause());
-                }
-            } else {
-                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), cause);
-            }
-        } catch (Throwable e) {
-            log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
-        }
-
-        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
-
     }
 
     /**
