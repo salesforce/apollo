@@ -11,20 +11,8 @@ import "stereotomy.proto";
 package fireflies;
 
 service Fireflies {
-    /*
-     * Fireflies 3 phase gossip
-     */
     rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (google.protobuf.Empty) {} 
-
-    /**
-     * Fireflies liveness ping
-     */
-    rpc ping (Ping) returns (google.protobuf.Empty) {}
-}
-
-message Ping {
-    utils.Digeste context = 1;
+    rpc update (State) returns (google.protobuf.Empty) {}
 }
 
 message Alert {

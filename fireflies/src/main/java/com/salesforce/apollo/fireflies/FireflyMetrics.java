@@ -37,8 +37,4 @@ public interface FireflyMetrics extends EdpointMetrics {
     Meter outboundUpdate();
 
     Timer outboundUpdateTimer();
-
-    Timer outboundPingRate();
-
-    Meter inboundPingRate();
 }

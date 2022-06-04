@@ -9,7 +9,6 @@ package com.salesforce.apollo.fireflies.communications;
 import java.io.IOException;
 
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
@@ -44,19 +43,12 @@ public interface Fireflies extends Link {
             }
 
             @Override
-            public ListenableFuture<Empty> ping(Digest context, int ping) {
-                return null;
-            }
-
-            @Override
             public void update(Digest context, int ring, Update update) {
             }
         };
     }
 
     ListenableFuture<Gossip> gossip(Digest context, SignedNote signedNote, int ring, Digests digests, Node from);
-
-    ListenableFuture<Empty> ping(Digest context, int ping);
 
     void update(Digest context, int ring, Update update);
 

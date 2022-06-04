@@ -24,12 +24,10 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Timer gossipRoundDuration;
     private final Meter inboundGossip;
     private final Timer inboundGossipTimer;
-    private final Meter inboundPingRate;
     private final Meter inboundUpdate;
     private final Timer inboundUpdateTimer;
     private final Meter outboundGossip;
     private final Timer outboundGossipTimer;
-    private final Timer outboundPingRate;
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
@@ -47,9 +45,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         inboundGossip = registry.meter(name(context.shortString(), "ff.gossip.inbound.bytes"));
         gossipReply = registry.meter(name(context.shortString(), "ff.gossip.reply.outbound.bytes"));
         gossipRoundDuration = registry.timer(name(context.shortString(), "ff.gossip.round.duration"));
-
-        outboundPingRate = registry.timer(name(context.shortString(), "ff.ping.outbound.duration"));
-        inboundPingRate = registry.meter(name(context.shortString(), "ff.ping.inbound"));
 
     }
 
@@ -79,11 +74,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     }
 
     @Override
-    public Meter inboundPingRate() {
-        return inboundPingRate;
-    }
-
-    @Override
     public Meter inboundUpdate() {
         return inboundUpdate;
     }
@@ -101,11 +91,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Timer outboundGossipTimer() {
         return outboundGossipTimer;
-    }
-
-    @Override
-    public Timer outboundPingRate() {
-        return outboundPingRate;
     }
 
     @Override

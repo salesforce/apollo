@@ -10,12 +10,10 @@ import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.State;
@@ -91,11 +89,6 @@ public class FfClient implements Fireflies {
             }
         }, r -> r.run());
         return result;
-    }
-
-    @Override
-    public ListenableFuture<Empty> ping(Digest context, int ping) {
-        return client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
     }
 
     public void release() {

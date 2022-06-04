@@ -15,7 +15,6 @@ import com.codahale.metrics.Timer.Context;
 import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesImplBase;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
-import com.salesfoce.apollo.fireflies.proto.Ping;
 import com.salesfoce.apollo.fireflies.proto.SayWhat;
 import com.salesfoce.apollo.fireflies.proto.State;
 import com.salesforce.apollo.comm.RoutableService;
@@ -71,17 +70,6 @@ public class FfServer extends FirefliesImplBase {
             }
             responseObserver.onNext(gossip);
             responseObserver.onCompleted();
-        }), log));
-    }
-
-    @Override
-    public void ping(Ping request, StreamObserver<Empty> responseObserver) {
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-            if (metrics != null) {
-                metrics.inboundPingRate().mark();
-            }
         }), log));
     }
 
