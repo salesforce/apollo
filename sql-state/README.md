@@ -8,10 +8,10 @@ this model include stored procedures, triggers, functions, indexes as well as sc
 
 
 ## Model
-The input to the SQL state machine is a linear log.  This log is composed of Blocks of transactions, which are submitted, in order, to the state machine.
-The transactionis then executed agains the local database representing the materialized view of this state.  Results can be returned from these transactions,
+The input to the SQL state machine is a linear log of SQL commands.  This log is composed of Blocks of transactions, which are submitted in order to the state machine.
+Each transaction is then executed against the local database that represents the materialized view of this state.  Results may be returned from these transactions,
 such as the _Call_ results from a SQL function.  Arguments may be supplied as well, which essentially means that each of the executed transactions by this module
-represent a kind of anonymous stored procedure executed at the "server" - in this case, the in process H2 Database that represents the materialized view.
+represent a kind of anonymous stored procedure executed at the "server" - in this case, the in embedded H2 Database for this CHOAM log that represents its materialized view.
 
 ### Transaction Execution
 Transaction exeution is performed via the single JDBC connection to the underlying H2 database.  This implies that the contents of the transactions are representable
@@ -21,6 +21,9 @@ is JDBC, which constrains the styles of interaction as well as the argument valu
 When a transaction is submitted, the client submitting the transaction can provide a function to execute when the transaction is finalized.  This function takes
 the value returned - possibly null - and the error raised - if any.  This means that calls, scripts, prepared statements, etc, and return values in addition to
 the normal SQL execution, providing a very powerful mechanism for transactions against a SQL store that we normally take for granted.
+
+### Database Compatibility
+Note that the H2 database has the ability to  _emulate_  several popular databases (it's one of its [fine selling points](http://www.h2database.com/html/features.html#compatibility)).  Currently, this is only available on the JDBC connection creation to the H2 embedded instance and thus is not currently supported by Apollo. This will be accomidated in the future.
 
 ### Schema Evolution
 The SQL state machine supports the full gamut of the SQL Data Definition Language (DDL).  Note, however, that for H2 and thus the SQL state machine, DDL is not transactional and the current transaction will be committed on each DDL statement.  The DDL statements cannot be rolled back.  Thus one can wedge one's self quite easily with ill advised schema evolution strategies.  In the interests of providing as many sharp knives as needed, there are currently no restrictions on DDL.

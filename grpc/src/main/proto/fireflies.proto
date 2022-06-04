@@ -15,7 +15,7 @@ service Fireflies {
      * Fireflies 3 phase gossip
      */
     rpc gossip (SayWhat) returns (Gossip) {}
-    rpc update (State) returns (google.protobuf.Empty) {}
+    rpc update (State) returns (google.protobuf.Empty) {} 
 
     /**
      * Fireflies liveness ping
@@ -25,6 +25,24 @@ service Fireflies {
 
 message Ping {
     utils.Digeste context = 1;
+}
+
+message Alert {
+	int32 ring = 1;
+	int64 epoch = 2;
+	utils.Digeste issuedBy = 3;
+	utils.Digeste target = 4;
+}
+
+message SignedAlert {
+    int64 age = 1;
+	Alert alert = 2;
+	utils.Sig signature = 3;
+}
+
+message AlertGossip {
+    utils.Biff bff = 1;
+    repeated SignedAlert updates = 2;
 }
 
 message SayWhat {
@@ -46,7 +64,6 @@ message Accusation {
     int32 ringNumber = 2;
     utils.Digeste accuser = 3;
     utils.Digeste accused = 4;
-    bytes content = 5;
 }
 
 message SignedAccusation {
@@ -94,7 +111,8 @@ message NoteGossip {
 message Digests { 
     utils.Biff identityBff = 1;
     utils.Biff noteBff = 2;
-    utils.Biff accusationBff = 3; 
+    utils.Biff accusationBff = 3;
+    utils.Biff alertsBff = 4;
 }
 
 message Gossip {
@@ -102,10 +120,12 @@ message Gossip {
     IdentityGossip identities = 2;
     NoteGossip notes = 3;
     AccusationGossip accusations = 4;
+	AlertGossip alerts = 5;
 }
 
 message Update {
     repeated Identity identities = 1;
     repeated SignedNote notes = 2;
     repeated SignedAccusation accusations = 3;
+	repeated SignedAlert alerts = 4;
 }

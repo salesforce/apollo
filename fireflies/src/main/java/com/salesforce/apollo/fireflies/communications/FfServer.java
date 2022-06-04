@@ -34,10 +34,10 @@ import io.grpc.stub.StreamObserver;
 public class FfServer extends FirefliesImplBase {
     private final static Logger log = LoggerFactory.getLogger(FfServer.class);
 
+    private final Executor                 exec;
     private ClientIdentity                 identity;
     private final FireflyMetrics           metrics;
     private final RoutableService<Service> router;
-    private final Executor                 exec;
 
     public FfServer(Service system, ClientIdentity identity, RoutableService<Service> router, Executor exec,
                     FireflyMetrics metrics) {
@@ -76,12 +76,7 @@ public class FfServer extends FirefliesImplBase {
 
     @Override
     public void ping(Ping request, StreamObserver<Empty> responseObserver) {
-        final var from = Digest.from(request.getContext());
-        if (from == null) {
-            responseObserver.onError(new IllegalStateException("Member has been removed"));
-            return;
-        }
-        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, from, s -> {
+        exec.execute(Utils.wrapped(() -> router.evaluate(responseObserver, Digest.from(request.getContext()), s -> {
             responseObserver.onNext(Empty.getDefaultInstance());
             responseObserver.onCompleted();
             if (metrics != null) {
