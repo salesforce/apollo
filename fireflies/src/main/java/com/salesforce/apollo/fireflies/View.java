@@ -8,7 +8,6 @@ package com.salesforce.apollo.fireflies;
 
 import static com.salesforce.apollo.fireflies.communications.FfClient.getCreate;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
@@ -40,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
 import com.salesfoce.apollo.fireflies.proto.Alert;
@@ -603,7 +601,6 @@ public class View {
     private final double                                      fpr;
     private final RingCommunications<Participant, Fireflies>  gossiper;
     private final FireflyMetrics                              metrics;
-    private final RingCommunications<Participant, Fireflies>  monitor;
     private final Node                                        node;
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals = new ConcurrentSkipListMap<>();
     private final TickableRoundScheduler                      roundTimers;
@@ -628,7 +625,6 @@ public class View {
                                                             exec, metrics),
                                           getCreate(metrics), Fireflies.getLocalLoopback(node));
         gossiper = new RingCommunications<>(context, node, comm, exec);
-        monitor = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
         add(node);
         roundTimers.schedule(() -> gcAlerts(), 1);
@@ -663,9 +659,6 @@ public class View {
 
         scheduler.schedule(() -> {
             exec.execute(Utils.wrapped(() -> oneRound(d, scheduler), log));
-        }, d.toNanos(), TimeUnit.NANOSECONDS);
-        scheduler.schedule(() -> {
-            exec.execute(Utils.wrapped(() -> monitor(d, scheduler), log));
         }, d.toNanos(), TimeUnit.NANOSECONDS);
         log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), seedList);
     }
@@ -1080,10 +1073,6 @@ public class View {
     private ListenableFuture<Gossip> gossip(Fireflies link, int ring) {
         NoteWrapper n = node.getNote();
         if (n == null) {
-            try {
-                link.close();
-            } catch (IOException e) {
-            }
             return null;
         }
         SignedNote signedNote = n.getWrapped();
@@ -1093,7 +1082,9 @@ public class View {
 
     private void gossip(Optional<ListenableFuture<Gossip>> futureSailor, Fireflies link, int ring, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
-        timer.close();
+        if (timer != null) {
+            timer.close();
+        }
         if (futureSailor.isEmpty()) {
             scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
             return;
@@ -1122,6 +1113,8 @@ public class View {
             } else {
                 log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
             }
+            log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
+            accuseOn((Participant) link.getMember(), ring);
         } catch (ExecutionException e) {
             var cause = e.getCause();
             if (cause instanceof StatusRuntimeException sre) {
@@ -1135,9 +1128,11 @@ public class View {
             } else {
                 log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), cause);
             }
-        } catch (Throwable e) {
-            log.warn("Exception gossiping with {} on: {}", link != null ? link.getMember() : "<no member>",
-                     node.getId(), e);
+            log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
+            accuseOn((Participant) link.getMember(), ring);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
         }
 
         scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
@@ -1179,36 +1174,6 @@ public class View {
 
     private boolean isEmpty(Update update) {
         return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
-    }
-
-    private void monitor(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
-
-        exec.execute(Utils.wrapped(() -> {
-            var timer = metrics == null ? null : metrics.outboundPingRate().time();
-            monitor.execute((link, ring) -> link.ping(context.getId(), ring),
-                            (futureSailor, link, ring) -> monitor(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
-        }, log));
-    }
-
-    private void monitor(Optional<ListenableFuture<Empty>> futureSailor, Fireflies link, int ring, Duration duration,
-                         ScheduledExecutorService scheduler, com.codahale.metrics.Timer.Context timer) {
-        timer.close();
-        if (!futureSailor.isEmpty()) {
-            try {
-                futureSailor.get().get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            } catch (ExecutionException e) {
-                log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
-                accuseOn((Participant) link.getMember(), ring);
-            }
-        }
-        scheduler.schedule(() -> monitor(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
     }
 
     private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
