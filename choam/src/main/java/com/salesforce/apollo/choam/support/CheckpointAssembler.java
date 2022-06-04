@@ -125,7 +125,8 @@ public class CheckpointAssembler {
         }
         log.info("Assembly of checkpoint: {} segments: {} on: {}", height, checkpoint.getSegmentsCount(),
                  member.getId());
-        RingIterator<Terminal> ringer = new RingIterator<>(frequency, context, member, comms, exec, true, scheduler);
+        RingIterator<Member, Terminal> ringer = new RingIterator<>(frequency, context, member, comms, exec, true,
+                                                                   scheduler);
         ringer.iterate(randomCut(digestAlgorithm), (link, ring) -> gossip(link),
                        (tally, futureSailor, link, ring) -> gossip(futureSailor),
                        t -> scheduler.schedule(() -> gossip(scheduler, duration, exec), duration.toMillis(),

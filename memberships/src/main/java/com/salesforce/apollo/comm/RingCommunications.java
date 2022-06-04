@@ -34,55 +34,55 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class RingCommunications<Comm extends Link> {
+public class RingCommunications<T extends Member, Comm extends Link> {
     public enum Direction {
         PREDECESSOR {
             @Override
-            public Member retrieve(Ring<Member> ring, Digest hash, Function<Member, IterateResult> test) {
+            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
                 return ring.findPredecessor(hash, test);
             }
 
             @Override
-            public Member retrieve(Ring<Member> ring, Member member, Function<Member, IterateResult> test) {
+            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
                 return ring.findPredecessor(member, test);
             }
         },
         SUCCESSOR {
             @Override
-            public Member retrieve(Ring<Member> ring, Digest hash, Function<Member, IterateResult> test) {
+            public <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test) {
                 return ring.findSuccessor(hash, test);
             }
 
             @Override
-            public Member retrieve(Ring<Member> ring, Member member, Function<Member, IterateResult> test) {
+            public <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test) {
                 return ring.findSuccessor(member, test);
             }
         };
 
-        public abstract Member retrieve(Ring<Member> ring, Digest hash, Function<Member, IterateResult> test);
+        public abstract <T extends Member> T retrieve(Ring<T> ring, Digest hash, Function<T, IterateResult> test);
 
-        public abstract Member retrieve(Ring<Member> ring, Member member, Function<Member, IterateResult> test);
+        public abstract <T extends Member> T retrieve(Ring<T> ring, T member, Function<T, IterateResult> test);
     }
 
     record linkAndRing<T> (T link, int ring) {}
 
     private final static Logger log = LoggerFactory.getLogger(RingCommunications.class);
 
-    final Context<Member> context;
-    final Executor        exec;
-    final SigningMember   member;
+    final Context<T>    context;
+    final Executor      exec;
+    final SigningMember member;
 
     private final CommonCommunications<Comm, ?>  comm;
     private final Direction                      direction;
     private volatile int                         lastRingIndex  = -1;
     private final AtomicReference<List<Integer>> traversalOrder = new AtomicReference<>();
 
-    public RingCommunications(Context<Member> context, SigningMember member, CommonCommunications<Comm, ?> comm,
+    public RingCommunications(Context<T> context, SigningMember member, CommonCommunications<Comm, ?> comm,
                               Executor exec) {
         this(Direction.SUCCESSOR, context, member, comm, exec);
     }
 
-    public RingCommunications(Direction direction, Context<Member> context, SigningMember member,
+    public RingCommunications(Direction direction, Context<T> context, SigningMember member,
                               CommonCommunications<Comm, ?> comm, Executor exec) {
         assert direction != null && context != null && member != null && comm != null;
         this.direction = direction;
@@ -98,7 +98,7 @@ public class RingCommunications<Comm extends Link> {
         traversalOrder.set(order);
     }
 
-    public <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler) {
+    public <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<Q, Comm> handler) {
         final var next = nextRing(null);
         try (Comm link = next.link) {
             execute(round, handler, link, next.ring);
@@ -125,7 +125,7 @@ public class RingCommunications<Comm extends Link> {
         return c;
     }
 
-    linkAndRing<Comm> nextRing(Digest digest, Function<Member, IterateResult> test) {
+    linkAndRing<Comm> nextRing(Digest digest, Function<T, IterateResult> test) {
         final int last = lastRingIndex;
         int rings = context.getRingCount();
         int current = (last + 1) % rings;
@@ -151,12 +151,12 @@ public class RingCommunications<Comm extends Link> {
         return linkFor(current);
     }
 
-    private <T> void execute(BiFunction<Comm, Integer, ListenableFuture<T>> round, Handler<T, Comm> handler, Comm link,
+    private <Q> void execute(BiFunction<Comm, Integer, ListenableFuture<Q>> round, Handler<Q, Comm> handler, Comm link,
                              int ring) {
         if (link == null) {
             handler.handle(Optional.empty(), link, ring);
         } else {
-            ListenableFuture<T> futureSailor = round.apply(link, ring);
+            ListenableFuture<Q> futureSailor = round.apply(link, ring);
             if (futureSailor == null) {
                 handler.handle(Optional.empty(), link, ring);
             } else {
@@ -176,10 +176,10 @@ public class RingCommunications<Comm extends Link> {
         return getTraversalOrder().get(current);
     }
 
-    private linkAndRing<Comm> linkFor(Digest digest, int index, Function<Member, IterateResult> test) {
+    private linkAndRing<Comm> linkFor(Digest digest, int index, Function<T, IterateResult> test) {
         int r = getTraversalOrder().get(index);
-        Ring<Member> ring = context.ring(r);
-        Member successor = direction.retrieve(ring, digest, test);
+        Ring<T> ring = context.ring(r);
+        T successor = direction.retrieve(ring, digest, test);
         if (successor == null) {
             return new linkAndRing<>(null, r);
         }
@@ -194,8 +194,9 @@ public class RingCommunications<Comm extends Link> {
 
     private linkAndRing<Comm> linkFor(int index) {
         int r = getTraversalOrder().get(index);
-        Ring<Member> ring = context.ring(r);
-        Member successor = direction.retrieve(ring, member, m -> {
+        Ring<T> ring = context.ring(r);
+        @SuppressWarnings("unchecked")
+        T successor = direction.retrieve(ring, (T) member, m -> {
             if (!context.isActive(m)) {
                 return IterateResult.CONTINUE;
             }

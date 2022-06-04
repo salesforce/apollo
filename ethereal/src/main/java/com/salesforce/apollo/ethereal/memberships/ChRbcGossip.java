@@ -90,7 +90,7 @@ public class ChRbcGossip {
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
     private final Processor                                       processor;
-    private final RingCommunications<Gossiper>                    ring;
+    private final RingCommunications<Member, Gossiper>            ring;
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started = new AtomicBoolean();
     private final Executor                                        exec;
@@ -106,7 +106,7 @@ public class ChRbcGossip {
                                      r -> new GossiperServer(communications.getClientIdentityProvider(), metrics, r,
                                                              exec),
                                      getCreate(metrics), Gossiper.getLocalLoopback(member));
-        ring = new RingCommunications<Gossiper>(context, member, this.comm, exec);
+        ring = new RingCommunications<>(context, member, this.comm, exec);
     }
 
     public Context<Member> getContext() {

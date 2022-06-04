@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutionException;
 
 import com.codahale.metrics.Timer.Context;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc;
 import com.salesfoce.apollo.fireflies.proto.FirefliesGrpc.FirefliesFutureStub;
@@ -97,18 +98,15 @@ public class FfClient implements Fireflies {
     }
 
     @Override
-    public int ping(Digest context, int ping) {
+    public ListenableFuture<Empty> ping(Digest context, int ping) {
         Context timer = metrics == null ? null : metrics.outboundGossipTimer().time();
-        try {
-            client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
-        } catch (Throwable e) {
-            throw new IllegalStateException("Unexpected exception in communication", e);
-        } finally {
+        ListenableFuture<Empty> result = client.ping(Ping.newBuilder().setContext(context.toDigeste()).build());
+        result.addListener(() -> {
             if (timer != null) {
                 timer.stop();
             }
-        }
-        return 0;
+        }, r -> r.run());
+        return result;
     }
 
     public void release() {

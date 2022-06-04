@@ -274,7 +274,7 @@ public class KerlDHT {
     private final UniKERLDirectPooled                                         kerlPool;
     private final KerlSpace                                                   kerlSpace;
     private final SigningMember                                               member;
-    private final RingCommunications<ReconciliationService>                   reconcile;
+    private final RingCommunications<Member, ReconciliationService>           reconcile;
     private final CommonCommunications<ReconciliationService, Reconciliation> reconcileComms;
     private final Reconcile                                                   reconciliation = new Reconcile();
     private final Service                                                     service        = new Service();

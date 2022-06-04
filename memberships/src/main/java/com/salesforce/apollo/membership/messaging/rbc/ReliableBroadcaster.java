@@ -383,7 +383,7 @@ public class ReliableBroadcaster {
     private final CommonCommunications<ReliableBroadcast, Service> comm;
     private final Context<Member>                                  context;
     private final Executor                                         exec;
-    private final RingCommunications<ReliableBroadcast>            gossiper;
+    private final RingCommunications<Member, ReliableBroadcast>    gossiper;
     private final SigningMember                                    member;
     private final Parameters                                       params;
     private final Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();

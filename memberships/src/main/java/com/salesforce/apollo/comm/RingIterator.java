@@ -32,7 +32,7 @@ import com.salesforce.apollo.utils.Utils;
  * @author hal.hildebrand
  *
  */
-public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
+public class RingIterator<T extends Member, Comm extends Link> extends RingCommunications<T, Comm> {
     private static final Logger log = LoggerFactory.getLogger(RingIterator.class);
 
     private volatile boolean               complete        = false;
@@ -42,7 +42,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
     private volatile boolean               majoritySucceed = false;
     private final ScheduledExecutorService scheduler;
 
-    public RingIterator(Duration frequency, Context<Member> context, SigningMember member,
+    public RingIterator(Duration frequency, Context<T> context, SigningMember member,
                         CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
                         ScheduledExecutorService scheduler) {
         super(context, member, comm, exec);
@@ -51,12 +51,12 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         this.frequency = frequency;
     }
 
-    public RingIterator(Duration frequency, Context<Member> context, SigningMember member,
+    public RingIterator(Duration frequency, Context<T> context, SigningMember member,
                         ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
         this(frequency, context, member, comm, exec, false, scheduler);
     }
 
-    public RingIterator(Duration frequency, Direction direction, Context<Member> context, SigningMember member,
+    public RingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
                         CommonCommunications<Comm, ?> comm, Executor exec, boolean ignoreSelf,
                         ScheduledExecutorService scheduler) {
         super(direction, context, member, comm, exec);
@@ -65,23 +65,23 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         this.frequency = frequency;
     }
 
-    public RingIterator(Duration frequency, Direction direction, Context<Member> context, SigningMember member,
+    public RingIterator(Duration frequency, Direction direction, Context<T> context, SigningMember member,
                         ScheduledExecutorService scheduler, CommonCommunications<Comm, ?> comm, Executor exec) {
         this(frequency, direction, context, member, comm, exec, false, scheduler);
     }
 
-    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            PredicateHandler<T, Comm> handler) {
+    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
+                            PredicateHandler<Q, Comm> handler) {
         iterate(digest, null, round, null, handler, null);
     }
 
-    public <T> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            PredicateHandler<T, Comm> handler, Consumer<Integer> onComplete) {
+    public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
+                            PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete) {
         iterate(digest, null, round, null, handler, onComplete);
     }
 
-    public <T> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<T>> round,
-                            Runnable failedMajority, PredicateHandler<T, Comm> handler, Consumer<Integer> onComplete) {
+    public <Q> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
+                            Runnable failedMajority, PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
         exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
 
@@ -92,9 +92,9 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
         return log;
     }
 
-    private <T> void internalIterate(Digest digest, Runnable onMajority,
-                                     BiFunction<Comm, Integer, ListenableFuture<T>> round, Runnable failedMajority,
-                                     PredicateHandler<T, Comm> handler, Consumer<Integer> onComplete,
+    private <Q> void internalIterate(Digest digest, Runnable onMajority,
+                                     BiFunction<Comm, Integer, ListenableFuture<Q>> round, Runnable failedMajority,
+                                     PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete,
                                      AtomicInteger tally) {
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
@@ -133,7 +133,7 @@ public class RingIterator<Comm extends Link> extends RingCommunications<Comm> {
             log.trace("Continuation: {} tally: {} for: {} on: {} ring: {} to: {} on: {}", current, tally.get(), digest,
                       context.getId(), next.ring(), link.getMember() == null ? null : link.getMember().getId(),
                       member.getId());
-            ListenableFuture<T> futureSailor = round.apply(link, next.ring());
+            ListenableFuture<Q> futureSailor = round.apply(link, next.ring());
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
                           current, link.getMember() == null ? null : link.getMember().getId(), member.getId());
