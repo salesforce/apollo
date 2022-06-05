@@ -71,17 +71,18 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
-                            PredicateHandler<Q, Comm> handler) {
+                            PredicateHandler<T, Q, Comm> handler) {
         iterate(digest, null, round, null, handler, null);
     }
 
     public <Q> void iterate(Digest digest, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
-                            PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete) {
+                            PredicateHandler<T, Q, Comm> handler, Consumer<Integer> onComplete) {
         iterate(digest, null, round, null, handler, onComplete);
     }
 
     public <Q> void iterate(Digest digest, Runnable onMajority, BiFunction<Comm, Integer, ListenableFuture<Q>> round,
-                            Runnable failedMajority, PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete) {
+                            Runnable failedMajority, PredicateHandler<T, Q, Comm> handler,
+                            Consumer<Integer> onComplete) {
         AtomicInteger tally = new AtomicInteger(0);
         exec.execute(() -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally));
 
@@ -94,7 +95,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
 
     private <Q> void internalIterate(Digest digest, Runnable onMajority,
                                      BiFunction<Comm, Integer, ListenableFuture<Q>> round, Runnable failedMajority,
-                                     PredicateHandler<Q, Comm> handler, Consumer<Integer> onComplete,
+                                     PredicateHandler<T, Q, Comm> handler, Consumer<Integer> onComplete,
                                      AtomicInteger tally) {
 
         Runnable proceed = () -> internalIterate(digest, onMajority, round, failedMajority, handler, onComplete, tally);
@@ -121,7 +122,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             if (link == null) {
                 log.trace("No successor found of: {} on: {} ring: {}  on: {}", digest, context.getId(), current,
                           member);
-                final boolean allow = handler.handle(tally, Optional.empty(), link, current);
+                final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
@@ -137,7 +138,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
             if (futureSailor == null) {
                 log.trace("No asynchronous response for: {} on: {} ring: {} from: {} on: {}", digest, context.getId(),
                           current, link.getMember() == null ? null : link.getMember().getId(), member.getId());
-                final boolean allow = handler.handle(tally, Optional.empty(), link, next.ring());
+                final boolean allow = handler.handle(tally, Optional.empty(), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),
@@ -147,7 +148,7 @@ public class RingIterator<T extends Member, Comm extends Link> extends RingCommu
                 return;
             }
             futureSailor.addListener(() -> {
-                final var allow = handler.handle(tally, Optional.of(futureSailor), link, next.ring());
+                final var allow = handler.handle(tally, Optional.of(futureSailor), next);
                 allowed.accept(allow);
                 if (!completed && allow) {
                     log.trace("Proceeding on: {} for: {} tally: {} on: {}", digest, context.getId(), tally.get(),

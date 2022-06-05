@@ -79,11 +79,11 @@ public class RoundScheduler extends AtomicInteger {
     private static final Logger log              = LoggerFactory.getLogger(RoundScheduler.class);
     private static final long   serialVersionUID = 1L;
 
+    private final String                       label;
     private final int                          roundDuration;
     private final PriorityBlockingQueue<Timer> scheduled = new PriorityBlockingQueue<>();
     private final AtomicInteger                tick      = new AtomicInteger();
     private final Map<String, Timer>           timers    = new HashMap<>();
-    private final String                       label;
 
     public RoundScheduler(String label, int roundDuration) {
         this.roundDuration = roundDuration;
@@ -99,6 +99,12 @@ public class RoundScheduler extends AtomicInteger {
 
     public void cancelAll() {
         new ArrayList<>(timers.values()).forEach(e -> e.cancel());
+    }
+
+    public void reset() {
+        cancelAll();
+        set(0);
+        tick.set(0);
     }
 
     public Timer schedule(Runnable action, int delayRounds) {
@@ -123,13 +129,13 @@ public class RoundScheduler extends AtomicInteger {
         return timer;
     }
 
-    public void tick(int r) {
+    public void tick() {
         var t = tick.incrementAndGet();
         if (t % roundDuration != 0) {
             return;
         }
         int current = incrementAndGet();
-//        log.info("Round: {} on: {}", current, label);
+//        log.error("Round: {} tick: {} on: {}", current, t, label);
         List<Timer> drained = new ArrayList<>();
         while (!scheduled.isEmpty() && scheduled.peek() != null && scheduled.peek().deadline <= current) {
             drained.add(scheduled.poll());

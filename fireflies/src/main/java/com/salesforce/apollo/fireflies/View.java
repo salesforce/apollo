@@ -19,7 +19,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -27,6 +26,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -54,6 +54,7 @@ import com.salesfoce.apollo.fireflies.proto.SignedAlert;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -77,7 +78,6 @@ import com.salesforce.apollo.stereotomy.event.protobuf.RotationEventImpl;
 import com.salesforce.apollo.stereotomy.identifier.SelfAddressingIdentifier;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.RoundScheduler;
-import com.salesforce.apollo.utils.TickableRoundScheduler;
 import com.salesforce.apollo.utils.Utils;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 
@@ -306,7 +306,6 @@ public class View {
 
         private static final Logger log = LoggerFactory.getLogger(Participant.class);
 
-        protected final Set<Digest>                     alerts           = new ConcurrentSkipListSet<>();
         protected volatile IdentityWrapper              identity;
         protected volatile NoteWrapper                  note;
         protected final Map<Integer, AccusationWrapper> validAccusations = new ConcurrentHashMap<>();
@@ -394,8 +393,8 @@ public class View {
             log.trace("Clearing accusations for {}", getId());
         }
 
-        AccusationWrapper getAccusation(int index) {
-            return validAccusations.get(index);
+        AccusationWrapper getAccusation(int ring) {
+            return validAccusations.get(ring);
         }
 
         Stream<AccusationWrapper> getAccusations() {
@@ -467,10 +466,6 @@ public class View {
             identity = identity.inEpoch(note.getEpoch(), digestAlgo);
             clearAccusations();
         }
-
-        private void alert(Digest issuedBy) {
-            alerts.add(issuedBy);
-        }
     }
 
     public class Service {
@@ -493,12 +488,12 @@ public class View {
          */
         public Gossip rumors(int ring, Digests digests, Digest from, Identity identity, SignedNote note) {
             if (ring >= context.getRingCount() || ring < 0) {
-                log.debug("invalid ring {} from {}", ring, from);
+                log.warn("invalid ring {} from {}", ring, from);
                 return Gossip.getDefaultInstance();
             }
             var wrapper = new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity);
             if (!from.equals(wrapper.identifier())) {
-                log.debug("invalid identity on ring {} from {}", ring, from);
+                log.warn("invalid identity on ring {} from {}", ring, from);
                 return Gossip.getDefaultInstance();
             }
 
@@ -507,7 +502,7 @@ public class View {
                 add(wrapper);
                 member = context.getMember(from);
                 if (member == null) {
-                    log.debug("No member on ring {} from {}", ring, from);
+                    log.warn("No member on ring {} from {}", ring, from);
                     return Gossip.getDefaultInstance();
                 }
             }
@@ -516,11 +511,11 @@ public class View {
 
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.debug("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.warn("invalid gossip from: {} on ring: {} on: {}", from, ring, member.getId());
                 return Gossip.getDefaultInstance();
             }
             if (!successor.equals(node)) {
-                redirectTo(member, ring, successor);
+                return redirectTo(member, ring, successor);
             }
             long seed = Entropy.nextSecureLong();
             return Gossip.newBuilder()
@@ -543,16 +538,17 @@ public class View {
         public void update(int ring, Update update, Digest from) {
             Participant member = context.getActiveMember(from);
             if (member == null) {
-                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, from);
+                log.info("No member, invalid update from: {} on ring: {} on: {}", from, ring, from);
                 return;
             }
             Participant successor = context.ring(ring).successor(member, m -> context.isActive(m.getId()));
             if (successor == null) {
-                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.info("No predecessor, invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
                 return;
             }
             if (!successor.equals(node)) {
-                log.debug("invalid update from: {} on ring: {} on: {}", from, ring, member.getId());
+                log.info("Incorrect predecessor, invalid update from: {} on ring: {} on: {}", from, ring,
+                         member.getId());
                 return;
             }
             processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList(),
@@ -599,11 +595,12 @@ public class View {
     private final DigestAlgorithm                             digestAlgo;
     private final Executor                                    exec;
     private final double                                      fpr;
+    private volatile ScheduledFuture<?>                       futureGossip;
     private final RingCommunications<Participant, Fireflies>  gossiper;
     private final FireflyMetrics                              metrics;
     private final Node                                        node;
     private final ConcurrentMap<Digest, RoundScheduler.Timer> pendingRebutals = new ConcurrentSkipListMap<>();
-    private final TickableRoundScheduler                      roundTimers;
+    private final RoundScheduler                              roundTimers;
     private final Service                                     service         = new Service();
     private final AtomicBoolean                               started         = new AtomicBoolean();
     private final EventValidation                             validation;
@@ -616,8 +613,7 @@ public class View {
         this.fpr = fpr;
         this.digestAlgo = digestAlgo;
         this.context = context;
-        this.roundTimers = new TickableRoundScheduler(String.format("Timers for: %s", context.getId()),
-                                                      context.timeToLive());
+        this.roundTimers = new RoundScheduler(String.format("Timers for: %s", context.getId()), context.timeToLive());
         var identity = identityFor(0, endpoint, member.getEvent());
         this.node = new Node(member, new IdentityWrapper(digestAlgo.digest(identity.toByteString()), identity));
         this.comm = communications.create(node, context.getId(), service,
@@ -628,7 +624,6 @@ public class View {
         this.exec = exec;
         add(node);
         roundTimers.schedule(() -> gcAlerts(), 1);
-        log.info("View [{}]", node.getId());
     }
 
     /**
@@ -656,11 +651,11 @@ public class View {
                                                                   identity)))
              .peek(m -> seedList.add(m.getId()))
              .forEach(m -> addSeed(m));
-
-        scheduler.schedule(() -> {
-            exec.execute(Utils.wrapped(() -> oneRound(d, scheduler), log));
-        }, d.toNanos(), TimeUnit.NANOSECONDS);
-        log.info("{} started, initial delay: {} ms seeds: {}", node.getId(), seedList);
+        var initial = d.plus(Duration.ofMillis(Entropy.nextBitsStreamInt(100)));
+        futureGossip = scheduler.schedule(() -> {
+            exec.execute(Utils.wrapped(() -> gossip(d, scheduler), log));
+        }, initial.toNanos(), TimeUnit.NANOSECONDS);
+        log.info("{} started, seeds: {}", node.getId(), seedList);
     }
 
     /**
@@ -670,11 +665,18 @@ public class View {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        roundTimers.reset();
         comm.deregister(context.getId());
         pendingRebutals.clear();
-        context.getActive().forEach(m -> {
+        context.active().forEach(m -> {
             context.offline(m);
+            m.clearAccusations();
         });
+        final var current = futureGossip;
+        futureGossip = null;
+        if (current != null) {
+            current.cancel(true);
+        }
     }
 
     @Override
@@ -692,22 +694,22 @@ public class View {
     }
 
     /**
-     * Accuse the member on the list of rings. If the member has disabled the ring
-     * in its mask, do not issue the accusation
+     * Accuse the member on the ring
      *
      * @param member
      * @param ring
      */
-    private void accuseOn(Participant member, int ring) {
+    private void accuse(Participant member, int ring) {
+        if (member.isAccusedOn(ring)) {
+            return; // Don't issue multiple accusations
+        }
         NoteWrapper n = member.getNote();
         if (n == null) {
             return;
         }
-        BitSet mask = n.getMask();
-        if (mask.get(ring)) {
-            log.info("{} accusing: {} ring: {}", node.getId(), member.getId(), ring);
-            add(node.accuse(member, ring));
-        }
+        member.addAccusation(node.accuse(member, ring));
+        startRebutalTimer(member);
+        log.debug("Accuse {} on ring {} (timer started) on: {}", member.getId(), ring, node.getId());
     }
 
     /**
@@ -718,33 +720,42 @@ public class View {
     private void add(AccusationWrapper accusation) {
         Participant accuser = context.getMember(accusation.getAccuser());
         Participant accused = context.getMember(accusation.getAccused());
+//        if (context.offline(accused)) {
+//            if (accused.getEpoch() == accusation.getEpoch() && !accused.isAccusedOn(accusation.getRingNumber())) {
+//                if (!accuser.verify(accusation.getSignature(),
+//                                    accusation.getWrapped().getAccusation().toByteString())) {
+//                    log.trace("Accusation by: {} accused:{} signature invalid on: {}", accuser.getId(), accused.getId(),
+//                              node.getId());
+//                    return;
+//                }
+//                accused.addAccusation(accusation);
+//            }
+//            return;
+//        }
         if (accuser == null || accused == null) {
-            log.info("Accusation discarded, accused or accuser do not exist in view on: {}", node);
+            log.trace("Accusation discarded, accused or accuser do not exist in view on: {}", node);
             return;
         }
 
         if (accusation.getRingNumber() > context.getRingCount()) {
-            log.debug("Invalid ring in accusation: {} on: {}", accusation.getRingNumber(), node);
+            log.trace("Invalid ring in accusation: {} on: {}", accusation.getRingNumber(), node);
             return;
         }
 
         if (accused.getEpoch() != accusation.getEpoch()) {
-            log.debug("Accusation discarded in epoch: {}  for: {} epoch: {} on: {}" + accusation.getEpoch(),
+            log.trace("Accusation discarded in epoch: {}  for: {} epoch: {} on: {}", accusation.getEpoch(),
                       accused.getId(), accused.getEpoch(), node);
             return;
         }
 
         if (!accused.getNote().getMask().get(accusation.getRingNumber())) {
-            log.debug("Member {} accussed on disabled ring {} by {} on: {}", accused.getId(),
+            log.trace("Member {} accussed on disabled ring {} by {} on: {}", accused.getId(),
                       accusation.getRingNumber(), accuser.getId(), node);
             return;
         }
 
-        // verify the accusation after all other tests pass, as it's reasonably
-        // expensive and we want to filter out all the noise first, before going to all
-        // the trouble (and cost) to validate the sig
         if (!accuser.verify(accusation.getSignature(), accusation.getWrapped().getAccusation().toByteString())) {
-            log.debug("Accusation by: {} accused:{} signature invalid on: {}", accuser.getId(), accused.getId(),
+            log.trace("Accusation by: {} accused:{} signature invalid on: {}", accuser.getId(), accused.getId(),
                       node.getId());
             return;
         }
@@ -768,8 +779,8 @@ public class View {
 
             if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
-                log.info("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
-                         ring.getIndex(), currentAccuser, node.getId());
+                log.debug("{} accused by {} on ring {} (replacing {}) on: {}", accused.getId(), accuser.getId(),
+                          ring.getIndex(), currentAccuser, node.getId());
             }
         } else {
             Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
@@ -777,13 +788,13 @@ public class View {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) &&
                     context.isActive(accused.getId())) {
-                    log.info("{} accused by {} on ring {} (timer started) on: {}", accused.getId(), accuser.getId(),
-                             accusation.getRingNumber(), node.getId());
+                    log.debug("{} accused by {} on ring {} (timer started) on: {}", accused.getId(), accuser.getId(),
+                              accusation.getRingNumber(), node.getId());
                     startRebutalTimer(accused);
                 }
             } else {
-                log.info("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
-                         accuser.getId(), accusation.getRingNumber(), predecessor.getId(), node.getId());
+                log.debug("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
+                          accuser.getId(), accusation.getRingNumber(), predecessor.getId(), node.getId());
             }
         }
     }
@@ -801,7 +812,7 @@ public class View {
             return member;
         }
         member = new Participant(identity);
-        log.trace("Adding member via identity: {} on: {}", member.getId(), node.getId());
+        log.debug("Adding member via identity: {} on: {}", member.getId(), node.getId());
         return add(member);
     }
 
@@ -814,18 +825,16 @@ public class View {
         log.trace("Adding note {} : {} on: {}", note.getId(), note.getEpoch(), node.getId());
         Participant m = context.getMember(note.getId());
         if (m == null) {
-            log.debug("No member for note: {} on: {}", note.getId(), node.getId());
+            log.trace("No member for note: {} on: {}", note.getId(), node.getId());
             return false;
         }
 
         if (m.getEpoch() >= note.getEpoch()) {
-            log.trace("Note redundant in epoch: {} (<= {} ) for: {}, failed: {} on: {}", note.getEpoch(), m.getEpoch(),
-                      note.getId(), context.isOffline(m.getId()), node.getId());
             return false;
         }
 
         if (!isValidMask(note.getMask(), context.toleranceLevel())) {
-            log.debug("Note: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
+            log.trace("Note: {} mask invalid {} on: {}", note.getId(), note.getMask(), node.getId());
             return false;
         }
 
@@ -834,11 +843,11 @@ public class View {
         // the noise first, before going to all the trouble to validate
 
         if (!m.verify(note.getSignature(), note.getWrapped().getNote().toByteString())) {
-            log.debug("Note signature invalid: {} on: {}", note.getId(), node.getId());
+            log.trace("Note signature invalid: {} on: {}", note.getId(), node.getId());
             return false;
         }
 
-        log.trace("Adding member via note {} on: {}", m, node.getId());
+        log.debug("Adding member via note {} on: {}", m, node.getId());
 
         if (m.isAccused()) {
             stopRebutalTimer(m);
@@ -914,7 +923,7 @@ public class View {
         }
 
         // It's dead, Jim
-        target.alert(issuedBy);
+//        target.alert(issuedBy);
         context.offline(target);
         var hash = signature.toDigest(digestAlgo);
         alerts.put(hash, sa);
@@ -1016,7 +1025,9 @@ public class View {
     }
 
     private void gc(Participant member) {
-        context.offline(member);
+        if (context.offline(member)) {
+            log.info("Offlining: {} active: {} on: {}", member.getId(), context.activeCount(), node.getId());
+        }
     }
 
     private void gcAlerts() {
@@ -1030,35 +1041,47 @@ public class View {
                 entry.setValue(SignedAlert.newBuilder(sa).setAge(sa.getAge() - 1).build());
             }
         }
+        roundTimers.schedule(() -> gcAlerts(), 1);
     }
 
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
         BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed,
-                                                                    context.cardinality() * context.getRingCount(), p);
-        context.getActive()
-               .stream()
-               .flatMap(m -> m.getAccusations())
-               .filter(e -> e != null)
-               .forEach(m -> bff.add(m.getHash()));
+                                                                    context.cardinality() * context.getRingCount() * 2,
+                                                                    p);
+        context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
         return bff;
     }
 
     private BloomFilter<Digest> getAlertsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, alerts.size(), p);
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, alerts.size() * 2, p);
         alerts.keySet().stream().forEach(d -> bff.add(d));
         return bff;
     }
 
     private BloomFilter<Digest> getIdentityBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
-        context.allMembers().map(m -> m.getIdentity()).filter(e -> e != null).forEach(n -> bff.add(n.hash));
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality() * 2, p);
+        context.active().map(m -> m.getIdentity()).filter(e -> e != null).forEach(n -> bff.add(n.hash));
         return bff;
     }
 
     private BloomFilter<Digest> getNotesBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality(), p);
-        context.allMembers().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
+        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, context.cardinality() * 2, p);
+        context.active().map(m -> m.getNote()).filter(e -> e != null).forEach(n -> bff.add(n.getHash()));
         return bff;
+    }
+
+    private void gossip(Duration duration, ScheduledExecutorService scheduler) {
+        if (!started.get()) {
+            return;
+        }
+
+        exec.execute(Utils.wrapped(() -> {
+            roundTimers.tick();
+            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
+            gossiper.execute((link, ring) -> gossip(link, ring),
+                             (futureSailor, destination) -> gossip(futureSailor, destination, duration, scheduler,
+                                                                   timer));
+        }, log));
     }
 
     /**
@@ -1080,62 +1103,60 @@ public class View {
         return link.gossip(context.getId(), signedNote, ring, outbound, node);
     }
 
-    private void gossip(Optional<ListenableFuture<Gossip>> futureSailor, Fireflies link, int ring, Duration duration,
+    private void gossip(Optional<ListenableFuture<Gossip>> futureSailor,
+                        Destination<Participant, Fireflies> destination, Duration duration,
                         ScheduledExecutorService scheduler, Timer.Context timer) {
         if (timer != null) {
             timer.close();
         }
         if (futureSailor.isEmpty()) {
-            scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+            if (destination.member() != null) {
+                accuse(destination.member(), destination.ring());
+            }
+            futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(),
+                                              TimeUnit.NANOSECONDS);
             return;
         }
 
         try {
             Gossip gossip = futureSailor.get().get();
-            if (log.isTraceEnabled()) {
-                log.trace("inbound: redirect: {} updates: identities: {}, notes: {}, accusations: {} on: {}",
-                          gossip.getRedirect(), gossip.getIdentities().getUpdatesCount(),
-                          gossip.getNotes().getUpdatesCount(), gossip.getAccusations().getUpdatesCount(), node.getId());
-            }
             if (gossip.getRedirect()) {
-                redirect((Participant) link.getMember(), gossip, ring);
+                redirect(destination.member(), gossip, destination.ring());
             } else {
                 Update update = response(gossip);
                 if (!isEmpty(update)) {
-                    link.update(context.getId(), ring, update);
+                    destination.link().update(context.getId(), destination.ring(), update);
                 }
             }
         } catch (StatusRuntimeException e) {
             if (e.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
                 e.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
                 e.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
+                log.trace("Cannot find/unknown: {} on: {}", destination.member(), node.getId());
             } else {
-                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e);
+                log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), e);
             }
-            log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
-            accuseOn((Participant) link.getMember(), ring);
+            accuse(destination.member(), destination.ring());
         } catch (ExecutionException e) {
             var cause = e.getCause();
             if (cause instanceof StatusRuntimeException sre) {
                 if (sre.getStatus().getCode() == Status.NOT_FOUND.getCode() ||
                     sre.getStatus().getCode() == Status.UNAVAILABLE.getCode() ||
                     sre.getStatus().getCode() == Status.UNKNOWN.getCode()) {
-                    log.trace("Cannot find/unknown: {} on: {}", link.getMember(), node.getId());
+                    log.trace("Cannot find/unknown: {} on: {}", destination.member(), node.getId());
                 } else {
-                    log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), e.getCause());
+                    log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), e.getCause());
                 }
             } else {
-                log.warn("Exception gossiping with {} on: {}", link.getMember(), node.getId(), cause);
+                log.warn("Exception gossiping with {} on: {}", destination.member(), node.getId(), cause);
             }
-            log.info("Accusing: {} on: {}", link.getMember().getId(), ring);
-            accuseOn((Participant) link.getMember(), ring);
+            accuse(destination.member(), destination.ring());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return;
         }
 
-        scheduler.schedule(() -> oneRound(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
+        futureGossip = scheduler.schedule(() -> gossip(duration, scheduler), duration.toNanos(), TimeUnit.NANOSECONDS);
 
     }
 
@@ -1153,41 +1174,25 @@ public class View {
         Participant accused = context.getMember(qa.getAccused());
         if (ring.isBetween(accuser, q, accused)) {
             assert q.isAccused();
-            assert q.isAccusedOn(ring.getIndex());
             q.invalidateAccusationOnRing(ring.getIndex());
-            log.debug("Invalidating accusation on ring: {} for member: {} on: {}", ring.getIndex(), q.getId(),
-                      node.getId());
             if (!q.isAccused()) {
+                stopRebutalTimer(q);
                 if (context.isOffline(q)) {
                     recover(q);
-                    log.debug("Member: {} recovered to accusation invalidated ring: {} on: {}", q.getId(),
-                              ring.getIndex(), node.getId());
                 } else {
-                    stopRebutalTimer(q);
                     log.debug("Member: {} rebuts (accusation invalidated) ring: {} on: {}", q.getId(), ring.getIndex(),
                               node.getId());
                     check.add(q);
                 }
+            } else {
+                log.debug("Invalidated accusation on ring: {} for member: {} on: {}", ring.getIndex(), q.getId(),
+                          node.getId());
             }
         }
     }
 
     private boolean isEmpty(Update update) {
         return update.getAccusationsCount() == 0 && update.getIdentitiesCount() == 0 && update.getNotesCount() == 0;
-    }
-
-    private void oneRound(Duration duration, ScheduledExecutorService scheduler) {
-        if (!started.get()) {
-            return;
-        }
-
-        exec.execute(Utils.wrapped(() -> {
-            roundTimers.tick();
-            var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
-            gossiper.execute((link, ring) -> gossip(link, ring),
-                             (futureSailor, link, ring) -> gossip(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
-        }, log));
     }
 
     /**
@@ -1206,14 +1211,15 @@ public class View {
         AccusationGossip.Builder builder = AccusationGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive()
-               .stream()
+        context.active()
                .flatMap(m -> m.getAccusations())
                .filter(a -> !bff.contains(a.getHash()))
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
-        log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (!gossip.getUpdatesList().isEmpty()) {
+            log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        }
         return gossip;
     }
 
@@ -1227,12 +1233,13 @@ public class View {
               .forEach(a -> builder.addUpdates(a.getValue()));
         builder.setBff(getAlertsBff(seed, p).toBff());
         AlertGossip gossip = builder.build();
-        log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (!gossip.getUpdatesList().isEmpty()) {
+            log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        }
         return gossip;
     }
 
     private IdentityGossip processIdentitys(Digest from, BloomFilter<Digest> bff, long seed, double p) {
-        log.trace("process identity digests on:{}", node.getId());
         IdentityGossip.Builder builder = IdentityGossip.newBuilder();
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
@@ -1244,7 +1251,9 @@ public class View {
                .forEach(id -> builder.addUpdates(id.identity));
         builder.setBff(getIdentityBff(seed, p).toBff());
         IdentityGossip gossip = builder.build();
-        log.trace("process identity produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (!gossip.getUpdatesList().isEmpty()) {
+            log.trace("process identity produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        }
         return gossip;
     }
 
@@ -1264,15 +1273,16 @@ public class View {
 
         // Add all updates that this view has that aren't reflected in the inbound
         // bff
-        context.getActive()
-               .stream()
+        context.active()
                .filter(m -> m.getNote() != null)
                .filter(m -> !bff.contains(m.getNote().getHash()))
                .map(m -> m.getNote())
                .forEach(n -> builder.addUpdates(n.getWrapped()));
         builder.setBff(getNotesBff(seed, p).toBff());
         NoteGossip gossip = builder.build();
-        log.trace("process notes produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        if (!gossip.getUpdatesList().isEmpty()) {
+            log.trace("process notes produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
+        }
         return gossip;
     }
 
@@ -1318,7 +1328,7 @@ public class View {
      */
     private void recover(Participant member) {
         if (context.activate(member)) {
-            log.info("Recovering: {} on: {}", member.getId(), node.getId());
+            log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         } else {
             log.trace("Already active: {} on: {}", member.getId(), node.getId());
         }
@@ -1420,7 +1430,8 @@ public class View {
      * @param m
      */
     private void startRebutalTimer(Participant m) {
-        pendingRebutals.computeIfAbsent(m.getId(), d -> roundTimers.schedule(() -> gc(m), 1));
+        log.debug("Starting timer for: {} on: {}", m.getId(), node.getId());
+        pendingRebutals.computeIfAbsent(m.getId(), d -> roundTimers.schedule(() -> gc(m), 2));
     }
 
     /**
@@ -1434,7 +1445,7 @@ public class View {
         if (timer != null) {
             timer.cancel();
         }
-        log.info("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node.getId());
+        log.debug("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node.getId());
     }
 
     /**
@@ -1474,8 +1485,7 @@ public class View {
                .forEach(n -> builder.addNotes(n));
 
         BloomFilter<Digest> accBff = BloomFilter.from(gossip.getAccusations().getBff());
-        context.getActive()
-               .stream()
+        context.active()
                .flatMap(m -> m.getAccusations())
                .filter(a -> !accBff.contains(a.getHash()))
                .forEach(a -> builder.addAccusations(a.getWrapped()));

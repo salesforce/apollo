@@ -720,7 +720,7 @@ public class CHOAM {
         transitions = fsm.getTransitions();
         roundScheduler = new RoundScheduler("CHOAM" + params.member().getId() + params.context().getId(),
                                             params.context().timeToLive());
-        combine.register(i -> roundScheduler.tick(i));
+        combine.register(i -> roundScheduler.tick());
         session = new Session(params, service());
     }
 

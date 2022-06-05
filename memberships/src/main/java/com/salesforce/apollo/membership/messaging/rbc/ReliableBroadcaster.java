@@ -43,6 +43,7 @@ import com.salesfoce.apollo.messaging.proto.MessageBff;
 import com.salesfoce.apollo.messaging.proto.Reconcile;
 import com.salesfoce.apollo.messaging.proto.ReconcileContext;
 import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
 import com.salesforce.apollo.crypto.Digest;
@@ -515,8 +516,9 @@ public class ReliableBroadcaster {
         }
     }
 
-    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor, ReliableBroadcast link, int ring,
-                        Duration duration, ScheduledExecutorService scheduler, Timer.Context timer) {
+    private void handle(Optional<ListenableFuture<Reconcile>> futureSailor,
+                        Destination<Member, ReliableBroadcast> destination, Duration duration,
+                        ScheduledExecutorService scheduler, Timer.Context timer) {
         try {
             if (futureSailor.isEmpty()) {
                 if (timer != null) {
@@ -528,19 +530,20 @@ public class ReliableBroadcaster {
             try {
                 gossip = futureSailor.get().get();
             } catch (InterruptedException e) {
-                log.debug("error gossiping with {}", link.getMember(), e);
+                Thread.currentThread().interrupt();
                 return;
             } catch (ExecutionException e) {
-                log.debug("error gossiping with {}", link.getMember(), e.getCause());
+                log.debug("error gossiping with {} on: {}", destination.member(), member.getId(), e.getCause());
                 return;
             }
             buffer.receive(gossip.getUpdatesList());
-            link.update(ReconcileContext.newBuilder()
-                                        .setRing(ring)
-                                        .setContext(context.getId().toDigeste())
-                                        .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
-                                                                        link.getMember().getId()))
-                                        .build());
+            destination.link()
+                       .update(ReconcileContext.newBuilder()
+                                               .setRing(destination.ring())
+                                               .setContext(context.getId().toDigeste())
+                                               .addAllUpdates(buffer.reconcile(BloomFilter.from(gossip.getDigests()),
+                                                                               destination.member().getId()))
+                                               .build());
         } finally {
             if (timer != null) {
                 timer.stop();
@@ -572,8 +575,8 @@ public class ReliableBroadcaster {
         exec.execute(() -> {
             var timer = metrics == null ? null : metrics.gossipRoundDuration().time();
             gossiper.execute((link, ring) -> gossipRound(link, ring),
-                             (futureSailor, link, ring) -> handle(futureSailor, link, ring, duration, scheduler,
-                                                                  timer));
+                             (futureSailor, destination) -> handle(futureSailor, destination, duration, scheduler,
+                                                                   timer));
         });
     }
 }

@@ -65,6 +65,7 @@ import com.salesfoce.apollo.utils.proto.Biff;
 import com.salesfoce.apollo.utils.proto.Digeste;
 import com.salesfoce.apollo.utils.proto.Sig;
 import com.salesforce.apollo.comm.RingCommunications;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 import com.salesforce.apollo.comm.RingIterator;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.Router.CommonCommunications;
@@ -221,12 +222,13 @@ public class KerlDHT {
                 final var fs = new CompletableFuture<KeyStateWithEndorsementsAndValidations>();
                 k.getKeyStateWithAttachments(coordinates)
                  .thenAcceptBoth(db_getValidations(coordinates), (ksa, validations) -> {
-                     var result = KeyStateWithEndorsementsAndValidations.newBuilder()
-                                                                        .setState(ksa.getState())
-                                                                        .putAllEndorsements(ksa.getAttachment()
-                                                                                               .getEndorsementsMap())
-                                                                        .addAllValidations(validations.getValidationsList())
-                                                                        .build();
+                     var result = ksa == null ? KeyStateWithEndorsementsAndValidations.getDefaultInstance()
+                                              : KeyStateWithEndorsementsAndValidations.newBuilder()
+                                                                                      .setState(ksa.getState())
+                                                                                      .putAllEndorsements(ksa.getAttachment()
+                                                                                                             .getEndorsementsMap())
+                                                                                      .addAllValidations(validations.getValidationsList())
+                                                                                      .build();
                      fs.complete(result);
                  })
                  .exceptionally(t -> {
@@ -330,9 +332,9 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, () -> majority.complete(true), (link, r) -> link.append(kerl),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append kerl"),
+                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
+                                                                                          isTimedOut, tally,
+                                                                                          destination, "append kerl"),
                                              null);
         return complete(majority, null);
     }
@@ -353,9 +355,9 @@ public class KerlDHT {
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append events"),
+                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
+                                                                                          isTimedOut, tally,
+                                                                                          destination, "append events"),
                                              null);
         return complete(majority, null);
     }
@@ -376,9 +378,9 @@ public class KerlDHT {
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.append(events, attachments),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append events"),
+                                             (tally, futureSailor, destination) -> mutate(futureSailor, identifier,
+                                                                                          isTimedOut, tally,
+                                                                                          destination, "append events"),
                                              null);
         return complete(majority, null);
     }
@@ -399,9 +401,9 @@ public class KerlDHT {
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.appendAttachments(events),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append attachments"),
+                                             (tally, futureSailor,
+                                              destination) -> mutate(futureSailor, identifier, isTimedOut, tally,
+                                                                     destination, "append attachments"),
                                              null);
         return complete(majority, null);
     }
@@ -422,9 +424,9 @@ public class KerlDHT {
                            executor).iterate(identifier, () -> majority.complete(true),
                                              (link, r) -> link.appendValidations(validations),
                                              () -> majority.completeExceptionally(new CompletionException("Failed to write majority")),
-                                             (tally, futureSailor, link, r) -> mutate(futureSailor, identifier,
-                                                                                      isTimedOut, tally, link,
-                                                                                      "append validations"),
+                                             (tally, futureSailor,
+                                              destination) -> mutate(futureSailor, identifier, isTimedOut, tally,
+                                                                     destination, "append validations"),
                                              null);
         return complete(majority, null);
     }
@@ -444,9 +446,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, null, (link, r) -> link.getAttachment(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, identifier, isTimedOut,
-                                                         link, "get attachment", Attachment.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                   isTimedOut, destination, "get attachment",
+                                                                   Attachment.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -466,9 +469,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKERL(identifier),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get kerl", KERL_.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, "get kerl",
+                                                                   KERL_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -488,9 +492,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyEvent(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get key event", KeyEvent_.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, "get key event",
+                                                                   KeyEvent_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -510,10 +515,11 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyState(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get key state for coordinates",
-                                                         KeyState_.getDefaultInstance()),
+                                             (tally, futureSailor, destination) -> read(result, gathered, tally,
+                                                                                        futureSailor, digest,
+                                                                                        isTimedOut, destination,
+                                                                                        "get key state for coordinates",
+                                                                                        KeyState_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -533,9 +539,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyState(identifier),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get current key state", KeyState_.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination, "get current key state",
+                                                                   KeyState_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -555,10 +562,11 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(digest, null, (link, r) -> link.getKeyStateWithAttachments(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get key state with attachments",
-                                                         KeyStateWithAttachments_.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination,
+                                                                   "get key state with attachments",
+                                                                   KeyStateWithAttachments_.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -579,10 +587,11 @@ public class KerlDHT {
                            executor).iterate(digest, null,
                                              (link, r) -> link.getKeyStateWithEndorsementsAndValidations(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, digest, isTimedOut,
-                                                         link, "get key state with endorsements",
-                                                         KeyStateWithEndorsementsAndValidations.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, digest,
+                                                                   isTimedOut, destination,
+                                                                   "get key state with endorsements",
+                                                                   KeyStateWithEndorsementsAndValidations.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -602,9 +611,10 @@ public class KerlDHT {
         new RingIterator<>(frequency, context, member, scheduler, dhtComms,
                            executor).iterate(identifier, null, (link, r) -> link.getValidations(coordinates),
                                              () -> completeExceptionally(result),
-                                             (tally, futureSailor, link,
-                                              r) -> read(result, gathered, tally, futureSailor, identifier, isTimedOut,
-                                                         link, "get validations", Validations.getDefaultInstance()),
+                                             (tally, futureSailor,
+                                              destination) -> read(result, gathered, tally, futureSailor, identifier,
+                                                                   isTimedOut, destination, "get validations",
+                                                                   Validations.getDefaultInstance()),
                                              t -> completeExceptionally(result));
         return result;
     }
@@ -810,29 +820,30 @@ public class KerlDHT {
     }
 
     private boolean mutate(Optional<ListenableFuture<Empty>> futureSailor, Digest identifier,
-                           Supplier<Boolean> isTimedOut, AtomicInteger tally, DhtService link, String action) {
+                           Supplier<Boolean> isTimedOut, AtomicInteger tally,
+                           Destination<Member, DhtService> destination, String action) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
         try {
             futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember().getId(), member, e);
+            log.warn("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             if (e.getCause() instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) e.getCause();
                 if (sre.getStatus() == Status.UNAVAILABLE) {
                     log.trace("Server unavailable action: {} for: {} from: {} on: {}", action, identifier,
-                              link.getMember().getId(), member.getId());
+                              destination.member().getId(), member.getId());
                 } else {
                     log.warn("Server status: {} : {} action: {} for: {} from: {} on: {}", sre.getStatus().getCode(),
-                             sre.getStatus().getDescription(), action, identifier, link.getMember().getId(),
+                             sre.getStatus().getDescription(), action, identifier, destination.member().getId(),
                              member.getId());
                 }
             } else {
-                log.warn("Error {}: {} from: {} on: {}", action, identifier, link.getMember().getId(), member.getId(),
-                         e.getCause());
+                log.warn("Error {}: {} from: {} on: {}", action, identifier, destination.member().getId(),
+                         member.getId(), e.getCause());
             }
             return !isTimedOut.get();
         }
@@ -849,7 +860,8 @@ public class KerlDHT {
 
     private <T> boolean read(CompletableFuture<T> result, HashMultiset<T> gathered, AtomicInteger tally,
                              Optional<ListenableFuture<T>> futureSailor, Digest identifier,
-                             Supplier<Boolean> isTimedOut, DhtService link, String action, T empty) {
+                             Supplier<Boolean> isTimedOut, Destination<Member, DhtService> destination, String action,
+                             T empty) {
         if (futureSailor.isEmpty()) {
             return !isTimedOut.get();
         }
@@ -857,26 +869,27 @@ public class KerlDHT {
         try {
             content = futureSailor.get().get();
         } catch (InterruptedException e) {
-            log.debug("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e);
+            log.debug("Error {}: {} from: {} on: {}", action, identifier, destination.member(), member, e);
             return !isTimedOut.get();
         } catch (ExecutionException e) {
             Throwable t = e.getCause();
             if (t instanceof StatusRuntimeException) {
                 StatusRuntimeException sre = (StatusRuntimeException) t;
                 if (sre.getStatus() == Status.NOT_FOUND) {
-                    log.trace("Error {}: {} server not found: {} on: {}", action, identifier, link.getMember().getId(),
-                              member.getId());
+                    log.trace("Error {}: {} server not found: {} on: {}", action, identifier,
+                              destination.member().getId(), member.getId());
                     return !isTimedOut.get();
                 } else if (sre.getStatus() == Status.UNKNOWN) {
                     content = empty;
                 }
             } else {
-                log.debug("Error {}: {} from: {} on: {}", action, identifier, link.getMember(), member, e.getCause());
+                log.debug("Error {}: {} from: {} on: {}", action, identifier, destination.member(), member,
+                          e.getCause());
                 return !isTimedOut.get();
             }
         }
         if (content != null) {
-            log.trace("{}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
+            log.trace("{}: {} from: {}  on: {}", action, identifier, destination.member().getId(), member.getId());
             gathered.add(content);
             var max = gathered.entrySet()
                               .stream()
@@ -892,24 +905,26 @@ public class KerlDHT {
             }
             return !isTimedOut.get();
         } else {
-            log.debug("Failed {}: {} from: {}  on: {}", action, identifier, link.getMember().getId(), member.getId());
+            log.debug("Failed {}: {} from: {}  on: {}", action, identifier, destination.member().getId(),
+                      member.getId());
             return !isTimedOut.get();
         }
     }
 
-    private void reconcile(Optional<ListenableFuture<Update>> futureSailor, ReconciliationService link,
-                           ScheduledExecutorService scheduler, Duration duration) {
+    private void reconcile(Optional<ListenableFuture<Update>> futureSailor,
+                           Destination<Member, ReconciliationService> destination, ScheduledExecutorService scheduler,
+                           Duration duration) {
         if (!started.get() || futureSailor.isEmpty()) {
             return;
         }
         try {
             Update update = futureSailor.get().get();
             log.trace("Received: {} events in interval reconciliation from: {} on: {}", update.getEventsCount(),
-                      link.getMember().getId(), member.getId());
+                      destination.member().getId(), member.getId());
             kerlSpace.update(update.getEventsList());
         } catch (InterruptedException | ExecutionException e) {
-            log.debug("Error in interval reconciliation with {} : {} on: {}", link.getMember().getId(), member.getId(),
-                      e.getCause());
+            log.debug("Error in interval reconciliation with {} : {} on: {}", destination.member().getId(),
+                      member.getId(), e.getCause());
         }
         if (started.get()) {
             scheduler.schedule(() -> reconcile(scheduler, duration), duration.toMillis(), TimeUnit.MILLISECONDS);
@@ -933,7 +948,7 @@ public class KerlDHT {
             return;
         }
         reconcile.execute((link, ring) -> reconcile(link, ring),
-                          (futureSailor, link, ring) -> reconcile(futureSailor, link, scheduler, duration));
+                          (futureSailor, destination) -> reconcile(futureSailor, destination, scheduler, duration));
 
     }
 

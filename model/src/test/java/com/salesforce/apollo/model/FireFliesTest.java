@@ -117,7 +117,7 @@ public class FireFliesTest {
         });
         assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
             return domains.stream()
-                          .filter(d -> d.getFoundation().getContext().getActive().size() != domains.size())
+                          .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())
                           .count() == 0;
         }));
         System.out.println();

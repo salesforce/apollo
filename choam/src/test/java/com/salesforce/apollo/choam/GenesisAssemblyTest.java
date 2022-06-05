@@ -123,7 +123,7 @@ public class GenesisAssemblyTest {
             comm.setMember(m);
             return comm;
         }));
-        CountDownLatch complete = new CountDownLatch(committee.activeMembers().size());
+        CountDownLatch complete = new CountDownLatch(committee.activeCount());
         var comms = members.stream()
                            .collect(Collectors.toMap(m -> m,
                                                      m -> communications.get(m)
@@ -135,7 +135,7 @@ public class GenesisAssemblyTest {
                                                                                 TerminalClient.getCreate(null),
                                                                                 Terminal.getLocalLoopback((SigningMember) m,
                                                                                                           servers.get(m)))));
-        committee.activeMembers().forEach(m -> {
+        committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);

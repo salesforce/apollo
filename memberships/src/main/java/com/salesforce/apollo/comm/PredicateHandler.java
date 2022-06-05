@@ -10,12 +10,13 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 
 /**
  * @author hal.hildebrand
  *
  */
 @FunctionalInterface
-public interface PredicateHandler<T, Comm> {
-    boolean handle(AtomicInteger tally, Optional<ListenableFuture<T>> futureSailor, Comm communications, int ring);
+public interface PredicateHandler<M, T, Comm> {
+    boolean handle(AtomicInteger tally, Optional<ListenableFuture<T>> futureSailor, Destination<M, Comm> destination);
 }

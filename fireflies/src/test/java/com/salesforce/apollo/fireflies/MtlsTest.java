@@ -164,24 +164,23 @@ public class MtlsTest {
 
         assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return views.stream()
-                        .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
         }), "view did not stabilize: "
-        + views.stream().map(view -> view.getContext().getActive().size()).collect(Collectors.toList()));
+        + views.stream().map(view -> view.getContext().activeCount()).collect(Collectors.toList()));
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
         + views.size() + " members");
 
         System.out.println("Checking views for consistency");
         var invalid = views.stream()
-                           .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                           .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                            .filter(view -> view != null)
                            .collect(Collectors.toList());
         assertEquals(0, invalid.size(), invalid.stream().map(view -> {
             var difference = Sets.difference(views.stream().map(v -> v.getNode().getId()).collect(Collectors.toSet()),
                                              view.getContext()
-                                                 .getActive()
-                                                 .stream()
+                                                 .active()
                                                  .map(m -> m.getId())
                                                  .collect(Collectors.toSet()));
             return "Invalid membership: " + view.getNode() + ", missing: " + difference.size();
@@ -195,7 +194,7 @@ public class MtlsTest {
 
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
-                        .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
         }));
@@ -204,7 +203,7 @@ public class MtlsTest {
         Thread.sleep(10_000);
         assertTrue(Utils.waitForCondition(30_000, 100, () -> {
             return views.stream()
-                        .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                        .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                         .filter(view -> view != null)
                         .count() == 0;
         }));
@@ -212,7 +211,7 @@ public class MtlsTest {
 
         System.out.println("Checking views for consistency");
         invalid = views.stream()
-                       .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                       .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                        .filter(view -> view != null)
                        .collect(Collectors.toList());
         assertEquals(0, invalid.size());

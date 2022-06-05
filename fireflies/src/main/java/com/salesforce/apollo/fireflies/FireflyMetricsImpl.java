@@ -27,7 +27,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     private final Meter inboundUpdate;
     private final Timer inboundUpdateTimer;
     private final Meter outboundGossip;
-    private final Timer outboundGossipTimer;
     private final Meter outboundUpdate;
     private final Timer outboundUpdateTimer;
 
@@ -38,7 +37,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
         outboundUpdate = registry.meter(name(context.shortString(), "ff.update.outbound.bytes"));
         inboundUpdate = registry.meter(name(context.shortString(), "ff.update.inbound.bytes"));
 
-        outboundGossipTimer = registry.timer(name(context.shortString(), "ff.gossip.outbound.duration"));
         inboundGossipTimer = registry.timer(name(context.shortString(), "ff.gossip.inbound.duration"));
         outboundGossip = registry.meter(name(context.shortString(), "ff.gossip.outbound.bytes"));
         gossipResponse = registry.meter(name(context.shortString(), "ff.gossip.reply.inbound.bytes"));
@@ -86,11 +84,6 @@ public class FireflyMetricsImpl extends EndpointMetricsImpl implements FireflyMe
     @Override
     public Meter outboundGossip() {
         return outboundGossip;
-    }
-
-    @Override
-    public Timer outboundGossipTimer() {
-        return outboundGossipTimer;
     }
 
     @Override

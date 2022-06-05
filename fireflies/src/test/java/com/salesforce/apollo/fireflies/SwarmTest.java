@@ -13,9 +13,11 @@ import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -92,9 +94,12 @@ public class SwarmTest {
     public void churn() throws Exception {
         initialize();
 
-        List<View> testViews = new ArrayList<>();
+        Set<View> testViews = new HashSet<>();
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
+        System.out.println();
+        System.out.println("Starting views");
+        System.out.println();
         for (int i = 0; i < 4; i++) {
             int start = testViews.size();
             for (int j = 0; j < 25; j++) {
@@ -103,28 +108,64 @@ public class SwarmTest {
             long then = System.currentTimeMillis();
             testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
-            assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
+            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .filter(view -> view.getContext().activeCount() != testViews.size())
                                 .count() == 0;
             }), " size: " + testViews.size() + " views: "
             + testViews.stream()
-                       .filter(e -> e.getContext().getActive().size() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getContext().getId(),
-                                               v.getContext().getOffline().stream().map(p -> p.getId()).toList()))
+                       .filter(e -> e.getContext().activeCount() != testViews.size())
+                       .map(v -> String.format("%s : %s", v.getNode().getId(),
+                                               v.getContext().getOffline().stream().count()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
         }
+        System.out.println();
         System.out.println("Stopping views");
-        testViews.forEach(e -> e.stop());
-        testViews.clear();
-        communications.forEach(e -> e.close());
+        System.out.println();
 
+        testViews.clear();
+        List<View> c = new ArrayList<>(views);
+        List<Router> r = new ArrayList<>(communications);
+        int delta = 25;
+        for (int i = 0; i < CARDINALITY / delta; i++) {
+            var stopped = new ArrayList<Digest>();
+            for (int j = 0; j < delta; j++) {
+                View v = c.get(j);
+                stopped.add(v.getNode().getId());
+                v.stop();
+                r.get(j).close();
+            }
+            c = c.subList(delta, c.size());
+            r = r.subList(delta, r.size());
+            final var expected = c;
+            long then = System.currentTimeMillis();
+            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
+                return expected.stream()
+                               .filter(view -> view.getContext().activeCount() != expected.size())
+                               .count() == 0;
+            }), " size: " + expected.size() + " views: "
+            + expected.stream()
+                      .filter(e -> e.getContext().activeCount() != expected.size())
+                      .map(v -> String.format("%s : %s", v.getNode().getId(),
+                                              v.getContext().getOffline().stream().map(p -> p.getId()).count()))
+                      .toList());
+
+            System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
+            + expected.size() + " members");
+        }
+
+        communications.forEach(e -> e.close());
         communications.forEach(e -> e.start());
+
+        System.out.println();
+        System.out.println("Restarting views");
+        System.out.println();
+
+        testViews.clear();
         for (int i = 0; i < 4; i++) {
-            System.out.println("Restarting views " + (i * 25) + " to " + (i + 1) * 25);
             int start = testViews.size();
             for (int j = 0; j < 25; j++) {
                 testViews.add(views.get(start + j));
@@ -132,21 +173,21 @@ public class SwarmTest {
             long then = System.currentTimeMillis();
             testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
 
-            boolean stabilized = Utils.waitForCondition(20_000, 1_000, () -> {
+            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().getActive().size() != testViews.size())
+                                .filter(view -> view.getContext().activeCount() != testViews.size())
                                 .count() == 0;
-            });
-
-            assertTrue(stabilized, "Views have not reached: " + testViews.size() + " currently: "
+            }), " size: " + testViews.size() + " views: "
             + testViews.stream()
-                       .filter(e -> e.getContext().getActive().size() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getContext().getId(), v.getContext().getOffline().size()))
+                       .filter(e -> e.getContext().activeCount() != testViews.size())
+                       .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
         }
+
+        System.out.println();
 
         Graph<Participant> testGraph = new Graph<>();
         for (View v : views) {
@@ -183,7 +224,7 @@ public class SwarmTest {
         views.forEach(view -> view.start(Duration.ofMillis(100), seeds, Executors.newSingleThreadScheduledExecutor()));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
-            return views.stream().filter(view -> view.getContext().getActive().size() != views.size()).count() == 0;
+            return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
         }));
 
         System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -198,7 +239,7 @@ public class SwarmTest {
         }
 
         List<View> invalid = views.stream()
-                                  .map(view -> view.getContext().getActive().size() != views.size() ? view : null)
+                                  .map(view -> view.getContext().activeCount() != views.size() ? view : null)
                                   .filter(view -> view != null)
                                   .collect(Collectors.toList());
         assertEquals(0, invalid.size());
@@ -243,7 +284,7 @@ public class SwarmTest {
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        var ctxBuilder = Context.<Participant>newBuilder().setCardinality(CARDINALITY);
+        var ctxBuilder = Context.<Participant>newBuilder().setpByz(0.3).setCardinality(CARDINALITY);
 
         var randomized = members.values().stream().collect(Collectors.toList());
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
@@ -268,7 +309,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.125,
                             DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }

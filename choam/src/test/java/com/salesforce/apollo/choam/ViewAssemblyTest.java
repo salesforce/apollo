@@ -133,7 +133,7 @@ public class ViewAssemblyTest {
                                                          .collect(Collectors.toMap(e -> e.getKey(),
                                                                                    e -> new Verifier.DefaultVerifier(e.getValue()
                                                                                                                       .getPublic())));
-        committee.activeMembers().forEach(m -> {
+        committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
             params.getProducer().ethereal().setSigner(sm);

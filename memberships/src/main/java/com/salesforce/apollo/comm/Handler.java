@@ -9,12 +9,13 @@ package com.salesforce.apollo.comm;
 import java.util.Optional;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.salesforce.apollo.comm.RingCommunications.Destination;
 
 /**
  * @author hal.hildebrand
  *
  */
 @FunctionalInterface
-public interface Handler<T, Comm> {
-    void handle(Optional<ListenableFuture<T>> futureSailor, Comm communications, int ring);
+public interface Handler<M, T, Comm> {
+    void handle(Optional<ListenableFuture<T>> futureSailor, Destination<M, Comm> destination);
 }

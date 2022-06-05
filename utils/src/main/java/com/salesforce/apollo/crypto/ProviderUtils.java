@@ -181,6 +181,6 @@ public class ProviderUtils {
             }
             buff.append(" version: ").append(p.getVersionStr());
         }
-        log.warn("JCE Providers:" + buff.toString());
+        log.debug("JCE Providers:" + buff.toString());
     }
 }
