@@ -105,10 +105,10 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(25), seeds,
+            testViews.forEach(view -> view.start(Duration.ofMillis(50), seeds,
                                                  Executors.newSingleThreadScheduledExecutor()));
 
-            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
                                 .filter(view -> view.getContext().activeCount() != testViews.size())
                                 .count() == 0;
@@ -139,7 +139,7 @@ public class SwarmTest {
             r = r.subList(delta, r.size());
             final var expected = c;
             long then = System.currentTimeMillis();
-            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return expected.stream()
                                .filter(view -> view.getContext().activeCount() != expected.size())
                                .count() == 0;
@@ -170,10 +170,10 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(25), seeds,
+            testViews.forEach(view -> view.start(Duration.ofMillis(50), seeds,
                                                  Executors.newSingleThreadScheduledExecutor()));
 
-            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(30_000, 1_000, () -> {
                 return testViews.stream()
                                 .filter(view -> view.getContext().activeCount() < testViews.size())
                                 .count() == 0;
@@ -223,7 +223,7 @@ public class SwarmTest {
     public void swarm() throws Exception {
         initialize();
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(Duration.ofMillis(25), seeds, Executors.newSingleThreadScheduledExecutor()));
+        views.forEach(view -> view.start(Duration.ofMillis(50), seeds, Executors.newSingleThreadScheduledExecutor()));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
@@ -311,7 +311,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.125,
                             DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }

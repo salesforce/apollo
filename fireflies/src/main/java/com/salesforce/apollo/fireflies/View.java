@@ -435,8 +435,8 @@ public class View {
             log.trace("Invalidating accusations of {} on {}", getId(), index);
         }
 
-        boolean isAccused(int majority) {
-            return validAccusations.size() >= majority;
+        boolean isAccused() {
+            return !validAccusations.isEmpty();
         }
 
         boolean isAccusedOn(int index) {
@@ -770,7 +770,7 @@ public class View {
                           ring.getIndex(), currentAccuser, node.getId());
             }
         } else {
-            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused(1)) || (m.equals(accuser)));
+            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) &&
@@ -839,7 +839,7 @@ public class View {
 
         stopRebutalTimer(m);
 
-        if (m.isAccused(1)) {
+        if (m.isAccused()) {
             checkInvalidations(m);
         }
 
@@ -972,7 +972,7 @@ public class View {
         while (!check.isEmpty()) {
             Participant checked = check.pop();
             context.rings().forEach(ring -> {
-                for (Participant q : ring.successors(checked, member -> !member.isAccused(1))) {
+                for (Participant q : ring.successors(checked, member -> !member.isAccused())) {
                     if (q.isAccusedOn(ring.getIndex())) {
                         invalidate(q, ring, check);
                     }
@@ -1125,9 +1125,9 @@ public class View {
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());
         if (ring.isBetween(accuser, q, accused)) {
-            assert q.isAccused(1);
+            assert q.isAccused();
             q.invalidateAccusationOnRing(ring.getIndex());
-            if (!q.isAccused(1)) {
+            if (!q.isAccused()) {
                 stopRebutalTimer(q);
                 if (context.isOffline(q)) {
                     recover(q);
@@ -1254,7 +1254,7 @@ public class View {
      * @param member
      */
     private void recover(Participant member) {
-        if (!member.isAccused(context.majority()) && context.activate(member)) {
+        if (context.activate(member)) {
             member.clearAccusations();
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         } else {
