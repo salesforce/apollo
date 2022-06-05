@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -41,8 +40,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.fireflies.proto.Accusation;
 import com.salesfoce.apollo.fireflies.proto.AccusationGossip;
-import com.salesfoce.apollo.fireflies.proto.Alert;
-import com.salesfoce.apollo.fireflies.proto.AlertGossip;
 import com.salesfoce.apollo.fireflies.proto.Digests;
 import com.salesfoce.apollo.fireflies.proto.Gossip;
 import com.salesfoce.apollo.fireflies.proto.Identity;
@@ -50,7 +47,6 @@ import com.salesfoce.apollo.fireflies.proto.IdentityGossip;
 import com.salesfoce.apollo.fireflies.proto.Note;
 import com.salesfoce.apollo.fireflies.proto.NoteGossip;
 import com.salesfoce.apollo.fireflies.proto.SignedAccusation;
-import com.salesfoce.apollo.fireflies.proto.SignedAlert;
 import com.salesfoce.apollo.fireflies.proto.SignedNote;
 import com.salesfoce.apollo.fireflies.proto.Update;
 import com.salesforce.apollo.comm.RingCommunications;
@@ -97,6 +93,8 @@ import io.grpc.StatusRuntimeException;
  * @since 220
  */
 public class View {
+    private static final int REBUTAL_TIMEOUT = 2;
+
     /**
      * Used in set reconcillation of Accusation Digests
      */
@@ -437,8 +435,8 @@ public class View {
             log.trace("Invalidating accusations of {} on {}", getId(), index);
         }
 
-        boolean isAccused() {
-            return !validAccusations.isEmpty();
+        boolean isAccused(int majority) {
+            return validAccusations.size() >= majority;
         }
 
         boolean isAccusedOn(int index) {
@@ -523,7 +521,6 @@ public class View {
                          .setIdentities(processIdentitys(from, BloomFilter.from(digests.getIdentityBff()), seed, fpr))
                          .setNotes(processNotes(from, BloomFilter.from(digests.getNoteBff()), seed, fpr))
                          .setAccusations(processAccusations(BloomFilter.from(digests.getAccusationBff()), seed, fpr))
-                         .setAlerts(processAlerts(BloomFilter.from(digests.getAlertsBff()), seed, seed))
                          .build();
         }
 
@@ -551,8 +548,7 @@ public class View {
                          member.getId());
                 return;
             }
-            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList(),
-                           update.getAlertsList());
+            processUpdates(update.getIdentitiesList(), update.getNotesList(), update.getAccusationsList());
         }
     }
 
@@ -588,8 +584,6 @@ public class View {
         return mask.cardinality() == toleranceLevel + 1;
     }
 
-    private final ConcurrentSkipListSet<Participant>          alerted         = new ConcurrentSkipListSet<>();
-    private final ConcurrentMap<Digest, SignedAlert>          alerts          = new ConcurrentSkipListMap<>();
     private final CommonCommunications<Fireflies, Service>    comm;
     private final Context<Participant>                        context;
     private final DigestAlgorithm                             digestAlgo;
@@ -623,7 +617,6 @@ public class View {
         gossiper = new RingCommunications<>(context, node, comm, exec);
         this.exec = exec;
         add(node);
-        roundTimers.schedule(() -> gcAlerts(), 1);
     }
 
     /**
@@ -641,10 +634,12 @@ public class View {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        roundTimers.reset();
         comm.register(context.getId(), service);
+        context.allMembers().forEach(e -> e.clearAccusations());
         context.activate(node);
         node.nextNote();
-        recover(node);
+        context.activate(node);
         List<Digest> seedList = new ArrayList<>();
         seeds.stream()
              .map(identity -> new Participant(new IdentityWrapper(digestAlgo.digest(identity.toByteString()),
@@ -708,7 +703,7 @@ public class View {
             return;
         }
         member.addAccusation(node.accuse(member, ring));
-        startRebutalTimer(member);
+        pendingRebutals.computeIfAbsent(member.getId(), d -> roundTimers.schedule(() -> gc(member), REBUTAL_TIMEOUT));
         log.debug("Accuse {} on ring {} (timer started) on: {}", member.getId(), ring, node.getId());
     }
 
@@ -720,18 +715,6 @@ public class View {
     private void add(AccusationWrapper accusation) {
         Participant accuser = context.getMember(accusation.getAccuser());
         Participant accused = context.getMember(accusation.getAccused());
-//        if (context.offline(accused)) {
-//            if (accused.getEpoch() == accusation.getEpoch() && !accused.isAccusedOn(accusation.getRingNumber())) {
-//                if (!accuser.verify(accusation.getSignature(),
-//                                    accusation.getWrapped().getAccusation().toByteString())) {
-//                    log.trace("Accusation by: {} accused:{} signature invalid on: {}", accuser.getId(), accused.getId(),
-//                              node.getId());
-//                    return;
-//                }
-//                accused.addAccusation(accusation);
-//            }
-//            return;
-//        }
         if (accuser == null || accused == null) {
             log.trace("Accusation discarded, accused or accuser do not exist in view on: {}", node);
             return;
@@ -771,11 +754,15 @@ public class View {
      * @param accused
      */
     private void add(AccusationWrapper accusation, Participant accuser, Participant accused) {
+        if (node.equals(accused)) {
+            node.clearAccusations();
+            node.nextNote();
+            return;
+        }
         Ring<Participant> ring = context.ring(accusation.getRingNumber());
 
         if (accused.isAccusedOn(ring.getIndex())) {
-            AccusationWrapper currentAccusation = accused.getAccusation(ring.getIndex());
-            Participant currentAccuser = context.getMember(currentAccusation.getAccuser());
+            Participant currentAccuser = context.getMember(accused.getAccusation(ring.getIndex()).getAccuser());
 
             if (!currentAccuser.equals(accuser) && ring.isBetween(currentAccuser, accuser, accused)) {
                 accused.addAccusation(accusation);
@@ -783,14 +770,15 @@ public class View {
                           ring.getIndex(), currentAccuser, node.getId());
             }
         } else {
-            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused()) || (m.equals(accuser)));
+            Participant predecessor = ring.predecessor(accused, m -> (!m.isAccused(1)) || (m.equals(accuser)));
             if (accuser.equals(predecessor)) {
                 accused.addAccusation(accusation);
                 if (!accused.equals(node) && !pendingRebutals.containsKey(accused.getId()) &&
                     context.isActive(accused.getId())) {
                     log.debug("{} accused by {} on ring {} (timer started) on: {}", accused.getId(), accuser.getId(),
                               accusation.getRingNumber(), node.getId());
-                    startRebutalTimer(accused);
+                    pendingRebutals.computeIfAbsent(accused.getId(),
+                                                    d -> roundTimers.schedule(() -> gc(accused), REBUTAL_TIMEOUT));
                 }
             } else {
                 log.debug("{} accused by {} on ring {} discarded as not predecessor {} on: {}", accused.getId(),
@@ -849,15 +837,14 @@ public class View {
 
         log.debug("Adding member via note {} on: {}", m, node.getId());
 
-        if (m.isAccused()) {
-            stopRebutalTimer(m);
+        stopRebutalTimer(m);
+
+        if (m.isAccused(1)) {
             checkInvalidations(m);
         }
 
-        recover(m);
-
         m.setNote(note);
-
+        recover(m);
         return true;
     }
 
@@ -876,60 +863,60 @@ public class View {
         return previous;
     }
 
-    private void add(SignedAlert sa) {
-        Digest issuedBy = Digest.from(sa.getAlert().getIssuedBy());
-        Digest targetDigest = Digest.from(sa.getAlert().getTarget());
-
-        // Run the gauntlet
-        Participant alerter = context.getActiveMember(issuedBy);
-        if (alerter == null) {
-            log.info("Alert discarded, isuedBy: {} target: {}, alerter does not exist in view on: {}", issuedBy,
-                     targetDigest, node);
-            return;
-        }
-
-        Participant target = context.getMember(targetDigest);
-        if (target == null) {
-            log.info("Alert discarded, isuedBy: {} target: {} does not exist in view on: {}", issuedBy, targetDigest,
-                     node);
-            return;
-        }
-
-        if (alerter.getEpoch() != sa.getAlert().getEpoch()) {
-            log.debug("Alert discarded, issued by: {} alerted on:{} invalid epoch: {} expected: {} on: {}",
-                      alerter.getId(), target, alerter.getEpoch(), sa.getAlert().getEpoch(), node.getId());
-            return;
-        }
-
-        int ring = sa.getAlert().getRing();
-        if (!target.getNote().getMask().get(ring)) {
-            log.debug("Alert discarded, issued by: {} target: {}, ring masked by target on: {}", alerter.getId(),
-                      target, ring, node.getId());
-            return;
-        }
-
-        Participant successor = context.ring(ring).successor(alerter, m -> context.isActive(m.getId()));
-        if (successor == null) {
-            log.info("Alert discarded, alerter: {} cannot issue alert on target: {} in view on: {}", issuedBy,
-                     targetDigest, node);
-            return;
-        }
-
-        JohnHancock signature = JohnHancock.from(sa.getSignature());
-        if (!alerter.verify(signature, sa.getAlert().toByteString())) {
-            log.debug("Alert discarded, issued by: {} allerted on:{} signature invalid on: {}", alerter.getId(), target,
-                      node.getId());
-            return;
-        }
-
-        // It's dead, Jim
+//    private void add(SignedAlert sa) {
+//        Digest issuedBy = Digest.from(sa.getAlert().getIssuedBy());
+//        Digest targetDigest = Digest.from(sa.getAlert().getTarget());
+//
+//        // Run the gauntlet
+//        Participant alerter = context.getActiveMember(issuedBy);
+//        if (alerter == null) {
+//            log.info("Alert discarded, isuedBy: {} target: {}, alerter does not exist in view on: {}", issuedBy,
+//                     targetDigest, node);
+//            return;
+//        }
+//
+//        Participant target = context.getMember(targetDigest);
+//        if (target == null) {
+//            log.info("Alert discarded, isuedBy: {} target: {} does not exist in view on: {}", issuedBy, targetDigest,
+//                     node);
+//            return;
+//        }
+//
+//        if (alerter.getEpoch() != sa.getAlert().getEpoch()) {
+//            log.debug("Alert discarded, issued by: {} alerted on:{} invalid epoch: {} expected: {} on: {}",
+//                      alerter.getId(), target, alerter.getEpoch(), sa.getAlert().getEpoch(), node.getId());
+//            return;
+//        }
+//
+//        int ring = sa.getAlert().getRing();
+//        if (!target.getNote().getMask().get(ring)) {
+//            log.debug("Alert discarded, issued by: {} target: {}, ring masked by target on: {}", alerter.getId(),
+//                      target, ring, node.getId());
+//            return;
+//        }
+//
+//        Participant successor = context.ring(ring).successor(alerter, m -> context.isActive(m.getId()));
+//        if (successor == null) {
+//            log.info("Alert discarded, alerter: {} cannot issue alert on target: {} in view on: {}", issuedBy,
+//                     targetDigest, node);
+//            return;
+//        }
+//
+//        JohnHancock signature = JohnHancock.from(sa.getSignature());
+//        if (!alerter.verify(signature, sa.getAlert().toByteString())) {
+//            log.debug("Alert discarded, issued by: {} allerted on:{} signature invalid on: {}", alerter.getId(), target,
+//                      node.getId());
+//            return;
+//        }
+//
+    // It's dead, Jim
 //        target.alert(issuedBy);
-        context.offline(target);
-        var hash = signature.toDigest(digestAlgo);
-        alerts.put(hash, sa);
-        alerted.add(target);
-        amplify(target);
-    }
+//        context.offline(target);
+//        var hash = signature.toDigest(digestAlgo);
+//        alerts.put(hash, sa);
+//        alerted.add(target);
+//        amplify(target);
+//    }
 
     /**
      * For bootstrap, add the seed as a fake, non crashed member. The note is signed
@@ -953,36 +940,18 @@ public class View {
         context.activate(seed);
     }
 
-    private void alertOn(int ring, Participant target) {
-        if (!alerted.add(target)) {
-            Alert alert = Alert.newBuilder()
-                               .setRing(ring)
-                               .setEpoch(node.getEpoch())
-                               .setIssuedBy(node.getId().toDigeste())
-                               .setTarget(target.getId().toDigeste())
-                               .build();
-            var signature = node.sign(alert.toByteString());
-            alerts.put(signature.toDigest(digestAlgo),
-                       SignedAlert.newBuilder()
-                                  .setSignature(signature.toSig())
-                                  .setAge(context.timeToLive())
-                                  .setAlert(alert)
-                                  .build());
-        }
-    }
-
     /**
      * If we monitor the target and haven't issued an alert, do so
      * 
      * @param sa
      */
     private void amplify(Participant target) {
-        if (alerted.contains(target)) {
-            return;
-        }
         context.rings()
                .filter(ring -> target.equals(ring.successor(target, m -> context.isActive(m))))
-               .forEach(ring -> alertOn(ring.getIndex(), target));
+               .forEach(ring -> {
+                   log.trace("amplifying: {} ring: {} on: {}", target.getId(), ring.getIndex(), node.getId());
+                   accuse(target, ring.getIndex());
+               });
     }
 
     /**
@@ -1003,7 +972,7 @@ public class View {
         while (!check.isEmpty()) {
             Participant checked = check.pop();
             context.rings().forEach(ring -> {
-                for (Participant q : ring.successors(checked, member -> !member.isAccused())) {
+                for (Participant q : ring.successors(checked, member -> !member.isAccused(1))) {
                     if (q.isAccusedOn(ring.getIndex())) {
                         invalidate(q, ring, check);
                     }
@@ -1025,23 +994,12 @@ public class View {
     }
 
     private void gc(Participant member) {
-        if (context.offline(member)) {
-            log.info("Offlining: {} active: {} on: {}", member.getId(), context.activeCount(), node.getId());
-        }
-    }
+        if (context.isActive(member)) {
+            amplify(member);
+            context.offline(member);
+            log.debug("Offlining: {} on: {}", member.getId(), node.getId());
 
-    private void gcAlerts() {
-        var iterator = alerts.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            SignedAlert sa = entry.getValue();
-            if (sa.getAge() == 0) {
-                iterator.remove();
-            } else {
-                entry.setValue(SignedAlert.newBuilder(sa).setAge(sa.getAge() - 1).build());
-            }
         }
-        roundTimers.schedule(() -> gcAlerts(), 1);
     }
 
     private BloomFilter<Digest> getAccusationsBff(long seed, double p) {
@@ -1049,12 +1007,6 @@ public class View {
                                                                     context.cardinality() * context.getRingCount() * 2,
                                                                     p);
         context.allMembers().flatMap(m -> m.getAccusations()).filter(e -> e != null).forEach(m -> bff.add(m.getHash()));
-        return bff;
-    }
-
-    private BloomFilter<Digest> getAlertsBff(long seed, double p) {
-        BloomFilter<Digest> bff = new BloomFilter.DigestBloomFilter(seed, alerts.size() * 2, p);
-        alerts.keySet().stream().forEach(d -> bff.add(d));
         return bff;
     }
 
@@ -1173,9 +1125,9 @@ public class View {
         Participant accuser = context.getMember(qa.getAccuser());
         Participant accused = context.getMember(qa.getAccused());
         if (ring.isBetween(accuser, q, accused)) {
-            assert q.isAccused();
+            assert q.isAccused(1);
             q.invalidateAccusationOnRing(ring.getIndex());
-            if (!q.isAccused()) {
+            if (!q.isAccused(1)) {
                 stopRebutalTimer(q);
                 if (context.isOffline(q)) {
                     recover(q);
@@ -1217,22 +1169,6 @@ public class View {
                .forEach(a -> builder.addUpdates(a.getWrapped()));
         builder.setBff(getAccusationsBff(seed, p).toBff());
         AccusationGossip gossip = builder.build();
-        if (!gossip.getUpdatesList().isEmpty()) {
-            log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
-        }
-        return gossip;
-    }
-
-    private AlertGossip processAlerts(BloomFilter<Digest> bff, long seed, double p) {
-        AlertGossip.Builder builder = AlertGossip.newBuilder();
-        // Add all updates that this view has that aren't reflected in the inbound
-        // bff
-        alerts.entrySet()
-              .stream()
-              .filter(a -> !bff.contains(a.getKey()))
-              .forEach(a -> builder.addUpdates(a.getValue()));
-        builder.setBff(getAlertsBff(seed, p).toBff());
-        AlertGossip gossip = builder.build();
         if (!gossip.getUpdatesList().isEmpty()) {
             log.trace("process accusations produced updates: {} on: {}", gossip.getUpdatesCount(), node.getId());
         }
@@ -1293,7 +1229,7 @@ public class View {
      */
     private void processUpdates(Gossip gossip) {
         processUpdates(gossip.getIdentities().getUpdatesList(), gossip.getNotes().getUpdatesList(),
-                       gossip.getAccusations().getUpdatesList(), gossip.getAlerts().getUpdatesList());
+                       gossip.getAccusations().getUpdatesList());
     }
 
     /**
@@ -1303,22 +1239,13 @@ public class View {
      * @param notes
      * @param accusations
      */
-    private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations,
-                                List<SignedAlert> alerts) {
+    private void processUpdates(List<Identity> identities, List<SignedNote> notes, List<SignedAccusation> accusations) {
         identities.stream()
                   .map(id -> new IdentityWrapper(digestAlgo.digest(id.toString()), id))
                   .filter(id -> validation.validate(id.event()))
                   .forEach(identity -> add(identity));
         notes.stream().map(s -> new NoteWrapper(s, digestAlgo)).forEach(note -> add(note));
         accusations.stream().map(s -> new AccusationWrapper(s, digestAlgo)).forEach(accusation -> add(accusation));
-
-        if (node.isAccused()) {
-            // Rebut the accusations by creating a new note and clearing the accusations
-            node.nextNote();
-            node.clearAccusations();
-        }
-
-        alerts.forEach(sa -> add(sa));
     }
 
     /**
@@ -1327,7 +1254,8 @@ public class View {
      * @param member
      */
     private void recover(Participant member) {
-        if (context.activate(member)) {
+        if (!member.isAccused(context.majority()) && context.activate(member)) {
+            member.clearAccusations();
             log.debug("Recovering: {} on: {}", member.getId(), node.getId());
         } else {
             log.trace("Already active: {} on: {}", member.getId(), node.getId());
@@ -1425,16 +1353,6 @@ public class View {
     }
 
     /**
-     * Initiate a timer to track the accussed member
-     *
-     * @param m
-     */
-    private void startRebutalTimer(Participant m) {
-        log.debug("Starting timer for: {} on: {}", m.getId(), node.getId());
-        pendingRebutals.computeIfAbsent(m.getId(), d -> roundTimers.schedule(() -> gc(m), 2));
-    }
-
-    /**
      * Cancel the timer to track the accussed member
      *
      * @param m
@@ -1445,7 +1363,6 @@ public class View {
         if (timer != null) {
             timer.cancel();
         }
-        log.debug("New note, epoch {}, clearing accusations of {} on: {}", m.getEpoch(), m.getId(), node.getId());
     }
 
     /**

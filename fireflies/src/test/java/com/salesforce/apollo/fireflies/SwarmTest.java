@@ -20,7 +20,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -57,8 +56,9 @@ import com.salesforce.apollo.utils.Utils;
  */
 public class SwarmTest {
 
-    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
     private static final int                                                   CARDINALITY = 100;
+    private static Map<Digest, ControlledIdentifier<SelfAddressingIdentifier>> identities;
+    private static final double                                                P_BYZ       = 0.3;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -72,12 +72,12 @@ public class SwarmTest {
                                                         controlled -> controlled));
     }
 
-    private Map<Digest, ControlledIdentifierMember> members;
-    private List<View>                              views;
     private List<Router>                            communications = new ArrayList<>();
-    private List<Identity>                          seeds;
-    private MetricRegistry                          registry;
+    private Map<Digest, ControlledIdentifierMember> members;
     private MetricRegistry                          node0Registry;
+    private MetricRegistry                          registry;
+    private List<Identity>                          seeds;
+    private List<View>                              views;
 
     @AfterEach
     public void after() {
@@ -95,7 +95,6 @@ public class SwarmTest {
         initialize();
 
         Set<View> testViews = new HashSet<>();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
 
         System.out.println();
         System.out.println("Starting views");
@@ -106,17 +105,18 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(25), seeds,
+                                                 Executors.newSingleThreadScheduledExecutor()));
 
-            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
                                 .filter(view -> view.getContext().activeCount() != testViews.size())
                                 .count() == 0;
-            }), " size: " + testViews.size() + " views: "
+            });
+            assertTrue(success, " expected: " + testViews.size() + " views: "
             + testViews.stream()
                        .filter(e -> e.getContext().activeCount() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getNode().getId(),
-                                               v.getContext().getOffline().stream().count()))
+                       .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().offlineCount()))
                        .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
@@ -129,34 +129,33 @@ public class SwarmTest {
         testViews.clear();
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
-        int delta = 25;
+        int delta = 10;
         for (int i = 0; i < CARDINALITY / delta; i++) {
-            var stopped = new ArrayList<Digest>();
             for (int j = 0; j < delta; j++) {
-                View v = c.get(j);
-                stopped.add(v.getNode().getId());
-                v.stop();
+                c.get(j).stop();
                 r.get(j).close();
             }
             c = c.subList(delta, c.size());
             r = r.subList(delta, r.size());
             final var expected = c;
             long then = System.currentTimeMillis();
-            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
                 return expected.stream()
                                .filter(view -> view.getContext().activeCount() != expected.size())
                                .count() == 0;
-            }), " size: " + expected.size() + " views: "
-            + expected.stream()
-                      .filter(e -> e.getContext().activeCount() != expected.size())
-                      .map(v -> String.format("%s : %s", v.getNode().getId(),
-                                              v.getContext().getOffline().stream().map(p -> p.getId()).count()))
-                      .toList());
+            });
+            assertTrue(success,
+                       " expected: " + c.size() + " views: "
+                       + c.stream()
+                          .filter(e -> e.getContext().activeCount() != expected.size())
+                          .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
+                          .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
-            + expected.size() + " members");
+            + c.size() + " members");
         }
 
+        views.forEach(e -> e.stop());
         communications.forEach(e -> e.close());
         communications.forEach(e -> e.start());
 
@@ -171,17 +170,20 @@ public class SwarmTest {
                 testViews.add(views.get(start + j));
             }
             long then = System.currentTimeMillis();
-            testViews.forEach(view -> view.start(Duration.ofMillis(100), seeds, scheduler));
+            testViews.forEach(view -> view.start(Duration.ofMillis(25), seeds,
+                                                 Executors.newSingleThreadScheduledExecutor()));
 
-            assertTrue(Utils.waitForCondition(20_000, 1_000, () -> {
+            boolean success = Utils.waitForCondition(20_000, 1_000, () -> {
                 return testViews.stream()
-                                .filter(view -> view.getContext().activeCount() != testViews.size())
+                                .filter(view -> view.getContext().activeCount() < testViews.size())
                                 .count() == 0;
-            }), " size: " + testViews.size() + " views: "
-            + testViews.stream()
-                       .filter(e -> e.getContext().activeCount() != testViews.size())
-                       .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
-                       .toList());
+            });
+            assertTrue(success,
+                       " expected: " + testViews.size() + " views: "
+                       + testViews.stream()
+                                  .filter(e -> e.getContext().activeCount() != testViews.size())
+                                  .map(v -> String.format("%s : %s", v.getNode().getId(), v.getContext().activeCount()))
+                                  .toList());
 
             System.out.println("View has stabilized in " + (System.currentTimeMillis() - then) + " Ms across all "
             + testViews.size() + " members");
@@ -221,7 +223,7 @@ public class SwarmTest {
     public void swarm() throws Exception {
         initialize();
         long then = System.currentTimeMillis();
-        views.forEach(view -> view.start(Duration.ofMillis(100), seeds, Executors.newSingleThreadScheduledExecutor()));
+        views.forEach(view -> view.start(Duration.ofMillis(25), seeds, Executors.newSingleThreadScheduledExecutor()));
 
         assertTrue(Utils.waitForCondition(15_000, 1_000, () -> {
             return views.stream().filter(view -> view.getContext().activeCount() != views.size()).count() == 0;
@@ -284,7 +286,7 @@ public class SwarmTest {
                             .stream()
                             .map(identity -> new ControlledIdentifierMember(identity))
                             .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        var ctxBuilder = Context.<Participant>newBuilder().setpByz(0.3).setCardinality(CARDINALITY);
+        var ctxBuilder = Context.<Participant>newBuilder().setpByz(P_BYZ).setCardinality(CARDINALITY);
 
         var randomized = members.values().stream().collect(Collectors.toList());
         while (seeds.size() < ctxBuilder.build().getRingCount() + 1) {
@@ -309,7 +311,7 @@ public class SwarmTest {
             comms.setMember(node);
             comms.start();
             communications.add(comms);
-            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.125,
+            return new View(context, node, new InetSocketAddress(0), EventValidation.NONE, comms, 0.0125,
                             DigestAlgorithm.DEFAULT, metrics, Executors.newFixedThreadPool(2));
         }).collect(Collectors.toList());
     }

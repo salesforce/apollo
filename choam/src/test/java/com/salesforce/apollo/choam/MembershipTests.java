@@ -170,9 +170,7 @@ public class MembershipTests {
                 }
             };
             params.getProducer().ethereal().setSigner(m);
-            if (m.equals(testSubject)) {
-                params.setSynchronizationCycles(20);
-            } else {
+            if (!m.equals(testSubject)) {
                 params.setSynchronizationCycles(1);
             }
             return new CHOAM(params.build(RuntimeParameters.newBuilder()
