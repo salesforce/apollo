@@ -59,10 +59,10 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  * @author hal.hildebrand
  *
  */
-public class ViewAssemblyTest {
+public class ViewAssembly2Test {
     static {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-            LoggerFactory.getLogger(ViewAssemblyTest.class).error("Error on thread: {}", t.getName(), e);
+            LoggerFactory.getLogger(ViewAssembly2Test.class).error("Error on thread: {}", t.getName(), e);
         });
     }
 
@@ -90,7 +90,7 @@ public class ViewAssemblyTest {
                                                                              .build())
                                               .setGossipDuration(Duration.ofMillis(10));
 
-        Map<Member, ViewAssembly> recons = new HashMap<>();
+        Map<Member, ViewAssembly2> recons = new HashMap<>();
         Map<Member, Concierge> servers = members.stream().collect(Collectors.toMap(m -> m, m -> mock(Concierge.class)));
         Map<Member, KeyPair> consensusPairs = new HashMap<>();
         servers.forEach((m, s) -> {
@@ -105,7 +105,6 @@ public class ViewAssemblyTest {
                                      .setConsensusKey(consensus)
                                      .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                      .build();
-
                 }
             });
         });
@@ -137,7 +136,6 @@ public class ViewAssemblyTest {
         committee.active().forEach(m -> {
             SigningMember sm = (SigningMember) m;
             Router router = communications.get(m);
-            params.getProducer().ethereal().setSigner(sm);
             ViewContext view = new ViewContext(committee,
                                                params.build(RuntimeParameters.newBuilder()
                                                                              .setExec(Executors.newFixedThreadPool(2))
@@ -148,30 +146,23 @@ public class ViewAssemblyTest {
                                                                              .build()),
                                                new Signer.SignerImpl(consensusPairs.get(m).getPrivate()), validators,
                                                null);
-            recons.put(m, new ViewAssembly(nextViewId, view, comms.get(m)) {
+            recons.put(m, new ViewAssembly2(nextViewId, view,
+                                            r -> recons.values().forEach(va -> va.inbound().accept(r)), comms.get(m)) {
 
                 @Override
                 public void complete() {
                     super.complete();
                     complete.countDown();
                 }
-
-                @Override
-                public void failed() {
-                    super.failed();
-                }
             });
         });
 
         try {
             communications.values().forEach(r -> r.start());
-            recons.values().forEach(r -> r.start());
-
             recons.values().forEach(r -> r.assembled());
 
-            assertTrue(complete.await(15, TimeUnit.SECONDS), "Failed to complete view");
+            assertTrue(complete.await(15, TimeUnit.SECONDS), "Failed to reconfigure");
         } finally {
-            recons.values().forEach(r -> r.stop());
             communications.values().forEach(r -> r.close());
         }
     }

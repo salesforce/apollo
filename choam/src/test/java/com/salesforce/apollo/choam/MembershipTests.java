@@ -47,7 +47,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
- *
+ * 
  */
 public class MembershipTests {
     static {

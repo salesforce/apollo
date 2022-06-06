@@ -56,6 +56,7 @@ import com.salesforce.apollo.ethereal.memberships.ChRbcGossip;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
+import com.salesforce.apollo.utils.Entropy;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -104,8 +105,10 @@ public class ViewAssembly implements Reconfiguration {
         nextAssembly = Committee.viewMembersOf(nextViewId, params().context())
                                 .stream()
                                 .collect(Collectors.toMap(m -> m.getId(), m -> m));
-        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(),
-                                                new ArrayList<>(nextAssembly.values()), comms, params().exec());
+        var slice = new ArrayList<>(nextAssembly.values());
+        Entropy.secureShuffle(slice);
+        committee = new SliceIterator<Terminal>("Committee for " + nextViewId, params().member(), slice, comms,
+                                                params().exec());
         // Create a new context for reconfiguration
         final Digest reconPrefixed = view.context().getId().xor(nextViewId);
         Context<Member> reContext = new ContextImpl<Member>(reconPrefixed, view.context().memberCount(),
@@ -113,7 +116,7 @@ public class ViewAssembly implements Reconfiguration {
                                                             view.context().getBias());
         reContext.activate(view.context().activeMembers());
 
-        final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, getStartState(), true);
+        final Fsm<Reconfiguration, Transitions> fsm = Fsm.construct(this, Transitions.class, Reconfigure.AWAIT_ASSEMBLY, true);
         this.transitions = fsm.getTransitions();
         fsm.setName("View Recon" + params().member().getId());
 
@@ -262,10 +265,6 @@ public class ViewAssembly implements Reconfiguration {
         if (cur != null) {
             cur.interrupt();
         }
-    }
-
-    protected Reconfigure getStartState() {
-        return Reconfigure.AWAIT_ASSEMBLY;
     }
 
     protected void validate(Validate v) {
