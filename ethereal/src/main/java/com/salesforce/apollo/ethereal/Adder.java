@@ -377,17 +377,19 @@ public class Adder {
             return;
         }
         var wpu = waiting.get(digest);
-        log.trace("Prevoted: {} wpu: {} count: {} on: {}", digest, wpu, prepared.size(), conf.logLabel());
 
-        // We only care if the # of prevotes is >= 2*f + 1
-        if (prepared.size() <= 2 * threshold) {
-            return;
-        }
         // We only care if we've gotten the proposal
         if (wpu == null) {
             log.trace("Prevoted, but no proposal: {} count: {} on: {}", digest, prepared.size(), conf.logLabel());
             return;
         }
+
+        // We only care if the # of prevotes is >= 2*f + 1
+        if (prepared.size() <= 2 * threshold) {
+            return;
+        }
+
+        log.trace("Prevoting: {} wpu: {} count: {} on: {}", digest, wpu, prepared.size(), conf.logLabel());
 
         switch (wpu.state()) {
         case PREVOTED:

@@ -22,6 +22,7 @@ public interface Reconfiguration2 {
             }
         },
         CERTIFICATION {
+
             @Override
             public Transitions certified() {
                 return RECONFIGURE;
@@ -30,6 +31,16 @@ public interface Reconfiguration2 {
             @Entry
             public void certify() {
                 context().certify();
+            }
+
+            @Override
+            public Transitions gathered() {
+                return CERTIFICATION;
+            }
+
+            @Override
+            public Transitions validation() {
+                return CERTIFICATION;
             }
         },
         GATHER {
@@ -105,11 +116,15 @@ public interface Reconfiguration2 {
         }
 
         default Transitions gathered() {
-            throw fsm().invalidTransitionOn();
+            return null;
         }
 
         default Transitions nominated() {
             throw fsm().invalidTransitionOn();
+        }
+
+        default Transitions validation() {
+            return null;
         }
     }
 

@@ -67,15 +67,19 @@ public class ViewAssembly2 {
 
         @Override
         public void certify() {
-            var certify = proposals.values()
-                                   .stream()
-                                   .filter(p -> p.validations.size() >= params().majority())
-                                   .sorted(Comparator.comparing(p -> p.member.getId()))
-                                   .collect(Collectors.toMap(p -> p.member, p -> joinOf(p)));
-            if (certify.size() >= params().majority()) {
-                log.debug("Certifying slate: {} of: {} on: {}", certify.size(), nextViewId, params().member());
+            if (proposals.values()
+                         .stream()
+                         .filter(p -> p.validations.size() == view.context().memberCount())
+                         .count() == nextAssembly.size()) {
+                log.debug("Certifying slate: {} of: {} on: {}", proposals.size(), nextViewId, params().member());
                 transitions.certified();
             }
+            log.debug("Not certifying slate: {} of: {} on: {}",
+                      proposals.entrySet()
+                               .stream()
+                               .map(e -> String.format("%s:%s", e.getKey(), e.getValue().validations.size()))
+                               .toList(),
+                      nextViewId, params().member());
         }
 
         @Override
@@ -87,14 +91,12 @@ public class ViewAssembly2 {
         public void elect() {
             proposals.values()
                      .stream()
-                     .filter(p -> p.validations.size() >= params().majority())
+                     .filter(p -> p.validations.size() >= view.context().memberCount())
                      .sorted(Comparator.comparing(p -> p.member.getId()))
                      .forEach(p -> slate.put(p.member(), joinOf(p)));
-            if (slate.size() >= params().majority()) {
+            if (slate.size() >= params().context().majority()) {
                 log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
                 transitions.complete();
-            } else {
-                transitions.failed();
             }
         }
 
@@ -190,18 +192,18 @@ public class ViewAssembly2 {
                   params().member().getId());
     }
 
-    Consumer<Reassemble2> inbound() {
-        return re -> {
-            Optional<Reassemble2> reassemble = re.getMembersList()
-                                                 .stream()
-                                                 .map(e -> join(e))
-                                                 .filter(r -> r != null)
-                                                 .reduce((a, b) -> Reassemble2.newBuilder(a)
-                                                                              .addAllMembers(b.getMembersList())
-                                                                              .addAllValidations(b.getValidationsList())
-                                                                              .build());
-            re.getValidationsList().stream().forEach(e -> validate(e));
-            reassemble.ifPresent(publisher);
+    Consumer<List<Reassemble2>> inbound() {
+        return lre -> {
+            lre.stream()
+               .flatMap(re -> re.getMembersList().stream())
+               .map(e -> join(e))
+               .filter(r -> r != null)
+               .reduce((a, b) -> Reassemble2.newBuilder(a)
+                                            .addAllMembers(b.getMembersList())
+                                            .addAllValidations(b.getValidationsList())
+                                            .build())
+               .ifPresent(publisher);
+            lre.stream().flatMap(re -> re.getValidationsList().stream()).forEach(e -> validate(e));
         };
     }
 
@@ -266,13 +268,7 @@ public class ViewAssembly2 {
     private boolean gathered() {
         boolean complete = proposals.size() == nextAssembly.size();
         if (complete) {
-            if (cancelSlice.compareAndSet(false, true)) {
-                log.trace("Proposal assembled: {} on: {}", nextViewId, params().member().getId());
-                transitions.gathered();
-            }
-        } else {
-            log.trace("Proposal incomplete: {} have: {} want: {} on: {}", nextViewId, proposals.size(),
-                      nextAssembly.size(), params().member().getId());
+            cancelSlice.set(true);
         }
         return complete;
     }
@@ -323,6 +319,9 @@ public class ViewAssembly2 {
             if (validations != null) {
                 validations.forEach(v -> validate(v));
             }
+            if (proposals.size() == nextAssembly.size()) {
+                transitions.gathered();
+            }
             return Reassemble2.newBuilder()
                               .addMembers(vm)
                               .addValidations(proposed.validations.get(params().member()))
@@ -372,10 +371,15 @@ public class ViewAssembly2 {
                      Digest.from(v.getWitness().getId()), params().member().getId());
             return;
         }
+        var newCertifier = new AtomicBoolean();
         proposed.validations.computeIfAbsent(certifier, k -> {
             log.debug("Validation of view member: {}:{} using certifier: {} on: {}", member.getId(), digest,
                       certifier.getId(), params().member().getId());
+            newCertifier.set(true);
             return v;
         });
+        if (newCertifier.get()) {
+            transitions.validation();
+        }
     }
 }
