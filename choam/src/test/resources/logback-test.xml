@@ -38,11 +38,14 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="trace" additivity="info">
+    <logger name="com.chiralbehaviors.tron" level="info" additivity="info">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.ethereal.Adder" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.ethereal.memberships" level="warn" additivity="false">
