@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
@@ -50,9 +51,10 @@ public class TxDataSource implements DataSource {
     private volatile Thread                          blockingThread;
     private final Member                             member;
     private final ChoamMetrics                       metrics;
-    private final AtomicReference<Mode>              mode        = new AtomicReference<>(Mode.UNIT);
+    private final AtomicReference<Mode>              mode         = new AtomicReference<>(Mode.UNIT);
     private final CapacityBatchingQueue<Transaction> processing;
-    private final BlockingQueue<Validate>            validations = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Reassemble>          reassemblies = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount) {
@@ -127,13 +129,18 @@ public class TxDataSource implements DataSource {
         validations.drainTo(vdx);
         builder.addAllValidations(vdx);
 
+        var reass = new ArrayList<Reassemble>();
+        reassemblies.drainTo(reass);
+        builder.addAllReassemblies(reass);
+
         final var data = builder.build();
         final var bs = data.toByteString();
         if (metrics != null) {
             metrics.publishedBatch(data.getTransactionsCount(), bs.size(), data.getValidationsCount());
         }
-        log.trace("Unit data: {} txns, {} validations totalling: {} bytes  on: {}", data.getTransactionsCount(),
-                  data.getValidationsCount(), bs.size(), member);
+        log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
+                  data.getTransactionsCount(), data.getValidationsCount(), data.getReassembliesCount(), bs.size(),
+                  member.getId());
         return bs;
     }
 
@@ -147,6 +154,10 @@ public class TxDataSource implements DataSource {
 
     public int getRemainingValidations() {
         return validations.size();
+    }
+
+    public void offer(Reassemble reassembly) {
+        reassemblies.offer(reassembly);
     }
 
     public boolean offer(Transaction txn) {

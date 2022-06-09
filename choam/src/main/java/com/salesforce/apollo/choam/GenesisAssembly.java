@@ -96,7 +96,7 @@ public class GenesisAssembly implements Genesis {
 
         final Fsm<Genesis, Transitions> fsm = Fsm.construct(this, Transitions.class, BrickLayer.INITIAL, true);
         this.transitions = fsm.getTransitions();
-        fsm.setName("View Recon" + params().member().getId());
+        fsm.setName("Genesis" + params().member().getId());
 
         Config.Builder config = params().producer().ethereal().clone();
 

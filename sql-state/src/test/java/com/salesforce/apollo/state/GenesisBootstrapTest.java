@@ -97,6 +97,10 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                .filter(cb -> cb != null)
                                .map(cb -> cb.height())
                                .toList());
+
+        choams.values().forEach(e -> e.stop());
+        routers.values().forEach(e -> e.close());
+
         System.out.println("Final state: " + members.stream()
                                                     .map(m -> updaters.get(m))
                                                     .map(ssm -> ssm.getCurrentBlock())

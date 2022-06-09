@@ -35,7 +35,7 @@ import com.salesforce.apollo.utils.Utils;
 public class CheckpointBootstrapTest extends AbstractLifecycleTest {
 
     static {
-////      ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
+//        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ViewAssembly.class)).setLevel(Level.TRACE);
@@ -134,6 +134,9 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                .filter(cb -> cb != null)
                                .map(cb -> cb.height())
                                .toList());
+
+        choams.values().forEach(e -> e.stop());
+        routers.values().forEach(e -> e.close());
 
         System.out.println("Final state: " + members.stream()
                                                     .map(m -> updaters.get(m))

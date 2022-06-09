@@ -70,8 +70,6 @@ public interface Driven {
 
     void complete();
 
-    void drain();
-
     void fail();
 
     void produceAssemble();

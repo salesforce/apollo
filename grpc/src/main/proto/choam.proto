@@ -118,6 +118,7 @@ message Transaction {
 message UnitData {
     repeated Validate validations = 1;
     repeated Transaction transactions = 2;
+    repeated Reassemble reassemblies = 3;
 }
 
 message Join {
@@ -160,24 +161,13 @@ message Validate {
     Certification witness = 2;
 }
 
-message Reassemble {
-    oneof assembly {
-        ViewMembers viewMembers = 1; 
-        Validations validations = 2;
-    }
-}
-
-message Reassemble2 { 
+message Reassemble { 
     repeated ViewMember members = 1;
     repeated Validate validations = 2;
 }
 
 message ViewMembers {
     repeated ViewMember members = 1;
-}
-
-message Joins {
-    repeated Join joins = 1;
 }
 
 message Validations {

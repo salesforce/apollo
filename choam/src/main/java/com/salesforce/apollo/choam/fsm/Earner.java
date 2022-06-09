@@ -56,29 +56,6 @@ public enum Earner implements Driven.Transitions {
     },
     COMPLETE {
     },
-    DRAIN { // currently unused.
-
-        @Override
-        public Transitions assembled() {
-            context().reconfigure();
-            return null;
-        }
-
-        @Entry
-        public void drain() {
-            context().drain();
-        }
-
-        @Override
-        public Transitions viewComplete() {
-            return null;
-        }
-
-        @Override
-        public Transitions newEpoch(int epoch, int lastEpoch) {
-            return AWAIT_VIEW;
-        }
-    },
     INITIAL {
         @Override
         public Transitions checkpoint() {
