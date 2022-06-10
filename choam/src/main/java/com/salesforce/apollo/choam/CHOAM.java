@@ -73,7 +73,7 @@ import com.salesforce.apollo.choam.comm.TxnSubmission;
 import com.salesforce.apollo.choam.comm.TxnSubmitClient;
 import com.salesforce.apollo.choam.comm.TxnSubmitServer;
 import com.salesforce.apollo.choam.fsm.Combine;
-import com.salesforce.apollo.choam.fsm.Merchantile;
+import com.salesforce.apollo.choam.fsm.Combine.Merchantile;
 import com.salesforce.apollo.choam.support.Bootstrapper;
 import com.salesforce.apollo.choam.support.Bootstrapper.SynchronizedState;
 import com.salesforce.apollo.choam.support.CheckpointState;
@@ -788,6 +788,14 @@ public class CHOAM {
                  params.member().getId());
     }
 
+    private void cancelBootstrap() {
+        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
+        if (fb != null) {
+            fb.cancel(true);
+            futureBootstrap.set(null);
+        }
+    }
+
     private void cancelSynchronization() {
         final ScheduledFuture<?> fs = futureSynchronization.get();
         if (fs != null) {
@@ -1162,14 +1170,6 @@ public class CHOAM {
         }));
     }
 
-    private void cancelBootstrap() {
-        final CompletableFuture<SynchronizedState> fb = futureBootstrap.get();
-        if (fb != null) {
-            fb.cancel(true);
-            futureBootstrap.set(null);
-        }
-    }
-
     private void restore() throws IllegalStateException {
         HashedCertifiedBlock lastBlock = store.getLastBlock();
         if (lastBlock == null) {
@@ -1210,7 +1210,7 @@ public class CHOAM {
 
     private Function<SubmittedTransaction, SubmitResult> service() {
         return stx -> {
-//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member()); 
+//            log.trace("Submitting transaction: {} in service() on: {}", stx.hash(), params.member());
             final var c = current.get();
             if (c == null) {
                 return SubmitResult.newBuilder().setResult(Result.NO_COMMITTEE).build();
