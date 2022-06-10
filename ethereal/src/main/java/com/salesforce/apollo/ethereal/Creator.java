@@ -180,7 +180,8 @@ public class Creator {
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
                                      conf.digestAlgorithm(), conf.signer());
-        assert parentsOnPreviousLevel(u) >= quorum;
+        assert parentsOnPreviousLevel(u) >= quorum : "Parents of: " + u + " for level: " + (u.level() - 1) + " count: "
+        + parentsOnPreviousLevel(u) + " quorum: " + quorum;
         if (log.isTraceEnabled()) {
             log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.logLabel());
         } else {
