@@ -89,7 +89,7 @@ public class MembershipTests {
               .filter(e -> !e.getKey().equals(testSubject.getId()))
               .forEach(ch -> ch.getValue().start());
 
-        final Duration timeout = Duration.ofSeconds(30);
+        final Duration timeout = Duration.ofSeconds(6);
         final var scheduler = Executors.newScheduledThreadPool(1);
 
         var txneer = choams.get(members.get(0).getId());
@@ -119,7 +119,7 @@ public class MembershipTests {
                                                 scheduler, countdown, Executors.newSingleThreadExecutor());
 
         transactioneer.start();
-        assertTrue(countdown.await(timeout.toSeconds(), TimeUnit.SECONDS), "Could not submit transaction");
+        assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
 
         var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
 
