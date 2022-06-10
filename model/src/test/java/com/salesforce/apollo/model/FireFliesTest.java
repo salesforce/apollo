@@ -115,7 +115,7 @@ public class FireFliesTest {
         domains.forEach(d -> {
             d.getFoundation().start(Duration.ofMillis(10), seeds, Executors.newSingleThreadScheduledExecutor());
         });
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> {
+        assertTrue(Utils.waitForCondition(60_000, 1_000, () -> {
             return domains.stream()
                           .filter(d -> d.getFoundation().getContext().activeCount() != domains.size())
                           .count() == 0;
@@ -127,7 +127,7 @@ public class FireFliesTest {
         System.out.println("******");
         System.out.println();
         domains.forEach(n -> n.start());
-        final var activated = Utils.waitForCondition(30_000, 1_000,
+        final var activated = Utils.waitForCondition(60_000, 1_000,
                                                      () -> domains.stream().filter(c -> !c.active()).count() == 0);
         assertTrue(activated,
                    "Domains did not become active : " + (domains.stream().filter(c -> !c.active()).toList()));
