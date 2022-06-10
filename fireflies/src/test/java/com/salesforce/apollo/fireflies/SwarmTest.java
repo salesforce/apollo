@@ -130,7 +130,7 @@ public class SwarmTest {
         List<View> c = new ArrayList<>(views);
         List<Router> r = new ArrayList<>(communications);
         int delta = 10;
-        for (int i = 0; i < CARDINALITY / delta; i++) {
+        for (int i = 0; i < (CARDINALITY / delta) - 2; i++) {
             for (int j = 0; j < delta; j++) {
                 c.get(j).stop();
                 r.get(j).close();
