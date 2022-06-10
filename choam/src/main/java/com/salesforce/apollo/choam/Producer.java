@@ -68,7 +68,7 @@ public class Producer {
             if (!reconfigured.compareAndSet(false, true)) {
                 return;
             }
-            final var slate = assembly.getSlate();
+            final var slate = assembly.get().getSlate();
             var reconfiguration = new HashedBlock(params().digestAlgorithm(),
                                                   view.reconfigure(slate, nextViewId, previousBlock.get(),
                                                                    checkpoint.get()));
@@ -84,7 +84,7 @@ public class Producer {
         @Override
         public void checkAssembly() {
             ds.drain();
-            assembly.election();
+            assembly.get().election();
             if (assembled.get()) {
                 assembled();
             }
@@ -130,7 +130,7 @@ public class Producer {
         @Override
         public void reconfigure() {
             log.debug("Starting view reconfiguration for: {} on: {}", nextViewId, params().member().getId());
-            assembly = new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
+            assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
                 @Override
                 public void complete() {
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
@@ -139,12 +139,12 @@ public class Producer {
                     Producer.this.transitions.viewComplete();
                     super.complete();
                 }
-            };
-            assembly.start();
-            assembly.assembled();
+            });
+            assembly.get().start();
+            assembly.get().assembled();
             List<Reassemble> reasses = new ArrayList<>();
             pendingReassembles.drainTo(reasses);
-            assembly.inbound().accept(reasses);
+            assembly.get().inbound().accept(reasses);
         }
 
         @Override
@@ -158,7 +158,7 @@ public class Producer {
     private static final Logger log = LoggerFactory.getLogger(Producer.class);
 
     private final AtomicBoolean                     assembled          = new AtomicBoolean();
-    private volatile ViewAssembly                   assembly;
+    private final AtomicReference<ViewAssembly>     assembly           = new AtomicReference<>();
     private final AtomicReference<HashedBlock>      checkpoint         = new AtomicReference<>();
     private final CommonCommunications<Terminal, ?> comms;
     private final Ethereal                          controller;
@@ -253,7 +253,7 @@ public class Producer {
         log.trace("Closing producer for: {} on: {}", getViewId(), params().member().getId());
         controller.stop();
         coordinator.stop();
-        final var c = assembly;
+        final var c = assembly.get();
         if (c != null) {
             c.stop();
         }
@@ -297,7 +297,7 @@ public class Producer {
         aggregate.stream().flatMap(e -> e.getReassembliesList().stream()).forEach(r -> {
             reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList());
         });
-        final var ass = assembly;
+        final var ass = assembly.get();
         if (ass != null) {
             log.trace("Consuming reassembly: {} members: {} validations: {} on: {}", aggregate.size(),
                       reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
