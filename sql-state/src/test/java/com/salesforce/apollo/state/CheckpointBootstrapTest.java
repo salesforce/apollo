@@ -76,6 +76,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                                              .filter(e -> !e.getKey().equals(testSubject.getId()))
                                                              .map(e -> e.getValue())
                                                              .filter(c -> !c.active())
+                                                             .map(c -> c.getId())
                                                              .toList()));
 
         for (int i = 0; i < 1; i++) {
