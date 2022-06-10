@@ -7,12 +7,12 @@
 package com.salesforce.apollo.choam.support;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,17 +41,13 @@ import com.salesforce.apollo.utils.CapacityBatchingQueue;
  */
 public class TxDataSource implements DataSource {
 
-    private enum Mode {
-        CLOSED, DRAIN, UNIT, VALIDATIONS;
-    }
-
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
+    private AtomicBoolean                            draining     = new AtomicBoolean();
     private final Member                             member;
     private final ChoamMetrics                       metrics;
-    private final AtomicReference<Mode>              mode         = new AtomicReference<>(Mode.UNIT);
     private final CapacityBatchingQueue<Transaction> processing;
     private final BlockingQueue<Reassemble>          reassemblies = new LinkedBlockingQueue<>();
     private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
@@ -67,7 +63,6 @@ public class TxDataSource implements DataSource {
     }
 
     public void close() {
-        mode.set(Mode.CLOSED);
         final var current = blockingThread;
         if (current != null) {
             current.interrupt();
@@ -81,67 +76,55 @@ public class TxDataSource implements DataSource {
     }
 
     public void drain() {
-        log.trace("Setting data source mode to DRAIN on: {}", member);
-        mode.set(Mode.DRAIN);
+        draining.set(true);
     }
 
     @Override
     public ByteString getData() {
         var builder = UnitData.newBuilder();
-        switch (mode.get()) {
-        case CLOSED:
-            return ByteString.EMPTY;
-        case DRAIN:
-        case UNIT:
-            log.trace("Requesting unit data on: {}", member);
-            Queue<Transaction> batch;
-            try {
-                batch = processing.blockingTakeWithTimeout(batchInterval, true);
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            }
-            if (batch != null) {
-                builder.addAllTransactions(batch);
-            }
-            break;
-        case VALIDATIONS:
-            log.trace("Requesting validations only on: {}", member);
-            mode.set(Mode.CLOSED);
-            blockingThread = Thread.currentThread();
-            try {
-                Validate validation = validations.take();
-                if (validation != null) {
-                    builder.addValidations(validation);
-                } else {
-                    System.out.println("No waiting validations on: " + member.getId());
+        log.trace("Requesting unit data on: {}", member);
+        blockingThread = Thread.currentThread();
+        var target = Instant.now().plus(batchInterval);
+        try {
+            while (true) {
+                var batch = processing.nonBlockingTake();
+                if (batch != null) {
+                    builder.addAllTransactions(batch);
                 }
-            } catch (InterruptedException e) {
-                return ByteString.EMPTY;
-            } finally {
-                blockingThread = null;
+                var r = new ArrayList<Reassemble>();
+                reassemblies.drainTo(r);
+                builder.addAllReassemblies(r);
+
+                var v = new ArrayList<Validate>();
+                validations.drainTo(v);
+                builder.addAllValidations(v);
+
+                if (builder.getTransactionsCount() > 0 || builder.getReassembliesCount() > 0 ||
+                    builder.getValidationsCount() > 0) {
+                    ByteString bs = builder.build().toByteString();
+                    if (metrics != null) {
+                        metrics.publishedBatch(builder.getTransactionsCount(), bs.size(),
+                                               builder.getValidationsCount());
+                    }
+                    log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
+                              builder.getTransactionsCount(), builder.getValidationsCount(),
+                              builder.getReassembliesCount(), bs.size(), member.getId());
+                    return bs;
+                }
+                if (Instant.now().isAfter(target)) {
+                    log.trace("No data available on: {}", member.getId());
+                    return ByteString.EMPTY;
+                }
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return ByteString.EMPTY;
+                }
             }
-            break;
-        default:
-            break;
+        } finally {
+            blockingThread = null;
         }
-
-        var vdx = new ArrayList<Validate>();
-        validations.drainTo(vdx);
-        builder.addAllValidations(vdx);
-
-        var reass = new ArrayList<Reassemble>();
-        reassemblies.drainTo(reass);
-        builder.addAllReassemblies(reass);
-
-        final var data = builder.build();
-        final var bs = data.toByteString();
-        if (metrics != null) {
-            metrics.publishedBatch(data.getTransactionsCount(), bs.size(), data.getValidationsCount());
-        }
-        log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
-                  data.getTransactionsCount(), data.getValidationsCount(), data.getReassembliesCount(), bs.size(),
-                  member.getId());
-        return bs;
     }
 
     public int getProcessing() {
@@ -150,6 +133,10 @@ public class TxDataSource implements DataSource {
 
     public int getRemaining() {
         return processing.size();
+    }
+
+    public int getRemainingReassemblies() {
+        return reassemblies.size();
     }
 
     public int getRemainingValidations() {
@@ -161,10 +148,9 @@ public class TxDataSource implements DataSource {
     }
 
     public boolean offer(Transaction txn) {
-        switch (mode.get()) {
-        case UNIT:
+        if (!draining.get()) {
             return processing.offer(txn);
-        default:
+        } else {
             return false;
         }
     }
@@ -175,10 +161,5 @@ public class TxDataSource implements DataSource {
 
     public void start(Duration batchInterval, ScheduledExecutorService scheduler) {
         processing.start(batchInterval, scheduler);
-    }
-
-    public void validationsOnly() {
-        log.trace("Setting data source mode to VALIDATIONS on: {}", member);
-        mode.set(Mode.VALIDATIONS);
     }
 }

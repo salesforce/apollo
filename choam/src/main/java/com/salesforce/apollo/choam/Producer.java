@@ -80,7 +80,7 @@ public class Producer {
 
         @Override
         public void checkAssembly() {
-            ds.validationsOnly();
+            ds.drain();
             assembly.election();
             if (assembled.get()) {
                 assembled();
