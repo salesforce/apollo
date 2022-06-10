@@ -208,7 +208,7 @@ public class CHOAMTest {
         });
         System.out.println("Starting txns");
         transactioneers.stream().forEach(e -> e.start());
-        final var finished = countdown.await(LARGE_TESTS ? 1200 : 30, TimeUnit.SECONDS);
+        final var finished = countdown.await(LARGE_TESTS ? 1200 : 120, TimeUnit.SECONDS);
         assertTrue(finished, "did not finish transactions: " + countdown.getCount() + " txneers: "
         + transactioneers.stream().map(t -> t.completed()).toList());
 
