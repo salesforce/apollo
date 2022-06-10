@@ -59,9 +59,10 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class TestCHOAM {
-    private static final int     CARDINALITY = 10;
+    private static final int     CARDINALITY;
     private static final boolean LARGE_TESTS = Boolean.getBoolean("large_tests");
     static {
+        CARDINALITY = LARGE_TESTS ? 10 : 5;
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
             LoggerFactory.getLogger(TestCHOAM.class).error("Error on thread: {}", t.getName(), e);
         });
