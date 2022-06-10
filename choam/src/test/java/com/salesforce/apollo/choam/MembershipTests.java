@@ -96,8 +96,23 @@ public class MembershipTests {
 
         System.out.println("Transactioneer: " + txneer.getId());
 
-        assertTrue(Utils.waitForCondition(12_000, 1_000, () -> txneer.active()),
-                   "Transactioneer did not become active: " + txneer.getId());
+        boolean actived = Utils.waitForCondition(12_000, 1_000,
+                                                 () -> choams.entrySet()
+                                                             .stream()
+                                                             .filter(e -> !testSubject.getId().equals(e.getKey()))
+                                                             .map(e -> e.getValue())
+                                                             .filter(c -> !c.active())
+                                                             .count() == 0);
+        assertTrue(actived,
+                   "Group did not become active, test subject: " + testSubject.getId() + " txneer: " + txneer.getId()
+                   + " inactive: "
+                   + choams.entrySet()
+                           .stream()
+                           .filter(e -> !testSubject.getId().equals(e.getKey()))
+                           .map(e -> e.getValue())
+                           .filter(c -> !c.active())
+                           .map(c -> c.getId())
+                           .toList());
 
         final var countdown = new CountDownLatch(1);
         var transactioneer = new Transactioneer(txneer.getSession(), Executors.newSingleThreadExecutor(), timeout, 1,
@@ -110,8 +125,9 @@ public class MembershipTests {
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> blocks.get(testSubject.getId()).get() >= target),
-                   "Expecting: " + target + " completed: " + blocks.get(testSubject.getId()).get());
+        final var targetMet = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> blocks.get(testSubject.getId()).get() >= target);
+        assertTrue(targetMet, "Expecting: " + target + " completed: " + blocks.get(testSubject.getId()).get());
 
     }
 

@@ -86,12 +86,23 @@ public class CHOAMTest {
         GENESIS_DATA = CHOAM.toGenesisData(txns);
     }
 
-    private File                               baseDir;
-    private File                               checkpointDirBase;
-    private Map<Digest, CHOAM>                 choams;
-    private List<SigningMember>                members;
-    private MetricRegistry                     registry;
-    private Map<Digest, Router>                routers;
+    private static Txn initialInsert() {
+        return Txn.newBuilder()
+                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
+                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
+                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
+                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
+                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
+                  .build();
+    }
+
+    private File                baseDir;
+    private File                checkpointDirBase;
+    private Map<Digest, CHOAM>  choams;
+    private List<SigningMember> members;
+    private MetricRegistry      registry;
+    private Map<Digest, Router> routers;
+
     private final Map<Member, SqlStateMachine> updaters = new ConcurrentHashMap<>();
 
     @AfterEach
@@ -178,9 +189,13 @@ public class CHOAMTest {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
-                   "System did not become active");
+        final var activated = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> choams.values()
+                                                                 .stream()
+                                                                 .filter(c -> !c.active())
+                                                                 .count() == 0);
+        assertTrue(activated, "System did not become active: "
+        + (choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList()));
 
         updaters.entrySet().forEach(e -> {
             var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
@@ -316,16 +331,6 @@ public class CHOAMTest {
                                                            }
                                                        })
                                                        .build()));
-    }
-
-    private static Txn initialInsert() {
-        return Txn.newBuilder()
-                  .setBatch(batch("insert into books values (1001, 'Java for dummies', 'Tan Ah Teck', 11.11, 11)",
-                                  "insert into books values (1002, 'More Java for dummies', 'Tan Ah Teck', 22.22, 22)",
-                                  "insert into books values (1003, 'More Java for more dummies', 'Mohammad Ali', 33.33, 33)",
-                                  "insert into books values (1004, 'A Cup of Java', 'Kumar', 44.44, 44)",
-                                  "insert into books values (1005, 'A Teaspoon of Java', 'Kevin Jones', 55.55, 55)"))
-                  .build();
     }
 
     private Txn update(Random entropy, Mutator mutator) {

@@ -63,14 +63,20 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> choams.entrySet()
-                                                      .stream()
-                                                      .filter(e -> !e.getKey().equals(testSubject.getId()))
-                                                      .map(e -> e.getValue())
-                                                      .filter(c -> !c.active())
-                                                      .count() == 0),
-                   "System did not become active");
+        final var activated = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> choams.entrySet()
+                                                                 .stream()
+                                                                 .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                                 .map(e -> e.getValue())
+                                                                 .filter(c -> !c.active())
+                                                                 .count() == 0);
+        assertTrue(activated,
+                   "System did not become active: " + (choams.entrySet()
+                                                             .stream()
+                                                             .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                             .map(e -> e.getValue())
+                                                             .filter(c -> !c.active())
+                                                             .toList()));
 
         for (int i = 0; i < 1; i++) {
             updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {

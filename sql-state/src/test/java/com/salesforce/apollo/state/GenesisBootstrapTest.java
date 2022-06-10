@@ -50,8 +50,20 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
 
         var txneer = updaters.get(members.get(0));
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choams.get(members.get(0).getId()).active()),
-                   "txneer did not become active");
+        final var activated = Utils.waitForCondition(30_000, 1_000,
+                                                     () -> choams.entrySet()
+                                                                 .stream()
+                                                                 .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                                 .map(e -> e.getValue())
+                                                                 .filter(c -> !c.active())
+                                                                 .count() == 0);
+        assertTrue(activated,
+                   "Group did not become active: " + (choams.entrySet()
+                                                            .stream()
+                                                            .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                            .map(e -> e.getValue())
+                                                            .filter(c -> !c.active())
+                                                            .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
         transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,

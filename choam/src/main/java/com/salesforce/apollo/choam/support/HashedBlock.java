@@ -125,4 +125,9 @@ public class HashedBlock implements Comparable<HashedBlock> {
     public ULong height() {
         return height(block);
     }
+
+    @Override
+    public String toString() {
+        return "hb" + hash.toString() + " height: " + height();
+    }
 }

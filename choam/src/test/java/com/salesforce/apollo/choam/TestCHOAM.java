@@ -194,9 +194,13 @@ public class TestCHOAM {
             }
         });
 
-        assertTrue(Utils.waitForCondition(30_000, 1_000,
-                                          () -> choams.values().stream().filter(c -> !c.active()).count() == 0),
-                   "System did not become active");
+        boolean activated = Utils.waitForCondition(30_000, 1_000,
+                                                   () -> choams.values()
+                                                               .stream()
+                                                               .filter(c -> !c.active())
+                                                               .count() == 0);
+        assertTrue(activated, "System did not become active: "
+        + choams.entrySet().stream().map(e -> e.getValue()).filter(c -> !c.active()).map(c -> c.getId()).toList());
 
         transactioneers.stream().forEach(e -> e.start());
         try {
