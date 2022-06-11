@@ -33,11 +33,8 @@ import com.salesfoce.apollo.ethereal.proto.Gossip;
 import com.salesfoce.apollo.ethereal.proto.Missing;
 import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.ethereal.Creator.RsData;
-import com.salesforce.apollo.ethereal.DeterministicRandomSource.DsrFactory;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
-import com.salesforce.apollo.ethereal.RandomSource.RandomSourceFactory;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
@@ -47,9 +44,9 @@ import com.salesforce.apollo.ethereal.linear.ExtenderService;
  */
 public class Ethereal {
 
-    public record PreBlock(List<ByteString> data, byte[] randomBytes) {}
+    public record PreBlock(List<ByteString> data) {}
 
-    private record epoch(int id, Dag dag, Adder adder, ExtenderService extender, RandomSource rs, AtomicBoolean more) {
+    private record epoch(int id, Dag dag, Adder adder, ExtenderService extender, AtomicBoolean more) {
 
         public void close() {
             adder.close();
@@ -82,8 +79,7 @@ public class Ethereal {
                 data.add(u.data());
             }
         }
-        var randomBytes = round.get(round.size() - 1).randomSourceData();
-        return data.isEmpty() ? null : new PreBlock(data, randomBytes);
+        return data.isEmpty() ? null : new PreBlock(data);
     }
 
     private static Consumer<List<Unit>> blocker(BiConsumer<PreBlock, Boolean> blocker, Config config) {
@@ -100,7 +96,7 @@ public class Ethereal {
             }
             if (preBlock != null) {
 
-                log.debug("Emitting pre block: {} on: {}", print, config.logLabel());
+                log.warn("Emitting pre block: {} on: {}", print, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
@@ -121,28 +117,21 @@ public class Ethereal {
     private final int                  maxSerializedSize;
     private final ReentrantLock        mx           = new ReentrantLock();
     private final Consumer<Integer>    newEpochAction;
-    private final RandomSourceFactory  rsf;
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
 
     public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
                     Consumer<Integer> newEpochAction) {
-        this(config, maxSerializedSize, ds, blocker, newEpochAction, new DsrFactory(config.digestAlgorithm()));
-    }
-
-    public Ethereal(Config conf, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
-        this(conf, maxSerializedSize, ds, blocker(blocker, conf), newEpochAction, rsf);
+        this(config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction);
     }
 
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
-                    Consumer<Integer> newEpochAction, RandomSourceFactory rsf) {
+                    Consumer<Integer> newEpochAction) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.newEpochAction = newEpochAction;
         this.maxSerializedSize = maxSerializedSize;
-        this.rsf = rsf;
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
             mx.lock();
@@ -152,7 +141,7 @@ public class Ethereal {
             } finally {
                 mx.unlock();
             }
-        }, rsData(), epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
+        }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
             final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
             t.setDaemon(true);
@@ -257,8 +246,7 @@ public class Ethereal {
 
     private epoch createEpoch(int epoch) {
         Dag dg = newDag(config, epoch);
-        RandomSource rs = rsf.newRandomSource(dg);
-        ExtenderService ext = new ExtenderService(dg, rs, config, handleTimingRounds());
+        ExtenderService ext = new ExtenderService(dg, config, handleTimingRounds());
         dg.afterInsert(u -> {
             if (!started.get()) {
                 return;
@@ -283,7 +271,7 @@ public class Ethereal {
                 // ignored
             }
         });
-        return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext, rs,
+        return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
                          new AtomicBoolean(true));
     }
 
@@ -429,28 +417,5 @@ public class Ethereal {
             }
         }
         return epoch;
-    }
-
-    /**
-     * rsData produces random source data for a unit with provided level, parents
-     * and epoch.
-     */
-    private RsData rsData() {
-        return (level, parents, epoch) -> {
-            final RandomSourceFactory r = rsf;
-            byte[] result = null;
-            if (level == 0) {
-                result = r.dealingData(epoch);
-            } else {
-                epochWithNewer ep = getEpoch(epoch);
-                if (ep != null && ep.epoch != null) {
-                    result = ep.epoch.rs().dataToInclude(parents, level);
-                }
-            }
-            if (result != null) {
-                return new byte[0];
-            }
-            return result;
-        };
     }
 }

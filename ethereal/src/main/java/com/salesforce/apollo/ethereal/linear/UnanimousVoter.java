@@ -14,7 +14,6 @@ import java.util.function.Supplier;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag;
-import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -22,8 +21,8 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 
-public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoundForCommonVote,
-                             int commonVoteDeterministicPrefix, Map<Digest, Vote> votingMemo) {
+public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, int commonVoteDeterministicPrefix,
+                             Map<Digest, Vote> votingMemo) {
 
     private record R(Vote vote, boolean finished) {}
 
@@ -153,8 +152,9 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
 
     static final int firstVotingRound = 1;
 
-    private boolean coinToss(Unit uc, int level, RandomSource rs) {
-        return (rs.randomBytes(uc.creator(), level)[0] & 1) == 0;
+    private boolean coinToss(Unit uc, int level) {
+        return level % 2 == 0;
+//        return (rs.randomBytes(uc.creator(), level)[0] & 1) == 0;
     }
 
     public Vote voteUsing(Unit u) {
@@ -222,7 +222,7 @@ public record UnanimousVoter(Dag dag, RandomSource rs, Unit uc, int zeroVoteRoun
             }
             return Vote.POPULAR;
         }
-        if (coinToss(uc, level + 1, rs)) {
+        if (coinToss(uc, level + 1)) {
             return Vote.POPULAR;
         }
 

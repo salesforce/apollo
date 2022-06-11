@@ -113,7 +113,7 @@ public class GenesisAssembly implements Genesis {
                                   epoch -> transitions.nextEpoch(epoch));
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().exec(),
-                                      params().metrics() == null ? null : params().metrics().getReconfigureMetrics());
+                                      params().metrics() == null ? null : params().metrics().getGensisMetrics());
         log.debug("Genesis Assembly: {} recontext: {} next assembly: {} on: {}", view.context().getId(),
                   reContext.getId(), nextAssembly.keySet(), params().member().getId());
     }
@@ -225,7 +225,7 @@ public class GenesisAssembly implements Genesis {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Stopping view assembly: {} on: {}", view.context().getId(), params().member().getId());
+        log.trace("Stopping genesis assembly: {} on: {}", view.context().getId(), params().member().getId());
         coordinator.stop();
         controller.stop();
         final var cur = blockingThread;

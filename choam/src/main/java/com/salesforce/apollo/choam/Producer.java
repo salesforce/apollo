@@ -118,6 +118,11 @@ public class Producer {
         }
 
         @Override
+        public void create(PreBlock preblock, boolean last) {
+            Producer.this.create(preblock, last);
+        }
+
+        @Override
         public void fail() {
             stop();
         }
@@ -217,7 +222,7 @@ public class Producer {
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
-                                  (preblock, last) -> create(preblock, last), epoch -> newEpoch(epoch));
+                                  (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch));
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), params().exec(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
@@ -297,19 +302,29 @@ public class Producer {
         aggregate.stream().flatMap(e -> e.getReassembliesList().stream()).forEach(r -> {
             reass.addAllMembers(r.getMembersList()).addAllValidations(r.getValidationsList());
         });
-        final var ass = assembly.get();
-        if (ass != null) {
-            log.trace("Consuming reassembly: {} members: {} validations: {} on: {}", aggregate.size(),
-                      reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
-            ass.inbound().accept(Collections.singletonList(reass.build()));
-        } else {
-            pendingReassembles.add(reass.build());
+        if (reass.getMembersCount() > 0 || reass.getValidationsCount() > 0) {
+            final var ass = assembly.get();
+            if (ass != null) {
+                log.trace("Consuming reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
+                          reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
+                ass.inbound().accept(Collections.singletonList(reass.build()));
+            } else {
+                log.trace("Pending reassemblies: {} members: {} validations: {} on: {}", aggregate.size(),
+                          reass.getMembersCount(), reass.getValidationsCount(), params().member().getId());
+                pendingReassembles.add(reass.build());
+            }
         }
 
         HashedBlock lb = previousBlock.get();
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (!txns.isEmpty()) {
+            log.warn("transactions: {} cum hash: {} height: {} on: {}", txns.size(),
+                     txns.stream()
+                         .map(t -> CHOAM.hashOf(t, params().digestAlgorithm()))
+                         .reduce((a, b) -> a.xor(b))
+                         .orElse(null),
+                     lb.height().add(1), params().member().getId());
             var builder = Executions.newBuilder();
             txns.forEach(e -> builder.addExecutions(e));
 
@@ -365,6 +380,9 @@ public class Producer {
     }
 
     private void publish(PendingBlock p) {
+//        assert previousBlock.get().hash.equals(Digest.from(p.block.block.getHeader().getPrevious())) : "Pending block: "
+//        + p.block.hash + " previous: " + Digest.from(p.block.block.getHeader().getPrevious()) + " is not: "
+//        + previousBlock.get().hash;
         log.debug("Published pending: {} height: {} on: {}", p.block.hash, p.block.height(), params().member().getId());
         p.published.set(true);
         pending.remove(p.block.hash);

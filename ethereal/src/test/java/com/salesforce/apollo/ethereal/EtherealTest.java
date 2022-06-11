@@ -53,15 +53,6 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  */
 public class EtherealTest {
 
-//    @Test
-    public void lots() throws Exception {
-        for (int i = 0; i < 100; i++) {
-            System.out.println("Iteration: " + i);
-            context();
-            System.out.println();
-        }
-    }
-
     @Test
     public void context() throws Exception {
 
@@ -189,9 +180,6 @@ public class EtherealTest {
                     }
                     outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
-                if (a.randomBytes() != b.randomBytes()) {
-                    fail("Mismatch random bytea at block: " + j + " process: " + i);
-                }
             }
         }
 //        System.out.println();
@@ -201,5 +189,14 @@ public class EtherealTest {
 //                       .convertDurationsTo(TimeUnit.MILLISECONDS)
 //                       .build()
 //                       .report();
+    }
+
+    // @Test
+    public void lots() throws Exception {
+        for (int i = 0; i < 100; i++) {
+            System.out.println("Iteration: " + i);
+            context();
+            System.out.println();
+        }
     }
 }

@@ -21,7 +21,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
-import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.linear.UnanimousVoter.SuperMajorityDecider;
 import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
@@ -44,18 +43,16 @@ public class Extender {
     private final int                               firstDecidedRound;
     private AtomicReference<List<Unit>>             lastTUs   = new AtomicReference<>();
     private final int                               orderStartLevel;
-    private final RandomSource                      randomSource;
     private final int                               zeroVoteRoundForCommonVote;
 
-    public Extender(Dag dag, RandomSource rs, Config conf) {
+    public Extender(Dag dag, Config conf) {
         this.dag = dag;
-        randomSource = rs;
         lastTUs.set(new ArrayList<>());
         zeroVoteRoundForCommonVote = conf.zeroVoteRoundForCommonVote();
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         digestAlgorithm = conf.digestAlgorithm();
-        crpIterator = new CommonRandomPermutation(dag.nProc(), rs, digestAlgorithm, conf.logLabel());
+        crpIterator = new CommonRandomPermutation(dag.nProc(), digestAlgorithm, conf.logLabel());
     }
 
     public TimingRound nextRound() {
@@ -105,13 +102,13 @@ public class Extender {
         }
         final var ctu = currentTU.get();
         final var ltu = lastTUs.get();
-        log.trace("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu, ltu, dagMaxLevel, level, dag.pid());
+        log.warn("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu, ltu, dagMaxLevel, level, dag.pid());
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
     private SuperMajorityDecider getDecider(Unit uc, int zeroRound) {
         return deciders.computeIfAbsent(uc.hash(),
-                                        h -> new SuperMajorityDecider(new UnanimousVoter(dag, randomSource, uc,
+                                        h -> new SuperMajorityDecider(new UnanimousVoter(dag, uc,
                                                                                          zeroVoteRoundForCommonVote,
                                                                                          zeroRound, new HashMap<>())));
     }

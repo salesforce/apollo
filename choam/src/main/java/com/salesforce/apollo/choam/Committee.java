@@ -40,10 +40,11 @@ import com.salesforce.apollo.membership.Member;
 public interface Committee {
 
     static Map<Member, Verifier> validatorsOf(Reconfigure reconfigure, Context<Member> context) {
-        return reconfigure.getViewList()
+        return reconfigure.getJoinsList()
                           .stream()
-                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getId())),
-                                                    e -> new DefaultVerifier(publicKey(e.getConsensusKey()))));
+                          .collect(Collectors.toMap(e -> context.getMember(new Digest(e.getMember().getId())),
+                                                    e -> new DefaultVerifier(publicKey(e.getMember()
+                                                                                        .getConsensusKey()))));
     }
 
     /**

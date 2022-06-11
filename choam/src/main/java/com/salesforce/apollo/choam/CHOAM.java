@@ -596,31 +596,44 @@ public class CHOAM {
         return JohnHancock.from(transaction.getSignature()).toDigest(digestAlgorithm);
     }
 
-    public static Reconfigure reconfigure(Digest id, Map<Member, Join> joins, Context<Member> context,
+    public static String print(Join join, DigestAlgorithm da) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("J[view: ")
+               .append(Digest.from(join.getView()))
+               .append(" member: ")
+               .append(ViewContext.print(join.getMember(), da))
+               .append("certifications: ")
+               .append(join.getEndorsementsList().stream().map(c -> ViewContext.print(c, da)).toList())
+               .append("]");
+        return builder.toString();
+    }
+
+    public static Reconfigure reconfigure(Digest nextViewId, Map<Member, Join> joins, Context<Member> context,
                                           Parameters params, int checkpointTarget) {
-        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(id.toDigeste());
+        var builder = Reconfigure.newBuilder().setCheckpointTarget(checkpointTarget).setId(nextViewId.toDigeste());
 
         // Canonical labeling of the view members for Ethereal
         var remapped = rosterMap(context, joins.keySet());
 
-        remapped.keySet()
-                .stream()
-                .sorted()
-                .map(d -> remapped.get(d))
-                .peek(m -> builder.addJoins(joins.get(m)))
-                .forEach(m -> builder.addView(joins.get(m).getMember()));
+        remapped.keySet().stream().sorted().map(d -> remapped.get(d)).forEach(m -> builder.addJoins(joins.get(m)));
 
+//        log.warn("reconfiguration: {} joins: {} on: {}", nextViewId,
+//                 builder.getJoinsList().stream().map(j -> print(j, params.digestAlgorithm())).toList(),
+//                 params.member().getId());
         var reconfigure = builder.build();
         return reconfigure;
     }
 
-    public static Block reconfigure(Digest id, Map<Member, Join> joins, HashedBlock head, Context<Member> context,
-                                    HashedBlock lastViewChange, Parameters params, HashedBlock lastCheckpoint) {
+    public static Block reconfigure(Digest nextViewId, Map<Member, Join> joins, HashedBlock head,
+                                    Context<Member> context, HashedBlock lastViewChange, Parameters params,
+                                    HashedBlock lastCheckpoint) {
         final Block lvc = lastViewChange.block;
         int lastTarget = lvc.hasGenesis() ? lvc.getGenesis().getInitialView().getCheckpointTarget()
                                           : lvc.getReconfigure().getCheckpointTarget();
         int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
-        var reconfigure = reconfigure(id, joins, context, params, checkpointTarget);
+        var reconfigure = reconfigure(nextViewId, joins, context, params, checkpointTarget);
+        log.warn("Reconfigure head: {} last view: {} last checkpoint: {} on: {}", head.hash, lastViewChange.hash,
+                 lastCheckpoint.hash, params.member().getId());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),

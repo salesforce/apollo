@@ -85,10 +85,9 @@ message Proof {
 message PreUnit_s {
     int64 id = 1;
     Crown_s crown = 2;
-    bytes data = 3;
-    bytes rsData = 4;
-    bytes salt = 5;
-    utils.Sig signature = 6;
+    bytes data = 3; 
+    bytes salt = 4;
+    utils.Sig signature = 5;
 }
 
 message Crown_s {

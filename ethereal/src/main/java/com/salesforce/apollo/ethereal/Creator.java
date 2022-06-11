@@ -95,15 +95,13 @@ public class Creator {
     private final Lock                                 mx         = new ReentrantLock();
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
-    private final RsData                               rsData;
 
     private final Consumer<Unit> send;
 
-    public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send, RsData rsData,
+    public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
         this.conf = config;
         this.ds = ds;
-        this.rsData = rsData;
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
         this.candidates = new Unit[config.nProc()];
@@ -178,8 +176,7 @@ public class Creator {
     private void createUnit(Unit[] parents, int level, ByteString data) {
         assert parents.length == conf.nProc();
         final int e = epoch.get();
-        Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, rsData.rsData(level, parents, e),
-                                     conf.digestAlgorithm(), conf.signer());
+        Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, conf.digestAlgorithm(), conf.signer());
         assert parentsOnPreviousLevel(u) >= quorum : "Parents of: " + u + " for level: " + (u.level() - 1) + " count: "
         + parentsOnPreviousLevel(u) + " quorum: " + quorum;
         if (log.isTraceEnabled()) {

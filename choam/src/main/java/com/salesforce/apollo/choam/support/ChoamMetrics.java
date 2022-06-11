@@ -26,7 +26,7 @@ public interface ChoamMetrics extends EdpointMetrics {
 
     EtherealMetrics getProducerMetrics();
 
-    EtherealMetrics getReconfigureMetrics();
+    EtherealMetrics getGensisMetrics();
 
     void publishedBatch(int batchSize, int byteSize, int validations);
 

@@ -10,14 +10,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,25 +35,6 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class CRPTest {
-    public static class DeterministicRandomSource extends RandomSourceMock {
-        Map<Integer, byte[]> randomBytes;
-
-        public DeterministicRandomSource(HashMap<Integer, byte[]> randomBytes) {
-            this.randomBytes = randomBytes;
-        }
-
-        @Override
-        public byte[] dataToInclude(Unit[] parents, int level) {
-            return super.dataToInclude(parents, level);
-        }
-
-        @Override
-        public byte[] randomBytes(short process, int level) {
-            super.randomBytes(process, level);
-            return randomBytes.get(level);
-        }
-
-    }
 
     public static class RandomSourceMock implements RandomSource {
 
@@ -82,8 +61,7 @@ public class CRPTest {
     public void emptyDagProvidesNoUnits() throws Exception {
         short nProc = 4;
         Dag dag = new DagFactory.TestDagFactory().createDag(nProc);
-        var rs = new RandomSourceMock();
-        var crpIt = new CommonRandomPermutation(dag.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(dag.nProc(), DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);
@@ -102,8 +80,7 @@ public class CRPTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var perm = new HashMap<Digest, Boolean>();
@@ -130,9 +107,8 @@ public class CRPTest {
             rand.nextBytes(randData);
             rsData.put(level, randData);
         }
-        var rs = new DeterministicRandomSource(rsData);
 
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation = new ArrayList<Unit>();
@@ -143,16 +119,13 @@ public class CRPTest {
             return true;
         });
 
-        assertTrue(rs.called);
-
         for (int level = 0; level < 10; level++) {
             var randData = new byte[64];
             rand.nextBytes(randData);
             rsData.put(level, randData);
         }
-        rs = new DeterministicRandomSource(rsData);
 
-        crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
+        crpIt = new CommonRandomPermutation(d.nProc(), DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         var permutation2 = new ArrayList<Unit>();
@@ -163,7 +136,6 @@ public class CRPTest {
             return true;
         });
 
-        assertTrue(rs.called);
         assertEquals(perm2, perm);
         assertNotEquals(permutation, permutation2);
     }
@@ -174,8 +146,7 @@ public class CRPTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var rs = new RandomSourceMock();
-        var crpIt = new CommonRandomPermutation(d.nProc(), rs, DigestAlgorithm.DEFAULT, "foo");
+        var crpIt = new CommonRandomPermutation(d.nProc(), DigestAlgorithm.DEFAULT, "foo");
         assertNotNull(crpIt);
 
         AtomicBoolean called = new AtomicBoolean(false);

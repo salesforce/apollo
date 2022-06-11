@@ -41,6 +41,10 @@ public class ViewContext {
 
     private final static Logger log = LoggerFactory.getLogger(ViewContext.class);
 
+    public static String print(Certification c, DigestAlgorithm algo) {
+        return String.format("id: %s sig: %s", Digest.from(c.getId()), algo.digest(c.getSignature().toByteString()));
+    }
+
     public static String print(Validate v, DigestAlgorithm algo) {
         return String.format("id: %s hash: %s sig: %s", Digest.from(v.getWitness().getId()), Digest.from(v.getHash()),
                              algo.digest(v.getWitness().getSignature().toByteString()));
@@ -146,9 +150,9 @@ public class ViewContext {
         blockProducer.publish(block.certifiedBlock);
     }
 
-    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock hashedBlock,
+    public Block reconfigure(Map<Member, Join> aggregate, Digest nextViewId, HashedBlock lastBlock,
                              HashedBlock checkpoint) {
-        return blockProducer.reconfigure(aggregate, nextViewId, hashedBlock, checkpoint);
+        return blockProducer.reconfigure(aggregate, nextViewId, lastBlock, checkpoint);
     }
 
     public Map<Digest, Short> roster() {

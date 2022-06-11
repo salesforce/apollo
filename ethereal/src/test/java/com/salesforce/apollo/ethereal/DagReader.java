@@ -40,6 +40,23 @@ public class DagReader {
         DEFAULT_SIGNER = new Signer.SignerImpl(DEFAULT_KEYPAIR.getPrivate());
     }
 
+    public static void add(Dag dag, PreUnit pu) {
+        if (pu.epoch() != dag.epoch()) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DATA_ERROR));
+        }
+        var alreadyInDag = dag.get(pu.hash());
+        if (alreadyInDag != null) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DUPLICATE_UNIT));
+        }
+        Decoded decodedParents = dag.decodeParents(pu);
+        if (decodedParents.inError()) {
+            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), decodedParents.classification()));
+        }
+        Unit[] parents = decodedParents.parents();
+        var freeUnit = dag.build(pu, parents);
+        dag.insert(freeUnit);
+    }
+
     public static Dag readDag(InputStream is, DagFactory df) {
         @SuppressWarnings("resource")
         Scanner scanner = new Scanner(is);
@@ -97,34 +114,17 @@ public class DagReader {
         return dag;
     }
 
-    public static void add(Dag dag, PreUnit pu) {
-        if (pu.epoch() != dag.epoch()) {
-            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DATA_ERROR));
-        }
-        var alreadyInDag = dag.get(pu.hash());
-        if (alreadyInDag != null) {
-            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), Correctness.DUPLICATE_UNIT));
-        }
-        Decoded decodedParents = dag.decodeParents(pu);
-        if (decodedParents.inError()) {
-            System.out.println(String.format("Failed: %s reason: %s", pu.hash(), decodedParents.classification()));
-        }
-        Unit[] parents = decodedParents.parents();
-        var freeUnit = dag.build(pu, parents);
-        dag.insert(freeUnit);
-    }
-
     private static PreUnit newPreUnit(short puCreator, Crown crown, ByteString data, byte[] rsData,
                                       DigestAlgorithm algo) {
-        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, rsData, algo, DEFAULT_SIGNER);
+        PreUnit newsie = newPreUnitFromEpoch(0, puCreator, crown, data, algo, DEFAULT_SIGNER);
         return newsie;
     }
 
-    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data, byte[] rsData,
+    private static PreUnit newPreUnitFromEpoch(int epoch, short puCreator, Crown crown, ByteString data,
                                                DigestAlgorithm algo, Signer signer) {
         byte[] salt = {};
-        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, rsData, salt);
+        JohnHancock signature = PreUnit.sign(signer, puCreator, crown, data, salt);
         return new preUnit(puCreator, epoch, crown.heights()[puCreator] + 1, signature.toDigest(algo), crown, data,
-                           rsData, signature, salt);
+                           signature, salt);
     }
 }

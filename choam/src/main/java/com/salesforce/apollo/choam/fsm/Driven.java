@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.chiralbehaviors.tron.Entry;
 import com.chiralbehaviors.tron.FsmExecutor;
+import com.salesforce.apollo.ethereal.Ethereal.PreBlock;
 
 /**
  * Leaf action interface for the Producer FSM
@@ -153,6 +154,11 @@ public interface Driven {
             throw fsm().invalidTransitionOn();
         }
 
+        default Transitions create(PreBlock preblock, boolean last) {
+            context().create(preblock, last);
+            return null;
+        }
+
         default Transitions establish() {
             throw fsm().invalidTransitionOn();
         }
@@ -188,6 +194,8 @@ public interface Driven {
     void checkpoint();
 
     void complete();
+
+    void create(PreBlock preblock, boolean last);
 
     void fail();
 

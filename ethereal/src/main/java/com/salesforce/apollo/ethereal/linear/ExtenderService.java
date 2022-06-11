@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
-import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -30,12 +29,12 @@ import com.salesforce.apollo.ethereal.Unit;
 public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
+    private final Config               config;
     private final Extender             ordering;
     private final Consumer<List<Unit>> output;
-    private final Config               config;
 
-    public ExtenderService(Dag dag, RandomSource rs, Config config, Consumer<List<Unit>> orderedUnits) {
-        ordering = new Extender(dag, rs, config);
+    public ExtenderService(Dag dag, Config config, Consumer<List<Unit>> orderedUnits) {
+        ordering = new Extender(dag, config);
         this.output = orderedUnits;
         this.config = config;
     }

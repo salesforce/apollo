@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.SlottedUnits;
 import com.salesforce.apollo.ethereal.Unit;
 
@@ -27,8 +26,7 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 
-public record CommonRandomPermutation(short nProc, RandomSource randomSource, DigestAlgorithm digestAlgorithm,
-                                      String logLabel) {
+public record CommonRandomPermutation(short nProc, DigestAlgorithm digestAlgorithm, String logLabel) {
 
     private static final Logger log = LoggerFactory.getLogger(CommonRandomPermutation.class);
 
@@ -39,6 +37,7 @@ public record CommonRandomPermutation(short nProc, RandomSource randomSource, Di
      */
     public void iterate(int level, SlottedUnits unitsOnLevel, Unit previousTU, Function<Unit, Boolean> work) {
         List<Unit> permutation = randomPermutation(level, pidOrder(level, previousTU), unitsOnLevel, previousTU);
+        log.warn("CRP: {} on: {}", permutation, logLabel);
         permutation.stream().map(work).filter(r -> !r).findFirst().orElse(true);
     }
 
@@ -79,8 +78,7 @@ public record CommonRandomPermutation(short nProc, RandomSource randomSource, Di
             if (units.isEmpty()) {
                 continue;
             }
-            var randomBytes = randomSource.randomBytes(pid, level + 5);
-            var cumulative = randomBytes == null ? digestAlgorithm.getOrigin() : digestAlgorithm.digest(randomBytes);
+            var cumulative = digestAlgorithm.getOrigin();
             cumulative = unit == null ? cumulative : cumulative.xor(unit.hash());
             for (var u : units) {
                 cumulative = cumulative.xor(u.hash());

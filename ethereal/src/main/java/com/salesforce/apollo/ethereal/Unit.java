@@ -68,11 +68,6 @@ public interface Unit extends PreUnit {
         }
 
         @Override
-        public byte[] randomSourceData() {
-            return unit.randomSourceData();
-        }
-
-        @Override
         public Crown view() {
             return unit.view();
         }

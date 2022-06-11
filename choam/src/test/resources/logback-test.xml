@@ -28,14 +28,14 @@
     <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Producer" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.chiralbehaviors.tron" level="info" additivity="info">
+    <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
