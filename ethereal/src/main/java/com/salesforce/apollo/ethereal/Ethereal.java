@@ -235,7 +235,6 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
-            ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
                 creator.consume(u, ext);

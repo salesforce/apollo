@@ -125,10 +125,11 @@ public class Creator {
         try {
             update(u);
             var built = ready();
+            ext.chooseNextTimingUnits();
             while (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
-                ext.chooseNextTimingUnits();
                 createUnit(built.parents, built.level, getData(built.level));
+                ext.chooseNextTimingUnits();
                 built = ready();
             }
         } catch (Throwable e) {

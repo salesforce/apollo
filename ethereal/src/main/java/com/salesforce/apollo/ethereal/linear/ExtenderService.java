@@ -30,6 +30,7 @@ public class ExtenderService {
     private static final Logger log = LoggerFactory.getLogger(ExtenderService.class);
 
     private final Config               config;
+    private final Dag                  dag;
     private final Extender             ordering;
     private final Consumer<List<Unit>> output;
 
@@ -37,11 +38,14 @@ public class ExtenderService {
         ordering = new Extender(dag, config);
         this.output = orderedUnits;
         this.config = config;
+        this.dag = dag;
     }
 
     public void chooseNextTimingUnits() {
-        log.trace("Signaling to see if we can produce a block on: {}", config.logLabel());
-        timingUnitDecider();
+        dag.read(() -> {
+            log.trace("Signaling to see if we can produce a block on: {}", config.logLabel());
+            timingUnitDecider();
+        });
     }
 
     /**

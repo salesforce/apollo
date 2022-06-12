@@ -288,6 +288,19 @@ public interface Dag {
             return config.pid();
         }
 
+        @Override
+        public void read(Runnable r) {
+            final Lock lock = rwLock.readLock();
+            lock.lock();
+            try {
+                r.run();
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
+            } finally {
+                lock.unlock();
+            }
+        }
+
         /**
          * return all units present in dag that are above (in height sense) given
          * heights. When called with null argument, returns all units in the dag. Units
@@ -328,18 +341,6 @@ public interface Dag {
             lock.lock();
             try {
                 return call.call();
-            } catch (Exception e) {
-                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private void read(Runnable r) {
-            final Lock lock = rwLock.readLock();
-            lock.lock();
-            try {
-                r.run();
             } catch (Exception e) {
                 throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
             } finally {
@@ -604,6 +605,8 @@ public interface Dag {
     short nProc();
 
     short pid();
+
+    void read(Runnable r);
 
     List<Unit> unitsAbove(int[] heights);
 
