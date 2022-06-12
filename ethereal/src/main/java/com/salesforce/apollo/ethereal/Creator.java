@@ -249,7 +249,10 @@ public class Creator {
      */
     private built ready() {
         final var unit = candidates.get(conf.pid());
-        assert unit != null : "Have not set candidate for self";
+        if (unit == null) {
+            log.trace("Candidate not set on: {}", conf.logLabel());
+            return null;
+        }
         final int l = unit.level();
         final var current = level.get();
         boolean ready = !epochDone.get() && current > l;

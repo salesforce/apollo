@@ -63,6 +63,7 @@ public class GenesisBootstrapTest extends AbstractLifecycleTest {
                                                             .filter(e -> !e.getKey().equals(testSubject.getId()))
                                                             .map(e -> e.getValue())
                                                             .filter(c -> !c.active())
+                                                            .map(c -> c.getId())
                                                             .toList()));
 
         var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
