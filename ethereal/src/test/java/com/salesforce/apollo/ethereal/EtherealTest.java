@@ -171,7 +171,8 @@ public class EtherealTest {
                 var a = preblocks.get(j);
                 var b = output.get(j);
                 if (a.data().size() != b.data().size()) {
-                    fail("Mismatch at block: " + j + " process: " + i);
+                    fail("Mismatch at block: " + j + " process: " + i + " data size: " + a.data().size() + " != "
+                    + b.data().size());
                 }
                 for (int k = 0; k < a.data().size(); k++) {
                     if (!a.data().get(k).equals(b.data().get(k))) {
@@ -191,7 +192,7 @@ public class EtherealTest {
 //                       .report();
     }
 
-    // @Test
+//    @Test
     public void lots() throws Exception {
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);

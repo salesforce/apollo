@@ -14,12 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -27,6 +25,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.ethereal.proto.Gossip;
@@ -65,7 +64,7 @@ public class Ethereal {
         }
     }
 
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(Ethereal.class);
+    private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     /**
      * return a preblock from a slice of units containing a timing round. It assumes
@@ -84,7 +83,7 @@ public class Ethereal {
 
     private static Consumer<List<Unit>> blocker(BiConsumer<PreBlock, Boolean> blocker, Config config) {
         return units -> {
-            var print = units.stream().map(e -> "[" + e.shortString() + "]").toList();
+            var print = log.isTraceEnabled() ? units.stream().map(e -> e.shortString()).toList() : null;
             log.trace("Make pre block: {} on: {}", print, config.logLabel());
             PreBlock preBlock = toPreBlock(units);
             var timingUnit = units.get(units.size() - 1);
@@ -96,7 +95,7 @@ public class Ethereal {
             }
             if (preBlock != null) {
 
-                log.warn("Emitting pre block: {} on: {}", print, config.logLabel());
+                log.trace("Emitting pre block: {} on: {}", print, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
@@ -109,13 +108,11 @@ public class Ethereal {
     private final Config               config;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
-    private volatile Thread            currentThread;
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
-    private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
+    private final ReentrantLock        lock         = new ReentrantLock(true);
     private final int                  maxSerializedSize;
-    private final ReentrantLock        mx           = new ReentrantLock();
     private final Consumer<Integer>    newEpochAction;
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
@@ -134,19 +131,11 @@ public class Ethereal {
         this.maxSerializedSize = maxSerializedSize;
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
-            mx.lock();
-            try {
+            locked(() -> {
                 log.trace("Sending: {} on: {}", u, config.logLabel());
                 insert(u);
-            } finally {
-                mx.unlock();
-            }
+            });
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
-        executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     public Processor processor() {
@@ -232,11 +221,6 @@ public class Ethereal {
         }
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
-        executor.shutdownNow();
-        final var c = currentThread;
-        if (c != null) {
-            c.interrupt();
-        }
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -251,24 +235,10 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
-            try {
-                executor.execute(() -> {
-                    if (!started.get()) {
-                        return;
-                    }
-                    currentThread = Thread.currentThread();
-                    try {
-                        ext.chooseNextTimingUnits();
-                        // don't put our own units on the unit belt, creator already knows about them.
-                        if (u.creator() != config.pid()) {
-                            creator.consume(u);
-                        }
-                    } finally {
-                        currentThread = null;
-                    }
-                });
-            } catch (RejectedExecutionException e) {
-                // ignored
+            ext.chooseNextTimingUnits();
+            // don't put our own units on the unit belt, creator already knows about them.
+            if (u.creator() != config.pid()) {
+                creator.consume(u, ext);
             }
         });
         return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
@@ -342,6 +312,26 @@ public class Ethereal {
         }
     }
 
+    private <T> T locked(Callable<T> call) {
+        lock.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void locked(Runnable r) {
+        lock.lock();
+        try {
+            r.run();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /**
      * newEpoch creates and returns a new epoch object with the given EpochID. If
      * such epoch already exists, returns it.
@@ -351,8 +341,7 @@ public class Ethereal {
             log.trace("Finished, beyond last epoch: {} on: {}", epoch, config.logLabel());
             return null;
         }
-        mx.lock();
-        try {
+        return locked(() -> {
             final var currentId = currentEpoch.get();
             epoch e = epochs.get(epoch);
             if (e == null && epoch == currentId + 1) {
@@ -374,9 +363,7 @@ public class Ethereal {
                 }
             }
             return e;
-        } finally {
-            mx.unlock();
-        }
+        });
     }
 
     /**
@@ -384,8 +371,7 @@ public class Ethereal {
      * such epoch already exists, returns it.
      */
     private epoch retreiveEpoch(int epoch) {
-        mx.lock();
-        try {
+        return locked(() -> {
             final var currentId = currentEpoch.get();
             final epoch e = epochs.get(epoch);
             if (e != null && epoch == e.id()) {
@@ -398,9 +384,7 @@ public class Ethereal {
                 return newEpoch;
             }
             return null;
-        } finally {
-            mx.unlock();
-        }
+        });
     }
 
     /**

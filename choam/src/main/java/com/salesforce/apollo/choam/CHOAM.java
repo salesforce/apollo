@@ -632,8 +632,8 @@ public class CHOAM {
                                           : lvc.getReconfigure().getCheckpointTarget();
         int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
         var reconfigure = reconfigure(nextViewId, joins, context, params, checkpointTarget);
-        log.warn("Reconfigure head: {} last view: {} last checkpoint: {} on: {}", head.hash, lastViewChange.hash,
-                 lastCheckpoint.hash, params.member().getId());
+//        log.warn("Reconfigure head: {} last view: {} last checkpoint: {} on: {}", head.hash, lastViewChange.hash,
+//                 lastCheckpoint.hash, params.member().getId());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),

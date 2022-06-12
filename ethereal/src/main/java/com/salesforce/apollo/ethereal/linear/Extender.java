@@ -74,6 +74,21 @@ public class Extender {
         }
 
         var units = dag.unitsOnLevel(level);
+        short count = 0;
+        for (short i = 0; i < dag.nProc(); i++) {
+            final var atPid = units.get(i);
+            if (atPid != null && !atPid.isEmpty()) {
+                count++;
+            }
+        }
+        if (!dag.isQuorum(count)) {
+            log.trace("No round, dag mxLvl: {} level: {} count: {} is less than quorum: {} on: {}", dagMaxLevel, level,
+                      count, Dag.minimalQuorum(dag.nProc(), 3), dag.pid());
+            return null;
+        } else {
+            log.trace("Round proceeding, dag mxLvl: {} level: {} count: {} on: {}", dagMaxLevel, level, count,
+                      dag.pid());
+        }
 
         var decided = new AtomicBoolean();
         crpIterator.iterate(level, units, previousTU, uc -> {
@@ -102,7 +117,11 @@ public class Extender {
         }
         final var ctu = currentTU.get();
         final var ltu = lastTUs.get();
-        log.warn("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu, ltu, dagMaxLevel, level, dag.pid());
+        if (log.isTraceEnabled()) {
+            log.trace("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu.shortString(),
+                      ltu == null ? null : ltu.stream().map(e -> e == null ? "null" : e.shortString()).toList(),
+                      dagMaxLevel, level, dag.pid());
+        }
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 

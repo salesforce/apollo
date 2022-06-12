@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
-import com.salesforce.apollo.ethereal.SlottedUnits;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -35,9 +34,13 @@ public record CommonRandomPermutation(short nProc, DigestAlgorithm digestAlgorit
      * the given work function on each of the units until the function returns false
      * or the contents run out.
      */
-    public void iterate(int level, SlottedUnits unitsOnLevel, Unit previousTU, Function<Unit, Boolean> work) {
-        List<Unit> permutation = randomPermutation(level, pidOrder(level, previousTU), unitsOnLevel, previousTU);
-        log.warn("CRP: {} on: {}", permutation, logLabel);
+    public void iterate(int level, List<List<Unit>> unitsOnLevel, Unit previousTU, Function<Unit, Boolean> work) {
+        final var pidOrder = pidOrder(level, previousTU);
+        List<Unit> permutation = randomPermutation(level, pidOrder, unitsOnLevel, previousTU);
+        if (log.isTraceEnabled()) {
+            log.trace("CRP level: {} permutation: {} pidOrder: {} previous: {} on: {}", level,
+                      permutation.stream().map(e -> e.shortString()).toList(), pidOrder, previousTU, logLabel);
+        }
         permutation.stream().map(work).filter(r -> !r).findFirst().orElse(true);
     }
 
@@ -57,29 +60,16 @@ public record CommonRandomPermutation(short nProc, DigestAlgorithm digestAlgorit
 
     }
 
-    @SuppressWarnings("unused")
-    private List<Unit> defaultPermutation(int level, List<Short> pids, SlottedUnits unitsOnLevel) {
-        var permutation = new ArrayList<Unit>();
-        for (short pid : pids) {
-            permutation.addAll(unitsOnLevel.get(pid));
-        }
-
-        Collections.sort(permutation, (a, b) -> a.hash().compareTo(b.hash()));
-        log.trace("permutation for: {} : {} on: {}", level, permutation, logLabel);
-        return permutation;
-    }
-
-    private List<Unit> randomPermutation(int level, List<Short> pids, SlottedUnits unitsOnLevel, Unit unit) {
+    private List<Unit> randomPermutation(int level, List<Short> pids, List<List<Unit>> unitsOnLevel, Unit unit) {
         var permutation = new ArrayList<Unit>();
         var priority = new HashMap<Digest, Digest>();
 
+        var cumulative = unit == null ? digestAlgorithm.getOrigin() : unit.hash();
         for (short pid : pids) {
             var units = unitsOnLevel.get(pid);
             if (units.isEmpty()) {
                 continue;
             }
-            var cumulative = digestAlgorithm.getOrigin();
-            cumulative = unit == null ? cumulative : cumulative.xor(unit.hash());
             for (var u : units) {
                 cumulative = cumulative.xor(u.hash());
                 priority.put(u.hash(), cumulative);

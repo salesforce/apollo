@@ -43,7 +43,6 @@ public class DagTest {
                     traverse(u, traversed, result);
                 }
             }
-            return true;
         });
         return result;
     }

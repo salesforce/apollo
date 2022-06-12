@@ -6,14 +6,12 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -21,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -82,7 +81,7 @@ public class Creator {
         }
     }
 
-    private final Unit[]                               candidates;
+    private final List<Unit>                           candidates;
     private final Config                               conf;
     private final DataSource                           ds;
     private final AtomicInteger                        epoch      = new AtomicInteger(0);
@@ -92,7 +91,6 @@ public class Creator {
     private final Queue<Unit>                          lastTiming;
     private final AtomicInteger                        level      = new AtomicInteger();
     private final AtomicInteger                        maxLvl     = new AtomicInteger();
-    private final Lock                                 mx         = new ReentrantLock();
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
 
@@ -104,7 +102,10 @@ public class Creator {
         this.ds = ds;
         this.epochProofBuilder = epochProofBuilder;
         this.send = send;
-        this.candidates = new Unit[config.nProc()];
+        this.candidates = new CopyOnWriteArrayList<>();
+        for (int i = 0; i < config.nProc(); i++) {
+            candidates.add(null);
+        }
         this.lastTiming = lastTiming;
 
         quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
@@ -114,27 +115,24 @@ public class Creator {
      * Unit is examined and stored to be used as parents of future units. When there
      * are enough new parents, a new unit is produced. lastTiming is a channel on
      * which the last timing unit of each epoch is expected to appear.
+     *
+     * @param ext
      * 
      * @param ext
      */
-    public void consume(Unit u) {
+    public void consume(Unit u, ExtenderService ext) {
         log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
-        mx.lock();
         try {
             update(u);
             var built = ready();
-            if (built == null) {
-                log.trace("Not ready to create unit on: {}", conf.logLabel());
-            }
-            if (built != null) {
+            while (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
+                ext.chooseNextTimingUnits();
                 createUnit(built.parents, built.level, getData(built.level));
-//                built = ready();
+                built = ready();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);
-        } finally {
-            mx.unlock();
         }
     }
 
@@ -146,11 +144,12 @@ public class Creator {
     }
 
     private built buildParents() {
-        var l = candidates[conf.pid()].level() + 1;
-        int count = count(l);
+        Unit[] parents = new Unit[conf.nProc()];
+        parents = candidates.toArray(parents);
+        var l = parents[conf.pid()].level() + 1;
+        int count = count(l, parents);
         if (count >= quorum) {
             log.trace("Parents ready: {} level: {} on: {}", quorum, level, conf.logLabel());
-            Unit[] parents = Arrays.copyOf(candidates, candidates.length);
             makeConsistent(parents);
             return new built(parents, l);
         } else {
@@ -160,10 +159,10 @@ public class Creator {
         }
     }
 
-    private int count(int level) {
+    private int count(int level, Unit[] parents) {
         var count = 0;
-        for (int i = 0; i < candidates.length; i++) {
-            Unit u = candidates[i];
+        for (int i = 0; i < conf.nProc(); i++) {
+            Unit u = parents[i];
             for (; u != null && u.level() >= level; u = u.predecessor())
                 ;
             if (u != null && u.level() == level - 1) {
@@ -249,10 +248,8 @@ public class Creator {
      * epoch after creating a unit with signature share.
      */
     private built ready() {
-        final var unit = candidates[conf.pid()];
-        if (unit == null) {
-            return null; // we're not even ready
-        }
+        final var unit = candidates.get(conf.pid());
+        assert unit != null : "Have not set candidate for self";
         final int l = unit.level();
         final var current = level.get();
         boolean ready = !epochDone.get() && current > l;
@@ -274,8 +271,8 @@ public class Creator {
      */
     private void resetEpoch(int epoch) {
         log.debug("Resetting epoch: {} on: {}", epoch, conf.logLabel());
-        for (int i = 0; i < candidates.length; i++) {
-            candidates[i] = null;
+        for (int i = 0; i < conf.nProc(); i++) {
+            candidates.set(i, null);
         }
         maxLvl.set(-1);
         onMaxLvl.set(0);
@@ -327,9 +324,9 @@ public class Creator {
         if (u.epoch() != epoch.get()) {
             return;
         }
-        var prev = candidates[u.creator()];
+        var prev = candidates.get(u.creator());
         if (prev == null || prev.level() < u.level()) {
-            candidates[u.creator()] = u;
+            candidates.set(u.creator(), u);
             log.trace("Update candidate to: {} on: {}", u, conf.logLabel());
             if (u.level() == maxLvl.get()) {
                 onMaxLvl.incrementAndGet();

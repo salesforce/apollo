@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -80,24 +79,24 @@ public class Adder {
     }
 
     private final List<DigestBloomFilter>    cmts            = new ArrayList<>();
-    private final Map<Digest, Set<Short>>    commits         = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
     private final Config                     conf;
     private final Dag                        dag;
     private final int                        epoch;
     private final Set<Digest>                failed;
-    private final ReentrantLock              lock            = new ReentrantLock();
+    private final ReentrantLock              lock            = new ReentrantLock(true);
     private final int                        maxSize;
-    private final Map<Long, List<Waiting>>   missing         = new ConcurrentSkipListMap<>();
-    private final Map<Digest, Set<Short>>    prevotes        = new ConcurrentSkipListMap<>();
+    private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
+    private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
     private final List<DigestBloomFilter>    prevs           = new ArrayList<>();
     private volatile int                     round           = 0;
-    private final Map<Digest, SignedCommit>  signedCommits   = new ConcurrentHashMap<>();
-    private final Map<Digest, SignedPreVote> signedPrevotes  = new ConcurrentHashMap<>();
+    private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
+    private final Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
     private final int                        threshold;
     private final List<DigestBloomFilter>    unts            = new ArrayList<>();
-    private final Map<Digest, Waiting>       waiting         = new ConcurrentSkipListMap<>();
-    private final Map<Long, Waiting>         waitingById     = new ConcurrentSkipListMap<>();
-    private final Map<Digest, Waiting>       waitingForRound = new ConcurrentSkipListMap<>();
+    private final Map<Digest, Waiting>       waiting         = new TreeMap<>();
+    private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
+    private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
 
     public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
         this.epoch = epoch;
@@ -118,18 +117,19 @@ public class Adder {
 
     public void close() {
         log.trace("Closing adder epoch: {} on: {}", dag.epoch(), conf.logLabel());
-        waiting.clear();
-        waitingById.clear();
-        waitingForRound.clear();
-        signedCommits.clear();
-        signedPrevotes.clear();
-        prevotes.clear();
-        missing.clear();
+        locked(() -> {
+            waiting.clear();
+            waitingById.clear();
+            waitingForRound.clear();
+            signedCommits.clear();
+            signedPrevotes.clear();
+            prevotes.clear();
+            missing.clear();
+        });
     }
 
     public String dump() {
-        lock.lock();
-        try {
+        return locked(() -> {
             var buff = new StringBuffer();
             buff.append("pid: ").append(conf.pid()).append('\n');
             buff.append('\t').append("round: ").append(round).append('\n');
@@ -138,23 +138,18 @@ public class Adder {
             buff.append('\t').append("waiting: ").append(waiting).append('\n');
             buff.append('\t').append("waiting for round: ").append(waitingForRound);
             return buff.toString();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public Have have() {
-        lock.lock();
-        try {
+        return locked(() -> {
             return Have.newBuilder()
                        .setEpoch(epoch)
                        .setHaveCommits(haveCommits())
                        .setHavePreVotes(havePreVotes())
                        .setHaveUnits(haveUnits())
                        .build();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public void produce(Unit u) {
@@ -165,8 +160,7 @@ public class Adder {
             log.trace("Produced duplicated unit: {} on: {}", u, conf.logLabel());
             return;
         }
-        lock.lock();
-        try {
+        locked(() -> {
             assert u.creator() == conf.pid();
             round = u.height();
             log.trace("Producing unit: {} on: {}", u, conf.logLabel());
@@ -180,9 +174,7 @@ public class Adder {
             commit(wpu);
             output(wpu);
             advance();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -195,15 +187,12 @@ public class Adder {
     public Missing updateFor(Have haves) {
         assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        lock.lock();
-        try {
+        return locked(() -> {
             final var builder = Missing.newBuilder();
             builder.setEpoch(epoch);
             Adder.this.update(haves, builder);
             return builder.setHaves(have()).build();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -212,8 +201,7 @@ public class Adder {
     public void updateFrom(Missing update) {
         assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
-        lock.lock();
-        try {
+        locked(() -> {
             update.getUnitsList().forEach(u -> {
                 final var signature = JohnHancock.from(u.getSignature());
                 final var digest = signature.toDigest(conf.digestAlgorithm());
@@ -267,9 +255,7 @@ public class Adder {
                     commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
                 }
             });
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     /**
@@ -577,7 +563,7 @@ public class Adder {
             default:
                 break;
             }
-            ;
+
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
                 removeFailed(wp);
             }
@@ -618,6 +604,26 @@ public class Adder {
 
     private Biff haveUnits() {
         return unts.get(Entropy.nextBitsStreamInt(unts.size())).toBff();
+    }
+
+    private <T> T locked(Callable<T> call) {
+        lock.lock();
+        try {
+            return call.call();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void locked(Runnable r) {
+        lock.lock();
+        try {
+            r.run();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**

@@ -83,6 +83,7 @@ public interface PreUnit {
         @Override
         public Unit from(Unit[] parents, double bias) {
             freeUnit u = new freeUnit(p, parents, Unit.levelFromParents(parents, bias), new HashMap<>());
+            assert u.height() == u.level;
             u.computeFloor();
             return u;
         }
