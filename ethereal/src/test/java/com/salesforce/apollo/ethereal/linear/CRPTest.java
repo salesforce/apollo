@@ -27,7 +27,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.DagFactory;
 import com.salesforce.apollo.ethereal.DagReader;
-import com.salesforce.apollo.ethereal.RandomSource;
 import com.salesforce.apollo.ethereal.Unit;
 
 /**
@@ -35,27 +34,6 @@ import com.salesforce.apollo.ethereal.Unit;
  *
  */
 public class CRPTest {
-
-    public static class RandomSourceMock implements RandomSource {
-
-        boolean called = false;
-
-        @Override
-        public byte[] dataToInclude(Unit[] parents, int level) {
-            called = true;
-            return null;
-        }
-
-        // RandomBytes returns a sequence of "random" bits for a given unit.
-        // It bases the sequence only on the pid and level, ignoring the unit itself.
-        @Override
-        public byte[] randomBytes(short process, int level) {
-            called = true;
-            byte[] answer = new byte[33];
-            answer[32] = (byte) (process + level);
-            return answer;
-        }
-    }
 
     @Test
     public void emptyDagProvidesNoUnits() throws Exception {

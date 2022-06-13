@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.ethereal.linear.ExtenderService;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -115,22 +114,17 @@ public class Creator {
      * Unit is examined and stored to be used as parents of future units. When there
      * are enough new parents, a new unit is produced. lastTiming is a channel on
      * which the last timing unit of each epoch is expected to appear.
-     *
-     * @param ext
      * 
-     * @param ext
      */
-    public void consume(Unit u, ExtenderService ext) {
+    public void consume(Unit u) {
         log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
         try {
             update(u);
-            ext.chooseNextTimingUnits();
             var built = ready();
             while (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
                 createUnit(built.parents, built.level, getData(built.level));
                 built = ready();
-                ext.chooseNextTimingUnits();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);

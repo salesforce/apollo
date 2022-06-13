@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -235,6 +236,12 @@ public class Ethereal {
         failed.clear();
         lastTiming.clear();
         log.trace("Orderer stopped on: {}", config.logLabel());
+        executor.shutdown();
+        try {
+            executor.awaitTermination(500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e1) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private epoch createEpoch(int epoch) {
@@ -248,9 +255,10 @@ public class Ethereal {
                 if (!started.get()) {
                     return;
                 }
+                ext.chooseNextTimingUnits();
                 // don't put our own units on the unit belt, creator already knows about them.
                 if (u.creator() != config.pid()) {
-                    creator.consume(u, ext);
+                    creator.consume(u);
                 }
             }, log));
 
