@@ -54,7 +54,7 @@ public class EtherealTest {
     @Test
     public void context() throws Exception {
 
-        final var gossipPeriod = Duration.ofMillis(15);
+        final var gossipPeriod = Duration.ofMillis(100);
 
         var registry = new MetricRegistry();
 
@@ -172,14 +172,15 @@ public class EtherealTest {
                     failed = true;
                     System.out.println("Mismatch at block: " + j + " process: " + i + " data size: " + a.data().size()
                     + " != " + b.data().size());
-                }
-                for (int k = 0; k < a.data().size(); k++) {
-                    if (!a.data().get(k).equals(b.data().get(k))) {
-                        failed = true;
-                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
-                        + a.data().get(k) + " received: " + b.data().get(k));
+                } else {
+                    for (int k = 0; k < a.data().size(); k++) {
+                        if (!a.data().get(k).equals(b.data().get(k))) {
+                            failed = true;
+                            System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i
+                            + " expected: " + a.data().get(k) + " received: " + b.data().get(k));
+                        }
+                        outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                     }
-                    outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
             }
         }

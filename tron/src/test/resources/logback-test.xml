@@ -13,7 +13,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.chiralbehaviors.tron" level="trace" additivity="false">
+    <logger name="com.chiralbehaviors.tron" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

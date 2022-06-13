@@ -176,6 +176,10 @@ public class RingCommunications<T extends Member, Comm extends Link> {
         return getTraversalOrder().get(current);
     }
 
+    private List<Integer> getTraversalOrder() {
+        return traversalOrder.get();
+    }
+
     private Destination<T, Comm> linkFor(Digest digest, int index, Function<T, IterateResult> test) {
         int r = getTraversalOrder().get(index);
         Ring<T> ring = context.ring(r);
@@ -223,9 +227,5 @@ public class RingCommunications<T extends Member, Comm extends Link> {
 
     private void setLastRingIndex(int lastRing) {
         this.lastRingIndex = lastRing;
-    }
-
-    private List<Integer> getTraversalOrder() {
-        return traversalOrder.get();
     }
 }
