@@ -240,7 +240,7 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
     private votingResult voteUsingPrimeAncestors(Unit uc, Unit u, Dag dag, BiFunction<Unit, Unit, R> voter) {
         short pop = 0;
         short unpop = 0;
-        for (short pid = 0; pid < u.parents().length; pid++) {
+        for (short pid = 0; pid < dag.nProc(); pid++) {
             var floor = u.floor(pid);
             var votesOne = false;
             var votesZero = false;

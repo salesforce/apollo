@@ -199,6 +199,9 @@ public class EtherealTest {
 
     @Test
     public void lots() throws Exception {
+        if (!Boolean.getBoolean("large_tests")) {
+            return;
+        }
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
             context();

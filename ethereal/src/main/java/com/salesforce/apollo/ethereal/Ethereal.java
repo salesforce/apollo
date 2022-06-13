@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
@@ -23,7 +22,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -116,7 +114,6 @@ public class Ethereal {
     private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
-    private final ReentrantLock        lock         = new ReentrantLock(true);
     private final int                  maxSerializedSize;
     private final Consumer<Integer>    newEpochAction;
     private final AtomicBoolean        started      = new AtomicBoolean();
@@ -136,10 +133,8 @@ public class Ethereal {
         this.maxSerializedSize = maxSerializedSize;
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
-            locked(() -> {
-                log.trace("Sending: {} on: {}", u, config.logLabel());
-                insert(u);
-            });
+            log.trace("Sending: {} on: {}", u, config.logLabel());
+            insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
             final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
@@ -334,26 +329,6 @@ public class Ethereal {
         }
     }
 
-    private <T> T locked(Callable<T> call) {
-        lock.lock();
-        try {
-            return call.call();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private void locked(Runnable r) {
-        lock.lock();
-        try {
-            r.run();
-        } finally {
-            lock.unlock();
-        }
-    }
-
     /**
      * newEpoch creates and returns a new epoch object with the given EpochID. If
      * such epoch already exists, returns it.
@@ -363,29 +338,27 @@ public class Ethereal {
             log.trace("Finished, beyond last epoch: {} on: {}", epoch, config.logLabel());
             return null;
         }
-        return locked(() -> {
-            final var currentId = currentEpoch.get();
-            epoch e = epochs.get(epoch);
-            if (e == null && epoch == currentId + 1) {
-                e = createEpoch(epoch);
-                epochs.put(epoch, e);
-                log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
-            }
+        final var currentId = currentEpoch.get();
+        epoch e = epochs.get(epoch);
+        if (e == null && epoch == currentId + 1) {
+            e = createEpoch(epoch);
+            epochs.put(epoch, e);
+            log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
+        }
 
-            if (epoch == currentId + 1) {
-                assert e != null;
-                var prev = epochs.remove(currentId - 1);
-                if (prev != null) {
-                    prev.close();
-                }
-                currentEpoch.set(epoch);
-
-                if (newEpochAction != null) {
-                    newEpochAction.accept(epoch);
-                }
+        if (epoch == currentId + 1) {
+            assert e != null;
+            var prev = epochs.remove(currentId - 1);
+            if (prev != null) {
+                prev.close();
             }
-            return e;
-        });
+            currentEpoch.set(epoch);
+
+            if (newEpochAction != null) {
+                newEpochAction.accept(epoch);
+            }
+        }
+        return e;
     }
 
     /**
@@ -393,20 +366,18 @@ public class Ethereal {
      * such epoch already exists, returns it.
      */
     private epoch retreiveEpoch(int epoch) {
-        return locked(() -> {
-            final var currentId = currentEpoch.get();
-            final epoch e = epochs.get(epoch);
-            if (e != null && epoch == e.id()) {
-                return e;
-            }
-            if (e == null && epoch == currentId + 1) {
-                final var newEpoch = createEpoch(epoch);
-                epochs.put(epoch, newEpoch);
-                log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
-                return newEpoch;
-            }
-            return null;
-        });
+        final var currentId = currentEpoch.get();
+        final epoch e = epochs.get(epoch);
+        if (e != null && epoch == e.id()) {
+            return e;
+        }
+        if (e == null && epoch == currentId + 1) {
+            final var newEpoch = createEpoch(epoch);
+            epochs.put(epoch, newEpoch);
+            log.trace("new epoch created: {} on: {}", epoch, config.logLabel());
+            return newEpoch;
+        }
+        return null;
     }
 
     /**
