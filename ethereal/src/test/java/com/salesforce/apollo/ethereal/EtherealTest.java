@@ -8,7 +8,6 @@
 package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -19,7 +18,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -56,7 +54,7 @@ public class EtherealTest {
     @Test
     public void context() throws Exception {
 
-        final var gossipPeriod = Duration.ofMillis(5);
+        final var gossipPeriod = Duration.ofMillis(15);
 
         var registry = new MetricRegistry();
 
@@ -67,10 +65,6 @@ public class EtherealTest {
         List<DataSource> dataSources = new ArrayList<>();
         List<ChRbcGossip> gossipers = new ArrayList<>();
         List<Router> comms = new ArrayList<>();
-        var schedN = new AtomicInteger();
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(nProc,
-                                                                              r -> new Thread(r, "gossip scheduler"
-                                                                              + schedN.incrementAndGet()));
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
@@ -87,8 +81,8 @@ public class EtherealTest {
         for (Member m : members) {
             context.activate(m);
         }
-        var builder = Config.deterministic()
-                            .setFpr(0.000125)
+        var builder = Config.newBuilder()
+                            .setFpr(0.0125)
                             .setnProc(nProc)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
 
@@ -105,11 +99,9 @@ public class EtherealTest {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
-            var execN = new AtomicInteger();
-            var executor = Executors.newFixedThreadPool(2, r -> new Thread(r, "system executor: "
-            + execN.incrementAndGet() + " for: " + pid));
-            executors.add(executor);
-            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), executor, metrics.limitsMetrics());
+            final var exec = Executors.newFixedThreadPool(2);
+            executors.add(exec);
+            var com = new LocalRouter(prefix, ServerConnectionCache.newBuilder(), exec, metrics.limitsMetrics());
             comms.add(com);
             final var member = members.get(i);
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), maxSize, ds,
@@ -127,7 +119,9 @@ public class EtherealTest {
                                               }
                                           });
 
-            var gossiper = new ChRbcGossip(context, member, controller.processor(), com, executor, metrics);
+            var e = Executors.newFixedThreadPool(3);
+            executors.add(e);
+            var gossiper = new ChRbcGossip(context, member, controller.processor(), com, e, metrics);
             gossipers.add(gossiper);
             dataSources.add(ds);
             controllers.add(controller);
@@ -142,7 +136,11 @@ public class EtherealTest {
         try {
             controllers.forEach(e -> e.start());
             comms.forEach(e -> e.start());
-            gossipers.forEach(e -> e.start(gossipPeriod, scheduler));
+            gossipers.forEach(e -> {
+                final var sched = Executors.newSingleThreadScheduledExecutor();
+                executors.add(sched);
+                e.start(gossipPeriod, sched);
+            });
             finished.await(60, TimeUnit.SECONDS);
         } finally {
             controllers.forEach(e -> e.stop());
@@ -155,34 +153,37 @@ public class EtherealTest {
                 } catch (InterruptedException e1) {
                 }
             });
-            scheduler.shutdown();
-            scheduler.awaitTermination(1, TimeUnit.SECONDS);
         }
         final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
         assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
+        boolean failed = false;
         for (int i = 0; i < nProc; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != 87) {
-                fail("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
+                failed = true;
+                System.out.println("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
             }
             for (int j = 0; j < preblocks.size(); j++) {
                 var a = preblocks.get(j);
                 var b = output.get(j);
                 if (a.data().size() != b.data().size()) {
-                    fail("Mismatch at block: " + j + " process: " + i + " data size: " + a.data().size() + " != "
-                    + b.data().size());
+                    failed = true;
+                    System.out.println("Mismatch at block: " + j + " process: " + i + " data size: " + a.data().size()
+                    + " != " + b.data().size());
                 }
                 for (int k = 0; k < a.data().size(); k++) {
                     if (!a.data().get(k).equals(b.data().get(k))) {
-                        fail("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
+                        failed = true;
+                        System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i + " expected: "
                         + a.data().get(k) + " received: " + b.data().get(k));
                     }
                     outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k)).getContents().toByteArray()));
                 }
             }
         }
+        assertFalse(failed, "Failed");
 //        System.out.println();
 //
 //        ConsoleReporter.forRegistry(registry)

@@ -124,13 +124,13 @@ public class Creator {
         log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
         try {
             update(u);
-            var built = ready();
             ext.chooseNextTimingUnits();
+            var built = ready();
             while (built != null) {
                 log.trace("Ready, creating unit on: {}", conf.logLabel());
                 createUnit(built.parents, built.level, getData(built.level));
-                ext.chooseNextTimingUnits();
                 built = ready();
+                ext.chooseNextTimingUnits();
             }
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);

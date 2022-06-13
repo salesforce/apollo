@@ -82,7 +82,7 @@ public class ExtenderTest {
         for (int level = 0; level < 8; level++) {
             TimingRound timingRound = ordering.nextRound();
             assertNotNull(timingRound, "failed at level:  " + level);
-            var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT);
+            var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT, "");
             assertNotNull(thisRound);
             timingRounds.add(thisRound);
         }

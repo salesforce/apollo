@@ -78,7 +78,6 @@ public class Adder {
                             SignedPreVote.newBuilder().setVote(prevote).setSignature(signature.toSig()).build());
     }
 
-    private final List<DigestBloomFilter>    cmts            = new ArrayList<>();
     private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
     private final Config                     conf;
     private final Dag                        dag;
@@ -88,12 +87,10 @@ public class Adder {
     private final int                        maxSize;
     private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
     private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
-    private final List<DigestBloomFilter>    prevs           = new ArrayList<>();
     private volatile int                     round           = 0;
     private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
     private final Map<Digest, SignedPreVote> signedPrevotes  = new TreeMap<>();
     private final int                        threshold;
-    private final List<DigestBloomFilter>    unts            = new ArrayList<>();
     private final Map<Digest, Waiting>       waiting         = new TreeMap<>();
     private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
@@ -105,14 +102,6 @@ public class Adder {
         this.failed = failed;
         this.threshold = Dag.threshold(conf.nProc());
         this.maxSize = maxSize;
-        for (int i = 0; i < 3; i++) {
-            prevs.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                            conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            cmts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-            unts.add(new DigestBloomFilter(Entropy.nextBitsStreamLong(),
-                                           conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr()));
-        }
     }
 
     public void close() {
@@ -165,9 +154,6 @@ public class Adder {
             round = u.height();
             log.trace("Producing unit: {} on: {}", u, conf.logLabel());
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
-            for (var unt : unts) {
-                unt.add(wpu.hash());
-            }
             checkIfMissing(wpu);
             checkParents(wpu);
             prevote(wpu);
@@ -220,9 +206,6 @@ public class Adder {
                 signedPrevotes.computeIfAbsent(signature.toDigest(conf.digestAlgorithm()), h -> {
                     validated.set(validate(pv));
                     if (validated.get()) {
-                        for (var pvts : prevs) {
-                            pvts.add(h);
-                        }
                         return pv;
                     } else {
                         return null;
@@ -243,9 +226,6 @@ public class Adder {
                 signedCommits.computeIfAbsent(digest, h -> {
                     validated.set(validate(c));
                     if (validated.get()) {
-                        for (var cmt : cmts) {
-                            cmt.add(h);
-                        }
                         return c;
                     } else {
                         return null;
@@ -450,13 +430,7 @@ public class Adder {
             log.warn("Invalid parents: {} on: {}", decoded, conf.nProc() - 1, conf.logLabel());
             return;
         }
-        for (var unt : unts) {
-            unt.add(digest);
-        }
         waiting.put(digest, wpu);
-        for (var unt : unts) {
-            unt.add(digest);
-        }
 
         if (preunit.height() - 1 > round) {
             wpu.setState(State.WAITING_ON_ROUND);
@@ -592,18 +566,28 @@ public class Adder {
      * Answer the bloom filter with the commits the receiver has
      */
     private Biff haveCommits() {
-        return cmts.get(Entropy.nextBitsStreamInt(cmts.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        signedCommits.keySet().forEach(d -> bff.add(d));
+        return bff.toBff();
     }
 
     /**
      * Answer the bloom filter with the prevotes the receiver has
      */
     private Biff havePreVotes() {
-        return prevs.get(Entropy.nextBitsStreamInt(prevs.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        signedPrevotes.keySet().forEach(d -> bff.add(d));
+        return bff.toBff();
     }
 
     private Biff haveUnits() {
-        return unts.get(Entropy.nextBitsStreamInt(unts.size())).toBff();
+        var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
+                                        conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
+        waiting.keySet().forEach(d -> bff.add(d));
+        dag.have(bff, epoch);
+        return bff.toBff();
     }
 
     private <T> T locked(Callable<T> call) {

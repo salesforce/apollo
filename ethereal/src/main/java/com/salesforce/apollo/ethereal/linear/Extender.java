@@ -35,6 +35,7 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
 public class Extender {
     private static Logger log = LoggerFactory.getLogger(Extender.class);
 
+    private final int                               commonVoteDeterministicPrefix;
     private final CommonRandomPermutation           crpIterator;
     private AtomicReference<Unit>                   currentTU = new AtomicReference<>();
     private final Dag                               dag;
@@ -52,6 +53,7 @@ public class Extender {
         firstDecidedRound = conf.firstDecidedRound();
         orderStartLevel = conf.orderStartLevel();
         digestAlgorithm = conf.digestAlgorithm();
+        commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
         crpIterator = new CommonRandomPermutation(dag.nProc(), digestAlgorithm, conf.logLabel());
     }
 
@@ -74,31 +76,18 @@ public class Extender {
         }
 
         var units = dag.unitsOnLevel(level);
-        short count = 0;
-        for (short i = 0; i < dag.nProc(); i++) {
-            final var atPid = units.get(i);
-            if (atPid != null && !atPid.isEmpty()) {
-                count++;
-            }
-        }
-        if (!dag.isQuorum(count)) {
-            log.trace("No round, dag mxLvl: {} level: {} count: {} is less than quorum: {} on: {}", dagMaxLevel, level,
-                      count, Dag.minimalQuorum(dag.nProc(), 3), dag.pid());
-            return null;
-        } else {
-            log.trace("Round proceeding, dag mxLvl: {} level: {} count: {} on: {}", dagMaxLevel, level, count,
-                      dag.pid());
-        }
 
         var decided = new AtomicBoolean();
         crpIterator.iterate(level, units, previousTU, uc -> {
-            SuperMajorityDecider decider = getDecider(uc, zeroVoteRoundForCommonVote);
+            SuperMajorityDecider decider = getDecider(uc);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
                 final List<Unit> ltus = lastTUs.get();
-                var next = ltus.isEmpty() ? ltus : new ArrayList<>(ltus.subList(1, ltus.size()));
-                next.add(previousTU);
-                lastTUs.set(next);
+//                var next = ltus.isEmpty() ? ltus : new ArrayList<>(ltus.subList(1, ltus.size()));
+                if (previousTU != null) {
+                    ltus.add(previousTU);
+                }
+                lastTUs.set(ltus);
                 currentTU.set(uc);
                 deciders.clear();
                 decided.set(true);
@@ -119,16 +108,16 @@ public class Extender {
         final var ltu = lastTUs.get();
         if (log.isTraceEnabled()) {
             log.trace("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu.shortString(),
-                      ltu == null ? null : ltu.stream().map(e -> e == null ? "null" : e.shortString()).toList(),
-                      dagMaxLevel, level, dag.pid());
+                      ltu.isEmpty() ? "null" : ltu.get(ltu.size() - 1).shortString(), dagMaxLevel, level, dag.pid());
         }
         return new TimingRound(ctu, new ArrayList<>(ltu));
     }
 
-    private SuperMajorityDecider getDecider(Unit uc, int zeroRound) {
+    private SuperMajorityDecider getDecider(Unit uc) {
         return deciders.computeIfAbsent(uc.hash(),
                                         h -> new SuperMajorityDecider(new UnanimousVoter(dag, uc,
                                                                                          zeroVoteRoundForCommonVote,
-                                                                                         zeroRound, new HashMap<>())));
+                                                                                         commonVoteDeterministicPrefix,
+                                                                                         new HashMap<>())));
     }
 }

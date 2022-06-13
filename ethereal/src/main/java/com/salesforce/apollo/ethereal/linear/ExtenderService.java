@@ -57,7 +57,7 @@ public class ExtenderService {
         var round = ordering.nextRound();
         while (round != null) {
             log.trace("Producing timing round: {} on: {}", round, config.logLabel());
-            var units = round.orderedUnits(config.digestAlgorithm());
+            var units = round.orderedUnits(config.digestAlgorithm(), config.logLabel());
             log.trace("Output of: {} preBlock: {} on: {}", round, units, config.logLabel());
             output.accept(units);
             round = ordering.nextRound();

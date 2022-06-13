@@ -17,6 +17,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,6 +37,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  *
@@ -109,6 +112,7 @@ public class Ethereal {
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
+    private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final ReentrantLock        lock         = new ReentrantLock(true);
@@ -136,6 +140,11 @@ public class Ethereal {
                 insert(u);
             });
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
+        executor = Executors.newSingleThreadExecutor(r -> {
+            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public Processor processor() {
@@ -235,10 +244,16 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
-            // don't put our own units on the unit belt, creator already knows about them.
-            if (u.creator() != config.pid()) {
-                creator.consume(u, ext);
-            }
+            executor.execute(Utils.wrapped(() -> {
+                if (!started.get()) {
+                    return;
+                }
+                // don't put our own units on the unit belt, creator already knows about them.
+                if (u.creator() != config.pid()) {
+                    creator.consume(u, ext);
+                }
+            }, log));
+
         });
         return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
                          new AtomicBoolean(true));
