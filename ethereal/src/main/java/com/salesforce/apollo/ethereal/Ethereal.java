@@ -16,10 +16,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -36,7 +33,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  *
@@ -97,7 +93,8 @@ public class Ethereal {
             }
             if (preBlock != null) {
 
-                log.trace("Emitting pre block: {} on: {}", print, config.logLabel());
+                log.warn("Emitting pre block: {} on: {}", units.stream().map(e -> e.shortString()).toList(),
+                         config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
@@ -111,7 +108,6 @@ public class Ethereal {
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
-    private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
@@ -136,11 +132,6 @@ public class Ethereal {
             log.trace("Sending: {} on: {}", u, config.logLabel());
             insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
-        executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     public Processor processor() {
@@ -231,12 +222,6 @@ public class Ethereal {
         failed.clear();
         lastTiming.clear();
         log.trace("Orderer stopped on: {}", config.logLabel());
-        executor.shutdown();
-        try {
-            executor.awaitTermination(500, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e1) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private epoch createEpoch(int epoch) {
@@ -246,17 +231,11 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
-            executor.execute(Utils.wrapped(() -> {
-                if (!started.get()) {
-                    return;
-                }
-                ext.chooseNextTimingUnits();
-                // don't put our own units on the unit belt, creator already knows about them.
-                if (u.creator() != config.pid()) {
-                    creator.consume(u);
-                }
-            }, log));
-
+            ext.chooseNextTimingUnits();
+            // don't put our own units on the unit belt, creator already knows about them.
+            if (u.creator() != config.pid()) {
+                creator.consume(u);
+            }
         });
         return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
                          new AtomicBoolean(true));
