@@ -93,8 +93,7 @@ public class Ethereal {
             }
             if (preBlock != null) {
 
-                log.warn("Emitting pre block: {} on: {}", units.stream().map(e -> e.shortString()).toList(),
-                         config.logLabel());
+                log.trace("Emitting pre block: {} on: {}", print, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
