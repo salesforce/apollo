@@ -23,7 +23,6 @@ import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Unit;
 import com.salesforce.apollo.ethereal.linear.UnanimousVoter.SuperMajorityDecider;
-import com.salesforce.apollo.ethereal.linear.UnanimousVoter.Vote;
 
 /**
  * Extender is a type that implements an algorithm that extends order of units

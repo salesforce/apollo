@@ -109,13 +109,13 @@ public class Ethereal {
     private final Config               config;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
-    private volatile Thread            currentThread;
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
     private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
     private final Consumer<Integer>    newEpochAction;
+    private final ExecutorService      producer;
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
 
@@ -137,7 +137,12 @@ public class Ethereal {
             insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
+            final var t = new Thread(r, "Ethereal Executor[" + conf.logLabel() + "]");
+            t.setDaemon(true);
+            return t;
+        });
+        producer = Executors.newSingleThreadExecutor(r -> {
+            final var t = new Thread(r, "Ethereal Producer[" + conf.logLabel() + "]");
             t.setDaemon(true);
             return t;
         });
@@ -227,10 +232,7 @@ public class Ethereal {
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
         executor.shutdownNow();
-        final var c = currentThread;
-        if (c != null) {
-            c.interrupt();
-        }
+        producer.shutdownNow();
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -248,7 +250,7 @@ public class Ethereal {
             ext.chooseNextTimingUnits();
             // don't put our own units on the unit belt, creator already knows about them.
             if (u.creator() != config.pid()) {
-                creator.consume(u);
+                producer.execute(Utils.wrapped(() -> creator.consume(u), log));
             }
         });
         return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
@@ -294,14 +296,7 @@ public class Ethereal {
                 finishEpoch(epoch);
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                executor.execute(Utils.wrapped(() -> {
-                    currentThread = Thread.currentThread();
-                    try {
-                        toPreblock.accept(round);
-                    } finally {
-                        currentThread = null;
-                    }
-                }, log));
+                executor.execute(Utils.wrapped(() -> toPreblock.accept(round), log));
                 log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
                           config.logLabel());
             }

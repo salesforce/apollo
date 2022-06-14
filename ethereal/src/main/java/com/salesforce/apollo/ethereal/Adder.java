@@ -445,17 +445,20 @@ public class Adder {
 
     // Advance the state of the RBC by one round
     private void advance() {
+        var ready = new ArrayList<Waiting>();
         var iterator = waitingForRound.entrySet().iterator();
         while (iterator.hasNext()) {
             var e = iterator.next();
             if (e.getValue().height() - 1 <= round) {
-                iterator.remove();
-                log.trace("Advanced: {} clearing round: {} on: {}", e.getValue(), round, conf.logLabel());
-                prevote(e.getValue());
+                ready.add(e.getValue());
             } else {
                 log.trace("Waiting for round: {} current: {} on: {}", e.getValue(), round, conf.logLabel());
             }
         }
+        ready.forEach(w -> {
+            log.trace("Advanced: {} clearing round: {} on: {}", w, round, conf.logLabel());
+            prevote(w);
+        });
     }
 
     /**

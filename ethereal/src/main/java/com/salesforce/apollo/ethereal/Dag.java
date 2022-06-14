@@ -214,7 +214,13 @@ public interface Dag {
 
         @Override
         public void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work) {
-            read(() -> unitsOnLevel(level).forEach(e -> work.apply(e)));
+            read(() -> {
+                for (var u : unitsOnLevel(level)) {
+                    if (!work.apply(u)) {
+                        return;
+                    }
+                }
+            });
         }
 
         @Override

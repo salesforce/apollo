@@ -319,12 +319,12 @@ public class Producer {
         final var txns = aggregate.stream().flatMap(e -> e.getTransactionsList().stream()).toList();
 
         if (!txns.isEmpty()) {
-            log.warn("transactions: {} cum hash: {} height: {} on: {}", txns.size(),
-                     txns.stream()
-                         .map(t -> CHOAM.hashOf(t, params().digestAlgorithm()))
-                         .reduce((a, b) -> a.xor(b))
-                         .orElse(null),
-                     lb.height().add(1), params().member().getId());
+            log.trace("transactions: {} comb hash: {} height: {} on: {}", txns.size(),
+                      txns.stream()
+                          .map(t -> CHOAM.hashOf(t, params().digestAlgorithm()))
+                          .reduce((a, b) -> a.xor(b))
+                          .orElse(null),
+                      lb.height().add(1), params().member().getId());
             var builder = Executions.newBuilder();
             txns.forEach(e -> builder.addExecutions(e));
 

@@ -12,6 +12,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Unit;
@@ -23,6 +26,8 @@ import com.salesforce.apollo.ethereal.Unit;
 
 public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, int commonVoteDeterministicPrefix,
                              Map<Digest, Vote> votingMemo) {
+
+    private static final Logger log = LoggerFactory.getLogger(UnanimousVoter.class);
 
     private record R(Vote vote, boolean finished) {}
 
@@ -63,6 +68,7 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                 }
                 if (updated) {
                     if (superMajority(v.dag, new votingResult(pop, unpop)) != Vote.UNDECIDED) {
+                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
                         return new R(result, true);
                     }
                 } else {
@@ -71,13 +77,17 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                     pop += remaining;
                     unpop += remaining;
                     if (superMajority(v.dag, new votingResult(pop, unpop)) == Vote.UNDECIDED) {
+                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
                         return new R(result, true);
                     }
                 }
 
+                log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
                 return new R(result, false);
             });
-            return superMajority(v.dag, r);
+            final var vote = superMajority(v.dag, r);
+            log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", vote, u);
+            return vote;
         }
 
         /**
@@ -146,10 +156,6 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
         }
     }
 
-    public enum Vote {
-        POPULAR, UNDECIDED, UNPOPULAR;
-    }
-
     static final int firstVotingRound = 1;
 
     private boolean coinToss(Unit uc, int level) {
@@ -181,6 +187,8 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                 }
                 if (lastVote.get() != null) {
                     if (lastVote.get() != result.get()) {
+                        log.trace("Undecided, last Vote: {} != result: {} for candidate: {} prime ancestor: {}",
+                                  lastVote.get(), result.get(), uc, u);
                         lastVote.set(Vote.UNDECIDED);
                         return new R(result.get(), true);
                     }
@@ -191,8 +199,10 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
 
             });
             if (lastVote.get() == null) {
+                log.trace("Undecided, no last vote for candidate: {} prime ancestor: {}", lastVote.get(), uc, u);
                 return Vote.UNDECIDED;
             }
+            log.trace("Vote result: {} candidate: {} prime ancestor: {}", lastVote.get(), uc, u);
             return lastVote.get();
         } finally {
             votingMemo.put(u.hash(), result.get());
@@ -213,24 +223,30 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
     private Vote commonVote(int level) {
         var round = level - uc.level();
         if (round <= firstVotingRound) {
-            // "Default vote is asked on too low unit level."
+            log.trace("Common vote is asked on too low unit level: {}", level);
             return Vote.UNDECIDED;
         }
         if (round <= commonVoteDeterministicPrefix) {
             if (round == zeroVoteRoundForCommonVote) {
+                log.trace("Common vote on: {} is asked on the zero vote round: {}", level, zeroVoteRoundForCommonVote);
                 return Vote.UNPOPULAR;
             }
+            log.trace("Common vote popular on: {} as round is beyond the determinist prefix: {}", level,
+                      commonVoteDeterministicPrefix);
             return Vote.POPULAR;
         }
         if (coinToss(uc, level + 1)) {
+            log.trace("Common vote popular on: {} due to coin toss", level, commonVoteDeterministicPrefix);
             return Vote.POPULAR;
         }
 
+        log.trace("Common vote unpopular on: {}", level, commonVoteDeterministicPrefix);
         return Vote.UNPOPULAR;
     }
 
     private Vote initialVote(Unit uc, Unit u) {
         if (u.above(uc)) {
+            log.trace("Intial vote popular candidate: {} is above {}", uc, u);
             return Vote.POPULAR;
         } else {
             return Vote.UNPOPULAR;
@@ -242,6 +258,7 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
         short unpop = 0;
         for (short pid = 0; pid < dag.nProc(); pid++) {
             var floor = u.floor(pid);
+            log.trace("Voting pid: {} candidate: {} prime: {} is: {}", pid, uc, u, floor);
             var votesOne = false;
             var votesZero = false;
             var finish = false;
@@ -279,6 +296,8 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                 unpop++;
             }
             if (finish) {
+                log.trace("Vote pid: {} pop: {} unpop: {} for candidate: {} prime ancestor: {}", pid, pop, unpop, uc,
+                          u);
                 return new votingResult(pop, unpop);
             }
         }
