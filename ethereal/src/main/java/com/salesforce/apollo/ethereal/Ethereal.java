@@ -16,6 +16,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,6 +35,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  *
@@ -106,7 +109,9 @@ public class Ethereal {
     private final Config               config;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
+    private volatile Thread            currentThread;
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
+    private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
@@ -131,6 +136,11 @@ public class Ethereal {
             log.trace("Sending: {} on: {}", u, config.logLabel());
             insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
+        executor = Executors.newSingleThreadExecutor(r -> {
+            final var t = new Thread(r, "Order Executor[" + conf.logLabel() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public Processor processor() {
@@ -216,6 +226,11 @@ public class Ethereal {
         }
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
+        executor.shutdownNow();
+        final var c = currentThread;
+        if (c != null) {
+            c.interrupt();
+        }
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -279,7 +294,14 @@ public class Ethereal {
                 finishEpoch(epoch);
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                toPreblock.accept(round);
+                executor.execute(Utils.wrapped(() -> {
+                    currentThread = Thread.currentThread();
+                    try {
+                        toPreblock.accept(round);
+                    } finally {
+                        currentThread = null;
+                    }
+                }, log));
                 log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
                           config.logLabel());
             }
