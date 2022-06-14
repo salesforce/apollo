@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -86,6 +87,7 @@ public class Adder {
     private final ReentrantLock              lock            = new ReentrantLock(true);
     private final int                        maxSize;
     private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
+    private final PriorityQueue<Waiting>     output          = new PriorityQueue<>();
     private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
     private volatile int                     round           = 0;
     private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
@@ -120,12 +122,33 @@ public class Adder {
     public String dump() {
         return locked(() -> {
             var buff = new StringBuffer();
-            buff.append("pid: ").append(conf.pid()).append('\n');
-            buff.append('\t').append("round: ").append(round).append('\n');
-            buff.append('\t').append("failed: ").append(failed).append('\n');
-            buff.append('\t').append("missing: ").append(missing).append('\n');
-            buff.append('\t').append("waiting: ").append(waiting).append('\n');
-            buff.append('\t').append("waiting for round: ").append(waitingForRound);
+            buff.append('\t')
+                .append("pid: ")
+                .append(conf.pid())
+                .append('\n')
+                .append('\t')
+                .append("round: ")
+                .append(round)
+                .append('\n')
+                .append('\t')
+                .append("failed: ")
+                .append(failed)
+                .append('\n')
+                .append('\t')
+                .append("missing: ")
+                .append(missing)
+                .append('\n')
+                .append('\t')
+                .append("waiting: ")
+                .append(waiting.values().stream().toList())
+                .append('\n')
+                .append('\t')
+                .append("commits: ")
+                .append(commits.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList())
+                .append('\n')
+                .append('\t')
+                .append("prevotes: ")
+                .append(prevotes.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList());
             return buff.toString();
         });
     }
@@ -160,6 +183,7 @@ public class Adder {
             commit(wpu);
             output(wpu);
             advance();
+            output();
         });
     }
 
@@ -235,6 +259,7 @@ public class Adder {
                     commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
                 }
             });
+            output();
         });
     }
 
@@ -628,6 +653,16 @@ public class Adder {
         pus.values().forEach(pu -> builder.addUnits(pu));
     }
 
+    private void output() {
+        if (output.isEmpty()) {
+            return;
+        }
+        log.warn("Output units: {} on: {}", output.size(), conf.logLabel());
+        var inserted = output.stream().map(wpu -> wpu.decoded()).toList();
+        output.clear();
+        dag.insert(inserted);
+    }
+
     private void output(Waiting wpu) {
         boolean valid = wpu.height() == 0 || wpu.height() - 1 <= round;
         assert valid : wpu + " is not <= " + round;
@@ -639,7 +674,7 @@ public class Adder {
 
         log.trace("Inserting unit: {} on: {}", wpu.decoded(), conf.logLabel());
 
-        dag.insert(wpu.decoded());
+        output.add(wpu);
 
         for (var ch : wpu.children()) {
             ch.decWaiting();

@@ -234,8 +234,8 @@ public interface PreUnit {
                            Crown.from(pu.getCrown()), pu.getData(), signature, pu.getSalt().toByteArray());
     }
 
-    public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
-        pus.sort(new Comparator<PreUnit>() {
+    public static Comparator<PreUnit> topologicalComparator() {
+        return new Comparator<PreUnit>() {
             @Override
             public int compare(PreUnit pu1, PreUnit pu2) {
                 var comp = Integer.compare(pu1.epoch(), pu2.epoch());
@@ -246,9 +246,13 @@ public interface PreUnit {
                 if (comp < 0 || comp > 0) {
                     return comp;
                 }
-                return Short.compare(pu1.creator(), pu2.creator());
+                return Integer.compare(pu1.creator(), pu2.creator());
             }
-        });
+        };
+    }
+
+    public static List<PreUnit> topologicalSort(List<PreUnit> pus) {
+        pus.sort(topologicalComparator());
         return pus;
     }
 

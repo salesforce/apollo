@@ -23,7 +23,13 @@
     <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.ethereal.linear.Extender" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ethereal.Creator" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.ethereal.linear.Adder" level="info" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+    <logger name="com.salesforce.apollo.ethereal.linear.Extender" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.ethereal.linear.CommonRandomPermutation" level="info" additivity="false">
@@ -32,15 +38,12 @@
     <logger name="com.salesforce.apollo.ethereal.linear.TimingRound" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.ethereal.Ethereal" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ethereal.Ethereal" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.ethereal.memberships" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
-    </logger>
-    <logger name="com.salesforce.apollo.ethereal.rbc.ChRbcGossiper" level="info" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
+    </logger> 
     <logger name="com.salesforce.apollo.membership.messaging.rbc" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>

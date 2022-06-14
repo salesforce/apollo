@@ -9,6 +9,7 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -179,6 +180,32 @@ public interface Dag {
                      .map(e -> e.getKey())
                      .forEach(d -> biff.add(d));
             });
+        }
+
+        @Override
+        public void insert(Collection<Unit> insertion) {
+            write(() -> {
+                for (Unit u : insertion) {
+                    if (u.epoch() != epoch) {
+                        log.warn("Invalid insert of: {} into epoch: {} expected: {} on: {}", u, u.epoch(), epoch,
+                                 config.logLabel());
+                    }
+                    var unit = u.embed(this);
+                    for (var hook : preInsert) {
+                        hook.accept(unit);
+                    }
+                    updateUnitsOnHeight(unit);
+                    updateUnitsOnLevel(unit);
+                    units.put(unit.hash(), unit);
+                    updateMaximal(unit);
+                }
+            });
+
+            for (Unit u : insertion) {
+                for (var hook : postInsert) {
+                    hook.accept(u);
+                }
+            }
         }
 
         @Override
@@ -588,6 +615,8 @@ public interface Dag {
     List<Unit> get(long id);
 
     void have(DigestBloomFilter biff, int epoch);
+
+    void insert(Collection<Unit> u);
 
     void insert(Unit u);
 

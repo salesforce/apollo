@@ -68,7 +68,7 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                 }
                 if (updated) {
                     if (superMajority(v.dag, new votingResult(pop, unpop)) != Vote.UNDECIDED) {
-                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
+                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, uPrA);
                         return new R(result, true);
                     }
                 } else {
@@ -77,16 +77,16 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                     pop += remaining;
                     unpop += remaining;
                     if (superMajority(v.dag, new votingResult(pop, unpop)) == Vote.UNDECIDED) {
-                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
+                        log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, uPrA);
                         return new R(result, true);
                     }
                 }
 
-                log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, u);
+                log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", result, uc, uPrA);
                 return new R(result, false);
             });
             final var vote = superMajority(v.dag, r);
-            log.trace("Vote decided: {} for candidate: {} prime ancestor: {}", vote, u);
+            log.trace("Vote decided: {} for candidate: {}", vote, u);
             return vote;
         }
 
@@ -231,7 +231,7 @@ public record UnanimousVoter(Dag dag, Unit uc, int zeroVoteRoundForCommonVote, i
                 log.trace("Common vote on: {} is asked on the zero vote round: {}", level, zeroVoteRoundForCommonVote);
                 return Vote.UNPOPULAR;
             }
-            log.trace("Common vote popular on: {} as round is beyond the determinist prefix: {}", level,
+            log.trace("Common vote popular on: {} as round is less than the determinist prefix: {}", level,
                       commonVoteDeterministicPrefix);
             return Vote.POPULAR;
         }

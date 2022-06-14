@@ -141,8 +141,9 @@ public class EtherealTest {
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });
-            finished.await(60, TimeUnit.SECONDS);
+            finished.await(5, TimeUnit.SECONDS);
         } finally {
+            controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());
             gossipers.forEach(e -> e.stop());
             comms.forEach(e -> e.close());

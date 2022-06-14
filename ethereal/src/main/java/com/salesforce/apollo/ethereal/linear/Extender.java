@@ -90,13 +90,14 @@ public class Extender {
                 currentTU.set(uc);
                 deciders.clear();
                 decided.set(true);
-                log.trace("Round decided: {} on: {}", uc.level(), dag.pid());
+                log.trace("Popular: {} on: {}", uc, dag.pid());
                 return false;
             }
             if (decision.decision() == Vote.UNDECIDED) {
-                log.trace("No round, undecided on: {}", dag.pid());
+                log.trace("Undecided: {} on: {}", uc, dag.pid());
                 return false;
             }
+            log.trace("Unpopular: {} on: {}", uc, dag.pid());
             return true;
         });
         if (!decided.get()) {
