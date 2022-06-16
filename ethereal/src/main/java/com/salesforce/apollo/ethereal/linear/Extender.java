@@ -51,13 +51,21 @@ public class Extender {
     public TimingRound chooseNextTimingUnits(TimingRound lastTU, Consumer<List<Unit>> output) {
         return dag.read(() -> {
             log.trace("Choose next, last: {} on: {}", lastTU, conf.logLabel());
-            TimingRound round = nextRound(lastTU);
-            if (round != null && !round.equals(lastTU)) {
-                var units = round.orderedUnits(conf.digestAlgorithm(), conf.logLabel());
-                log.trace("Output of: {} preBlock: {} on: {}", round, units, conf.logLabel());
-                output.accept(units);
-            }
-            return round;
+            TimingRound next;
+            TimingRound last = lastTU;
+
+            do {
+                next = nextRound(last);
+                if (next != null && !next.equals(last)) {
+                    var units = next.orderedUnits(conf.digestAlgorithm(), conf.logLabel());
+                    log.trace("Output of: {} preBlock: {} on: {}", next, units, conf.logLabel());
+                    output.accept(units);
+                    last = next;
+                } else {
+                    return next;
+                }
+            } while (next != null && !next.equals(last));
+            return next;
         });
     }
 
