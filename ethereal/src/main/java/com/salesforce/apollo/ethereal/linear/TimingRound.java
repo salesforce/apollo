@@ -21,8 +21,15 @@ import com.salesforce.apollo.ethereal.Unit;
  * @author hal.hildebrand
  *
  */
-public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
+public record TimingRound(Unit currentTU, int level, Unit lastTU) {
+
     private static final Logger log = LoggerFactory.getLogger(TimingRound.class);
+
+    @Override
+    public String toString() {
+        return String.format("TimingRound [current: %s, level: %s, lastTU: %s]", currentTU.shortString(), level,
+                             lastTU == null ? null : lastTU.shortString());
+    }
 
     /**
      * returns all units ordered in this timing round.
@@ -43,14 +50,11 @@ public record TimingRound(Unit currentTU, List<Unit> lastTUs) {
      * some unit would decide 0 for it.
      */
     private boolean checkIfAlreadyOrdered(Unit u) {
-        var prevTU = lastTUs.get(lastTUs.size() - 1);
-        if (prevTU == null || u.level() > prevTU.level()) {
+        if (lastTU == null || u.level() > lastTU.level()) {
             return false;
         }
-        for (var it = lastTUs.size() - 1; it >= 0; it--) {
-            if (lastTUs.get(it).above(u)) {
-                return true;
-            }
+        if (lastTU != null && lastTU.above(u)) {
+            return true;
         }
         return false;
     }

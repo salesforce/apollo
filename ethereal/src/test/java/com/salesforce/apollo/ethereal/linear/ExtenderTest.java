@@ -40,7 +40,7 @@ public class ExtenderTest {
         }
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
         var ordering = new Extender(d, cnf);
-        assertNull(ordering.nextRound());
+        assertNull(ordering.nextRound(null));
     }
 
     @Test
@@ -51,7 +51,7 @@ public class ExtenderTest {
         }
         var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
         var ordering = new Extender(d, cnf);
-        assertNull(ordering.nextRound());
+        assertNull(ordering.nextRound(null));
     }
 
     @Test
@@ -63,10 +63,12 @@ public class ExtenderTest {
         var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
         var ordering = new Extender(d, cnf);
 
+        TimingRound current = null;
         for (int level = 0; level < 8; level++) {
-            assertNotNull(ordering.nextRound(), "failed at level:  " + level);
+            current = ordering.nextRound(current);
+            assertNotNull(current, "failed at level:  " + level);
         }
-        assertNull(ordering.nextRound());
+        assertEquals(current, ordering.nextRound(current));
     }
 
     @Test
@@ -79,14 +81,15 @@ public class ExtenderTest {
         var ordering = new Extender(d, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();
+        TimingRound current = null;
         for (int level = 0; level < 8; level++) {
-            TimingRound timingRound = ordering.nextRound();
-            assertNotNull(timingRound, "failed at level:  " + level);
-            var thisRound = timingRound.orderedUnits(DigestAlgorithm.DEFAULT, "");
+            current = ordering.nextRound(current);
+            assertNotNull(current, "failed at level:  " + level);
+            var thisRound = current.orderedUnits(DigestAlgorithm.DEFAULT, "");
             assertNotNull(thisRound);
             timingRounds.add(thisRound);
         }
-        assertNull(ordering.nextRound());
+        assertEquals(current, ordering.nextRound(current));
 
         // each level choose timing unit on this level
         for (int level = 0; level < 8; level++) {

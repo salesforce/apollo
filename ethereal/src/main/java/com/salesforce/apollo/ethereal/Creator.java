@@ -6,9 +6,13 @@
  */
 package com.salesforce.apollo.ethereal;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import com.salesforce.apollo.utils.Utils;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -91,9 +96,9 @@ public class Creator {
     private final AtomicInteger                        level      = new AtomicInteger();
     private final AtomicInteger                        maxLvl     = new AtomicInteger();
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
+    private final ExecutorService                      producer;
     private final int                                  quorum;
-
-    private final Consumer<Unit> send;
+    private final Consumer<Unit>                       send;
 
     public Creator(Config config, DataSource ds, Queue<Unit> lastTiming, Consumer<Unit> send,
                    Function<Integer, EpochProofBuilder> epochProofBuilder) {
@@ -108,6 +113,11 @@ public class Creator {
         this.lastTiming = lastTiming;
 
         quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
+        producer = Executors.newSingleThreadExecutor(r -> {
+            final var t = new Thread(r, "Ethereal Producer[" + conf.logLabel() + "]");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     /**
@@ -120,12 +130,15 @@ public class Creator {
         log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
         try {
             update(u);
-            var built = ready();
-            while (built != null) {
-                log.trace("Ready, creating unit on: {}", conf.logLabel());
-                createUnit(built.parents, built.level, getData(built.level));
-                built = ready();
-            }
+            producer.execute(Utils.wrapped(() -> {
+                var built = ready();
+                if (built != null) {
+                    log.trace("Ready, creating unit on: {}", conf.logLabel());
+                    createUnit(built.parents, built.level, getData(built.level));
+                }
+            }, log));
+        } catch (RejectedExecutionException e) {
+            // ignore as closed
         } catch (Throwable e) {
             log.error("Error in processing units on: {}", conf.logLabel(), e);
         }
@@ -136,6 +149,7 @@ public class Creator {
     }
 
     public void stop() {
+        producer.shutdownNow();
     }
 
     private built buildParents() {
@@ -161,6 +175,7 @@ public class Creator {
             for (; u != null && u.level() >= level; u = u.predecessor())
                 ;
             if (u != null && u.level() == level - 1) {
+                parents[i] = u;
                 count++;
             }
         }
@@ -171,8 +186,8 @@ public class Creator {
         assert parents.length == conf.nProc();
         final int e = epoch.get();
         Unit u = PreUnit.newFreeUnit(conf.pid(), e, parents, level, data, conf.digestAlgorithm(), conf.signer());
-        assert parentsOnPreviousLevel(u) >= quorum : "Parents of: " + u + " for level: " + (u.level() - 1) + " count: "
-        + parentsOnPreviousLevel(u) + " quorum: " + quorum;
+        assert parentsOnPreviousLevel(u) >= quorum : "Parents: " + Arrays.asList(u.parents()) + " of: " + u
+        + " for level: " + (u.level() - 1) + " count: " + parentsOnPreviousLevel(u) + " quorum: " + quorum;
         if (log.isTraceEnabled()) {
             log.trace("Created unit: {} parents: {} on: {}", u, parents, conf.logLabel());
         } else {

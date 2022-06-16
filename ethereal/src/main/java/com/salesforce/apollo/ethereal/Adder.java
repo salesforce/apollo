@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -36,6 +35,7 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.ethereal.Ethereal.epoch;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
@@ -82,12 +82,11 @@ public class Adder {
     private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
     private final Config                     conf;
     private final Dag                        dag;
-    private final int                        epoch;
+    private epoch                            epoch;
     private final Set<Digest>                failed;
     private final ReentrantLock              lock            = new ReentrantLock(true);
     private final int                        maxSize;
     private final Map<Long, List<Waiting>>   missing         = new TreeMap<>();
-    private final PriorityQueue<Waiting>     output          = new PriorityQueue<>();
     private final Map<Digest, Set<Short>>    prevotes        = new TreeMap<>();
     private volatile int                     round           = 0;
     private final Map<Digest, SignedCommit>  signedCommits   = new TreeMap<>();
@@ -97,8 +96,7 @@ public class Adder {
     private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
 
-    public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
-        this.epoch = epoch;
+    public Adder(Dag dag, int maxSize, Config conf, Set<Digest> failed) {
         this.dag = dag;
         this.conf = conf;
         this.failed = failed;
@@ -144,11 +142,19 @@ public class Adder {
                 .append('\n')
                 .append('\t')
                 .append("commits: ")
-                .append(commits.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList())
+                .append(commits.entrySet()
+                               .stream()
+                               .filter(e -> e.getValue().size() < 2 * threshold + 1)
+                               .map(e -> e.getKey() + ":" + e.getValue())
+                               .toList())
                 .append('\n')
                 .append('\t')
                 .append("prevotes: ")
-                .append(prevotes.entrySet().stream().map(e -> e.getKey() + ":" + e.getValue()).toList());
+                .append(prevotes.entrySet()
+                                .stream()
+                                .filter(e -> e.getValue().size() < 2 * threshold + 1)
+                                .map(e -> e.getKey() + ":" + e.getValue())
+                                .toList());
             return buff.toString();
         });
     }
@@ -156,7 +162,7 @@ public class Adder {
     public Have have() {
         return locked(() -> {
             return Have.newBuilder()
-                       .setEpoch(epoch)
+                       .setEpoch(epoch.id())
                        .setHaveCommits(haveCommits())
                        .setHavePreVotes(havePreVotes())
                        .setHaveUnits(haveUnits())
@@ -165,7 +171,7 @@ public class Adder {
     }
 
     public void produce(Unit u) {
-        if (u.epoch() != epoch) {
+        if (u.epoch() != epoch.id()) {
             throw new IllegalStateException("incorrect epoch: " + u + " only accepting: " + epoch);
         }
         if (dag.contains(u.hash())) {
@@ -183,7 +189,6 @@ public class Adder {
             commit(wpu);
             output(wpu);
             advance();
-            output();
         });
     }
 
@@ -195,11 +200,11 @@ public class Adder {
      * @return Missing based on the current state and the haves of the receiver
      */
     public Missing updateFor(Have haves) {
-        assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
+        assert haves.getEpoch() == epoch.id() : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
         return locked(() -> {
             final var builder = Missing.newBuilder();
-            builder.setEpoch(epoch);
+            builder.setEpoch(epoch.id());
             Adder.this.update(haves, builder);
             return builder.setHaves(have()).build();
         });
@@ -209,8 +214,8 @@ public class Adder {
      * Update the commit, prevote and unit state from the supplied update
      */
     public void updateFrom(Missing update) {
-        assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
-        + " on: " + conf.logLabel();
+        assert update.getEpoch() == epoch.id() : "Update from incorrect epoch: " + update.getEpoch() + " expected: "
+        + epoch.id() + " on: " + conf.logLabel();
         locked(() -> {
             update.getUnitsList().forEach(u -> {
                 final var signature = JohnHancock.from(u.getSignature());
@@ -259,7 +264,6 @@ public class Adder {
                     commit(Digest.from(c.getCommit().getHash()), (short) c.getCommit().getSource());
                 }
             });
-            output();
         });
     }
 
@@ -280,10 +284,10 @@ public class Adder {
         var wpu = waiting.get(digest);
 
         if (!committed.add(member)) {
-            log.trace("Already committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
+            log.trace("Already committed: {} count: {} on: {}", wpu, committed.size(), conf.logLabel());
             return;
         }
-        log.trace("Committed: {} wpu: {} count: {} on: {}", digest, wpu, committed.size(), conf.logLabel());
+        log.trace("Committed: {} count: {} on: {}", wpu == null ? digest : wpu, committed.size(), conf.logLabel());
 
         if (committed.size() <= threshold) {
             return;
@@ -428,7 +432,7 @@ public class Adder {
         if (decoded.creator() == conf.pid()) {
             return;
         }
-        if (decoded.epoch() != epoch) {
+        if (decoded.epoch() != epoch.id()) {
             log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, decoded,
                       conf.logLabel());
             return;
@@ -466,6 +470,10 @@ public class Adder {
 
         log.trace("Proposed: {} on: {}", wpu, conf.logLabel());
         prevote(wpu);
+    }
+
+    void setEpoch(epoch epoch) {
+        this.epoch = epoch;
     }
 
     // Advance the state of the RBC by one round
@@ -560,14 +568,14 @@ public class Adder {
             case ABIGUOUS_PARENTS:
             case COMPLIANCE_ERROR:
             case DATA_ERROR:
-                removeFailed(wp);
+                removeFailed(wp, decoded.classification());
                 return false;
             default:
                 break;
             }
 
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
-                removeFailed(wp);
+                removeFailed(wp, decoded.classification());
             }
             return false;
         }
@@ -614,7 +622,7 @@ public class Adder {
         var bff = new DigestBloomFilter(Entropy.nextBitsStreamLong(),
                                         conf.epochLength() * conf.numberOfEpochs() * conf.nProc() * 2, conf.fpr());
         waiting.keySet().forEach(d -> bff.add(d));
-        dag.have(bff, epoch);
+        dag.have(bff);
         return bff.toBff();
     }
 
@@ -644,23 +652,13 @@ public class Adder {
      */
     private void missing(BloomFilter<Digest> have, Missing.Builder builder) {
         var pus = new TreeMap<Digest, PreUnit_s>();
-        dag.missing(have, pus, epoch);
+        dag.missing(have, pus);
         waiting.entrySet()
                .stream()
                .filter(e -> !have.contains(e.getKey()))
                .filter(e -> !failed.contains(e.getKey()))
                .forEach(e -> pus.putIfAbsent(e.getKey(), e.getValue().serialized()));
         pus.values().forEach(pu -> builder.addUnits(pu));
-    }
-
-    private void output() {
-        if (output.isEmpty()) {
-            return;
-        }
-        log.warn("Output units: {} on: {}", output.size(), conf.logLabel());
-        var inserted = output.stream().map(wpu -> wpu.decoded()).toList();
-        output.clear();
-        dag.insert(inserted);
     }
 
     private void output(Waiting wpu) {
@@ -672,9 +670,10 @@ public class Adder {
         wpu.setState(State.OUTPUT);
         remove(wpu);
 
-        log.trace("Inserting unit: {} on: {}", wpu.decoded(), conf.logLabel());
+        final var decoded = wpu.decoded();
+        log.trace("Inserting unit: {} on: {}", decoded, conf.logLabel());
 
-        output.add(wpu);
+        dag.insert(decoded);
 
         for (var ch : wpu.children()) {
             ch.decWaiting();
@@ -716,6 +715,16 @@ public class Adder {
     private void removeFailed(Waiting wp) {
         wp.setState(State.FAILED);
         log.warn("Failed: {} on: {}", wp, conf.logLabel());
+        failed.add(wp.hash());
+        remove(wp);
+        for (var ch : wp.children()) {
+            removeFailed(ch);
+        }
+    }
+
+    private void removeFailed(Waiting wp, Correctness correctness) {
+        wp.setState(State.FAILED);
+        log.warn("Failed: {} reason: {} on: {}", wp, correctness, conf.logLabel());
         failed.add(wp.hash());
         remove(wp);
         for (var ch : wp.children()) {

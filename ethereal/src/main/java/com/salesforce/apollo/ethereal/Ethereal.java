@@ -19,8 +19,13 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -34,7 +39,8 @@ import com.salesfoce.apollo.ethereal.proto.Update;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
-import com.salesforce.apollo.ethereal.linear.ExtenderService;
+import com.salesforce.apollo.ethereal.linear.Extender;
+import com.salesforce.apollo.ethereal.linear.TimingRound;
 import com.salesforce.apollo.utils.Utils;
 
 /**
@@ -46,7 +52,7 @@ public class Ethereal {
 
     public record PreBlock(List<ByteString> data) {}
 
-    private record epoch(int id, Dag dag, Adder adder, ExtenderService extender, AtomicBoolean more) {
+    record epoch(int id, Dag dag, Adder adder, AtomicBoolean more) {
 
         public void close() {
             adder.close();
@@ -61,8 +67,33 @@ public class Ethereal {
     private record epochWithNewer(epoch epoch, boolean newer) {
 
         public void noMoreUnits() {
-            epoch.noMoreUnits();
+            if (epoch != null) {
+                epoch.noMoreUnits();
+            }
         }
+    }
+
+    private record UnitTask(Unit unit, Consumer<Unit> execution) implements Runnable, Comparable<UnitTask> {
+
+        @Override
+        public void run() {
+            Utils.wrapped(() -> execution.accept(unit), log).run();
+
+        }
+
+        @Override
+        public int compareTo(UnitTask o) {
+            var comp = Integer.compare(unit.epoch(), o.unit.epoch());
+            if (comp < 0 || comp > 0) {
+                return comp;
+            }
+            comp = Integer.compare(unit.height(), o.unit.height());
+            if (comp < 0 || comp > 0) {
+                return comp;
+            }
+            return Integer.compare(unit.creator(), o.unit.creator());
+        }
+
     }
 
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
@@ -96,17 +127,18 @@ public class Ethereal {
             }
             if (preBlock != null) {
 
-                log.trace("Emitting pre block: {} on: {}", print, config.logLabel());
+                log.trace("Emitting last: {} pre block: {} on: {}", last, print, config.logLabel());
                 try {
                     blocker.accept(preBlock, last);
                 } catch (Throwable t) {
-                    log.error("Error consuming pre block: {} on: {}", print, config.logLabel(), t);
+                    log.error("Error consuming last: {} pre block: {} on: {}", last, print, config.logLabel(), t);
                 }
             }
         };
     }
 
     private final Config               config;
+    private final ExecutorService      consumer;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
@@ -115,7 +147,6 @@ public class Ethereal {
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
     private final Consumer<Integer>    newEpochAction;
-    private final ExecutorService      producer;
     private final AtomicBoolean        started      = new AtomicBoolean();
     private final Consumer<List<Unit>> toPreblock;
 
@@ -131,21 +162,24 @@ public class Ethereal {
         this.toPreblock = toPreblock;
         this.newEpochAction = newEpochAction;
         this.maxSerializedSize = maxSerializedSize;
-        creator = new Creator(config, ds, lastTiming, u -> {
-            assert u.creator() == config.pid();
-            log.trace("Sending: {} on: {}", u, config.logLabel());
-            insert(u);
-        }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
         executor = Executors.newSingleThreadExecutor(r -> {
             final var t = new Thread(r, "Ethereal Executor[" + conf.logLabel() + "]");
             t.setDaemon(true);
             return t;
         });
-        producer = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Ethereal Producer[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
+
+        consumer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MICROSECONDS, new PriorityBlockingQueue<>(50));
+        creator = new Creator(config, ds, lastTiming, u -> {
+            assert u.creator() == config.pid();
+            try {
+                executor.execute(() -> {
+                    log.trace("Sending: {} on: {}", u, config.logLabel());
+                    insert(u);
+                });
+            } catch (RejectedExecutionException e) {
+                // ignore as closing
+            }
+        }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
     public String dump() {
@@ -241,7 +275,7 @@ public class Ethereal {
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
         executor.shutdownNow();
-        producer.shutdownNow();
+        consumer.shutdownNow();
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -251,19 +285,33 @@ public class Ethereal {
 
     private epoch createEpoch(int epoch) {
         Dag dg = newDag(config, epoch);
-        ExtenderService ext = new ExtenderService(dg, config, handleTimingRounds());
+        final var handleTimingRounds = handleTimingRounds();
+        Extender ext = new Extender(dg, config);
+        final var lastTU = new AtomicReference<TimingRound>();
         dg.afterInsert(u -> {
             if (!started.get()) {
                 return;
             }
-            ext.chooseNextTimingUnits();
-            // don't put our own units on the unit belt, creator already knows about them.
-            if (u.creator() != config.pid()) {
-                producer.execute(Utils.wrapped(() -> creator.consume(u), log));
-            }
+            consumer.execute(new UnitTask(u, Utils.wrapped((Consumer<Unit>) unit -> {
+                if (!started.get()) {
+                    return;
+                }
+                final var current = lastTU.get();
+                final var next = ext.chooseNextTimingUnits(current, handleTimingRounds);
+                if (!lastTU.compareAndSet(current, next)) {
+                    throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
+                                                                  current, next));
+                }
+                // don't put our own units on the unit belt, creator already knows about them.
+                if (unit.creator() != config.pid()) {
+                    creator.consume(unit);
+                }
+            }, log)));
         });
-        return new epoch(epoch, dg, new Adder(epoch, dg, maxSerializedSize, config, failed), ext,
-                         new AtomicBoolean(true));
+        final var adder = new Adder(dg, maxSerializedSize, config, failed);
+        final var e = new epoch(epoch, dg, adder, new AtomicBoolean(true));
+        adder.setEpoch(e);
+        return e;
     }
 
     private void finishEpoch(int epoch) {
@@ -305,9 +353,15 @@ public class Ethereal {
                 finishEpoch(epoch);
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                executor.execute(Utils.wrapped(() -> toPreblock.accept(round), log));
-                log.debug("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
-                          config.logLabel());
+                try {
+                    executor.execute(Utils.wrapped(() -> {
+                        toPreblock.accept(round);
+                        log.trace("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
+                                  config.logLabel());
+                    }, log));
+                } catch (RejectedExecutionException e) {
+                    // ignore as closed
+                }
             }
             current.set(epoch);
         };

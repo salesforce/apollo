@@ -9,7 +9,6 @@ package com.salesforce.apollo.ethereal;
 import static com.salesforce.apollo.ethereal.PreUnit.decode;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -172,7 +171,7 @@ public interface Dag {
         }
 
         @Override
-        public void have(DigestBloomFilter biff, int epoch) {
+        public void have(DigestBloomFilter biff) {
             read(() -> {
                 units.entrySet()
                      .stream()
@@ -180,32 +179,6 @@ public interface Dag {
                      .map(e -> e.getKey())
                      .forEach(d -> biff.add(d));
             });
-        }
-
-        @Override
-        public void insert(Collection<Unit> insertion) {
-            write(() -> {
-                for (Unit u : insertion) {
-                    if (u.epoch() != epoch) {
-                        log.warn("Invalid insert of: {} into epoch: {} expected: {} on: {}", u, u.epoch(), epoch,
-                                 config.logLabel());
-                    }
-                    var unit = u.embed(this);
-                    for (var hook : preInsert) {
-                        hook.accept(unit);
-                    }
-                    updateUnitsOnHeight(unit);
-                    updateUnitsOnLevel(unit);
-                    units.put(unit.hash(), unit);
-                    updateMaximal(unit);
-                }
-            });
-
-            for (Unit u : insertion) {
-                for (var hook : postInsert) {
-                    hook.accept(u);
-                }
-            }
         }
 
         @Override
@@ -301,7 +274,7 @@ public interface Dag {
         }
 
         @Override
-        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch) {
+        public void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing) {
             read(() -> {
                 units.entrySet().forEach(e -> {
                     if (e.getValue().epoch() == epoch && !have.contains(e.getKey())) {
@@ -319,6 +292,19 @@ public interface Dag {
         @Override
         public short pid() {
             return config.pid();
+        }
+
+        @Override
+        public <T> T read(Callable<T> call) {
+            final Lock lock = rwLock.readLock();
+            lock.lock();
+            try {
+                return call.call();
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
+            } finally {
+                lock.unlock();
+            }
         }
 
         @Override
@@ -367,18 +353,6 @@ public interface Dag {
                 arr.add(Collections.emptyList());
             }
             return arr;
-        }
-
-        private <T> T read(Callable<T> call) {
-            final Lock lock = rwLock.readLock();
-            lock.lock();
-            try {
-                return call.call();
-            } catch (Exception e) {
-                throw new IllegalStateException("Error during read locked call on: " + config.logLabel(), e);
-            } finally {
-                lock.unlock();
-            }
         }
 
         private void updateMaximal(Unit u) {
@@ -491,7 +465,7 @@ public interface Dag {
                 if (h == -1) {
                     continue;
                 }
-                var su = content.get(h);
+                var su = (h < content.size()) ? content.get(h) : null;
                 if (su != null) {
                     result.set(pid, (su.get(pid)));
                 }
@@ -614,9 +588,7 @@ public interface Dag {
 
     List<Unit> get(long id);
 
-    void have(DigestBloomFilter biff, int epoch);
-
-    void insert(Collection<Unit> u);
+    void have(DigestBloomFilter biff);
 
     void insert(Unit u);
 
@@ -635,11 +607,13 @@ public interface Dag {
 
     void missing(BloomFilter<Digest> have, List<PreUnit_s> missing);
 
-    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing, int epoch);
+    void missing(BloomFilter<Digest> have, Map<Digest, PreUnit_s> missing);
 
     short nProc();
 
     short pid();
+
+    <T> T read(Callable<T> c);
 
     void read(Runnable r);
 

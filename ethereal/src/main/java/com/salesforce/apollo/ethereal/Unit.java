@@ -112,7 +112,7 @@ public interface Unit extends PreUnit {
 
         @Override
         public String toString() {
-            return "unitInDag[" + shortString() + "]";
+            return "uid[" + shortString() + "]";
         }
 
         @Override

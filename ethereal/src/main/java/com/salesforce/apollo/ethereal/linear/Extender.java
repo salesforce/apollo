@@ -7,18 +7,17 @@
 package com.salesforce.apollo.ethereal.linear;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.salesforce.apollo.crypto.Digest;
-import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.ethereal.Config;
 import com.salesforce.apollo.ethereal.Dag;
 import com.salesforce.apollo.ethereal.Unit;
@@ -34,90 +33,140 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.SuperMajorityDecider
 public class Extender {
     private static Logger log = LoggerFactory.getLogger(Extender.class);
 
-    private final int                               commonVoteDeterministicPrefix;
-    private final CommonRandomPermutation           crpIterator;
-    private AtomicReference<Unit>                   currentTU = new AtomicReference<>();
-    private final Dag                               dag;
-    private final Map<Digest, SuperMajorityDecider> deciders  = new ConcurrentHashMap<>();
-    private final DigestAlgorithm                   digestAlgorithm;
-    private final int                               firstDecidedRound;
-    private AtomicReference<List<Unit>>             lastTUs   = new AtomicReference<>();
-    private final int                               orderStartLevel;
-    private final int                               zeroVoteRoundForCommonVote;
+    private final Config conf;
+    private final Dag    dag;
+    private final String logLabel;
 
     public Extender(Dag dag, Config conf) {
         this.dag = dag;
-        lastTUs.set(new ArrayList<>());
-        zeroVoteRoundForCommonVote = conf.zeroVoteRoundForCommonVote();
-        firstDecidedRound = conf.firstDecidedRound();
-        orderStartLevel = conf.orderStartLevel();
-        digestAlgorithm = conf.digestAlgorithm();
-        commonVoteDeterministicPrefix = conf.commonVoteDeterministicPrefix();
-        crpIterator = new CommonRandomPermutation(dag.nProc(), digestAlgorithm, conf.logLabel());
+        this.conf = conf;
+        logLabel = conf.logLabel();
     }
 
-    public TimingRound nextRound() {
+    /**
+     * roundSorter picks information about newly picked timing unit from the
+     * timingRounds channel, finds all units belonging to their timing round and
+     * establishes linear order on them. Sends slices of ordered units to output.
+     */
+    public TimingRound chooseNextTimingUnits(TimingRound lastTU, Consumer<List<Unit>> output) {
+        return dag.read(() -> {
+            log.trace("Choose next, last: {} on: {}", lastTU, conf.logLabel());
+            TimingRound round = nextRound(lastTU);
+            if (round != null && !round.equals(lastTU)) {
+                var units = round.orderedUnits(conf.digestAlgorithm(), conf.logLabel());
+                log.trace("Output of: {} preBlock: {} on: {}", round, units, conf.logLabel());
+                output.accept(units);
+            }
+            return round;
+        });
+    }
+
+    public TimingRound nextRound(TimingRound lastTU) {
         var dagMaxLevel = dag.maxLevel();
-        if (dagMaxLevel < orderStartLevel) {
-            log.trace("No round, dag mxLvl: {} is < order start level: {} on: {}", dagMaxLevel, orderStartLevel,
-                      dag.pid());
-            return null;
+        if (dagMaxLevel < conf.orderStartLevel()) {
+            log.trace("No round, dag mxLvl: {} is < order start level: {} on: {}", dagMaxLevel, conf.orderStartLevel(),
+                      logLabel);
+            return lastTU;
         }
-        var level = orderStartLevel;
-        final Unit previousTU = currentTU.get();
+        log.trace("Begin round, {} dag mxLvl: {} on: {}", lastTU, dagMaxLevel, conf.firstDecidedRound(), logLabel);
+        var level = conf.orderStartLevel();
+        final Unit previousTU = lastTU == null ? null : lastTU.currentTU();
         if (previousTU != null) {
-            level = previousTU.level() + 1;
+            level = lastTU.level() + 1;
         }
-        if (dagMaxLevel < level + firstDecidedRound) {
-            log.trace("No round, dag mxLvl: {} is < ({} + {}) on: {}", dagMaxLevel, level, firstDecidedRound,
-                      dag.pid());
-            return null;
+        if (dagMaxLevel < level + conf.firstDecidedRound()) {
+            log.trace("No round, dag mxLvl: {} is < ({} + {}) on: {}", dagMaxLevel, level, conf.firstDecidedRound(),
+                      logLabel);
+            return lastTU;
         }
 
         var units = dag.unitsOnLevel(level);
 
-        var decided = new AtomicBoolean();
-        crpIterator.iterate(level, units, previousTU, uc -> {
-            SuperMajorityDecider decider = getDecider(uc);
+        var decided = false;
+        var deciders = new ConcurrentHashMap<Digest, SuperMajorityDecider>();
+        Unit currentTU = null;
+
+        for (Unit uc : commonRandomPermutation(level, units, previousTU)) {
+            SuperMajorityDecider decider = getDecider(uc, deciders);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
-                final List<Unit> ltus = lastTUs.get();
-//                var next = ltus.isEmpty() ? ltus : new ArrayList<>(ltus.subList(1, ltus.size()));
-                if (previousTU != null) {
-                    ltus.add(previousTU);
-                }
-                lastTUs.set(ltus);
-                currentTU.set(uc);
-                deciders.clear();
-                decided.set(true);
-                log.trace("Popular: {} on: {}", uc, dag.pid());
-                return false;
+                currentTU = uc;
+                decided = true;
+                log.trace("Popular: {} level: {} on: {}", uc, level, logLabel);
+                break;
             }
             if (decision.decision() == Vote.UNDECIDED) {
-                log.trace("Undecided: {} on: {}", uc, dag.pid());
-                return false;
+                log.trace("Undecided: {} level: {} on: {}", uc, level, logLabel);
+                break;
             }
-            log.trace("Unpopular: {} on: {}", uc, dag.pid());
-            return true;
-        });
-        if (!decided.get()) {
-            log.trace("No round decided, dag mxLvl: {} level: {} on: {}", dagMaxLevel, level, dag.pid());
-            return null;
+            log.trace("Unpopular: {} level: {} on: {}", uc, level, logLabel);
+
         }
-        final var ctu = currentTU.get();
-        final var ltu = lastTUs.get();
-        if (log.isTraceEnabled()) {
-            log.trace("Timing round: {} last: {} dag mxLvl: {} level: {} on: {}", ctu.shortString(),
-                      ltu.isEmpty() ? "null" : ltu.get(ltu.size() - 1).shortString(), dagMaxLevel, level, dag.pid());
+        if (!decided) {
+            log.trace("No round decided, dag mxLvl: {} level: {} on: {}", dagMaxLevel, level, logLabel);
+            return lastTU;
         }
-        return new TimingRound(ctu, new ArrayList<>(ltu));
+        final var current = new TimingRound(currentTU, level, lastTU == null ? null : lastTU.currentTU());
+        log.trace("{} dag mxLvl: {} on: {}", current, dagMaxLevel, logLabel);
+        return current;
     }
 
-    private SuperMajorityDecider getDecider(Unit uc) {
+    private List<Unit> commonRandomPermutation(int level, List<List<Unit>> unitsOnLevel, Unit previousTU) {
+        final var pidOrder = pidOrder(level, previousTU);
+        List<Unit> permutation = randomPermutation(level, pidOrder, unitsOnLevel, previousTU);
+        if (log.isWarnEnabled()) {
+            log.trace("CRP level: {} permutation: {} pidOrder: {} previous: {} on: {}", level,
+                      permutation.stream().map(e -> e.shortString()).toList(), pidOrder,
+                      previousTU == null ? null : previousTU.shortString(), logLabel);
+        }
+        return permutation;
+    }
+
+    private SuperMajorityDecider getDecider(Unit uc, Map<Digest, SuperMajorityDecider> deciders) {
         return deciders.computeIfAbsent(uc.hash(),
                                         h -> new SuperMajorityDecider(new UnanimousVoter(dag, uc,
-                                                                                         zeroVoteRoundForCommonVote,
-                                                                                         commonVoteDeterministicPrefix,
-                                                                                         new HashMap<>())));
+                                                                                         conf.zeroVoteRoundForCommonVote(),
+                                                                                         conf.commonVoteDeterministicPrefix(),
+                                                                                         new HashMap<>(), logLabel),
+                                                                      logLabel));
     }
+
+    private List<Short> pidOrder(int level, Unit tu) {
+        var pids = new ArrayList<Short>();
+        for (int pid = 0; pid < conf.nProc(); pid++) {
+            pids.add((short) ((pid + level) % conf.nProc()));
+        }
+        if (tu == null) {
+            return pids;
+
+        }
+        for (short pid : new ArrayList<>(pids)) {
+            pids.set(pid, (short) ((pids.get(pid) + tu.creator()) % conf.nProc()));
+        }
+        return pids;
+
+    }
+
+    private List<Unit> randomPermutation(int level, List<Short> pids, List<List<Unit>> unitsOnLevel, Unit unit) {
+        var permutation = new ArrayList<Unit>();
+        var priority = new HashMap<Digest, Digest>();
+
+        var cumulative = unit == null ? conf.digestAlgorithm().getOrigin() : unit.hash();
+        for (short pid : pids) {
+            var units = unitsOnLevel.get(pid);
+            if (units.isEmpty()) {
+                continue;
+            }
+            for (var u : units) {
+                cumulative = cumulative.xor(u.hash());
+                priority.put(u.hash(), cumulative);
+            }
+            permutation.addAll(units);
+        }
+        Collections.sort(permutation, (a, b) -> priority.get(a.hash()).compareTo(priority.get(b.hash())));
+
+        return permutation;
+
+    }
+
 }
