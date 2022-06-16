@@ -35,7 +35,6 @@ import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.JohnHancock;
 import com.salesforce.apollo.crypto.Signer;
-import com.salesforce.apollo.ethereal.Ethereal.epoch;
 import com.salesforce.apollo.utils.Entropy;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter;
 import com.salesforce.apollo.utils.bloomFilters.BloomFilter.DigestBloomFilter;
@@ -82,7 +81,7 @@ public class Adder {
     private final Map<Digest, Set<Short>>    commits         = new TreeMap<>();
     private final Config                     conf;
     private final Dag                        dag;
-    private epoch                            epoch;
+    private final int                        epoch;
     private final Set<Digest>                failed;
     private final ReentrantLock              lock            = new ReentrantLock(true);
     private final int                        maxSize;
@@ -96,7 +95,8 @@ public class Adder {
     private final Map<Long, Waiting>         waitingById     = new TreeMap<>();
     private final Map<Digest, Waiting>       waitingForRound = new TreeMap<>();
 
-    public Adder(Dag dag, int maxSize, Config conf, Set<Digest> failed) {
+    public Adder(int epoch, Dag dag, int maxSize, Config conf, Set<Digest> failed) {
+        this.epoch = epoch;
         this.dag = dag;
         this.conf = conf;
         this.failed = failed;
@@ -162,7 +162,7 @@ public class Adder {
     public Have have() {
         return locked(() -> {
             return Have.newBuilder()
-                       .setEpoch(epoch.id())
+                       .setEpoch(epoch)
                        .setHaveCommits(haveCommits())
                        .setHavePreVotes(havePreVotes())
                        .setHaveUnits(haveUnits())
@@ -171,7 +171,7 @@ public class Adder {
     }
 
     public void produce(Unit u) {
-        if (u.epoch() != epoch.id()) {
+        if (u.epoch() != epoch) {
             throw new IllegalStateException("incorrect epoch: " + u + " only accepting: " + epoch);
         }
         if (dag.contains(u.hash())) {
@@ -200,11 +200,11 @@ public class Adder {
      * @return Missing based on the current state and the haves of the receiver
      */
     public Missing updateFor(Have haves) {
-        assert haves.getEpoch() == epoch.id() : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
+        assert haves.getEpoch() == epoch : "Have from incorrect epoch: " + haves.getEpoch() + " expected: " + epoch
         + " on: " + conf.logLabel();
         return locked(() -> {
             final var builder = Missing.newBuilder();
-            builder.setEpoch(epoch.id());
+            builder.setEpoch(epoch);
             Adder.this.update(haves, builder);
             return builder.setHaves(have()).build();
         });
@@ -214,8 +214,8 @@ public class Adder {
      * Update the commit, prevote and unit state from the supplied update
      */
     public void updateFrom(Missing update) {
-        assert update.getEpoch() == epoch.id() : "Update from incorrect epoch: " + update.getEpoch() + " expected: "
-        + epoch.id() + " on: " + conf.logLabel();
+        assert update.getEpoch() == epoch : "Update from incorrect epoch: " + update.getEpoch() + " expected: " + epoch
+        + " on: " + conf.logLabel();
         locked(() -> {
             update.getUnitsList().forEach(u -> {
                 final var signature = JohnHancock.from(u.getSignature());
@@ -432,7 +432,7 @@ public class Adder {
         if (decoded.creator() == conf.pid()) {
             return;
         }
-        if (decoded.epoch() != epoch.id()) {
+        if (decoded.epoch() != epoch) {
             log.trace("Invalid epoch: {} expected {} unit: {} on: {}", decoded.epoch(), epoch, decoded,
                       conf.logLabel());
             return;
@@ -470,10 +470,6 @@ public class Adder {
 
         log.trace("Proposed: {} on: {}", wpu, conf.logLabel());
         prevote(wpu);
-    }
-
-    void setEpoch(epoch epoch) {
-        this.epoch = epoch;
     }
 
     // Advance the state of the RBC by one round
@@ -668,7 +664,6 @@ public class Adder {
             return;
         }
         wpu.setState(State.OUTPUT);
-        remove(wpu);
 
         final var decoded = wpu.decoded();
         log.trace("Inserting unit: {} on: {}", decoded, conf.logLabel());
@@ -685,6 +680,7 @@ public class Adder {
                 log.trace("Continuing to wait for remaining parents: {} on: {}", ch, conf.logLabel());
             }
         }
+        remove(wpu);
     }
 
     private void prevote(Waiting wpu) {

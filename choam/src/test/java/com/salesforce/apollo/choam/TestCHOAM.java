@@ -99,7 +99,7 @@ public class TestCHOAM {
 
         var params = Parameters.newBuilder()
                                .setGenesisViewId(DigestAlgorithm.DEFAULT.getOrigin().prefix(entropy.nextLong()))
-                               .setGossipDuration(Duration.ofMillis(200))
+                               .setGossipDuration(Duration.ofMillis(20))
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setMaxBatchCount(15_000)
                                                               .setMaxBatchByteSize(200 * 1024 * 1024)

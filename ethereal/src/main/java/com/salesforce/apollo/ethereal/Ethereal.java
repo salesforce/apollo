@@ -292,25 +292,27 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
+            final var current = lastTU.get();
+            final var next = ext.chooseNextTimingUnits(current, handleTimingRounds);
+            if (!lastTU.compareAndSet(current, next)) {
+                throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
+                                                              current, next));
+            }
             consumer.execute(new UnitTask(u, Utils.wrapped((Consumer<Unit>) unit -> {
                 if (!started.get()) {
                     return;
                 }
-                final var current = lastTU.get();
-                final var next = ext.chooseNextTimingUnits(current, handleTimingRounds);
-                if (!lastTU.compareAndSet(current, next)) {
-                    throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
-                                                                  current, next));
-                }
                 // don't put our own units on the unit belt, creator already knows about them.
                 if (unit.creator() != config.pid()) {
+                    if (!started.get()) {
+                        return;
+                    }
                     creator.consume(unit);
                 }
             }, log)));
         });
-        final var adder = new Adder(dg, maxSerializedSize, config, failed);
+        final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);
         final var e = new epoch(epoch, dg, adder, new AtomicBoolean(true));
-        adder.setEpoch(e);
         return e;
     }
 

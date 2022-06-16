@@ -39,7 +39,7 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit pu) {
+            if (obj instanceof Unit pu) {
                 return hash().equals(pu.hash());
             }
             return false;
@@ -171,7 +171,7 @@ public interface PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit u) {
+            if (obj instanceof Unit u) {
                 return hash.equals(u.hash());
             }
             return false;

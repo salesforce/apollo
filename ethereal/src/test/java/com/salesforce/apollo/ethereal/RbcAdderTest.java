@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +26,6 @@ import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Verifier;
 import com.salesforce.apollo.ethereal.Adder.State;
 import com.salesforce.apollo.ethereal.Dag.DagImpl;
-import com.salesforce.apollo.ethereal.Ethereal.epoch;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
@@ -75,8 +73,7 @@ public class RbcAdderTest {
     public void dealingAllPids() throws Exception {
         final var dag = new DagImpl(config, 0);
 
-        var adder = new Adder(dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-        adder.setEpoch(new epoch(0, null, null, new AtomicBoolean()));
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         // PID 0
         var u = unit(0, 0);
@@ -191,8 +188,7 @@ public class RbcAdderTest {
     public void dealingPid0() throws Exception {
         final var dag = new DagImpl(config, 0);
 
-        var adder = new Adder(dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-        adder.setEpoch(new epoch(0, null, null, new AtomicBoolean()));
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         var prime = unit(0, 0);
         var u = prime;
@@ -244,8 +240,7 @@ public class RbcAdderTest {
     @Test
     public void round3() throws Exception {
         final var dag = new DagImpl(config, 0);
-        var adder = new Adder(dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-        adder.setEpoch(new epoch(0, null, null, new AtomicBoolean()));
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
 
         round(0, adder);
         round(1, adder);
@@ -279,8 +274,7 @@ public class RbcAdderTest {
     @Test
     public void waitingForParents() {
         final var dag = new DagImpl(config, 0);
-        var adder = new Adder(dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
-        adder.setEpoch(new epoch(0, null, null, new AtomicBoolean()));
+        var adder = new Adder(0, dag, 1024 * 1024, config, new ConcurrentSkipListSet<>());
         round(0, adder);
 
         // Units from 0, 2, 3 at level 1 proposed. Unit 1 from 0 is added to the DAG, as
@@ -356,6 +350,10 @@ public class RbcAdderTest {
         assertEquals(State.WAITING_FOR_PARENTS, waiting.state());
     }
 
+    private Unit unit(int pid, int level) {
+        return units.get((short) pid).get(level).get(0);
+    }
+
     // All PIDs should be output
     private void round(int round, Adder adder) {
         var u = unit(0, round);
@@ -389,9 +387,5 @@ public class RbcAdderTest {
         adder.commit(u.hash(), (short) 1);
         adder.commit(u.hash(), (short) 2);
         adder.commit(u.hash(), (short) 3);
-    }
-
-    private Unit unit(int pid, int level) {
-        return units.get((short) pid).get(level).get(0);
     }
 }

@@ -36,7 +36,7 @@ public interface Unit extends PreUnit {
             if (this == obj) {
                 return true;
             }
-            if (obj instanceof PreUnit uid) {
+            if (obj instanceof Unit uid) {
                 return hash().equals(uid.hash());
             }
             return false;

@@ -49,24 +49,24 @@ public class Extender {
      * establishes linear order on them. Sends slices of ordered units to output.
      */
     public TimingRound chooseNextTimingUnits(TimingRound lastTU, Consumer<List<Unit>> output) {
-        return dag.read(() -> {
-            log.trace("Choose next, last: {} on: {}", lastTU, conf.logLabel());
-            TimingRound next;
-            TimingRound last = lastTU;
+        TimingRound next;
+        TimingRound last = lastTU;
 
-            do {
-                next = nextRound(last);
-                if (next != null && !next.equals(last)) {
-                    var units = next.orderedUnits(conf.digestAlgorithm(), conf.logLabel());
-                    log.trace("Output of: {} preBlock: {} on: {}", next, units, conf.logLabel());
-                    output.accept(units);
-                    last = next;
-                } else {
-                    return next;
-                }
-            } while (next != null && !next.equals(last));
-            return next;
-        });
+        do {
+            log.trace("Choose TR, last: {} on: {}", lastTU, conf.logLabel());
+            next = nextRound(last);
+            if (next != null && !next.equals(last)) {
+                var units = next.orderedUnits(conf.digestAlgorithm(), conf.logLabel());
+                log.trace("Output of: {} preBlock: {} on: {}", next, units, conf.logLabel());
+                output.accept(units);
+                last = next;
+            } else {
+                log.trace("Exit choose TR, last: {} on: {}", next, conf.logLabel());
+                return next;
+            }
+        } while (next != null && !next.equals(last));
+        log.trace("Exit choose TR, last: {} on: {}", next, conf.logLabel());
+        return next;
     }
 
     public TimingRound nextRound(TimingRound lastTU) {
