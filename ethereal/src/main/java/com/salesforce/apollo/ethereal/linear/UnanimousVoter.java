@@ -45,7 +45,45 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             this.logLabel = logLabel;
         }
 
-        public Vote decide(Unit u) {
+        /**
+         * Decides if uc is popular (i.e. it can be used as a timing unit). Returns
+         * vote, level on which the decision was made and current dag level.
+         */
+        public Decision decideUnitIsPopular(int dagMaxLevel) {
+            if (decision != Vote.UNDECIDED) {
+                return new Decision(decision, decisionLevel);
+            }
+            int maxDecisionLevel = getMaxDecideLevel(dagMaxLevel);
+
+            log.trace("Max decision level: {} for: {} on: {}", maxDecisionLevel, voter.uc, logLabel);
+
+            for (int level = voter.uc.level() + firstVotingRound + 1; level <= maxDecisionLevel; level++) {
+                AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
+
+                var commonVote = voter.lazyCommonVote(level);
+                voter.dag.iterateUnitsOnLevel(level, primes -> {
+                    for (var v : primes) {
+                        Vote vDecision = decide(v);
+                        if (vDecision != Vote.UNDECIDED && vDecision == commonVote.get()) {
+                            decision.set(vDecision);
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+
+                if (decision.get() != Vote.UNDECIDED) {
+                    this.decision = decision.get();
+                    this.decisionLevel = level;
+                    voter.dispose();
+                    return new Decision(decision.get(), level);
+                }
+            }
+
+            return new Decision(Vote.UNDECIDED, -1);
+        }
+
+        private Vote decide(Unit u) {
             var commonVote = voter.lazyCommonVote(u.level() - 1);
             var r = voter.voteUsingPrimeAncestors(voter.uc, u, voter.dag, (uc, uPrA) -> {
                 short pop = 0;
@@ -91,42 +129,6 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             final var vote = superMajority(voter.dag, r);
             log.trace("Vote decided: {} for candidate: {} on: {}", vote, u, logLabel);
             return vote;
-        }
-
-        /**
-         * Decides if uc is popular (i.e. it can be used as a timing unit). Returns
-         * vote, level on which the decision was made and current dag level.
-         */
-        public Decision decideUnitIsPopular(int dagMaxLevel) {
-            if (decision != Vote.UNDECIDED) {
-                return new Decision(decision, decisionLevel);
-            }
-            int maxDecisionLevel = getMaxDecideLevel(dagMaxLevel);
-
-            for (int level = voter.uc.level() + firstVotingRound + 1; level <= maxDecisionLevel; level++) {
-                AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
-
-                var commonVote = voter.lazyCommonVote(level);
-                voter.dag.iterateUnitsOnLevel(level, primes -> {
-                    for (var v : primes) {
-                        Vote vDecision = decide(v);
-                        if (vDecision != Vote.UNDECIDED && vDecision == commonVote.get()) {
-                            decision.set(vDecision);
-                            return false;
-                        }
-                    }
-                    return true;
-                });
-
-                if (decision.get() != Vote.UNDECIDED) {
-                    this.decision = decision.get();
-                    this.decisionLevel = level;
-                    voter.dispose();
-                    return new Decision(decision.get(), level);
-                }
-            }
-
-            return new Decision(Vote.UNDECIDED, -1);
         }
 
         /**

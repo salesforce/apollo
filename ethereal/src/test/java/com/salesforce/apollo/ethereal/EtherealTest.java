@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -52,6 +54,23 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  *
  */
 public class EtherealTest {
+    private static class SimpleDataSource implements DataSource {
+        private final Deque<ByteString> dataStack = new ArrayDeque<>();
+        private final Duration          gossipFrequency;
+
+        private SimpleDataSource(Duration gossipFrequency) {
+            this.gossipFrequency = gossipFrequency;
+        }
+
+        @Override
+        public ByteString getData() {
+            try {
+                Thread.sleep(gossipFrequency.toMillis() * 3);
+            } catch (InterruptedException e) {
+            }
+            return dataStack.pollFirst();
+        }
+    }
 
     private static final int EPOCH_LENGTH = 30;
     private static final int NUM_EPOCHS   = 3;
@@ -120,7 +139,7 @@ public class EtherealTest {
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
         for (short i = 0; i < nProc; i++) {
-            var ds = new SimpleDataSource();
+            var ds = new SimpleDataSource(gossipPeriod);
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             final var exec = Executors.newFixedThreadPool(2);

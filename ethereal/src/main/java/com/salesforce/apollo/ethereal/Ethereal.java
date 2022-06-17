@@ -19,10 +19,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -73,29 +70,6 @@ public class Ethereal {
         }
     }
 
-    private record UnitTask(Unit unit, Consumer<Unit> execution) implements Runnable, Comparable<UnitTask> {
-
-        @Override
-        public void run() {
-            Utils.wrapped(() -> execution.accept(unit), log).run();
-
-        }
-
-        @Override
-        public int compareTo(UnitTask o) {
-            var comp = Integer.compare(unit.epoch(), o.unit.epoch());
-            if (comp < 0 || comp > 0) {
-                return comp;
-            }
-            comp = Integer.compare(unit.height(), o.unit.height());
-            if (comp < 0 || comp > 0) {
-                return comp;
-            }
-            return Integer.compare(unit.creator(), o.unit.creator());
-        }
-
-    }
-
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     /**
@@ -138,7 +112,6 @@ public class Ethereal {
     }
 
     private final Config               config;
-    private final ExecutorService      consumer;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
@@ -167,8 +140,6 @@ public class Ethereal {
             t.setDaemon(true);
             return t;
         });
-
-        consumer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MICROSECONDS, new PriorityBlockingQueue<>(50));
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
             try {
@@ -275,7 +246,6 @@ public class Ethereal {
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
         executor.shutdownNow();
-        consumer.shutdownNow();
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -300,23 +270,15 @@ public class Ethereal {
                 throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
                                                               current, next));
             }
-
-            // Consumption handles in a linearly ordered queue
-            try {
-                consumer.execute(new UnitTask(u, Utils.wrapped((Consumer<Unit>) unit -> {
-                    if (!started.get()) {
-                        return;
-                    }
-                    // don't put our own units on the unit belt, creator already knows about them.
-                    if (unit.creator() != config.pid()) {
-                        if (!started.get()) {
-                            return;
-                        }
-                        creator.consume(unit);
-                    }
-                }, log)));
-            } catch (RejectedExecutionException e) {
-                // ignore as closed
+            if (!started.get()) {
+                return;
+            }
+            // creator already knows about units created by this node.
+            if (u.creator() != config.pid()) {
+                if (!started.get()) {
+                    return;
+                }
+                creator.consume(u);
             }
         });
         final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);

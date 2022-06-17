@@ -35,7 +35,7 @@ public class TxDataSourceTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier().get()), 100, null,
-                                           1024, Duration.ofMillis(100), 100);
+                                           1024, Duration.ofMillis(100), 100, Duration.ofNanos(1));
         Transaction tx = Transaction.newBuilder()
                                     .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();

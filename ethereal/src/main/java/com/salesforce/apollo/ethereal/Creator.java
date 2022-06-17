@@ -183,8 +183,6 @@ public class Creator {
             if (u != null && u.level() == level - 1) {
                 parents[i] = u;
                 count++;
-            } else {
-                parents[i] = null;
             }
         }
         return count;

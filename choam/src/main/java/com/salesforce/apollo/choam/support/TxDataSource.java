@@ -46,6 +46,7 @@ public class TxDataSource implements DataSource {
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
     private AtomicBoolean                            draining     = new AtomicBoolean();
+    private final Duration                           maditoryLatency;
     private final Member                             member;
     private final ChoamMetrics                       metrics;
     private final CapacityBatchingQueue<Transaction> processing;
@@ -53,9 +54,10 @@ public class TxDataSource implements DataSource {
     private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
-                        Duration batchInterval, int maxBatchCount) {
+                        Duration batchInterval, int maxBatchCount, Duration maditoryLatency) {
         this.member = member;
         this.batchInterval = batchInterval;
+        this.maditoryLatency = maditoryLatency;
         processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
                                                             maxBatchCount, maxBatchByteSize,
                                                             tx -> tx.toByteString().size(), 5);
@@ -84,7 +86,9 @@ public class TxDataSource implements DataSource {
         var builder = UnitData.newBuilder();
         log.trace("Requesting unit data on: {}", member);
         blockingThread = Thread.currentThread();
-        var target = Instant.now().plus(batchInterval);
+        final var then = Instant.now();
+        var target = then.plus(batchInterval);
+        var minimum = then.plus(maditoryLatency);
         try {
             while (true) {
                 var batch = processing.nonBlockingTake();
@@ -109,6 +113,16 @@ public class TxDataSource implements DataSource {
                     log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
                               builder.getTransactionsCount(), builder.getValidationsCount(),
                               builder.getReassembliesCount(), bs.size(), member.getId());
+                    var now = Instant.now();
+                    if (now.isAfter(minimum)) {
+                        return bs;
+                    }
+                    try {
+                        Thread.sleep(maditoryLatency.minus(Duration.between(then, now)).toMillis());
+                    } catch (InterruptedException e1) {
+                        Thread.currentThread().interrupt();
+                        return ByteString.EMPTY;
+                    }
                     return bs;
                 }
                 if (Instant.now().isAfter(target)) {

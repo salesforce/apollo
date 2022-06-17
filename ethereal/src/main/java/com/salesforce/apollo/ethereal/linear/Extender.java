@@ -83,7 +83,8 @@ public class Extender {
             level = lastTU.level() + 1;
             // cached votes are out of date when the difference between the max level and
             // the level we're currently deciding is > 3
-            if (dagMaxLevel >= level + 3) {
+            if (dagMaxLevel > level + 3) {
+                log.trace("Clearing deciders as max: {} is > : {} + 3 on: {}", dagMaxLevel, level, logLabel);
                 deciders.clear();
             }
         }

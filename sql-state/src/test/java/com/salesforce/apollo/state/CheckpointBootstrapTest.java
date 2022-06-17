@@ -14,7 +14,6 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -47,7 +46,6 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     @Test
     public void checkpointBootstrap() throws Exception {
         final Duration timeout = Duration.ofSeconds(6);
-        var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = 1;
         final int max = 1;
         final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
@@ -79,18 +77,21 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                                              .map(c -> c.getId())
                                                              .toList()));
 
-        for (int i = 0; i < 1; i++) {
-            updaters.entrySet().stream().filter(e -> !e.getKey().equals(testSubject)).map(e -> {
-                var mutator = e.getValue().getMutator(choams.get(e.getKey().getId()).getSession());
-                Supplier<Txn> update = () -> update(entropy, mutator);
-                return new Transactioneer(update, mutator, timeout, max, txExecutor, countdown, txScheduler);
-            }).forEach(e -> transactioneers.add(e));
-        }
+        final var submitter = updaters.entrySet()
+                                      .stream()
+                                      .filter(e -> !e.getKey().equals(testSubject))
+                                      .findFirst()
+                                      .get();
+
+        var mutator = submitter.getValue().getMutator(choams.get(submitter.getKey().getId()).getSession());
+        Supplier<Txn> update = () -> update(entropy, mutator);
+        var transactioneer = new Transactioneer(update, mutator, timeout, max, txExecutor, countdown, txScheduler);
 
         System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
         System.out.println("Starting txns");
 
-        transactioneers.stream().forEach(e -> e.start());
+        transactioneer.start();
+
         assertTrue(countdown.await(60, TimeUnit.SECONDS), "Did not complete transactions");
         assertTrue(checkpointOccurred.await(60, TimeUnit.SECONDS), "Checkpoints did not complete");
 
@@ -115,10 +116,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         routers.get(testSubject.getId()).start();
 
         assertTrue(Utils.waitForCondition(30_000, 1000, () -> {
-            if (!(transactioneers.stream()
-                                 .mapToInt(t -> t.inFlight())
-                                 .filter(t -> t == 0)
-                                 .count() == transactioneers.size())) {
+            if (transactioneer.inFlight() != 0) {
                 return false;
             }
             var mT = members.stream()
