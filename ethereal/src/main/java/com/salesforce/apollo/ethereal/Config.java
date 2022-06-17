@@ -22,10 +22,9 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-public record Config(String label, short nProc, int epochLength, short pid, int zeroVoteRoundForCommonVote,
-                     int firstDecidedRound, int orderStartLevel, Signer signer, DigestAlgorithm digestAlgorithm,
-                     int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey, Clock clock, double bias,
-                     Verifier[] verifiers, double fpr, int commonVoteDeterministicPrefix) {
+public record Config(String label, short nProc, int epochLength, short pid, int firstDecidedRound, int orderStartLevel,
+                     Signer signer, DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs,
+                     WeakThresholdKey WTKey, Clock clock, double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder deterministic() {
         Builder b = new Builder();
@@ -53,7 +52,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         private int              bias            = 3;
         private Clock            clock           = Clock.systemUTC();
-        private int              commonVoteDeterministicPrefix;
         private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int              epochLength     = 30;
         private int              firstDecidedRound;
@@ -68,7 +66,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
         private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
-        private int              zeroVoteRoundForCommonVote;
 
         public Builder() {
             requiredByLinear();
@@ -100,9 +97,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             if (lastLevel <= 0) {
                 addLastLevel();
             }
-            return new Config(label, nProc, epochLength, pid, zeroVoteRoundForCommonVote, firstDecidedRound,
-                              orderStartLevel, signer, digestAlgorithm, lastLevel, numberOfEpochs, wtk, clock, bias,
-                              verifiers, fpr, commonVoteDeterministicPrefix);
+            return new Config(label, nProc, epochLength, pid, firstDecidedRound, orderStartLevel, signer,
+                              digestAlgorithm, lastLevel, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -120,10 +116,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Clock getClock() {
             return clock;
-        }
-
-        public int getCommonVoteDeterministicPrefix() {
-            return commonVoteDeterministicPrefix;
         }
 
         public DigestAlgorithm getDigestAlgorithm() {
@@ -182,14 +174,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return wtk;
         }
 
-        public int getZeroVotRoundForCommonVote() {
-            return zeroVoteRoundForCommonVote;
-        }
-
         public Builder requiredByLinear() {
             firstDecidedRound = 3;
-            zeroVoteRoundForCommonVote = 3;
-            commonVoteDeterministicPrefix = 10;
             return this;
         }
 
@@ -200,11 +186,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Builder setClock(Clock clock) {
             this.clock = clock;
-            return this;
-        }
-
-        public Builder setCommonVoteDeterministicPrefix(int commonVoteDeterministicPrefix) {
-            this.commonVoteDeterministicPrefix = commonVoteDeterministicPrefix;
             return this;
         }
 
@@ -277,11 +258,5 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             this.wtk = wtk;
             return this;
         }
-
-        public Builder setZeroVoteRoundForCommonVote(int zeroVoteRoundForCommonVote) {
-            this.zeroVoteRoundForCommonVote = zeroVoteRoundForCommonVote;
-            return this;
-        }
     }
-
 }

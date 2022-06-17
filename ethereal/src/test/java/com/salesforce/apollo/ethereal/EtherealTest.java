@@ -9,6 +9,7 @@ package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.salesfoce.apollo.messaging.proto.ByteMessage;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
@@ -51,9 +53,29 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
  */
 public class EtherealTest {
 
+    private static final int EPOCH_LENGTH = 30;
+    private static final int NUM_EPOCHS   = 3;
+
     @Test
     public void context() throws Exception {
 
+        one(0);
+    }
+
+    @Test
+    public void lots() throws Exception {
+        if (!Boolean.getBoolean("large_tests")) {
+            return;
+        }
+        for (int i = 0; i < 100; i++) {
+            System.out.println("Iteration: " + i);
+            one(i);
+            System.out.println();
+        }
+    }
+
+    private void one(int iteration) throws NoSuchAlgorithmException, InterruptedException,
+                                    InvalidProtocolBufferException {
         final var gossipPeriod = Duration.ofMillis(5);
 
         var registry = new MetricRegistry();
@@ -84,6 +106,8 @@ public class EtherealTest {
         var builder = Config.newBuilder()
                             .setFpr(0.0125)
                             .setnProc(nProc)
+                            .setNumberOfEpochs(NUM_EPOCHS)
+                            .setEpochLength(EPOCH_LENGTH)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
@@ -141,7 +165,7 @@ public class EtherealTest {
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });
-            finished.await(5, TimeUnit.SECONDS);
+            finished.await(30, TimeUnit.SECONDS);
         } finally {
 //            controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());
@@ -155,30 +179,34 @@ public class EtherealTest {
                 }
             });
         }
-        final var first = produced.stream().filter(l -> l.size() == 87).findFirst();
-        assertFalse(first.isEmpty(), "No process produced 87 blocks: " + produced.stream().map(l -> l.size()).toList());
+        final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);
+        final var first = produced.stream().filter(l -> l.size() == expected).findFirst();
+        assertFalse(first.isEmpty(), "Iteration: " + iteration + ", no process produced " + expected + " blocks: "
+        + produced.stream().map(l -> l.size()).toList());
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
         boolean failed = false;
         for (int i = 0; i < nProc; i++) {
             final List<PreBlock> output = produced.get(i);
-            if (output.size() != 87) {
+            if (output.size() != expected) {
                 failed = true;
-                System.out.println("Did not get all expected blocks on: " + i + " blocks received: " + output.size());
+                System.out.println("Iteration: " + iteration + ", did not get all expected blocks on: " + i
+                + " blocks received: " + output.size());
             } else {
                 for (int j = 0; j < preblocks.size(); j++) {
                     var a = preblocks.get(j);
                     var b = output.get(j);
                     if (a.data().size() != b.data().size()) {
                         failed = true;
-                        System.out.println("Mismatch at block: " + j + " process: " + i + " data size: "
-                        + a.data().size() + " != " + b.data().size());
+                        System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " process: " + i
+                        + " data size: " + a.data().size() + " != " + b.data().size());
                     } else {
                         for (int k = 0; k < a.data().size(); k++) {
                             if (!a.data().get(k).equals(b.data().get(k))) {
                                 failed = true;
-                                System.out.println("Mismatch at block: " + j + " unit: " + k + " process: " + i
-                                + " expected: " + a.data().get(k) + " received: " + b.data().get(k));
+                                System.out.println("Iteration: " + iteration + ", mismatch at block: " + j + " unit: "
+                                + k + " process: " + i + " expected: " + a.data().get(k) + " received: "
+                                + b.data().get(k));
                             }
                             outputOrder.add(new String(ByteMessage.parseFrom(a.data().get(k))
                                                                   .getContents()
@@ -188,7 +216,7 @@ public class EtherealTest {
                 }
             }
         }
-        assertFalse(failed, "Failed");
+        assertFalse(failed, "Failed iteration: " + iteration);
 //        System.out.println();
 //
 //        ConsoleReporter.forRegistry(registry)
@@ -196,17 +224,5 @@ public class EtherealTest {
 //                       .convertDurationsTo(TimeUnit.MILLISECONDS)
 //                       .build()
 //                       .report();
-    }
-
-    @Test
-    public void lots() throws Exception {
-        if (!Boolean.getBoolean("large_tests")) {
-            return;
-        }
-        for (int i = 0; i < 100; i++) {
-            System.out.println("Iteration: " + i);
-            context();
-            System.out.println();
-        }
     }
 }

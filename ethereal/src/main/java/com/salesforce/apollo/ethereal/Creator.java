@@ -132,9 +132,10 @@ public class Creator {
             update(u);
             producer.execute(Utils.wrapped(() -> {
                 var built = ready();
-                if (built != null) {
+                while (built != null) {
                     log.trace("Ready, creating unit on: {}", conf.logLabel());
                     createUnit(built.parents, built.level, getData(built.level));
+                    built = ready();
                 }
             }, log));
         } catch (RejectedExecutionException e) {
@@ -155,7 +156,12 @@ public class Creator {
     private built buildParents() {
         Unit[] parents = new Unit[conf.nProc()];
         parents = candidates.toArray(parents);
-        var l = parents[conf.pid()].level() + 1;
+        final var thisUnit = parents[conf.pid()];
+        if (thisUnit == null) {
+            log.trace("No unit for this proc for level: {} on: {}", level, conf.logLabel());
+            return null;
+        }
+        var l = thisUnit.level() + 1;
         int count = count(l, parents);
         if (count >= quorum) {
             log.trace("Parents ready: {} level: {} on: {}", quorum, level, conf.logLabel());
@@ -177,6 +183,8 @@ public class Creator {
             if (u != null && u.level() == level - 1) {
                 parents[i] = u;
                 count++;
+            } else {
+                parents[i] = null;
             }
         }
         return count;

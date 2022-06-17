@@ -292,24 +292,32 @@ public class Ethereal {
             if (!started.get()) {
                 return;
             }
+
+            // Timing rounds need to be determined while the DAG is write locked
             final var current = lastTU.get();
             final var next = ext.chooseNextTimingUnits(current, handleTimingRounds);
             if (!lastTU.compareAndSet(current, next)) {
                 throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
                                                               current, next));
             }
-            consumer.execute(new UnitTask(u, Utils.wrapped((Consumer<Unit>) unit -> {
-                if (!started.get()) {
-                    return;
-                }
-                // don't put our own units on the unit belt, creator already knows about them.
-                if (unit.creator() != config.pid()) {
+
+            // Consumption handles in a linearly ordered queue
+            try {
+                consumer.execute(new UnitTask(u, Utils.wrapped((Consumer<Unit>) unit -> {
                     if (!started.get()) {
                         return;
                     }
-                    creator.consume(unit);
-                }
-            }, log)));
+                    // don't put our own units on the unit belt, creator already knows about them.
+                    if (unit.creator() != config.pid()) {
+                        if (!started.get()) {
+                            return;
+                        }
+                        creator.consume(unit);
+                    }
+                }, log)));
+            } catch (RejectedExecutionException e) {
+                // ignore as closed
+            }
         });
         final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);
         final var e = new epoch(epoch, dg, adder, new AtomicBoolean(true));
