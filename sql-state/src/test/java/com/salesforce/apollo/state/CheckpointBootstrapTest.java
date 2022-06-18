@@ -14,16 +14,15 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
-import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.Utils;
 
@@ -46,9 +45,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     @Test
     public void checkpointBootstrap() throws Exception {
         final Duration timeout = Duration.ofSeconds(6);
-        final int clientCount = 1;
-        final int max = 1;
-        final CountDownLatch countdown = new CountDownLatch((choams.size() - 1) * clientCount);
+        var transactioneers = new ArrayList<Transactioneer>();
+        final CountDownLatch countdown = new CountDownLatch(1);
 
         routers.entrySet()
                .stream()
@@ -61,6 +59,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
               .map(e -> e.getValue())
               .forEach(ch -> ch.start());
 
+        var txneer = updaters.get(members.get(0));
+
         final var activated = Utils.waitForCondition(30_000, 1_000,
                                                      () -> choams.entrySet()
                                                                  .stream()
@@ -69,30 +69,23 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
                                                                  .filter(c -> !c.active())
                                                                  .count() == 0);
         assertTrue(activated,
-                   "System did not become active: " + (choams.entrySet()
-                                                             .stream()
-                                                             .filter(e -> !e.getKey().equals(testSubject.getId()))
-                                                             .map(e -> e.getValue())
-                                                             .filter(c -> !c.active())
-                                                             .map(c -> c.getId())
-                                                             .toList()));
+                   "Group did not become active: " + (choams.entrySet()
+                                                            .stream()
+                                                            .filter(e -> !e.getKey().equals(testSubject.getId()))
+                                                            .map(e -> e.getValue())
+                                                            .filter(c -> !c.active())
+                                                            .map(c -> c.getId())
+                                                            .toList()));
 
-        final var submitter = updaters.entrySet()
-                                      .stream()
-                                      .filter(e -> !e.getKey().equals(testSubject))
-                                      .findFirst()
-                                      .get();
-
-        var mutator = submitter.getValue().getMutator(choams.get(submitter.getKey().getId()).getSession());
-        Supplier<Txn> update = () -> update(entropy, mutator);
-        var transactioneer = new Transactioneer(update, mutator, timeout, max, txExecutor, countdown, txScheduler);
-
-        System.out.println("# of clients: " + (choams.size() - 1) * clientCount);
+        var mutator = txneer.getMutator(choams.get(members.get(0).getId()).getSession());
+        transactioneers.add(new Transactioneer(() -> update(entropy, mutator), mutator, timeout, 1, txExecutor,
+                                               countdown, txScheduler));
+        System.out.println("Transaction member: " + members.get(0).getId());
         System.out.println("Starting txns");
-
-        transactioneer.start();
-
-        assertTrue(countdown.await(60, TimeUnit.SECONDS), "Did not complete transactions");
+        transactioneers.stream().forEach(e -> e.start());
+        var success = countdown.await(60, TimeUnit.SECONDS);
+        assertTrue(success,
+                   "Did not complete transactions: " + (transactioneers.stream().mapToInt(t -> t.completed()).sum()));
         assertTrue(checkpointOccurred.await(60, TimeUnit.SECONDS), "Checkpoints did not complete");
 
         ULong chkptHeight = checkpointHeight.get();
@@ -116,7 +109,10 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         routers.get(testSubject.getId()).start();
 
         assertTrue(Utils.waitForCondition(30_000, 1000, () -> {
-            if (transactioneer.inFlight() != 0) {
+            if (!(transactioneers.stream()
+                                 .mapToInt(t -> t.inFlight())
+                                 .filter(t -> t == 0)
+                                 .count() == transactioneers.size())) {
                 return false;
             }
             var mT = members.stream()
