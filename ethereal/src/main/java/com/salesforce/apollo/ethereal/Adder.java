@@ -564,14 +564,14 @@ public class Adder {
             case ABIGUOUS_PARENTS:
             case COMPLIANCE_ERROR:
             case DATA_ERROR:
-                removeFailed(wp, decoded.classification());
+                removeFailed(wp, decoded);
                 return false;
             default:
                 break;
             }
 
             if (decoded.classification() != Correctness.DUPLICATE_UNIT) {
-                removeFailed(wp, decoded.classification());
+                removeFailed(wp, decoded);
             }
             return false;
         }
@@ -587,7 +587,7 @@ public class Adder {
 
         var err = dag.check(freeUnit);
         if (err != null) {
-            removeFailed(wp);
+            removeFailed(wp, err);
             log.warn("Failed: {} check: {} on: {}", freeUnit, err, conf.logLabel());
         }
         wp.setDecoded(freeUnit);
@@ -718,9 +718,9 @@ public class Adder {
         }
     }
 
-    private void removeFailed(Waiting wp, Correctness correctness) {
+    private void removeFailed(Waiting wp, Object failure) {
         wp.setState(State.FAILED);
-        log.warn("Failed: {} reason: {} on: {}", wp, correctness, conf.logLabel());
+        log.warn("Failed: {} reason: {} on: {}", wp, failure, conf.logLabel());
         failed.add(wp.hash());
         remove(wp);
         for (var ch : wp.children()) {

@@ -38,7 +38,7 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/empty.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
+        var cnf = Config.newBuilder().build();
         var ordering = new Extender(d, cnf);
         assertNull(ordering.nextRound(null));
     }
@@ -49,7 +49,7 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/10/only_dealing.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var cnf = Config.Builder.empty().setOrderStartLevel(0).build();
+        var cnf = Config.newBuilder().build();
         var ordering = new Extender(d, cnf);
         assertNull(ordering.nextRound(null));
     }
@@ -60,7 +60,7 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
+        var cnf = Config.newBuilder().setnProc(d.nProc()).build();
         var ordering = new Extender(d, cnf);
 
         TimingRound current = null;
@@ -77,7 +77,7 @@ public class ExtenderTest {
         try (FileInputStream fis = new FileInputStream(new File("src/test/resources/dags/4/regular.txt"))) {
             d = DagReader.readDag(fis, new DagFactory.TestDagFactory());
         }
-        var cnf = Config.Builder.empty().setnProc(d.nProc()).setOrderStartLevel(0).build();
+        var cnf = Config.newBuilder().setnProc(d.nProc()).build();
         var ordering = new Extender(d, cnf);
 
         var timingRounds = new ArrayList<List<Unit>>();

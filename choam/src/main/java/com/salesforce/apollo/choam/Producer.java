@@ -197,16 +197,15 @@ public class Producer {
         // Number of rounds we can provide data for
         final var blocks = ep.getEpochLength() - 4;
         final int maxElements = blocks * lastEpoch;
-
+        final var name = "Producer" + getViewId() + params().member().getId().toString();
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
-                              producerParams.batchInterval(), producerParams.maxBatchCount(),
-                              params().producer().gossipDuration().multipliedBy(view.context().majority()));
+                              producerParams.batchInterval(), producerParams.maxBatchCount());
 
         log.trace("Producer max elements: {} reconfiguration epoch: {} on: {}", maxElements, lastEpoch,
                   params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
-        fsm.setName("Producer" + getViewId() + params().member().getId().toString());
+        fsm.setName(name);
         transitions = fsm.getTransitions();
 
         Config.Builder config = params().producer().ethereal().clone();

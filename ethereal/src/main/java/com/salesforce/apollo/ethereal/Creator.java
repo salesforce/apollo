@@ -12,7 +12,6 @@ import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  * Creator is a component responsible for producing new units. It processes
@@ -87,6 +85,7 @@ public class Creator {
 
     private final List<Unit>                           candidates;
     private final Config                               conf;
+    private volatile Thread                            currentThread;
     private final DataSource                           ds;
     private final AtomicInteger                        epoch      = new AtomicInteger(0);
     private final AtomicBoolean                        epochDone  = new AtomicBoolean();
@@ -128,20 +127,12 @@ public class Creator {
      */
     public void consume(Unit u) {
         log.trace("Processing next unit: {} on: {}", u, conf.logLabel());
-        try {
-            update(u);
-            producer.execute(Utils.wrapped(() -> {
-                var built = ready();
-                while (built != null) {
-                    log.trace("Ready, creating unit on: {}", conf.logLabel());
-                    createUnit(built.parents, built.level, getData(built.level));
-                    built = ready();
-                }
-            }, log));
-        } catch (RejectedExecutionException e) {
-            // ignore as closed
-        } catch (Throwable e) {
-            log.error("Error in processing units on: {}", conf.logLabel(), e);
+        update(u);
+        var built = ready();
+        while (built != null) {
+            log.trace("Ready, creating unit on: {}", conf.logLabel());
+            createUnit(built.parents, built.level, getData(built.level));
+            built = ready();
         }
     }
 
@@ -151,6 +142,10 @@ public class Creator {
 
     public void stop() {
         producer.shutdownNow();
+        final var c = currentThread;
+        if (c != null) {
+            c.interrupt();
+        }
     }
 
     private built buildParents() {
@@ -228,13 +223,7 @@ public class Creator {
             final int e = epoch.get();
             if (timingUnit.epoch() == e) {
                 epochDone.set(true);
-                if (e == conf.numberOfEpochs() - 1) {
-                    log.trace("Finished, last epoch timing unit: {} level: {} on: {}", timingUnit, level,
-                              conf.logLabel());
-                    return epochProof.get().buildShare(timingUnit);
-                } else {
-                    log.trace("Timing unit: {}, level: {} on: {}", timingUnit, level, conf.logLabel());
-                }
+                log.trace("Finished, last epoch timing unit: {} level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
             log.trace("Ignored timing unit from epoch: {} current: {} on: {}", timingUnit.epoch(), e, conf.logLabel());
@@ -325,7 +314,7 @@ public class Creator {
         // that the current epoch is finished) switch to a new epoch.
         ByteString ep = epochProof.get().tryBuilding(unit);
         if (ep != null) {
-            log.debug("Advancing epoch from: {} to: {} using: {} on: {}", e, e + 1, unit, conf.logLabel());
+            log.trace("Advancing epoch from: {} to: {} using: {} on: {}", e, e + 1, unit, conf.logLabel());
             newEpoch(e + 1, ep, e);
             return;
         }

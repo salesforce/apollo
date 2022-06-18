@@ -455,7 +455,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public static class Builder {
             private Duration       batchInterval    = Duration.ofMillis(100);
-            private Config.Builder ethereal         = Config.deterministic();
+            private Config.Builder ethereal         = Config.newBuilder();
             private Duration       gossipDuration   = Duration.ofSeconds(1);
             private int            maxBatchByteSize = 2 * 1024 * 1024;
             private int            maxBatchCount    = 10_000;

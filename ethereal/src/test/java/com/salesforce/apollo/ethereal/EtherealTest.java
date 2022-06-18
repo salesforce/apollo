@@ -56,18 +56,9 @@ import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
 public class EtherealTest {
     private static class SimpleDataSource implements DataSource {
         private final Deque<ByteString> dataStack = new ArrayDeque<>();
-        private final Duration          gossipFrequency;
-
-        private SimpleDataSource(Duration gossipFrequency) {
-            this.gossipFrequency = gossipFrequency;
-        }
 
         @Override
         public ByteString getData() {
-            try {
-                Thread.sleep(gossipFrequency.toMillis() * 3);
-            } catch (InterruptedException e) {
-            }
             return dataStack.pollFirst();
         }
     }
@@ -123,7 +114,7 @@ public class EtherealTest {
             context.activate(m);
         }
         var builder = Config.newBuilder()
-                            .setFpr(0.0125)
+                            .setFpr(0.00000125)
                             .setnProc(nProc)
                             .setNumberOfEpochs(NUM_EPOCHS)
                             .setEpochLength(EPOCH_LENGTH)
@@ -139,7 +130,7 @@ public class EtherealTest {
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
         for (short i = 0; i < nProc; i++) {
-            var ds = new SimpleDataSource(gossipPeriod);
+            var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
             final var exec = Executors.newFixedThreadPool(2);
@@ -184,7 +175,7 @@ public class EtherealTest {
                 executors.add(sched);
                 e.start(gossipPeriod, sched);
             });
-            finished.await(30, TimeUnit.SECONDS);
+            finished.await(60, TimeUnit.SECONDS);
         } finally {
 //            controllers.forEach(c -> System.out.println(c.dump()));
             controllers.forEach(e -> e.stop());

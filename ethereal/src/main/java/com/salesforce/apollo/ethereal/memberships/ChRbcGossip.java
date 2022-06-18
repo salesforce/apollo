@@ -88,13 +88,13 @@ public class ChRbcGossip {
 
     private final CommonCommunications<Gossiper, GossiperService> comm;
     private final Context<Member>                                 context;
+    private final Executor                                        exec;
     private final SigningMember                                   member;
     private final EtherealMetrics                                 metrics;
     private final Processor                                       processor;
     private final RingCommunications<Member, Gossiper>            ring;
     private volatile ScheduledFuture<?>                           scheduled;
     private final AtomicBoolean                                   started = new AtomicBoolean();
-    private final Executor                                        exec;
 
     public ChRbcGossip(Context<Member> context, SigningMember member, Processor processor, Router communications,
                        Executor exec, EtherealMetrics m) {

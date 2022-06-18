@@ -70,14 +70,10 @@ public class Extender {
     }
 
     public TimingRound nextRound(TimingRound lastTU) {
+        deciders.clear();
         var dagMaxLevel = dag.maxLevel();
-        if (dagMaxLevel < conf.orderStartLevel()) {
-            log.trace("No round, dag mxLvl: {} is < order start level: {} on: {}", dagMaxLevel, conf.orderStartLevel(),
-                      logLabel);
-            return lastTU;
-        }
         log.trace("Begin round, {} dag mxLvl: {} on: {}", lastTU, dagMaxLevel, conf.firstDecidedRound(), logLabel);
-        var level = conf.orderStartLevel();
+        var level = 0;
         final Unit previousTU = lastTU == null ? null : lastTU.currentTU();
         if (previousTU != null) {
             level = lastTU.level() + 1;

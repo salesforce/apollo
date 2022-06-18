@@ -347,6 +347,19 @@ public interface Dag {
             });
         }
 
+        @Override
+        public void write(Runnable r) {
+            final Lock lock = rwLock.writeLock();
+            lock.lock();
+            try {
+                r.run();
+            } catch (Exception e) {
+                throw new IllegalStateException("Error during write locked call on: " + config.logLabel(), e);
+            } finally {
+                lock.unlock();
+            }
+        }
+
         private List<List<Unit>> emptySlotList(short nProc) {
             var arr = new ArrayList<List<Unit>>();
             for (var i = 0; i < nProc; i++) {
@@ -379,7 +392,10 @@ public interface Dag {
             }
             var su = heightUnits.getFiber(height);
 
-            su.get(creator).add(u);
+            final var parentsByCreator = su.get(creator);
+            if (parentsByCreator.isEmpty()) {
+                parentsByCreator.add(u);
+            }
         }
 
         private void updateUnitsOnLevel(Unit u) {
@@ -389,18 +405,6 @@ public interface Dag {
             var su = levelUnits.getFiber(u.level());
             su.get(u.creator()).add(u);
 
-        }
-
-        private void write(Runnable r) {
-            final Lock lock = rwLock.writeLock();
-            lock.lock();
-            try {
-                r.run();
-            } catch (Exception e) {
-                throw new IllegalStateException("Error during write locked call on: " + config.logLabel(), e);
-            } finally {
-                lock.unlock();
-            }
         }
     }
 
@@ -620,4 +624,6 @@ public interface Dag {
     List<Unit> unitsAbove(int[] heights);
 
     List<List<Unit>> unitsOnLevel(int level);
+
+    void write(Runnable r);
 }

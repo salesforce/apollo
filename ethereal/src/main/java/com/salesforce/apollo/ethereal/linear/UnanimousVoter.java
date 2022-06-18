@@ -27,6 +27,7 @@ import com.salesforce.apollo.ethereal.Unit;
 public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, String logLabel) {
 
     private static final Logger log = LoggerFactory.getLogger(UnanimousVoter.class);
+    private static final int DETERMINISTIC_VOTE_PREFIX = 10;
 
     private record R(Vote vote, boolean finished) {}
 
@@ -55,7 +56,8 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             }
             int maxDecisionLevel = getMaxDecideLevel(dagMaxLevel);
 
-            log.trace("Max decision level: {} for: {} on: {}", maxDecisionLevel, voter.uc, logLabel);
+            log.trace("Max decision relative: {} for: {} on: {}", maxDecisionLevel - voter.uc.level(), voter.uc,
+                      logLabel);
 
             for (int level = voter.uc.level() + firstVotingRound + 1; level <= maxDecisionLevel; level++) {
                 AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
@@ -136,14 +138,13 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
          * assuming that dag is on level 'dagMaxLevel'.
          */
         private int getMaxDecideLevel(int dagMaxLevel) {
-            var deterministicLevel = voter.uc.level() + 4;
-            if (dagMaxLevel - 2 < deterministicLevel) {
-                if (deterministicLevel > dagMaxLevel) {
-                    return dagMaxLevel;
-                }
-                return deterministicLevel;
+            if (dagMaxLevel <= 5) {
+                return Math.max(5, dagMaxLevel); // need this to progress first 3 rounds
             }
-            return dagMaxLevel - 2;
+            var deterministicLevel = voter.uc.level() + DETERMINISTIC_VOTE_PREFIX;
+
+            // keep things within the deterministic level unil things get out of hand
+            return (dagMaxLevel - 2 < deterministicLevel) ? Math.min(deterministicLevel, dagMaxLevel) : dagMaxLevel;
         }
 
         /**
@@ -172,7 +173,7 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
         if (cachedResult != null) {
             return cachedResult;
         }
-        AtomicReference<Vote> result = new AtomicReference<>();
+        AtomicReference<Vote> result = new AtomicReference<>(Vote.UNDECIDED);
 
         try {
             if (roundDiff == firstVotingRound) {
@@ -231,9 +232,9 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             log.trace("Common vote level: {} is asked on the zero vote round diff: {} on: {}", level, 3, logLabel);
             return Vote.UNPOPULAR;
         }
-        if (roundDiff <= 4) {
-            log.trace("Common vote popular level: {} as round diff: {} is less than the determinist prefix: {} on: {}",
-                      level, roundDiff, 4, logLabel);
+        if (roundDiff <= 3) {
+            log.trace("Common vote popular level: {} as round diff: {} is <= than the determinist prefix: {} on: {}",
+                      level, roundDiff, 3, logLabel);
             return Vote.POPULAR;
         }
         if (roundDiff % 2 == 1) {
@@ -278,13 +279,13 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
 
                 // compute vote using prime ancestor
                 R counted = voter.apply(uc, v);
+                finish = counted.finished;
                 switch (counted.vote) {
                 case POPULAR:
                     votesOne = true;
                 case UNPOPULAR:
                     votesZero = true;
                 default:
-                    break;
                 }
                 if (finish || (votesOne && votesZero)) {
                     break;

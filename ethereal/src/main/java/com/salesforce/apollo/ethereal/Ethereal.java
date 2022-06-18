@@ -19,7 +19,10 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -70,6 +73,28 @@ public class Ethereal {
         }
     }
 
+    private record UnitTask(Unit unit, Consumer<Unit> consumer) implements Runnable, Comparable<UnitTask> {
+
+        @Override
+        public int compareTo(UnitTask o) {
+            var comp = Integer.compare(unit.epoch(), o.unit.epoch());
+            if (comp < 0 || comp > 0) {
+                return comp;
+            }
+            comp = Integer.compare(unit.height(), o.unit.height());
+            if (comp < 0 || comp > 0) {
+                return comp;
+            }
+            return Integer.compare(unit.creator(), o.unit.creator());
+        }
+
+        @Override
+        public void run() {
+            consumer.accept(unit);
+        }
+
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
     /**
@@ -112,8 +137,10 @@ public class Ethereal {
     }
 
     private final Config               config;
+    private final ExecutorService      consumer;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
+    private volatile Thread            currentThread;
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
     private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
@@ -140,16 +167,17 @@ public class Ethereal {
             t.setDaemon(true);
             return t;
         });
+
+        consumer = new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(1000), r -> {
+            final var t = new Thread(r, "Creator Consumer[" + conf.logLabel() + "]");
+            t.setDaemon(true);
+            return t;
+        }, (r, t) -> log.warn("Cannot consum unit", t));
+
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
-            try {
-                executor.execute(() -> {
-                    log.trace("Sending: {} on: {}", u, config.logLabel());
-                    insert(u);
-                });
-            } catch (RejectedExecutionException e) {
-                // ignore as closing
-            }
+            log.trace("Sending: {} on: {}", u, config.logLabel());
+            insert(u);
         }, epoch -> new epochProofImpl(config, epoch, new sharesDB(config, new ConcurrentHashMap<>())));
     }
 
@@ -246,6 +274,10 @@ public class Ethereal {
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
         executor.shutdownNow();
+        final var c = currentThread;
+        if (c != null) {
+            c.interrupt();
+        }
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -263,23 +295,24 @@ public class Ethereal {
                 return;
             }
 
-            // Timing rounds need to be determined while the DAG is write locked
             final var current = lastTU.get();
             final var next = ext.chooseNextTimingUnits(current, handleTimingRounds);
             if (!lastTU.compareAndSet(current, next)) {
                 throw new IllegalStateException(String.format("LastTU has been changed underneath us, expected: %s have: %s",
                                                               current, next));
             }
-            if (!started.get()) {
-                return;
-            }
-            // creator already knows about units created by this node.
-            if (u.creator() != config.pid()) {
+
+            consumer.execute(new UnitTask(u, unit -> {
                 if (!started.get()) {
                     return;
                 }
-                creator.consume(u);
-            }
+
+                // creator already knows about units created by this node.
+                if (unit.creator() != config.pid()) {
+                    creator.consume(unit);
+                }
+            }));
+
         });
         final var adder = new Adder(epoch, dg, maxSerializedSize, config, failed);
         final var e = new epoch(epoch, dg, adder, new AtomicBoolean(true));

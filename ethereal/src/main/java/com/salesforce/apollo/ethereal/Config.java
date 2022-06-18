@@ -22,20 +22,9 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-public record Config(String label, short nProc, int epochLength, short pid, int firstDecidedRound, int orderStartLevel,
-                     Signer signer, DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs,
-                     WeakThresholdKey WTKey, Clock clock, double bias, Verifier[] verifiers, double fpr) {
-
-    public static Builder deterministic() {
-        Builder b = new Builder();
-        b.requiredByLinear();
-        b.addConsensusConfig();
-        return b;
-    }
-
-    public static Config empty() {
-        return Builder.empty().build();
-    }
+public record Config(String label, short nProc, int epochLength, short pid, int firstDecidedRound, Signer signer,
+                     DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey,
+                     Clock clock, double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -46,42 +35,23 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
     }
 
     public static class Builder implements Cloneable {
-        public static Builder empty() {
-            return new Builder().requiredByLinear();
-        }
 
-        private int              bias            = 3;
-        private Clock            clock           = Clock.systemUTC();
-        private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
-        private int              epochLength     = 30;
-        private int              firstDecidedRound;
-        private double           fpr             = 0.125;
-        private String           label           = "";
-        private int              lastLevel       = -1;
+        private int              bias              = 3;
+        private Clock            clock             = Clock.systemUTC();
+        private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
+        private int              epochLength       = 30;
+        private int              firstDecidedRound = 3;
+        private double           fpr               = 0.125;
+        private String           label             = "";
         private short            nProc;
-        private int              numberOfEpochs  = 3;
-        private int              orderStartLevel = 6;
-        private double           pByz            = -1;
+        private int              numberOfEpochs    = 3;
+        private double           pByz              = -1;
         private short            pid;
-        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
+        private Signer           signer            = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
 
         public Builder() {
-            requiredByLinear();
-            addConsensusConfig();
-        }
-
-        public Builder addConsensusConfig() {
-            orderStartLevel = 0;
-            numberOfEpochs = 3;
-            epochLength = 30;
-            return this;
-        }
-
-        public Builder addLastLevel() {
-            lastLevel = epochLength + orderStartLevel - 1;
-            return this;
         }
 
         public Config build() {
@@ -94,11 +64,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-            if (lastLevel <= 0) {
-                addLastLevel();
-            }
-            return new Config(label, nProc, epochLength, pid, firstDecidedRound, orderStartLevel, signer,
-                              digestAlgorithm, lastLevel, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
+            return new Config(label, nProc, epochLength, pid, firstDecidedRound, signer, digestAlgorithm,
+                              epochLength - 1, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
         }
 
         @Override
@@ -138,20 +105,12 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return label;
         }
 
-        public int getLastLevel() {
-            return lastLevel;
-        }
-
         public short getnProc() {
             return nProc;
         }
 
         public int getNumberOfEpochs() {
             return numberOfEpochs;
-        }
-
-        public int getOrderStartLevel() {
-            return orderStartLevel;
         }
 
         public double getpByz() {
@@ -172,11 +131,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public WeakThresholdKey getWtk() {
             return wtk;
-        }
-
-        public Builder requiredByLinear() {
-            firstDecidedRound = 3;
-            return this;
         }
 
         public Builder setBias(int bias) {
@@ -214,11 +168,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return this;
         }
 
-        public Builder setLastLevel(int lastLevel) {
-            this.lastLevel = lastLevel;
-            return this;
-        }
-
         public Builder setnProc(short nProc) {
             this.nProc = nProc;
             return this;
@@ -226,11 +175,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Builder setNumberOfEpochs(int numberOfEpochs) {
             this.numberOfEpochs = numberOfEpochs;
-            return this;
-        }
-
-        public Builder setOrderStartLevel(int orderStartLevel) {
-            this.orderStartLevel = orderStartLevel;
             return this;
         }
 
