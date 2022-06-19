@@ -56,7 +56,7 @@ import com.salesforce.apollo.utils.Utils;
 
 /**
  * @author hal.hildebrand
- *
+ * 
  */
 public class TestCHOAM {
     private static final int     CARDINALITY;
