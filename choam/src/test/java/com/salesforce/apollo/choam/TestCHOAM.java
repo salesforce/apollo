@@ -107,7 +107,7 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockDelta(1);
-        params.getProducer().ethereal().setNumberOfEpochs(5).setFpr(0.0125);
+        params.getProducer().ethereal().setFpr(0.0125);
 
         checkpointOccurred = new CompletableFuture<>();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

@@ -140,7 +140,6 @@ public class Ethereal {
     private final ExecutorService      consumer;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
-    private volatile Thread            currentThread;
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
     private final ExecutorService      executor;
     private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
@@ -169,7 +168,7 @@ public class Ethereal {
         });
 
         consumer = new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(1000), r -> {
-            final var t = new Thread(r, "Creator Consumer[" + conf.logLabel() + "]");
+            final var t = new Thread(r, "Ethereal Consumer[" + conf.logLabel() + "]");
             t.setDaemon(true);
             return t;
         }, (r, t) -> log.warn("Cannot consum unit", t));
@@ -274,10 +273,7 @@ public class Ethereal {
         log.trace("Stopping Orderer on: {}", config.logLabel());
         creator.stop();
         executor.shutdownNow();
-        final var c = currentThread;
-        if (c != null) {
-            c.interrupt();
-        }
+        consumer.shutdownNow();
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
@@ -353,7 +349,8 @@ public class Ethereal {
             var timingUnit = round.get(round.size() - 1);
             var epoch = timingUnit.epoch();
 
-            if (timingUnit.level() == config.lastLevel()) {
+            if (timingUnit.level() >= config.lastLevel()) {
+                log.trace("Last Timing: {}, on: {}", timingUnit, config.logLabel());
                 lastTiming.add(timingUnit);
                 finishEpoch(epoch);
             }
@@ -361,8 +358,7 @@ public class Ethereal {
                 try {
                     executor.execute(Utils.wrapped(() -> {
                         toPreblock.accept(round);
-                        log.trace("Preblock produced level: {}, epoch: {} on: {}", timingUnit.level(), epoch,
-                                  config.logLabel());
+                        log.trace("Preblock produced: {} on: {}", timingUnit, config.logLabel());
                     }, log));
                 } catch (RejectedExecutionException e) {
                     // ignore as closed

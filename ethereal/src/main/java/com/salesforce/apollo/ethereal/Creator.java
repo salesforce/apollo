@@ -10,8 +10,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -85,7 +83,6 @@ public class Creator {
 
     private final List<Unit>                           candidates;
     private final Config                               conf;
-    private volatile Thread                            currentThread;
     private final DataSource                           ds;
     private final AtomicInteger                        epoch      = new AtomicInteger(0);
     private final AtomicBoolean                        epochDone  = new AtomicBoolean();
@@ -95,7 +92,6 @@ public class Creator {
     private final AtomicInteger                        level      = new AtomicInteger();
     private final AtomicInteger                        maxLvl     = new AtomicInteger();
     private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
-    private final ExecutorService                      producer;
     private final int                                  quorum;
     private final Consumer<Unit>                       send;
 
@@ -112,11 +108,6 @@ public class Creator {
         this.lastTiming = lastTiming;
 
         quorum = Dag.minimalQuorum(config.nProc(), config.bias()) + 1;
-        producer = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Ethereal Producer[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     /**
@@ -141,11 +132,6 @@ public class Creator {
     }
 
     public void stop() {
-        producer.shutdownNow();
-        final var c = currentThread;
-        if (c != null) {
-            c.interrupt();
-        }
     }
 
     private built buildParents() {

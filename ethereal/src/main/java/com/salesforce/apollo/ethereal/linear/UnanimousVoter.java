@@ -86,13 +86,17 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
         }
 
         private Vote decide(Unit u) {
-            var commonVote = voter.lazyCommonVote(u.level() - 1);
+            AtomicReference<Vote> commonVote = new AtomicReference<>();
             var r = voter.voteUsingPrimeAncestors(voter.uc, u, voter.dag, (uc, uPrA) -> {
                 short pop = 0;
                 short unpop = 0;
                 Vote result = voter.voteUsing(uPrA);
                 if (result == Vote.UNDECIDED) {
                     result = commonVote.get();
+                    if (result == null) {
+                        result = voter.commonVote(u.level() - 1);
+                        commonVote.set(result);
+                    }
                 }
                 var updated = false;
                 switch (result) {
@@ -138,13 +142,10 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
          * assuming that dag is on level 'dagMaxLevel'.
          */
         private int getMaxDecideLevel(int dagMaxLevel) {
-            if (dagMaxLevel <= 5) {
-                return Math.max(5, dagMaxLevel); // need this to progress first 3 rounds
-            }
             var deterministicLevel = voter.uc.level() + DETERMINISTIC_VOTE_PREFIX;
 
             // keep things within the deterministic level unil things get out of hand
-            return (dagMaxLevel - 2 < deterministicLevel) ? Math.min(deterministicLevel, dagMaxLevel) : dagMaxLevel;
+            return (dagMaxLevel - 2 < deterministicLevel) ? Math.min(deterministicLevel, dagMaxLevel) : dagMaxLevel - 2;
         }
 
         /**
@@ -177,7 +178,8 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
 
         try {
             if (roundDiff == firstVotingRound) {
-                return initialVote(uc, u);
+                result.set(initialVote(uc, u));
+                return result.get();
             }
             var commonVote = lazyCommonVote(u.level() - 1);
             AtomicReference<Vote> lastVote = new AtomicReference<>();
@@ -205,7 +207,8 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
                 return Vote.UNDECIDED;
             }
             log.trace("Vote result: {} candidate: {} prime ancestor: {} on: {}", lastVote.get(), uc, u, logLabel);
-            return lastVote.get();
+            result.set(lastVote.get());
+            return result.get();
         } finally {
             votingMemo.put(u.hash(), result.get());
         }

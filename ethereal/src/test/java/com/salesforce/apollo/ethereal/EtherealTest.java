@@ -47,6 +47,7 @@ import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
 import com.salesforce.apollo.stereotomy.mem.MemKERL;
 import com.salesforce.apollo.stereotomy.mem.MemKeyStore;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * 
@@ -59,6 +60,10 @@ public class EtherealTest {
 
         @Override
         public ByteString getData() {
+            try {
+                Thread.sleep(Entropy.nextBitsStreamLong(1_000));
+            } catch (InterruptedException e) {
+            }
             return dataStack.pollFirst();
         }
     }

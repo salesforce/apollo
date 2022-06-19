@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -32,10 +31,9 @@ import com.salesforce.apollo.ethereal.linear.UnanimousVoter.SuperMajorityDecider
 public class Extender {
     private static Logger log = LoggerFactory.getLogger(Extender.class);
 
-    private final Config                            conf;
-    private final Dag                               dag;
-    private final Map<Digest, SuperMajorityDecider> deciders = new HashMap<Digest, SuperMajorityDecider>();
-    private final String                            logLabel;
+    private final Config conf;
+    private final Dag    dag;
+    private final String logLabel;
 
     public Extender(Dag dag, Config conf) {
         this.dag = dag;
@@ -70,19 +68,12 @@ public class Extender {
     }
 
     public TimingRound nextRound(TimingRound lastTU) {
-        deciders.clear();
         var dagMaxLevel = dag.maxLevel();
         log.trace("Begin round, {} dag mxLvl: {} on: {}", lastTU, dagMaxLevel, conf.firstDecidedRound(), logLabel);
         var level = 0;
         final Unit previousTU = lastTU == null ? null : lastTU.currentTU();
         if (previousTU != null) {
             level = lastTU.level() + 1;
-            // cached votes are out of date when the difference between the max level and
-            // the level we're currently deciding is > 3
-            if (dagMaxLevel > level + 3) {
-                log.trace("Clearing deciders as max: {} is > : {} + 3 on: {}", dagMaxLevel, level, logLabel);
-                deciders.clear();
-            }
         }
         if (dagMaxLevel < level + conf.firstDecidedRound()) {
             log.trace("No round, dag mxLvl: {} is < ({} + {}) on: {}", dagMaxLevel, level, conf.firstDecidedRound(),
@@ -94,9 +85,10 @@ public class Extender {
 
         var decided = false;
         Unit currentTU = null;
+        var deciders = new HashMap<Digest, SuperMajorityDecider>();
 
         for (Unit uc : commonRandomPermutation(level, units, previousTU)) {
-            SuperMajorityDecider decider = getDecider(uc);
+            SuperMajorityDecider decider = getDecider(uc, deciders);
             var decision = decider.decideUnitIsPopular(dagMaxLevel);
             if (decision.decision() == Vote.POPULAR) {
                 currentTU = uc;
@@ -106,7 +98,6 @@ public class Extender {
             }
             if (decision.decision() == Vote.UNDECIDED) {
                 log.trace("Undecided: {} level: {} on: {}", uc, level, logLabel);
-                deciders.clear();
                 break;
             }
             log.trace("Unpopular: {} level: {} on: {}", uc, level, logLabel);
@@ -116,7 +107,6 @@ public class Extender {
             log.trace("No round decided, dag mxLvl: {} level: {} on: {}", dagMaxLevel, level, logLabel);
             return lastTU;
         }
-        deciders.clear();
         final var current = new TimingRound(currentTU, level, lastTU == null ? null : lastTU.currentTU());
         log.trace("{} dag mxLvl: {} on: {}", current, dagMaxLevel, logLabel);
         return current;
@@ -133,7 +123,7 @@ public class Extender {
         return permutation;
     }
 
-    private SuperMajorityDecider getDecider(Unit uc) {
+    private SuperMajorityDecider getDecider(Unit uc, HashMap<Digest, SuperMajorityDecider> deciders) {
         return deciders.computeIfAbsent(uc.hash(),
                                         h -> new SuperMajorityDecider(new UnanimousVoter(dag, uc, new HashMap<>(),
                                                                                          logLabel),
