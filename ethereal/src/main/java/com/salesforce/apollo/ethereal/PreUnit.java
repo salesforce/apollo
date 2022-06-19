@@ -320,10 +320,6 @@ public interface PreUnit {
     }
 
     int epoch();
-//
-//    default boolean equals(PreUnit v) {
-//        return creator() == v.creator() && height() == v.height() && epoch() == v.epoch();
-//    }
 
     default Unit from(Unit[] parents, double bias) {
         freeUnit u = new freeUnit(this, parents, Unit.levelFromParents(parents, bias), new HashMap<>());

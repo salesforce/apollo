@@ -6,7 +6,6 @@
  */
 package com.salesforce.apollo.ethereal;
 
-import java.time.Clock;
 import java.util.Objects;
 
 import com.salesforce.apollo.crypto.DigestAlgorithm;
@@ -22,9 +21,9 @@ import com.salesforce.apollo.ethereal.WeakThresholdKey.NoOpWeakThresholdKey;
  * @author hal.hildebrand
  *
  */
-public record Config(String label, short nProc, int epochLength, short pid, int firstDecidedRound, Signer signer,
+public record Config(String label, short nProc, int epochLength, short pid, Signer signer,
                      DigestAlgorithm digestAlgorithm, int lastLevel, int numberOfEpochs, WeakThresholdKey WTKey,
-                     Clock clock, double bias, Verifier[] verifiers, double fpr) {
+                     double bias, Verifier[] verifiers, double fpr) {
 
     public static Builder newBuilder() {
         return new Builder();
@@ -36,18 +35,16 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
     public static class Builder implements Cloneable {
 
-        private int              bias              = 3;
-        private Clock            clock             = Clock.systemUTC();
-        private DigestAlgorithm  digestAlgorithm   = DigestAlgorithm.DEFAULT;
-        private int              epochLength       = 30;
-        private int              firstDecidedRound = 3;
-        private double           fpr               = 0.125;
-        private String           label             = "";
+        private int              bias            = 3;
+        private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
+        private int              epochLength     = 30;
+        private double           fpr             = 0.125;
+        private String           label           = "";
         private short            nProc;
-        private int              numberOfEpochs    = 3;
-        private double           pByz              = -1;
+        private int              numberOfEpochs  = 3;
+        private double           pByz            = -1;
         private short            pid;
-        private Signer           signer            = new MockSigner(SignatureAlgorithm.DEFAULT);
+        private Signer           signer          = new MockSigner(SignatureAlgorithm.DEFAULT);
         private Verifier[]       verifiers;
         private WeakThresholdKey wtk;
 
@@ -64,8 +61,8 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             }
             Objects.requireNonNull(signer, "Signer cannot be null");
             Objects.requireNonNull(digestAlgorithm, "Digest Algorithm cannot be null");
-            return new Config(label, nProc, epochLength, pid, firstDecidedRound, signer, digestAlgorithm,
-                              epochLength - 1, numberOfEpochs, wtk, clock, bias, verifiers, fpr);
+            return new Config(label, nProc, epochLength, pid, signer, digestAlgorithm, epochLength - 1, numberOfEpochs,
+                              wtk, bias, verifiers, fpr);
         }
 
         @Override
@@ -81,20 +78,12 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return bias;
         }
 
-        public Clock getClock() {
-            return clock;
-        }
-
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
         }
 
         public int getEpochLength() {
             return epochLength;
-        }
-
-        public int getFirstDecidedRound() {
-            return firstDecidedRound;
         }
 
         public double getFpr() {
@@ -138,11 +127,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
             return this;
         }
 
-        public Builder setClock(Clock clock) {
-            this.clock = clock;
-            return this;
-        }
-
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
             return this;
@@ -150,11 +134,6 @@ public record Config(String label, short nProc, int epochLength, short pid, int 
 
         public Builder setEpochLength(int epochLength) {
             this.epochLength = epochLength;
-            return this;
-        }
-
-        public Builder setFirstDecidedRound(int firstDecidedRound) {
-            this.firstDecidedRound = firstDecidedRound;
             return this;
         }
 

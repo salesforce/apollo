@@ -53,6 +53,7 @@ import com.salesforce.apollo.comm.ServerConnectionCache;
 import com.salesforce.apollo.crypto.Digest;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
+import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.ContextImpl;
 import com.salesforce.apollo.membership.Member;
@@ -189,7 +190,7 @@ public class GenesisAssemblyTest {
                                .setConsensusKey(consensus)
                                .setSignature(((Signer) m).sign(consensus.toByteString()).toSig())
                                .build();
-            genii.put(m, new GenesisAssembly(view, comms.get(m), vm));
+            genii.put(m, new GenesisAssembly(view, comms.get(m), vm, Ethereal.consumer(m.getId().toString())));
         });
 
         try {

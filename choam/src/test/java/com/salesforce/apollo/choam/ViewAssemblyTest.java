@@ -240,7 +240,7 @@ public class ViewAssemblyTest {
             };
             var controller = new Ethereal(builder.setSigner(members.get(i)).setPid(pid).build(), 1024 * 1024,
                                           dataSources.get(member), blocker, ep -> {
-                                          });
+                                          }, Ethereal.consumer(Integer.toString(i)));
 
             var gossiper = new ChRbcGossip(context, member, controller.processor(), communications.get(member),
                                            Executors.newFixedThreadPool(2), null);

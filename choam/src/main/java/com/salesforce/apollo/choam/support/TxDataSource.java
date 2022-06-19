@@ -7,7 +7,6 @@
 package com.salesforce.apollo.choam.support;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -84,44 +83,32 @@ public class TxDataSource implements DataSource {
         var builder = UnitData.newBuilder();
         log.trace("Requesting unit data on: {}", member);
         blockingThread = Thread.currentThread();
-        var target = Instant.now().plus(batchInterval);
         try {
-            while (true) {
-                var batch = processing.nonBlockingTake();
+            try {
+                var batch = processing.blockingTakeWithTimeout(batchInterval);
                 if (batch != null) {
                     builder.addAllTransactions(batch);
                 }
-                var r = new ArrayList<Reassemble>();
-                reassemblies.drainTo(r);
-                builder.addAllReassemblies(r);
-
-                var v = new ArrayList<Validate>();
-                validations.drainTo(v);
-                builder.addAllValidations(v);
-
-                if (builder.getTransactionsCount() > 0 || builder.getReassembliesCount() > 0 ||
-                    builder.getValidationsCount() > 0) {
-                    ByteString bs = builder.build().toByteString();
-                    if (metrics != null) {
-                        metrics.publishedBatch(builder.getTransactionsCount(), bs.size(),
-                                               builder.getValidationsCount());
-                    }
-                    log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
-                              builder.getTransactionsCount(), builder.getValidationsCount(),
-                              builder.getReassembliesCount(), bs.size(), member.getId());
-                    return bs;
-                }
-                if (Instant.now().isAfter(target)) {
-                    log.trace("No data available on: {}", member.getId());
-                    return ByteString.EMPTY;
-                }
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return ByteString.EMPTY;
-                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ByteString.EMPTY;
             }
+            var r = new ArrayList<Reassemble>();
+            reassemblies.drainTo(r);
+            builder.addAllReassemblies(r);
+
+            var v = new ArrayList<Validate>();
+            validations.drainTo(v);
+            builder.addAllValidations(v);
+
+            ByteString bs = builder.build().toByteString();
+            if (metrics != null) {
+                metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount());
+            }
+            log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
+                      builder.getTransactionsCount(), builder.getValidationsCount(), builder.getReassembliesCount(),
+                      bs.size(), member.getId());
+            return bs;
         } finally {
             blockingThread = null;
         }

@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -78,7 +79,8 @@ public class GenesisAssembly implements Genesis {
     private final ViewContext           view;
     private final Map<Member, Validate> witnesses = new ConcurrentHashMap<>();
 
-    public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember) {
+    public GenesisAssembly(ViewContext vc, CommonCommunications<Terminal, ?> comms, ViewMember genesisMember,
+                           ThreadPoolExecutor consumer) {
         view = vc;
         ds = new OneShot();
         nextAssembly = Committee.viewMembersOf(view.context().getId(), params().context())
@@ -110,7 +112,7 @@ public class GenesisAssembly implements Genesis {
         config.setLabel("Genesis Assembly" + view.context().getId() + " on: " + params().member().getId());
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize(), dataSource(),
                                   (preblock, last) -> transitions.process(preblock, last),
-                                  epoch -> transitions.nextEpoch(epoch));
+                                  epoch -> transitions.nextEpoch(epoch), consumer);
         coordinator = new ChRbcGossip(reContext, params().member(), controller.processor(), params().communications(),
                                       params().exec(),
                                       params().metrics() == null ? null : params().metrics().getGensisMetrics());

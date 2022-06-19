@@ -38,12 +38,10 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
     public static class SuperMajorityDecider {
         private Vote                 decision = Vote.UNDECIDED;
         private int                  decisionLevel;
-        private final String         logLabel;
         private final UnanimousVoter voter;
 
-        public SuperMajorityDecider(UnanimousVoter v, String logLabel) {
+        public SuperMajorityDecider(UnanimousVoter v) {
             this.voter = v;
-            this.logLabel = logLabel;
         }
 
         /**
@@ -57,7 +55,7 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             int maxDecisionLevel = getMaxDecideLevel(dagMaxLevel);
 
             log.trace("Max decision relative: {} for: {} on: {}", maxDecisionLevel - voter.uc.level(), voter.uc,
-                      logLabel);
+                      voter.logLabel);
 
             for (int level = voter.uc.level() + firstVotingRound + 1; level <= maxDecisionLevel; level++) {
                 AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
@@ -114,7 +112,7 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
                 if (updated) {
                     if (superMajority(voter.dag, new votingResult(pop, unpop)) != Vote.UNDECIDED) {
                         log.trace("Vote decided: {} for candidate: {} prime ancestor: {} on: {}", result, uc, uPrA,
-                                  logLabel);
+                                  voter.logLabel);
                         return new R(result, true);
                     }
                 } else {
@@ -124,16 +122,17 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
                     unpop += remaining;
                     if (superMajority(voter.dag, new votingResult(pop, unpop)) == Vote.UNDECIDED) {
                         log.trace("Vote decided: {} for candidate: {} prime ancestor: {} on: {}", result, uc, uPrA,
-                                  logLabel);
+                                  voter.logLabel);
                         return new R(result, true);
                     }
                 }
 
-                log.trace("Vote decided: {} for candidate: {} prime ancestor: {} on: {}", result, uc, uPrA, logLabel);
+                log.trace("Vote decided: {} for candidate: {} prime ancestor: {} on: {}", result, uc, uPrA,
+                          voter.logLabel);
                 return new R(result, false);
             });
             final var vote = superMajority(voter.dag, r);
-            log.trace("Vote decided: {} for candidate: {} on: {}", vote, u, logLabel);
+            log.trace("Vote decided: {} for candidate: {} on: {}", vote, u, voter.logLabel);
             return vote;
         }
 

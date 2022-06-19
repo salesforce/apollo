@@ -16,11 +16,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,7 +38,6 @@ import com.salesforce.apollo.ethereal.EpochProofBuilder.epochProofImpl;
 import com.salesforce.apollo.ethereal.EpochProofBuilder.sharesDB;
 import com.salesforce.apollo.ethereal.linear.Extender;
 import com.salesforce.apollo.ethereal.linear.TimingRound;
-import com.salesforce.apollo.utils.Utils;
 
 /**
  *
@@ -97,6 +93,14 @@ public class Ethereal {
 
     private static final Logger log = LoggerFactory.getLogger(Ethereal.class);
 
+    public static ThreadPoolExecutor consumer(String label) {
+        return new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(), r -> {
+            final var t = new Thread(r, "Ethereal Consumer[" + label + "]");
+            t.setDaemon(true);
+            return t;
+        }, (r, t) -> log.trace("Shutdown, cannot consume unit", t));
+    }
+
     /**
      * return a preblock from a slice of units containing a timing round. It assumes
      * that the timing unit is the last unit in the slice, and that random source
@@ -137,12 +141,11 @@ public class Ethereal {
     }
 
     private final Config               config;
-    private final ExecutorService      consumer;
+    private final ThreadPoolExecutor   consumer;
     private final Creator              creator;
     private final AtomicInteger        currentEpoch = new AtomicInteger(-1);
     private final Map<Integer, epoch>  epochs       = new ConcurrentHashMap<>();
-    private final ExecutorService      executor;
-    private Set<Digest>                failed       = new ConcurrentSkipListSet<>();
+    private final Set<Digest>          failed       = new ConcurrentSkipListSet<>();
     private final Queue<Unit>          lastTiming;
     private final int                  maxSerializedSize;
     private final Consumer<Integer>    newEpochAction;
@@ -150,28 +153,18 @@ public class Ethereal {
     private final Consumer<List<Unit>> toPreblock;
 
     public Ethereal(Config config, int maxSerializedSize, DataSource ds, BiConsumer<PreBlock, Boolean> blocker,
-                    Consumer<Integer> newEpochAction) {
-        this(config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction);
+                    Consumer<Integer> newEpochAction, ThreadPoolExecutor consumer) {
+        this(config, maxSerializedSize, ds, blocker(blocker, config), newEpochAction, consumer);
     }
 
     public Ethereal(Config conf, int maxSerializedSize, DataSource ds, Consumer<List<Unit>> toPreblock,
-                    Consumer<Integer> newEpochAction) {
+                    Consumer<Integer> newEpochAction, ThreadPoolExecutor consumer) {
         this.config = conf;
         this.lastTiming = new LinkedBlockingDeque<>();
         this.toPreblock = toPreblock;
         this.newEpochAction = newEpochAction;
         this.maxSerializedSize = maxSerializedSize;
-        executor = Executors.newSingleThreadExecutor(r -> {
-            final var t = new Thread(r, "Ethereal Executor[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        });
-
-        consumer = new ThreadPoolExecutor(1, 1, 1, TimeUnit.NANOSECONDS, new PriorityBlockingQueue<>(1000), r -> {
-            final var t = new Thread(r, "Ethereal Consumer[" + conf.logLabel() + "]");
-            t.setDaemon(true);
-            return t;
-        }, (r, t) -> log.warn("Cannot consum unit", t));
+        this.consumer = consumer;
 
         creator = new Creator(config, ds, lastTiming, u -> {
             assert u.creator() == config.pid();
@@ -270,15 +263,14 @@ public class Ethereal {
         if (!started.compareAndSet(true, false)) {
             return;
         }
-        log.trace("Stopping Orderer on: {}", config.logLabel());
+        log.trace("Stopping Ethereal on: {}", config.logLabel());
+        consumer.getQueue().clear(); // Flush any pending consumers
         creator.stop();
-        executor.shutdownNow();
-        consumer.shutdownNow();
         epochs.values().forEach(e -> e.close());
         epochs.clear();
         failed.clear();
         lastTiming.clear();
-        log.trace("Orderer stopped on: {}", config.logLabel());
+        log.trace("Ethereal stopped on: {}", config.logLabel());
     }
 
     private epoch createEpoch(int epoch) {
@@ -350,19 +342,13 @@ public class Ethereal {
             var epoch = timingUnit.epoch();
 
             if (timingUnit.level() >= config.lastLevel()) {
-                log.trace("Last Timing: {}, on: {}", timingUnit, config.logLabel());
+                log.trace("Last Timing: {}  on: {}", timingUnit, config.logLabel());
                 lastTiming.add(timingUnit);
                 finishEpoch(epoch);
             }
             if (epoch >= current.get() && timingUnit.level() <= config.lastLevel()) {
-                try {
-                    executor.execute(Utils.wrapped(() -> {
-                        toPreblock.accept(round);
-                        log.trace("Preblock produced: {} on: {}", timingUnit, config.logLabel());
-                    }, log));
-                } catch (RejectedExecutionException e) {
-                    // ignore as closed
-                }
+                toPreblock.accept(round);
+                log.trace("Preblock produced: {} on: {}", timingUnit, config.logLabel());
             }
             current.set(epoch);
         };

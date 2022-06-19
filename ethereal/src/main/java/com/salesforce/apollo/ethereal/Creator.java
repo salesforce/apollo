@@ -158,11 +158,15 @@ public class Creator {
     private int count(int level, Unit[] parents) {
         var count = 0;
         for (int i = 0; i < conf.nProc(); i++) {
-            Unit u = parents[i];
-            for (; u != null && u.level() >= level; u = u.predecessor())
+            Unit p = parents[i];
+
+            // Ensure all parents are < level
+            for (; p != null && p.level() >= level; p = p.predecessor())
                 ;
-            if (u != null && u.level() == level - 1) {
-                parents[i] = u;
+            parents[i] = p;
+
+            // Count parents directly above this level
+            if (p != null && p.level() == level - 1) {
                 count++;
             }
         }

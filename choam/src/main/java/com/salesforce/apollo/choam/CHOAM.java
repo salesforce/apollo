@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -90,6 +91,7 @@ import com.salesforce.apollo.crypto.SignatureAlgorithm;
 import com.salesforce.apollo.crypto.Signer;
 import com.salesforce.apollo.crypto.Signer.SignerImpl;
 import com.salesforce.apollo.crypto.Verifier;
+import com.salesforce.apollo.ethereal.Ethereal;
 import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.GroupIterator;
 import com.salesforce.apollo.membership.Member;
@@ -380,7 +382,7 @@ public class CHOAM {
                       params.member().getId());
             Signer signer = new SignerImpl(nextView.consensusKeyPair.getPrivate());
             viewContext = new ViewContext(context, params, signer, validators, constructBlock());
-            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm);
+            producer = new Producer(viewContext, head.get(), checkpoint.get(), comm, consumer);
             producer.start();
         }
 
@@ -425,7 +427,7 @@ public class CHOAM {
                           params.member().getId());
                 Signer signer = new SignerImpl(c.consensusKeyPair.getPrivate());
                 ViewContext vc = new GenesisContext(formation, params, signer, constructBlock());
-                assembly = new GenesisAssembly(vc, comm, next.get().member);
+                assembly = new GenesisAssembly(vc, comm, next.get().member, consumer);
                 nextViewId.set(params.genesisViewId());
             } else {
                 assembly = null;
@@ -617,9 +619,6 @@ public class CHOAM {
 
         remapped.keySet().stream().sorted().map(d -> remapped.get(d)).forEach(m -> builder.addJoins(joins.get(m)));
 
-//        log.warn("reconfiguration: {} joins: {} on: {}", nextViewId,
-//                 builder.getJoinsList().stream().map(j -> print(j, params.digestAlgorithm())).toList(),
-//                 params.member().getId());
         var reconfigure = builder.build();
         return reconfigure;
     }
@@ -632,8 +631,6 @@ public class CHOAM {
                                           : lvc.getReconfigure().getCheckpointTarget();
         int checkpointTarget = lastTarget == 0 ? params.checkpointBlockDelta() : lastTarget - 1;
         var reconfigure = reconfigure(nextViewId, joins, context, params, checkpointTarget);
-//        log.warn("Reconfigure head: {} last view: {} last checkpoint: {} on: {}", head.hash, lastViewChange.hash,
-//                 lastCheckpoint.hash, params.member().getId());
         return Block.newBuilder()
                     .setHeader(buildHeader(params.digestAlgorithm(), reconfigure, head.hash, head.height().add(1),
                                            lastCheckpoint.height(), lastCheckpoint.hash, lastViewChange.height(),
@@ -668,6 +665,7 @@ public class CHOAM {
     private final AtomicReference<HashedCertifiedBlock>                 checkpoint            = new AtomicReference<>();
     private final ReliableBroadcaster                                   combine;
     private final CommonCommunications<Terminal, Concierge>             comm;
+    private final ThreadPoolExecutor                                    consumer;
     private final AtomicReference<Committee>                            current               = new AtomicReference<>();
     private final ExecutorService                                       executions;
     private final AtomicReference<CompletableFuture<SynchronizedState>> futureBootstrap       = new AtomicReference<>();
@@ -735,6 +733,7 @@ public class CHOAM {
                                             params.context().timeToLive());
         combine.register(i -> roundScheduler.tick());
         session = new Session(params, service());
+        consumer = Ethereal.consumer("CHOAM" + params.member().getId() + params.context().getId());
     }
 
     public boolean active() {
@@ -884,8 +883,6 @@ public class CHOAM {
         while (next != null) {
             final HashedCertifiedBlock h = head.get();
             if (h.height() != null && next.height().compareTo(h.height()) <= 0) {
-//                log.trace("Have already advanced beyond block: {} height: {} current: {} on: {}", next.hash,
-//                          next.height(), h.height(), params.member().getId());
                 pending.poll();
             } else if (isNext(next)) {
                 if (current.get().validate(next)) {

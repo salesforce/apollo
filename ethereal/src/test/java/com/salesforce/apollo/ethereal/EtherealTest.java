@@ -21,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -61,7 +62,7 @@ public class EtherealTest {
         @Override
         public ByteString getData() {
             try {
-                Thread.sleep(Entropy.nextBitsStreamLong(1_000));
+                Thread.sleep(Entropy.nextBitsStreamLong(150));
             } catch (InterruptedException e) {
             }
             return dataStack.pollFirst();
@@ -69,12 +70,17 @@ public class EtherealTest {
     }
 
     private static final int EPOCH_LENGTH = 30;
-    private static final int NUM_EPOCHS   = 3;
+
+    private static final int NPROC      = 4;
+    private static final int NUM_EPOCHS = 3;
 
     @Test
     public void context() throws Exception {
-
-        one(0);
+        var consumers = new ArrayList<ThreadPoolExecutor>();
+        for (var i = 0; i < NPROC; i++) {
+            consumers.add(Ethereal.consumer(Integer.toString(i)));
+        }
+        one(0, consumers);
     }
 
     @Test
@@ -82,21 +88,25 @@ public class EtherealTest {
         if (!Boolean.getBoolean("large_tests")) {
             return;
         }
+        var consumers = new ArrayList<ThreadPoolExecutor>();
+        for (var i = 0; i < NPROC; i++) {
+            consumers.add(Ethereal.consumer(Integer.toString(i)));
+        }
         for (int i = 0; i < 100; i++) {
             System.out.println("Iteration: " + i);
-            one(i);
+            one(i, consumers);
             System.out.println();
         }
     }
 
-    private void one(int iteration) throws NoSuchAlgorithmException, InterruptedException,
-                                    InvalidProtocolBufferException {
+    private void one(int iteration, List<ThreadPoolExecutor> consumers) throws NoSuchAlgorithmException,
+                                                                        InterruptedException,
+                                                                        InvalidProtocolBufferException {
         final var gossipPeriod = Duration.ofMillis(5);
 
         var registry = new MetricRegistry();
 
-        short nProc = 4;
-        CountDownLatch finished = new CountDownLatch(nProc);
+        CountDownLatch finished = new CountDownLatch((short) NPROC);
 
         List<Ethereal> controllers = new ArrayList<>();
         List<DataSource> dataSources = new ArrayList<>();
@@ -107,7 +117,7 @@ public class EtherealTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
-        List<SigningMember> members = IntStream.range(0, nProc)
+        List<SigningMember> members = IntStream.range(0, (short) NPROC)
                                                .mapToObj(i -> stereotomy.newIdentifier().get())
                                                .map(cpk -> new ControlledIdentifierMember(cpk))
                                                .map(e -> (SigningMember) e)
@@ -120,13 +130,13 @@ public class EtherealTest {
         }
         var builder = Config.newBuilder()
                             .setFpr(0.00000125)
-                            .setnProc(nProc)
+                            .setnProc((short) NPROC)
                             .setNumberOfEpochs(NUM_EPOCHS)
                             .setEpochLength(EPOCH_LENGTH)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
 
         List<List<PreBlock>> produced = new ArrayList<>();
-        for (int i = 0; i < nProc; i++) {
+        for (int i = 0; i < (short) NPROC; i++) {
             produced.add(new CopyOnWriteArrayList<>());
         }
 
@@ -134,7 +144,7 @@ public class EtherealTest {
         var level = new AtomicInteger();
         final var prefix = UUID.randomUUID().toString();
         int maxSize = 1024 * 1024;
-        for (short i = 0; i < nProc; i++) {
+        for (short i = 0; i < (short) NPROC; i++) {
             var ds = new SimpleDataSource();
             final short pid = i;
             List<PreBlock> output = produced.get(pid);
@@ -156,7 +166,7 @@ public class EtherealTest {
                                               if (pid == 0) {
                                                   System.out.println("new epoch: " + ep);
                                               }
-                                          });
+                                          }, consumers.get(i));
 
             var e = Executors.newFixedThreadPool(3);
             executors.add(e);
@@ -201,7 +211,7 @@ public class EtherealTest {
         List<PreBlock> preblocks = first.get();
         List<String> outputOrder = new ArrayList<>();
         boolean failed = false;
-        for (int i = 0; i < nProc; i++) {
+        for (int i = 0; i < (short) NPROC; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != expected) {
                 failed = true;

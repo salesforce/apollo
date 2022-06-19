@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -181,7 +182,7 @@ public class Producer {
     private final ViewContext                       view;
 
     public Producer(ViewContext view, HashedBlock lastBlock, HashedBlock checkpoint,
-                    CommonCommunications<Terminal, ?> comms) {
+                    CommonCommunications<Terminal, ?> comms, ThreadPoolExecutor consumer) {
         assert view != null;
         this.view = view;
         this.previousBlock.set(lastBlock);
@@ -222,7 +223,8 @@ public class Producer {
         config.setLabel("Producer" + getViewId() + " on: " + params().member().getId());
         var producerMetrics = params().metrics() == null ? null : params().metrics().getProducerMetrics();
         controller = new Ethereal(config.build(), params().producer().maxBatchByteSize() + (8 * 1024), ds,
-                                  (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch));
+                                  (preblock, last) -> transitions.create(preblock, last), epoch -> newEpoch(epoch),
+                                  consumer);
         coordinator = new ChRbcGossip(view.context(), params().member(), controller.processor(),
                                       params().communications(), params().exec(), producerMetrics);
         log.debug("Roster for: {} is: {} on: {}", getViewId(), view.roster(), params().member().getId());
