@@ -24,6 +24,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
@@ -232,7 +233,7 @@ public class DomainTest {
         domains.forEach(domain -> context.activate(domain.getMember()));
     }
 
-//    @Test
+    @Test
     public void smoke() throws Exception {
         domains.forEach(n -> n.start());
         final var activated = Utils.waitForCondition(60_000, 1_000,

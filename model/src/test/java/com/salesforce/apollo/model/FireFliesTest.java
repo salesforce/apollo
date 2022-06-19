@@ -23,6 +23,7 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.salesfoce.apollo.choam.proto.Foundation;
 import com.salesfoce.apollo.choam.proto.FoundationSeal;
@@ -104,7 +105,7 @@ public class FireFliesTest {
         });
     }
 
-//    @Test
+    @Test
     public void smokin() throws Exception {
         long then = System.currentTimeMillis();
         final var seeds = domains.stream()
