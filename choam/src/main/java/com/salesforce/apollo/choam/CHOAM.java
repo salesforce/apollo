@@ -740,7 +740,7 @@ public class CHOAM {
         final var c = current.get();
         HashedCertifiedBlock h = head.get();
         return (transitions.fsm().getCurrentState() == Merchantile.OPERATIONAL) && c != null &&
-               c instanceof Administration && h != null && h.height().compareTo(ULong.valueOf(1)) >= 0;
+               c instanceof Administration && h != null && h.height().compareTo(ULong.valueOf(2)) >= 0;
     }
 
     public Context<Member> context() {
