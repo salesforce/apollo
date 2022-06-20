@@ -49,7 +49,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
