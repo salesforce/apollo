@@ -6,6 +6,8 @@
  */
 package com.salesforce.apollo.choam;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -45,6 +47,7 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
+import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -56,7 +59,48 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
-                         int checkpointSegmentSize, Duration drainDelay) {
+                         int checkpointSegmentSize, Parameters.ExponentialBackoffPolicy drainPolicy) {
+
+    public static final class ExponentialBackoffPolicy {
+        private Duration initialBackoff = Duration.ofMillis(10);
+        private double   jitter         = .01;
+        private Duration maxBackoff     = Duration.ofMillis(500);
+        private double   multiplier     = 0.05;
+        private Duration nextBackoff    = initialBackoff;
+
+        public Duration nextBackoff() {
+            long currentBackoffNanos = nextBackoff.toNanos();
+            nextBackoff = Duration.ofNanos(Math.min((long) (currentBackoffNanos * multiplier), maxBackoff.toNanos()));
+            return Duration.ofNanos(currentBackoffNanos
+            + uniformRandom(-jitter * currentBackoffNanos, jitter * currentBackoffNanos));
+        }
+
+        public ExponentialBackoffPolicy setInitialBackoff(Duration initialBackoff) {
+            this.initialBackoff = initialBackoff;
+            return this;
+        }
+
+        public ExponentialBackoffPolicy setJitter(double jitter) {
+            this.jitter = jitter;
+            return this;
+        }
+
+        public ExponentialBackoffPolicy setMaxBackoff(Duration maxBackoff) {
+            this.maxBackoff = maxBackoff;
+            return this;
+        }
+
+        public ExponentialBackoffPolicy setMultiplier(double multiplier) {
+            this.multiplier = multiplier;
+            return this;
+        }
+
+        private long uniformRandom(double low, double high) {
+            checkArgument(high >= low);
+            double mag = high - low;
+            return (long) (Entropy.nextBitsStreamDouble() * mag + low);
+        }
+    }
 
     public int majority() {
         return runtime.context.majority();
@@ -626,6 +670,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                                                                                                      .build();
         private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
         private Duration                       drainDelay            = Duration.ofMillis(50);
+        private ExponentialBackoffPolicy       drainPolicy           = new ExponentialBackoffPolicy();
         private Digest                         genesisViewId;
         private Duration                       gossipDuration        = Duration.ofSeconds(1);
         private int                            maxCheckpointSegments = 200;
@@ -641,7 +686,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
                                   regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder,
-                                  checkpointSegmentSize, drainDelay);
+                                  checkpointSegmentSize, drainPolicy);
         }
 
         @Override
@@ -675,6 +720,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Duration getDrainDelay() {
             return drainDelay;
+        }
+
+        public ExponentialBackoffPolicy getDrainPolicy() {
+            return drainPolicy;
         }
 
         public Digest getGenesisViewId() {
@@ -748,6 +797,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setDrainDelay(Duration drainDelay) {
             this.drainDelay = drainDelay;
+            return this;
+        }
+
+        public Builder setDrainPolicy(ExponentialBackoffPolicy drainPolicy) {
+            this.drainPolicy = drainPolicy;
             return this;
         }
 

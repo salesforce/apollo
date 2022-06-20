@@ -21,6 +21,7 @@ import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
+import com.salesforce.apollo.choam.Parameters.ExponentialBackoffPolicy;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.CapacityBatchingQueue;
@@ -44,8 +45,8 @@ public class TxDataSource implements DataSource {
 
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
-    private final Duration                           drainDelay;
     private AtomicBoolean                            draining     = new AtomicBoolean();
+    private final ExponentialBackoffPolicy           drainPolicy;
     private final Member                             member;
     private final ChoamMetrics                       metrics;
     private final CapacityBatchingQueue<Transaction> processing;
@@ -53,10 +54,10 @@ public class TxDataSource implements DataSource {
     private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
-                        Duration batchInterval, int maxBatchCount, Duration drainDelay) {
+                        Duration batchInterval, int maxBatchCount, ExponentialBackoffPolicy drainPolicy) {
         this.member = member;
         this.batchInterval = batchInterval;
-        this.drainDelay = drainDelay;
+        this.drainPolicy = drainPolicy;
         processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
                                                             maxBatchCount, maxBatchByteSize,
                                                             tx -> tx.toByteString().size(), 5);
@@ -98,7 +99,7 @@ public class TxDataSource implements DataSource {
                 }
             } else {
                 try {
-                    Thread.sleep(drainDelay.toMillis());
+                    Thread.sleep(drainPolicy.nextBackoff().toMillis());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return ByteString.EMPTY;

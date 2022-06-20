@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.google.protobuf.ByteString;
 import com.salesfoce.apollo.choam.proto.Transaction;
+import com.salesforce.apollo.choam.Parameters.ExponentialBackoffPolicy;
 import com.salesforce.apollo.crypto.DigestAlgorithm;
 import com.salesforce.apollo.membership.stereotomy.ControlledIdentifierMember;
 import com.salesforce.apollo.stereotomy.StereotomyImpl;
@@ -35,7 +36,7 @@ public class TxDataSourceTest {
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
         TxDataSource ds = new TxDataSource(new ControlledIdentifierMember(stereotomy.newIdentifier().get()), 100, null,
-                                           1024, Duration.ofMillis(100), 100, Duration.ofMillis(10));
+                                           1024, Duration.ofMillis(100), 100, new ExponentialBackoffPolicy());
         Transaction tx = Transaction.newBuilder()
                                     .setContent(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
                                     .build();
