@@ -200,7 +200,7 @@ public class Producer {
         final int maxElements = blocks * lastEpoch;
         final var name = "Producer" + getViewId() + params().member().getId().toString();
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
-                              producerParams.batchInterval(), producerParams.maxBatchCount());
+                              producerParams.batchInterval(), producerParams.maxBatchCount(), params().drainDelay());
 
         log.trace("Producer max elements: {} reconfiguration epoch: {} on: {}", maxElements, lastEpoch,
                   params.member().getId());

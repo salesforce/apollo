@@ -56,7 +56,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
-                         int checkpointSegmentSize) {
+                         int checkpointSegmentSize, Duration drainDelay) {
 
     public int majority() {
         return runtime.context.majority();
@@ -625,6 +625,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
         private ReliableBroadcaster.Parameters combine               = ReliableBroadcaster.Parameters.newBuilder()
                                                                                                      .build();
         private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private Duration                       drainDelay            = Duration.ofMillis(50);
         private Digest                         genesisViewId;
         private Duration                       gossipDuration        = Duration.ofSeconds(1);
         private int                            maxCheckpointSegments = 200;
@@ -640,7 +641,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
                                   regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder,
-                                  checkpointSegmentSize);
+                                  checkpointSegmentSize, drainDelay);
         }
 
         @Override
@@ -670,6 +671,10 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public DigestAlgorithm getDigestAlgorithm() {
             return digestAlgorithm;
+        }
+
+        public Duration getDrainDelay() {
+            return drainDelay;
         }
 
         public Digest getGenesisViewId() {
@@ -738,6 +743,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setDigestAlgorithm(DigestAlgorithm digestAlgorithm) {
             this.digestAlgorithm = digestAlgorithm;
+            return this;
+        }
+
+        public Builder setDrainDelay(Duration drainDelay) {
+            this.drainDelay = drainDelay;
             return this;
         }
 

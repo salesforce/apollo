@@ -44,6 +44,7 @@ public class TxDataSource implements DataSource {
 
     private final Duration                           batchInterval;
     private volatile Thread                          blockingThread;
+    private final Duration                           drainDelay;
     private AtomicBoolean                            draining     = new AtomicBoolean();
     private final Member                             member;
     private final ChoamMetrics                       metrics;
@@ -52,9 +53,10 @@ public class TxDataSource implements DataSource {
     private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
-                        Duration batchInterval, int maxBatchCount) {
+                        Duration batchInterval, int maxBatchCount, Duration drainDelay) {
         this.member = member;
         this.batchInterval = batchInterval;
+        this.drainDelay = drainDelay;
         processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
                                                             maxBatchCount, maxBatchByteSize,
                                                             tx -> tx.toByteString().size(), 5);
@@ -84,14 +86,23 @@ public class TxDataSource implements DataSource {
         log.trace("Requesting unit data on: {}", member);
         blockingThread = Thread.currentThread();
         try {
-            try {
-                var batch = processing.blockingTakeWithTimeout(batchInterval);
-                if (batch != null) {
-                    builder.addAllTransactions(batch);
+            if (!draining.get()) {
+                try {
+                    var batch = processing.blockingTakeWithTimeout(batchInterval);
+                    if (batch != null) {
+                        builder.addAllTransactions(batch);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return ByteString.EMPTY;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return ByteString.EMPTY;
+            } else {
+                try {
+                    Thread.sleep(drainDelay.toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return ByteString.EMPTY;
+                }
             }
             var r = new ArrayList<Reassemble>();
             reassemblies.drainTo(r);

@@ -57,15 +57,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Producer" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
