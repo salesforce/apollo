@@ -13,6 +13,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +22,6 @@ import com.salesfoce.apollo.choam.proto.Reassemble;
 import com.salesfoce.apollo.choam.proto.Transaction;
 import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
-import com.salesforce.apollo.choam.Parameters.ExponentialBackoffPolicy;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.utils.CapacityBatchingQueue;
@@ -87,7 +87,31 @@ public class TxDataSource implements DataSource {
         log.trace("Requesting unit data on: {}", member);
         blockingThread = Thread.currentThread();
         try {
-            if (!draining.get()) {
+            var r = new ArrayList<Reassemble>();
+            var v = new ArrayList<Validate>();
+
+            if (draining.get()) {
+                var target = Instant.now().plus(drainPolicy.nextBackoff().toMillis());
+                while (builder.getReassembliesCount() != 0 && builder.getValidationsCount() != 0) {
+                    // rinse and repeat
+                    r = new ArrayList<Reassemble>();
+                    reassemblies.drainTo(r);
+                    builder.addAllReassemblies(r);
+
+                    v = new ArrayList<Validate>();
+                    validations.drainTo(v);
+                    builder.addAllValidations(v);
+                    try {
+                        Thread.sleep(drainPolicy.getInitialBackoff().dividedBy(2).toMillis());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return ByteString.EMPTY;
+                    }
+                    if (target.isAfter(Instant.now())) {
+                        break;
+                    }
+                }
+            } else {
                 try {
                     var batch = processing.blockingTakeWithTimeout(batchInterval);
                     if (batch != null) {
@@ -97,19 +121,14 @@ public class TxDataSource implements DataSource {
                     Thread.currentThread().interrupt();
                     return ByteString.EMPTY;
                 }
-            } else {
-                try {
-                    Thread.sleep(drainPolicy.nextBackoff().toMillis());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return ByteString.EMPTY;
-                }
             }
-            var r = new ArrayList<Reassemble>();
+
+            // One more time into ye breech
+            r = new ArrayList<Reassemble>();
             reassemblies.drainTo(r);
             builder.addAllReassemblies(r);
 
-            var v = new ArrayList<Validate>();
+            v = new ArrayList<Validate>();
             validations.drainTo(v);
             builder.addAllValidations(v);
 

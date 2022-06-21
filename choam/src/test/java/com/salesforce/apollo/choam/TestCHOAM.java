@@ -180,7 +180,7 @@ public class TestCHOAM {
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 5_000 : 50;
-        final var max = LARGE_TESTS ? 1_000 : 10;
+        final var max = LARGE_TESTS ? 500 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
         var cnt = new AtomicInteger();
@@ -205,7 +205,7 @@ public class TestCHOAM {
 
         transactioneers.stream().forEach(e -> e.start());
         try {
-            final var complete = countdown.await(LARGE_TESTS ? 1600 : 60, TimeUnit.SECONDS);
+            final var complete = countdown.await(LARGE_TESTS ? 3200 : 60, TimeUnit.SECONDS);
             assertTrue(complete, "All clients did not complete: "
             + transactioneers.stream().map(t -> t.getCompleted()).filter(i -> i < max).count());
         } finally {

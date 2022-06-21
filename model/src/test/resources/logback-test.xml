@@ -25,7 +25,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="trace" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.Session" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.choam.support" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

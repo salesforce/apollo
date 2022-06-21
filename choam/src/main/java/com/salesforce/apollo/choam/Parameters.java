@@ -6,8 +6,6 @@
  */
 package com.salesforce.apollo.choam;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -37,6 +35,7 @@ import com.salesfoce.apollo.stereotomy.event.proto.KERL_;
 import com.salesforce.apollo.choam.CHOAM.TransactionExecutor;
 import com.salesforce.apollo.choam.support.CheckpointState;
 import com.salesforce.apollo.choam.support.ChoamMetrics;
+import com.salesforce.apollo.choam.support.ExponentialBackoffPolicy;
 import com.salesforce.apollo.choam.support.HashedBlock;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.crypto.Digest;
@@ -47,7 +46,6 @@ import com.salesforce.apollo.membership.Context;
 import com.salesforce.apollo.membership.Member;
 import com.salesforce.apollo.membership.SigningMember;
 import com.salesforce.apollo.membership.messaging.rbc.ReliableBroadcaster;
-import com.salesforce.apollo.utils.Entropy;
 
 /**
  * @author hal.hildebrand
@@ -59,48 +57,8 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
                          SignatureAlgorithm viewSigAlgorithm, int synchronizationCycles, int regenerationCycles,
                          Parameters.BootstrapParameters bootstrap, Parameters.ProducerParameters producer,
                          Parameters.MvStoreBuilder mvBuilder, Parameters.LimiterBuilder txnLimiterBuilder,
-                         int checkpointSegmentSize, Parameters.ExponentialBackoffPolicy drainPolicy) {
-
-    public static final class ExponentialBackoffPolicy {
-        private Duration initialBackoff = Duration.ofMillis(10);
-        private double   jitter         = .01;
-        private Duration maxBackoff     = Duration.ofMillis(500);
-        private double   multiplier     = 0.05;
-        private Duration nextBackoff    = initialBackoff;
-
-        public Duration nextBackoff() {
-            long currentBackoffNanos = nextBackoff.toNanos();
-            nextBackoff = Duration.ofNanos(Math.min((long) (currentBackoffNanos * multiplier), maxBackoff.toNanos()));
-            return Duration.ofNanos(currentBackoffNanos
-            + uniformRandom(-jitter * currentBackoffNanos, jitter * currentBackoffNanos));
-        }
-
-        public ExponentialBackoffPolicy setInitialBackoff(Duration initialBackoff) {
-            this.initialBackoff = initialBackoff;
-            return this;
-        }
-
-        public ExponentialBackoffPolicy setJitter(double jitter) {
-            this.jitter = jitter;
-            return this;
-        }
-
-        public ExponentialBackoffPolicy setMaxBackoff(Duration maxBackoff) {
-            this.maxBackoff = maxBackoff;
-            return this;
-        }
-
-        public ExponentialBackoffPolicy setMultiplier(double multiplier) {
-            this.multiplier = multiplier;
-            return this;
-        }
-
-        private long uniformRandom(double low, double high) {
-            checkArgument(high >= low);
-            double mag = high - low;
-            return (long) (Entropy.nextBitsStreamDouble() * mag + low);
-        }
-    }
+                         ExponentialBackoffPolicy.Builder submitPolicy, int checkpointSegmentSize,
+                         ExponentialBackoffPolicy.Builder drainPolicy) {
 
     public int majority() {
         return runtime.context.majority();
@@ -663,29 +621,29 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
     public static class Builder implements Cloneable {
 
-        private BootstrapParameters            bootstrap             = BootstrapParameters.newBuilder().build();
-        private int                            checkpointBlockDelta  = 10;
-        private int                            checkpointSegmentSize = 8192;
-        private ReliableBroadcaster.Parameters combine               = ReliableBroadcaster.Parameters.newBuilder()
-                                                                                                     .build();
-        private DigestAlgorithm                digestAlgorithm       = DigestAlgorithm.DEFAULT;
-        private Duration                       drainDelay            = Duration.ofMillis(50);
-        private ExponentialBackoffPolicy       drainPolicy           = new ExponentialBackoffPolicy();
-        private Digest                         genesisViewId;
-        private Duration                       gossipDuration        = Duration.ofSeconds(1);
-        private int                            maxCheckpointSegments = 200;
-        private MvStoreBuilder                 mvBuilder             = new MvStoreBuilder();
-        private ProducerParameters             producer              = ProducerParameters.newBuilder().build();
-        private int                            regenerationCycles    = 20;
-        private Duration                       submitTimeout         = Duration.ofSeconds(30);
-        private int                            synchronizationCycles = 10;
-        private LimiterBuilder                 txnLimiterBuilder     = new LimiterBuilder();
-        private SignatureAlgorithm             viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
+        private BootstrapParameters              bootstrap             = BootstrapParameters.newBuilder().build();
+        private int                              checkpointBlockDelta  = 10;
+        private int                              checkpointSegmentSize = 8192;
+        private ReliableBroadcaster.Parameters   combine               = ReliableBroadcaster.Parameters.newBuilder()
+                                                                                                       .build();
+        private DigestAlgorithm                  digestAlgorithm       = DigestAlgorithm.DEFAULT;
+        private ExponentialBackoffPolicy.Builder drainPolicy           = ExponentialBackoffPolicy.newBuilder();
+        private Digest                           genesisViewId;
+        private Duration                         gossipDuration        = Duration.ofSeconds(1);
+        private int                              maxCheckpointSegments = 200;
+        private MvStoreBuilder                   mvBuilder             = new MvStoreBuilder();
+        private ProducerParameters               producer              = ProducerParameters.newBuilder().build();
+        private int                              regenerationCycles    = 20;
+        private ExponentialBackoffPolicy.Builder submitPolicy          = ExponentialBackoffPolicy.newBuilder();
+        private Duration                         submitTimeout         = Duration.ofSeconds(30);
+        private int                              synchronizationCycles = 10;
+        private LimiterBuilder                   txnLimiterBuilder     = new LimiterBuilder();
+        private SignatureAlgorithm               viewSigAlgorithm      = SignatureAlgorithm.DEFAULT;
 
         public Parameters build(RuntimeParameters runtime) {
             return new Parameters(runtime, combine, gossipDuration, maxCheckpointSegments, submitTimeout, genesisViewId,
                                   checkpointBlockDelta, digestAlgorithm, viewSigAlgorithm, synchronizationCycles,
-                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder,
+                                  regenerationCycles, bootstrap, producer, mvBuilder, txnLimiterBuilder, submitPolicy,
                                   checkpointSegmentSize, drainPolicy);
         }
 
@@ -718,11 +676,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return digestAlgorithm;
         }
 
-        public Duration getDrainDelay() {
-            return drainDelay;
-        }
-
-        public ExponentialBackoffPolicy getDrainPolicy() {
+        public ExponentialBackoffPolicy.Builder getDrainPolicy() {
             return drainPolicy;
         }
 
@@ -750,16 +704,16 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return regenerationCycles;
         }
 
+        public ExponentialBackoffPolicy.Builder getSubmitPolicy() {
+            return submitPolicy;
+        }
+
         public Duration getSubmitTimeout() {
             return submitTimeout;
         }
 
         public int getSynchronizationCycles() {
             return synchronizationCycles;
-        }
-
-        public Duration getTransactonTimeout() {
-            return submitTimeout;
         }
 
         public LimiterBuilder getTxnLimiterBuilder() {
@@ -795,12 +749,7 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
-        public Builder setDrainDelay(Duration drainDelay) {
-            this.drainDelay = drainDelay;
-            return this;
-        }
-
-        public Builder setDrainPolicy(ExponentialBackoffPolicy drainPolicy) {
+        public Builder setDrainPolicy(ExponentialBackoffPolicy.Builder drainPolicy) {
             this.drainPolicy = drainPolicy;
             return this;
         }
@@ -835,6 +784,11 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
             return this;
         }
 
+        public Builder setSubmitPolicy(ExponentialBackoffPolicy.Builder submitPolicy) {
+            this.submitPolicy = submitPolicy;
+            return this;
+        }
+
         public Builder setSubmitTimeout(Duration submitTimeout) {
             this.submitTimeout = submitTimeout;
             return this;
@@ -842,11 +796,6 @@ public record Parameters(Parameters.RuntimeParameters runtime, ReliableBroadcast
 
         public Builder setSynchronizationCycles(int synchronizationCycles) {
             this.synchronizationCycles = synchronizationCycles;
-            return this;
-        }
-
-        public Builder setTransactonTimeout(Duration transactonTimeout) {
-            this.submitTimeout = transactonTimeout;
             return this;
         }
 

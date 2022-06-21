@@ -68,11 +68,11 @@ public class Session {
                                transaction.getContent().asReadOnlyByteBuffer());
     }
 
+    private final Limiter<Void>                                limiter;
     private AtomicInteger                                      nonce     = new AtomicInteger();
     private final Parameters                                   params;
     private final Function<SubmittedTransaction, SubmitResult> service;
     private final Map<Digest, SubmittedTransaction>            submitted = new ConcurrentHashMap<>();
-    private final Limiter<Void>                                limiter;
 
     public Session(Parameters params, Function<SubmittedTransaction, SubmitResult> service) {
         this.params = params;
@@ -122,14 +122,19 @@ public class Session {
         submitted.put(stxn.hash(), stxn);
 
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+        var backoff = params.submitPolicy().build();
         boolean success = false;
         for (var i = 0; i < 20; i++) {
+            log.info("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
             if (stxn.onCompletion().isDone() || submit(stxn)) {
                 success = true;
                 break;
             }
             try {
-                Thread.sleep(100);
+                final var delay = backoff.nextBackoff();
+                log.info("Failed submitting: {} retry: {} delay: {} on: {}", stxn.hash(), i, delay,
+                         params.member().getId());
+                Thread.sleep(delay.toMillis());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -145,6 +150,9 @@ public class Session {
             return result;
         }
         var futureTimeout = scheduler.schedule(() -> {
+            if (result.isDone()) {
+                return;
+            }
             log.debug("Timeout of txn: {} on: {}", hash, params.member().getId());
             final var to = new TimeoutException("Transaction timeout");
             result.completeExceptionally(to);
@@ -183,7 +191,7 @@ public class Session {
     private boolean submit(SubmittedTransaction stx) {
         var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
-            log.info("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
+            log.warn("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedFail();
             }

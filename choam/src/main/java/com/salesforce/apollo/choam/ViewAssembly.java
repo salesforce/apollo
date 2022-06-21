@@ -98,13 +98,12 @@ public class ViewAssembly {
                 log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
                 transitions.complete();
             } else {
-                log.error("Failing election, required: {} slate: {} of: {} on: {}",
+                log.error("Failed election, required: {} slate: {} of: {} on: {}", params().context().majority() + 1,
                           proposals.values()
                                    .stream()
                                    .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
                                    .toList(),
                           nextViewId, params().member());
-                transitions.failed();
             }
         }
 

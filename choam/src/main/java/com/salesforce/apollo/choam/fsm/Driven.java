@@ -34,6 +34,12 @@ public interface Driven {
             }
 
             @Override
+            public Transitions create(PreBlock preblock, boolean last) {
+                context().checkAssembly();
+                return super.create(preblock, last);
+            }
+
+            @Override
             public Transitions lastBlock() {
                 return COMPLETE;
             }
