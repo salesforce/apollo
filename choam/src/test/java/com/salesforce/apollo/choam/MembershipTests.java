@@ -77,7 +77,7 @@ public class MembershipTests {
 
     @Test
     public void genesisBootstrap() throws Exception {
-        SigningMember testSubject = initialize(2000, 11);
+        SigningMember testSubject = initialize(2000, 5);
         System.out.println("Test subject: " + testSubject.getId() + " membership: "
         + members.stream().map(e -> e.getId()).toList());
         routers.entrySet()

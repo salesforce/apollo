@@ -7,13 +7,12 @@
 package com.salesforce.apollo.choam.support;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +23,7 @@ import com.salesfoce.apollo.choam.proto.UnitData;
 import com.salesfoce.apollo.choam.proto.Validate;
 import com.salesforce.apollo.ethereal.DataSource;
 import com.salesforce.apollo.membership.Member;
-import com.salesforce.apollo.utils.CapacityBatchingQueue;
+import com.salesforce.apollo.utils.BatchingQueue;
 
 /**
  * 
@@ -43,24 +42,23 @@ public class TxDataSource implements DataSource {
 
     private final static Logger log = LoggerFactory.getLogger(TxDataSource.class);
 
-    private final Duration                           batchInterval;
-    private volatile Thread                          blockingThread;
-    private AtomicBoolean                            draining     = new AtomicBoolean();
-    private final ExponentialBackoffPolicy           drainPolicy;
-    private final Member                             member;
-    private final ChoamMetrics                       metrics;
-    private final CapacityBatchingQueue<Transaction> processing;
-    private final BlockingQueue<Reassemble>          reassemblies = new LinkedBlockingQueue<>();
-    private final BlockingQueue<Validate>            validations  = new LinkedBlockingQueue<>();
+    private final Duration                   batchInterval;
+    private volatile Thread                  blockingThread;
+    private AtomicBoolean                    draining     = new AtomicBoolean();
+    private final ExponentialBackoffPolicy   drainPolicy;
+    private final Member                     member;
+    private final ChoamMetrics               metrics;
+    private final BatchingQueue<Transaction> processing;
+    private final BlockingQueue<Reassemble>  reassemblies = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Validate>    validations  = new LinkedBlockingQueue<>();
 
     public TxDataSource(Member member, int maxElements, ChoamMetrics metrics, int maxBatchByteSize,
                         Duration batchInterval, int maxBatchCount, ExponentialBackoffPolicy drainPolicy) {
         this.member = member;
         this.batchInterval = batchInterval;
         this.drainPolicy = drainPolicy;
-        processing = new CapacityBatchingQueue<Transaction>(maxElements, String.format("Tx DS[%s]", member.getId()),
-                                                            maxBatchCount, maxBatchByteSize,
-                                                            tx -> tx.toByteString().size(), 5);
+        processing = new BatchingQueue<Transaction>(maxElements, maxBatchCount, tx -> tx.toByteString().size(),
+                                                    maxBatchByteSize);
         this.metrics = metrics;
     }
 
@@ -73,8 +71,8 @@ public class TxDataSource implements DataSource {
         if (metrics != null) {
             metrics.dropped(processing.size(), validations.size());
         }
-        log.trace("Closed with remaining txns: {} validations: {} on: {}", processing.size(), validations.size(),
-                  member);
+        log.warn("Closed with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
+                 processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
@@ -91,7 +89,7 @@ public class TxDataSource implements DataSource {
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
-                var target = Instant.now().plus(drainPolicy.nextBackoff().toMillis());
+                var target = Instant.now().plus(drainPolicy.nextBackoff());
                 while (builder.getReassembliesCount() != 0 && builder.getValidationsCount() != 0) {
                     // rinse and repeat
                     r = new ArrayList<Reassemble>();
@@ -113,7 +111,7 @@ public class TxDataSource implements DataSource {
                 }
             } else {
                 try {
-                    var batch = processing.blockingTakeWithTimeout(batchInterval);
+                    var batch = processing.take(batchInterval);
                     if (batch != null) {
                         builder.addAllTransactions(batch);
                     }
@@ -136,7 +134,7 @@ public class TxDataSource implements DataSource {
             if (metrics != null) {
                 metrics.publishedBatch(builder.getTransactionsCount(), bs.size(), builder.getValidationsCount());
             }
-            log.trace("Unit data: {} txns, {} validations {} reassemblies totalling: {} bytes  on: {}",
+            log.trace("Unit data: {} txns, {} validations, {} reassemblies totalling: {} bytes  on: {}",
                       builder.getTransactionsCount(), builder.getValidationsCount(), builder.getReassembliesCount(),
                       bs.size(), member.getId());
             return bs;
@@ -145,16 +143,12 @@ public class TxDataSource implements DataSource {
         }
     }
 
-    public int getProcessing() {
-        return processing.size();
-    }
-
-    public int getRemaining() {
-        return processing.size();
-    }
-
     public int getRemainingReassemblies() {
         return reassemblies.size();
+    }
+
+    public int getRemainingTransactions() {
+        return processing.size();
     }
 
     public int getRemainingValidations() {
@@ -175,9 +169,5 @@ public class TxDataSource implements DataSource {
 
     public void offer(Validate generateValidation) {
         validations.offer(generateValidation);
-    }
-
-    public void start(Duration batchInterval, ScheduledExecutorService scheduler) {
-        processing.start(batchInterval, scheduler);
     }
 }

@@ -176,11 +176,11 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final var timeout = Duration.ofSeconds(3);
+        final var timeout = Duration.ofSeconds(6);
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 5_000 : 50;
-        final var max = LARGE_TESTS ? 500 : 10;
+        final var max = LARGE_TESTS ? 1_000 : 10;
         final var countdown = new CountDownLatch(clientCount * choams.size());
 
         var cnt = new AtomicInteger();

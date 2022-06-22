@@ -85,6 +85,10 @@ public class Producer {
         @Override
         public void checkAssembly() {
             ds.drain();
+            final var dropped = ds.getRemainingTransactions();
+            if (dropped != 0) {
+                log.warn("Dropped txns: {} on: {}", dropped, params().member().getId());
+            }
             assembly.get().election();
             if (assembled.get()) {
                 assembled();
@@ -196,15 +200,15 @@ public class Producer {
         lastEpoch = ep.getNumberOfEpochs() - 1;
 
         // Number of rounds we can provide data for
-        final var blocks = ep.getEpochLength() - 4;
+        final var blocks = ep.getEpochLength() - 6;
         final int maxElements = blocks * lastEpoch;
         final var name = "Producer" + getViewId() + params().member().getId().toString();
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
                               producerParams.batchInterval(), producerParams.maxBatchCount(),
                               params().drainPolicy().build());
 
-        log.trace("Producer max elements: {} reconfiguration epoch: {} on: {}", maxElements, lastEpoch,
-                  params.member().getId());
+        log.info("Producer max elements: {} reconfiguration epoch: {} on: {}", maxElements, lastEpoch,
+                 params.member().getId());
 
         var fsm = Fsm.construct(new DriveIn(), Transitions.class, Earner.INITIAL, true);
         fsm.setName(name);
@@ -245,7 +249,6 @@ public class Producer {
             return;
         }
         final Block prev = previousBlock.get().block;
-        ds.start(params().producer().batchInterval(), params().scheduler());
         if (prev.hasReconfigure() && prev.getReconfigure().getCheckpointTarget() == 0) { // genesis block won't ever be
                                                                                          // 0
             transitions.checkpoint();

@@ -8,6 +8,7 @@
 package com.salesforce.apollo.ethereal;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -56,23 +57,24 @@ import com.salesforce.apollo.utils.Entropy;
  *
  */
 public class EtherealTest {
+
     private static class SimpleDataSource implements DataSource {
         private final Deque<ByteString> dataStack = new ArrayDeque<>();
 
         @Override
         public ByteString getData() {
             try {
-                Thread.sleep(Entropy.nextBitsStreamLong(150));
+                Thread.sleep(Entropy.nextBitsStreamLong(DELAY_MS));
             } catch (InterruptedException e) {
             }
             return dataStack.pollFirst();
         }
     }
 
-    private static final int EPOCH_LENGTH = 30;
-
-    private static final int NPROC      = 4;
-    private static final int NUM_EPOCHS = 3;
+    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 150 : 5;
+    private static final int  EPOCH_LENGTH = 30;
+    private static final int  NPROC        = 4;
+    private static final int  NUM_EPOCHS   = 3;
 
     @Test
     public void context() throws Exception {
@@ -214,7 +216,6 @@ public class EtherealTest {
         for (int i = 0; i < (short) NPROC; i++) {
             final List<PreBlock> output = produced.get(i);
             if (output.size() != expected) {
-                failed = true;
                 System.out.println("Iteration: " + iteration + ", did not get all expected blocks on: " + i
                 + " blocks received: " + output.size());
             } else {
@@ -242,6 +243,11 @@ public class EtherealTest {
             }
         }
         assertFalse(failed, "Failed iteration: " + iteration);
+        assertTrue(produced.stream()
+                           .map(pbs -> pbs.size())
+                           .filter(count -> count == expected)
+                           .count() >= context.majority(),
+                   "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
 //        System.out.println();
 //
 //        ConsoleReporter.forRegistry(registry)

@@ -10,9 +10,9 @@ public class ExponentialBackoffPolicy {
 
     public static class Builder {
         private Duration initialBackoff = Duration.ofMillis(10);
-        private double   jitter         = .01;
+        private double   jitter         = .2;
         private Duration maxBackoff     = Duration.ofMillis(500);
-        private double   multiplier     = 0.05;
+        private double   multiplier     = 1.6;
 
         public ExponentialBackoffPolicy build() {
             return new ExponentialBackoffPolicy(initialBackoff, jitter, maxBackoff, multiplier);
@@ -91,8 +91,10 @@ public class ExponentialBackoffPolicy {
     }
 
     public Duration nextBackoff() {
-        long currentBackoffNanos = nextBackoff.toNanos();
-        nextBackoff = Duration.ofNanos(Math.min((long) (currentBackoffNanos * multiplier), maxBackoff.toNanos()));
+        long currentBackoffNanos = (long) (nextBackoff.toNanos() * multiplier);
+
+        nextBackoff = Duration.ofNanos(Math.min(currentBackoffNanos, maxBackoff.toNanos()));
+
         return Duration.ofNanos(currentBackoffNanos
         + uniformRandom(-jitter * currentBackoffNanos, jitter * currentBackoffNanos));
     }

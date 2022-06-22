@@ -8,6 +8,7 @@ package com.salesforce.apollo.choam;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -123,17 +124,19 @@ public class Session {
 
         final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
         var backoff = params.submitPolicy().build();
-        boolean success = false;
-        for (var i = 0; i < 20; i++) {
-            log.info("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
+        boolean submitted = false;
+        var target = Instant.now().plus(timeout);
+        int i = 0;
+        while (Instant.now().isBefore(target)) {
+            log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
             if (stxn.onCompletion().isDone() || submit(stxn)) {
-                success = true;
+                submitted = true;
                 break;
             }
             try {
                 final var delay = backoff.nextBackoff();
-                log.info("Failed submitting: {} retry: {} delay: {} on: {}", stxn.hash(), i, delay,
-                         params.member().getId());
+                log.debug("Failed submitting: {} retry: {} delay: {}ms on: {}", stxn.hash(), i, delay.toMillis(),
+                          params.member().getId());
                 Thread.sleep(delay.toMillis());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -141,8 +144,9 @@ public class Session {
             if (params.metrics() != null) {
                 params.metrics().transactionSubmitRetry();
             }
+            i++;
         }
-        if (!success) {
+        if (!submitted) {
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedBufferFull();
             }
@@ -191,7 +195,7 @@ public class Session {
     private boolean submit(SubmittedTransaction stx) {
         var listener = limiter.acquire(null);
         if (listener.isEmpty()) {
-            log.warn("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
+            log.debug("Transaction submission: {} rejected on: {}", stx.hash(), params.member().getId());
             if (params.metrics() != null) {
                 params.metrics().transactionSubmittedFail();
             }

@@ -49,10 +49,6 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.GenesisAssembly" level="trace" additivity="false">
-        <appender-ref ref="STDOUT" />
-    </logger>
-
     <logger name="com.salesforce.apollo.choam.Session" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
