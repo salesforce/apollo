@@ -7,13 +7,16 @@
 package com.salesforce.apollo.choam;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,18 +30,18 @@ class Transactioneer {
     private final static Random entropy = new Random();
     private final static Logger log     = LoggerFactory.getLogger(Transactioneer.class);
 
-    private final AtomicInteger            completed = new AtomicInteger();
-    private final CountDownLatch           countdown;
-    private final AtomicInteger            inFlight  = new AtomicInteger();
-    private final int                      max;
-    private final ScheduledExecutorService scheduler;
-    private final Session                  session;
-    private final Duration                 timeout;
-    private final ByteMessage              tx        = ByteMessage.newBuilder()
-                                                                  .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
-                                                                  .build();
-    private final Executor                 txnCompletion;
-    private final Executor                 txnExecutor;
+    private final AtomicInteger              completed = new AtomicInteger();
+    private final CountDownLatch             countdown;
+    private final List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();
+    private final int                        max;
+    private final ScheduledExecutorService   scheduler;
+    private final Session                    session;
+    private final Duration                   timeout;
+    private final ByteMessage                tx        = ByteMessage.newBuilder()
+                                                                    .setContents(ByteString.copyFromUtf8("Give me food or give me slack or kill me"))
+                                                                    .build();
+    private final Executor                   txnCompletion;
+    private final Executor                   txnExecutor;
 
     Transactioneer(Session session, Executor txnCompletion, Duration timeout, int max,
                    ScheduledExecutorService scheduler, CountDownLatch countdown, Executor txnScheduler) {
@@ -56,11 +59,9 @@ class Transactioneer {
     }
 
     void decorate(CompletableFuture<?> fs) {
-        inFlight.incrementAndGet();
-
-        fs.whenCompleteAsync((o, t) -> {
-            inFlight.decrementAndGet();
-
+        final var futureSailor = new AtomicReference<CompletableFuture<?>>();
+        futureSailor.set(fs.whenCompleteAsync((o, t) -> {
+            inFlight.remove(futureSailor.get());
             if (t != null) {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
@@ -75,7 +76,7 @@ class Transactioneer {
                 }
             } else {
                 if (completed.incrementAndGet() >= max) {
-                    if (inFlight.get() == 0) {
+                    if (inFlight.size() == 0) {
                         countdown.countDown();
                     }
                 } else {
@@ -88,7 +89,8 @@ class Transactioneer {
                     }, log));
                 }
             }
-        }, txnCompletion);
+        }, txnCompletion));
+        inFlight.add(futureSailor.get());
     }
 
     void start() {

@@ -7,29 +7,32 @@
 package com.salesforce.apollo.state;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import com.salesfoce.apollo.state.proto.Txn;
 import com.salesforce.apollo.choam.support.InvalidTransaction;
 
 class Transactioneer {
-    private final static Random            entropy   = new Random();
-    private final AtomicInteger            completed = new AtomicInteger();
-    private final CountDownLatch           countdown;
-    private final Executor                 executor;
-    private final AtomicInteger            inFlight  = new AtomicInteger();
-    private final int                      max;
-    private final Mutator                  mutator;
-    private final ScheduledExecutorService scheduler;
-    private final Duration                 timeout;
-    private final Supplier<Txn>            update;
+    private final static Random              entropy   = new Random();
+    private final AtomicInteger              completed = new AtomicInteger();
+    private final CountDownLatch             countdown;
+    private final Executor                   executor;
+    private final List<CompletableFuture<?>> inFlight  = new CopyOnWriteArrayList<>();
+    private final int                        max;
+    private final Mutator                    mutator;
+    private final ScheduledExecutorService   scheduler;
+    private final Duration                   timeout;
+    private final Supplier<Txn>              update;
 
     public Transactioneer(Supplier<Txn> update, Mutator mutator, Duration timeout, int max, Executor executor,
                           CountDownLatch countdown, ScheduledExecutorService txScheduler) {
@@ -47,13 +50,13 @@ class Transactioneer {
     }
 
     public int inFlight() {
-        return inFlight.get();
+        return inFlight.size();
     }
 
     void decorate(CompletableFuture<?> fs) {
-        inFlight.incrementAndGet();
-        fs.whenCompleteAsync((o, t) -> {
-            inFlight.decrementAndGet();
+        final var futureSailor = new AtomicReference<CompletableFuture<?>>();
+        futureSailor.set(fs.whenCompleteAsync((o, t) -> {
+            inFlight.remove(futureSailor.get());
             if (t != null) {
                 if (completed.get() < max) {
                     scheduler.schedule(() -> {
@@ -75,12 +78,13 @@ class Transactioneer {
                         }
                     }, entropy.nextInt(100), TimeUnit.MILLISECONDS);
                 } else if (complete >= max) {
-                    if (inFlight.get() == 0) {
+                    if (inFlight.size() == 0) {
                         countdown.countDown();
                     }
                 }
             }
-        }, executor);
+        }, executor));
+        inFlight.add(futureSailor.get());
     }
 
     void start() {

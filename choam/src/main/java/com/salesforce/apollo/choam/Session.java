@@ -16,6 +16,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,7 +117,8 @@ public class Session {
             throw new InvalidTransaction();
         }
         var hash = CHOAM.hashOf(txn, params.digestAlgorithm());
-        var result = new CompletableFuture<T>();
+        AtomicReference<BiFunction<T, Throwable, T>> completion = new AtomicReference<>((r, t) -> r);
+        var result = new CompletableFuture<T>().whenComplete((r, t) -> completion.get().apply(r, t));
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
@@ -129,7 +132,11 @@ public class Session {
         int i = 0;
         while (Instant.now().isBefore(target)) {
             log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
-            if (stxn.onCompletion().isDone() || submit(stxn)) {
+            if (stxn.onCompletion().isDone()) {
+                submitted = true;
+                return result;
+            }
+            if (submit(stxn)) {
                 submitted = true;
                 break;
             }
@@ -165,10 +172,14 @@ public class Session {
             }
         }, timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        return result.whenComplete((r, t) -> {
+        if (!completion.compareAndSet(completion.get(), (r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
-        });
+            return r;
+        })) {
+            futureTimeout.cancel(true);
+        }
+        return result;
     }
 
     public int submitted() {

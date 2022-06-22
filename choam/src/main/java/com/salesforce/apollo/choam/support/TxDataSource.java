@@ -71,8 +71,8 @@ public class TxDataSource implements DataSource {
         if (metrics != null) {
             metrics.dropped(processing.size(), validations.size());
         }
-        log.warn("Closed with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
-                 processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
+        log.trace("Closed with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
+                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {

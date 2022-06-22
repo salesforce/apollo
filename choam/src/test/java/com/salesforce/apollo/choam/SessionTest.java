@@ -94,7 +94,7 @@ public class SessionTest {
         var result = session.submit(tx, null, exec);
         assertEquals(1, session.submitted());
         assertEquals(content, result.get(1, TimeUnit.SECONDS));
-        assertEquals(0, session.submitted());
+        assertEquals(1, session.submitted());
     }
 
     @Test
