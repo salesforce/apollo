@@ -122,10 +122,11 @@ public class Session {
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
-        var stxn = new SubmittedTransaction(hash, txn, result);
+        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+
+        var stxn = new SubmittedTransaction(hash, txn, result, timer);
         submitted.put(stxn.hash(), stxn);
 
-        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
         var backoff = params.submitPolicy().build();
         boolean submitted = false;
         var target = Instant.now().plus(timeout);
@@ -134,6 +135,9 @@ public class Session {
             log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
             if (stxn.onCompletion().isDone()) {
                 submitted = true;
+                if (timer != null) {
+                    timer.close();
+                }
                 return result;
             }
             if (submit(stxn)) {
@@ -175,8 +179,14 @@ public class Session {
         if (!completion.compareAndSet(completion.get(), (r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
+            if (timer != null) {
+                timer.close();
+            }
             return r;
         })) {
+            if (timer != null) {
+                timer.close();
+            }
             futureTimeout.cancel(true);
         }
         return result;
@@ -189,6 +199,9 @@ public class Session {
     SubmittedTransaction complete(Digest hash) {
         final SubmittedTransaction stxn = submitted.remove(hash);
         if (stxn != null) {
+            if (stxn.timer() != null) {
+                stxn.timer().close();
+            }
             log.trace("Completed: {} on: {}", hash, params.member().getId());
         }
         return stxn;

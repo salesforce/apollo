@@ -131,7 +131,7 @@ public class EtherealTest {
             context.activate(m);
         }
         var builder = Config.newBuilder()
-                            .setFpr(0.00000125)
+                            .setFpr(0.125)
                             .setnProc((short) NPROC)
                             .setNumberOfEpochs(NUM_EPOCHS)
                             .setEpochLength(EPOCH_LENGTH)
