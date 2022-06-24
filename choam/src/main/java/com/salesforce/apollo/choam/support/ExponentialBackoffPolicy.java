@@ -91,9 +91,9 @@ public class ExponentialBackoffPolicy {
     }
 
     public Duration nextBackoff() {
-        long currentBackoffNanos = (long) (nextBackoff.toNanos() * multiplier);
+        long currentBackoffNanos = nextBackoff.toNanos();
 
-        nextBackoff = Duration.ofNanos(Math.min(currentBackoffNanos, maxBackoff.toNanos()));
+        nextBackoff = Duration.ofNanos((long) Math.min(currentBackoffNanos * multiplier, maxBackoff.toNanos()));
 
         return Duration.ofNanos(currentBackoffNanos
         + uniformRandom(-jitter * currentBackoffNanos, jitter * currentBackoffNanos));

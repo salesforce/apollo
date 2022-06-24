@@ -148,7 +148,7 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(checkpointBlockSize);
-        params.getProducer().ethereal().setEpochLength(10);
+
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);

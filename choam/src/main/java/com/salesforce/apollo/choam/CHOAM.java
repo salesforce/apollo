@@ -988,7 +988,6 @@ public class CHOAM {
             Digest hash = hashOf(exec, params.digestAlgorithm());
             var stxn = session.complete(hash);
             try {
-
                 params.processor()
                       .execute(i, CHOAM.hashOf(exec, params.digestAlgorithm()), exec,
                                stxn == null ? null : stxn.onCompletion());

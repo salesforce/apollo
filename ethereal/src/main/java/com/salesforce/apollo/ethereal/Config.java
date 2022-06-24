@@ -38,7 +38,7 @@ public record Config(String label, short nProc, int epochLength, short pid, Sign
         private int              bias            = 3;
         private DigestAlgorithm  digestAlgorithm = DigestAlgorithm.DEFAULT;
         private int              epochLength     = 30;
-        private double           fpr             = 0.125;
+        private double           fpr             = 0.00125;
         private String           label           = "";
         private short            nProc;
         private int              numberOfEpochs  = 3;

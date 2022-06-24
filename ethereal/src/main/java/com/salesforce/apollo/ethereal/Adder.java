@@ -155,6 +155,21 @@ public class Adder {
                                 .filter(e -> e.getValue().size() < 2 * threshold + 1)
                                 .map(e -> e.getKey() + ":" + e.getValue())
                                 .toList());
+            var units = new ArrayList<Unit>();
+
+            dag.iterateUnits(u -> {
+                if (u.epoch() == epoch) {
+                    units.add(u);
+                }
+                return true;
+            });
+
+            units.sort(PreUnit.topologicalComparator());
+
+            buff.append('\n').append('\n').append('\t').append("Dag Units: ").append('\n');
+            units.forEach(u -> {
+                buff.append('\t').append(u).append('\n');
+            });
             return buff.toString();
         });
     }

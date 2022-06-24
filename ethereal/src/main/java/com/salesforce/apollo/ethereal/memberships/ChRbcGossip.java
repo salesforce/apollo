@@ -121,7 +121,7 @@ public class ChRbcGossip {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamLong(2 * duration.toMillis()));
+        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamLong(duration.toMillis()));
         log.trace("Starting GossipService[{}] on: {}", context.getId(), member);
         comm.register(context.getId(), new Terminal());
         scheduler.schedule(() -> {

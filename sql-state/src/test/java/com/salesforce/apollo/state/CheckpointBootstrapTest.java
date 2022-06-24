@@ -8,6 +8,8 @@ package com.salesforce.apollo.state;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.TimeUnit;
+
 import org.joou.ULong;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +35,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
     public void checkpointBootstrap() throws Exception {
         pre();
 
+        checkpointOccurred.await(30, TimeUnit.SECONDS);
+
         ULong chkptHeight = checkpointHeight.get();
         System.out.println("Checkpoint at height: " + chkptHeight);
 
@@ -52,6 +56,8 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         choam.context().activate(testSubject);
         choam.start();
         routers.get(testSubject.getId()).start();
+
+        assertTrue(Utils.waitForCondition(30_000, 1_000, () -> choam.active()), "Test subject did not become active");
 
         post();
     }

@@ -75,14 +75,10 @@ abstract public class AbstractLifecycleTest {
     protected static final Random                   entropy     = new Random();
     protected static final Executor                 txExecutor  = Executors.newFixedThreadPool(CARDINALITY);
     protected static final ScheduledExecutorService txScheduler = Executors.newScheduledThreadPool(CARDINALITY);
+    private static final List<Transaction>          GENESIS_DATA;
 
-    private static final List<Transaction> GENESIS_DATA;
-    private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
-
-    static {
-        var txns = MigrationTest.initializeBookSchema();
-        txns.add(initialInsert());
-        GENESIS_DATA = CHOAM.toGenesisData(txns);
+    private static final Digest GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
+//    static {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Session.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(CHOAM.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(GenesisAssembly.class)).setLevel(Level.TRACE);
@@ -90,6 +86,12 @@ abstract public class AbstractLifecycleTest {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+//    }
+
+    static {
+        var txns = MigrationTest.initializeBookSchema();
+        txns.add(initialInsert());
+        GENESIS_DATA = CHOAM.toGenesisData(txns);
     }
 
     private static Txn initialInsert() {
@@ -355,7 +357,6 @@ abstract public class AbstractLifecycleTest {
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
 
-        params.getProducer().ethereal().setEpochLength(10);
         return params;
     }
 

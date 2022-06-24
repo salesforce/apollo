@@ -175,10 +175,16 @@ public class Ethereal {
 
     public String dump() {
         var builder = new StringBuffer();
+        builder.append("****************************").append('\n');
         epochs.keySet().stream().sorted().forEach(e -> {
-            builder.append("Epoch: ").append(e).append('\n').append(epochs.get(e).adder.dump());
+            builder.append("Epoch: ")
+                   .append(e)
+                   .append('\n')
+                   .append(epochs.get(e).adder.dump())
+                   .append('\n')
+                   .append('\n');
         });
-        builder.append('\n');
+        builder.append("****************************").append('\n').append('\n');
         return builder.toString();
     }
 

@@ -1064,7 +1064,7 @@ public class Utils {
 
     public static boolean waitForCondition(int maxWaitTime, final int sleepTime, Supplier<Boolean> condition) {
         long endTime = System.currentTimeMillis() + maxWaitTime;
-        while (System.currentTimeMillis() < endTime) {
+        while (System.currentTimeMillis() <= endTime) {
             if (condition.get()) {
                 return true;
             }

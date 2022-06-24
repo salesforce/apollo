@@ -139,8 +139,9 @@ public class Extender {
 
     private List<Short> pidOrder(int level, Unit tu) {
         var pids = new ArrayList<Short>();
+        int rnd = Math.abs((tu == null ? 0 : (short) tu.hash().getLongs()[0]));
         for (int pid = 0; pid < conf.nProc(); pid++) {
-            pids.add((short) ((pid + level) % conf.nProc()));
+            pids.add((short) ((pid + level + rnd) % conf.nProc()));
         }
         if (tu == null) {
             return pids;

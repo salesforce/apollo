@@ -72,7 +72,7 @@ import com.salesforce.apollo.utils.Utils;
  *
  */
 public class CHOAMTest {
-    private static final int CARDINALITY = 5;
+    private static final int CARDINALITY;
 
     private static final List<Transaction> GENESIS_DATA;
     private static final Digest            GENESIS_VIEW_ID = DigestAlgorithm.DEFAULT.digest("Give me food or give me slack or kill me".getBytes());
@@ -84,6 +84,7 @@ public class CHOAMTest {
         var txns = MigrationTest.initializeBookSchema();
         txns.add(initialInsert());
         GENESIS_DATA = CHOAM.toGenesisData(txns);
+        CARDINALITY = LARGE_TESTS ? 10 : 5;
     }
 
     private static Txn initialInsert() {
@@ -152,7 +153,7 @@ public class CHOAMTest {
                                                               .build())
                                .setCheckpointBlockDelta(2);
 
-        params.getProducer().ethereal().setNumberOfEpochs(4);
+        params.getProducer().ethereal().setNumberOfEpochs(7).setEpochLength(60);
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
 
         members = IntStream.range(0, CARDINALITY)
@@ -179,7 +180,7 @@ public class CHOAMTest {
     @Test
     public void submitMultiplTxn() throws Exception {
         final Random entropy = new Random();
-        final Duration timeout = Duration.ofSeconds(6);
+        final Duration timeout = Duration.ofSeconds(12);
         var transactioneers = new ArrayList<Transactioneer>();
         final int clientCount = LARGE_TESTS ? 1_000 : 2;
         final int max = LARGE_TESTS ? 50 : 10;

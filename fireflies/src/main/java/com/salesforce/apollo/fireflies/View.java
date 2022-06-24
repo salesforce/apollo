@@ -93,8 +93,6 @@ import io.grpc.StatusRuntimeException;
  * @since 220
  */
 public class View {
-    private static final int REBUTAL_TIMEOUT = 2;
-
     /**
      * Used in set reconcillation of Accusation Digests
      */
@@ -554,6 +552,8 @@ public class View {
 
     private static Logger log = LoggerFactory.getLogger(View.class);
 
+    private static final int REBUTAL_TIMEOUT = 2;
+
     public static Identity identityFor(int epoch, InetSocketAddress endpoint, EstablishmentEvent event) {
         assert endpoint != null;
         assert event != null;
@@ -646,10 +646,10 @@ public class View {
                                                                   identity)))
              .peek(m -> seedList.add(m.getId()))
              .forEach(m -> addSeed(m));
-        var initial = d.plus(Duration.ofMillis(Entropy.nextBitsStreamInt(100)));
+        var initial = Entropy.nextBitsStreamLong(d.toNanos());
         futureGossip = scheduler.schedule(() -> {
             exec.execute(Utils.wrapped(() -> gossip(d, scheduler), log));
-        }, initial.toNanos(), TimeUnit.NANOSECONDS);
+        }, initial, TimeUnit.NANOSECONDS);
         log.info("{} started, seeds: {}", node.getId(), seedList);
     }
 

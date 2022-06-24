@@ -107,7 +107,9 @@ public class TestCHOAM {
                                                               .setBatchInterval(Duration.ofMillis(50))
                                                               .build())
                                .setCheckpointBlockDelta(1);
-        params.getProducer().ethereal().setFpr(0.0125);
+        if (LARGE_TESTS) {
+            params.getProducer().ethereal().setNumberOfEpochs(5).setEpochLength(60);
+        }
 
         checkpointOccurred = new CompletableFuture<>();
         var stereotomy = new StereotomyImpl(new MemKeyStore(), new MemKERL(DigestAlgorithm.DEFAULT), entropy);
@@ -176,7 +178,7 @@ public class TestCHOAM {
         routers.values().forEach(r -> r.start());
         choams.values().forEach(ch -> ch.start());
 
-        final var timeout = Duration.ofSeconds(6);
+        final var timeout = Duration.ofSeconds(15);
 
         final var transactioneers = new ArrayList<Transactioneer>();
         final var clientCount = LARGE_TESTS ? 5_000 : 50;

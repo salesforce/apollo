@@ -89,8 +89,9 @@ public class TxDataSource implements DataSource {
             var v = new ArrayList<Validate>();
 
             if (draining.get()) {
-                var target = Instant.now().plus(drainPolicy.nextBackoff());
-                while (builder.getReassembliesCount() != 0 && builder.getValidationsCount() != 0) {
+                var target = Instant.now().plus(drainPolicy.nextBackoff().dividedBy(2));
+                while (target.isAfter(Instant.now()) && builder.getReassembliesCount() == 0 &&
+                       builder.getValidationsCount() == 0) {
                     // rinse and repeat
                     r = new ArrayList<Reassemble>();
                     reassemblies.drainTo(r);
@@ -99,14 +100,17 @@ public class TxDataSource implements DataSource {
                     v = new ArrayList<Validate>();
                     validations.drainTo(v);
                     builder.addAllValidations(v);
+
+                    if (builder.getReassembliesCount() != 0 || builder.getValidationsCount() != 0) {
+                        break;
+                    }
+
+                    // sleep waiting for input
                     try {
-                        Thread.sleep(drainPolicy.getInitialBackoff().dividedBy(2).toMillis());
+                        Thread.sleep(drainPolicy.getInitialBackoff().toMillis());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return ByteString.EMPTY;
-                    }
-                    if (target.isAfter(Instant.now())) {
-                        break;
                     }
                 }
             } else {

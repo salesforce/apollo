@@ -227,7 +227,6 @@ public class ViewAssemblyTest {
 
     private void initEthereals() {
         var builder = Config.newBuilder()
-                            .setFpr(0.000125)
                             .setnProc(CARDINALITY)
                             .setVerifiers(members.toArray(new Verifier[members.size()]));
 

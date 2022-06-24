@@ -232,7 +232,7 @@ public class ViewAssembly {
             retryDelay.accumulateAndGet(Duration.ofMillis(100), (a, b) -> a.plus(b));
         }
 
-        log.trace("Proposal incomplete of: {} gathered: {} required: {}, retrying: {} on: {}", nextViewId,
+        log.trace("Proposal incomplete of: {} gathered: {} desired: {}, retrying: {} on: {}", nextViewId,
                   proposals.keySet().stream().toList(), nextAssembly.size(), delay, params().member().getId());
         if (!cancelSlice.get()) {
             params().scheduler().schedule(() -> reiterate.get().run(), delay.toMillis(), TimeUnit.MILLISECONDS);

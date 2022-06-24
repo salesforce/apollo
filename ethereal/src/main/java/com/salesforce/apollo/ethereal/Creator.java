@@ -10,7 +10,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -85,13 +84,9 @@ public class Creator {
     private final Config                               conf;
     private final DataSource                           ds;
     private final AtomicInteger                        epoch      = new AtomicInteger(0);
-    private final AtomicBoolean                        epochDone  = new AtomicBoolean();
     private final AtomicReference<EpochProofBuilder>   epochProof = new AtomicReference<>();
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
     private final Queue<Unit>                          lastTiming;
-    private final AtomicInteger                        level      = new AtomicInteger();
-    private final AtomicInteger                        maxLvl     = new AtomicInteger();
-    private final AtomicInteger                        onMaxLvl   = new AtomicInteger();
     private final int                                  quorum;
     private final Consumer<Unit>                       send;
 
@@ -139,17 +134,17 @@ public class Creator {
         parents = candidates.toArray(parents);
         final var thisUnit = parents[conf.pid()];
         if (thisUnit == null) {
-            log.trace("No unit for this proc for level: {} on: {}", level, conf.logLabel());
+            log.trace("No unit for this proc on: {}", conf.logLabel());
             return null;
         }
         var l = thisUnit.level() + 1;
         int count = count(l, parents);
         if (count >= quorum) {
-            log.trace("Parents ready: {} level: {} on: {}", quorum, level, conf.logLabel());
+            log.trace("Parents ready: {} level: {} on: {}", quorum, l, conf.logLabel());
             makeConsistent(parents);
             return new built(parents, l);
         } else {
-            log.trace("Parents not ready level: {} current: {} required: {}  on: {}", level, count, quorum,
+            log.trace("Parents not ready level: {} current: {} required: {}  on: {}", l, count, quorum,
                       conf.logLabel());
             return null;
         }
@@ -212,7 +207,6 @@ public class Creator {
         while (timingUnit != null) {
             final int e = epoch.get();
             if (timingUnit.epoch() == e) {
-                epochDone.set(true);
                 log.trace("Finished, last epoch timing unit: {} level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
@@ -227,9 +221,7 @@ public class Creator {
      * creates a dealing with the provided data.
      **/
     private void newEpoch(int epoch, ByteString data, int from) {
-        log.trace("Changing epoch from: {} to: {} on: {}", from, epoch, conf.logLabel());
         this.epoch.set(epoch);
-        epochDone.set(false);
 
         resetEpoch(epoch);
         epochProof.set(epochProofBuilder.apply(epoch));
@@ -249,16 +241,8 @@ public class Creator {
             return null;
         }
         final int l = unit.level();
-        final var current = level.get();
-        boolean ready = !epochDone.get() && current > l;
-        if (ready) {
-            log.trace("Ready to create epochDone: {} level: {} candidate level: {} on: {}", epochDone, current, l,
-                      conf.logLabel());
-            return buildParents();
-        }
-        log.trace("Not ready to create epochDone: {} epoch: {} level: {} candidate level: {} on: {}", epochDone,
-                  epoch.get(), current, l, conf.logLabel());
-        return null;
+        log.trace("Ready to create epoch: {} candidate level: {} on: {}", epoch.get(), l, conf.logLabel());
+        return buildParents();
     }
 
     /**
@@ -272,9 +256,6 @@ public class Creator {
         for (int i = 0; i < conf.nProc(); i++) {
             candidates.set(i, null);
         }
-        maxLvl.set(-1);
-        onMaxLvl.set(0);
-        level.set(0);
     }
 
     /**
@@ -286,16 +267,18 @@ public class Creator {
         // if the unit is from an older epoch we simply ignore it
         final int e = epoch.get();
         if (unit.epoch() < e) {
-            log.debug("Unit: {} from a previous epoch, current epoch: {} on: {}", unit, epoch, conf.logLabel());
+            log.trace("Unit: {} from a previous epoch, current epoch: {} on: {}", unit, epoch.get(), conf.logLabel());
             return;
         }
 
         // If the unit is the first epoch from a new epoch, switch to that epoch.
         if (unit.epoch() > e && unit.height() == 0) {
             if (!epochProof.get().verify(unit)) {
-                log.warn("Unit did not verify epoch, rejected on: {}", conf.logLabel());
+                log.warn("Unit did not verify epoch proof with: {}, rejected on: {}", unit, conf.logLabel());
                 return;
             }
+            log.trace("Changing epoch from: {} to: {} using: {} on: {}", epoch.get(), unit.epoch(), unit,
+                      conf.logLabel());
             newEpoch(unit.epoch(), unit.data(), e);
         }
 
@@ -325,24 +308,6 @@ public class Creator {
         var prev = candidates.get(u.creator());
         if (prev == null || prev.level() < u.level()) {
             candidates.set(u.creator(), u);
-            log.trace("Update candidate to: {} on: {}", u, conf.logLabel());
-            if (u.level() == maxLvl.get()) {
-                onMaxLvl.incrementAndGet();
-                log.trace("Update candidate onMaxLvl incremented to: {} by: {} on: {}", onMaxLvl.get(), u,
-                          conf.logLabel());
-            } else if (u.level() > maxLvl.get()) {
-                maxLvl.set(u.level());
-                onMaxLvl.set(1);
-                log.trace("Update candidate {} new maxLvl: {} onMaxLvl: {} on: {}", u, maxLvl.get(), onMaxLvl.get(),
-                          conf.logLabel());
-            }
-            level.set(maxLvl.get());
-            log.trace("Update candidate new level: {} via: {} on: {}", level, u, conf.logLabel());
-            if (onMaxLvl.get() >= quorum) {
-                level.incrementAndGet();
-                log.trace("Update candidate onMaxLvl: {} >= quorum: {} level now: {} via: {} on: {}", onMaxLvl.get(),
-                          quorum, level.get(), u, conf.logLabel());
-            }
         }
     }
 

@@ -16,8 +16,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,12 +115,12 @@ public class Session {
             throw new InvalidTransaction();
         }
         var hash = CHOAM.hashOf(txn, params.digestAlgorithm());
-        AtomicReference<BiFunction<T, Throwable, T>> completion = new AtomicReference<>((r, t) -> r);
-        var result = new CompletableFuture<T>().whenComplete((r, t) -> completion.get().apply(r, t));
+        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
+
+        var result = new CompletableFuture<T>();
         if (timeout == null) {
             timeout = params.submitTimeout();
         }
-        final var timer = params.metrics() == null ? null : params.metrics().transactionLatency().time();
 
         var stxn = new SubmittedTransaction(hash, txn, result, timer);
         submitted.put(stxn.hash(), stxn);
@@ -133,13 +131,6 @@ public class Session {
         int i = 0;
         while (Instant.now().isBefore(target)) {
             log.debug("Submitting: {} retry: {} on: {}", stxn.hash(), i, params.member().getId());
-            if (stxn.onCompletion().isDone()) {
-                submitted = true;
-                if (timer != null) {
-                    timer.close();
-                }
-                return result;
-            }
             if (submit(stxn)) {
                 submitted = true;
                 break;
@@ -176,20 +167,10 @@ public class Session {
             }
         }, timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-        if (!completion.compareAndSet(completion.get(), (r, t) -> {
+        return result.whenComplete((r, t) -> {
             futureTimeout.cancel(true);
             complete(hash, timer, t);
-            if (timer != null) {
-                timer.close();
-            }
-            return r;
-        })) {
-            if (timer != null) {
-                timer.close();
-            }
-            futureTimeout.cancel(true);
-        }
-        return result;
+        });
     }
 
     public int submitted() {
@@ -199,9 +180,6 @@ public class Session {
     SubmittedTransaction complete(Digest hash) {
         final SubmittedTransaction stxn = submitted.remove(hash);
         if (stxn != null) {
-            if (stxn.timer() != null) {
-                stxn.timer().close();
-            }
             log.trace("Completed: {} on: {}", hash, params.member().getId());
         }
         return stxn;

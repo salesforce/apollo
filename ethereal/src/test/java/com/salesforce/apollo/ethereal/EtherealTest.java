@@ -71,7 +71,7 @@ public class EtherealTest {
         }
     }
 
-    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 150 : 5;
+    private final static long DELAY_MS     = Boolean.getBoolean("large_tests") ? 5 : 5;
     private static final int  EPOCH_LENGTH = 30;
     private static final int  NPROC        = 4;
     private static final int  NUM_EPOCHS   = 3;
@@ -131,7 +131,6 @@ public class EtherealTest {
             context.activate(m);
         }
         var builder = Config.newBuilder()
-                            .setFpr(0.125)
                             .setnProc((short) NPROC)
                             .setNumberOfEpochs(NUM_EPOCHS)
                             .setEpochLength(EPOCH_LENGTH)
@@ -206,6 +205,7 @@ public class EtherealTest {
                 }
             });
         }
+
         final var expected = NUM_EPOCHS * (EPOCH_LENGTH - 1);
         final var first = produced.stream().filter(l -> l.size() == expected).findFirst();
         assertFalse(first.isEmpty(), "Iteration: " + iteration + ", no process produced " + expected + " blocks: "
@@ -243,11 +243,8 @@ public class EtherealTest {
             }
         }
         assertFalse(failed, "Failed iteration: " + iteration);
-        assertTrue(produced.stream()
-                           .map(pbs -> pbs.size())
-                           .filter(count -> count == expected)
-                           .count() >= context.majority(),
-                   "Failed iteration: " + iteration + ", failed to obtain majority agreement on output count");
+        assertTrue(produced.stream().map(pbs -> pbs.size()).filter(count -> count == expected).count() == NPROC,
+                   "Failed iteration: " + iteration + ", failed to obtain universal agreement on output count");
 //        System.out.println();
 //
 //        ConsoleReporter.forRegistry(registry)

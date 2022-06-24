@@ -48,8 +48,7 @@ public interface Dag {
         private final List<Consumer<Unit>>                     postInsert = new ArrayList<>();
         private final List<Consumer<Unit>>                     preInsert  = new ArrayList<>();
         private final ReadWriteLock                            rwLock     = new ReentrantReadWriteLock(true);
-
-        private final Map<Digest, Unit> units = new HashMap<>();
+        private final Map<Digest, Unit>                        units      = new HashMap<>();
 
         /**
          * @param config
@@ -210,6 +209,17 @@ public interface Dag {
         @Override
         public void iterateMaxUnitsPerProcess(Consumer<List<Unit>> work) {
             read(() -> maximalUnitsPerProcess().forEach(work));
+        }
+
+        @Override
+        public void iterateUnits(Function<Unit, Boolean> consumer) {
+            read(() -> {
+                for (Unit u : units.values()) {
+                    if (!consumer.apply(u)) {
+                        break;
+                    }
+                }
+            });
         }
 
         @Override
@@ -599,6 +609,8 @@ public interface Dag {
     boolean isQuorum(short cardinality);
 
     void iterateMaxUnitsPerProcess(Consumer<List<Unit>> work);
+
+    void iterateUnits(Function<Unit, Boolean> consumer);
 
     void iterateUnitsOnLevel(int level, Function<List<Unit>, Boolean> work);
 

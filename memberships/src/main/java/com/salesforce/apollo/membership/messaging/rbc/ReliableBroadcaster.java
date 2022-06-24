@@ -375,7 +375,7 @@ public class ReliableBroadcaster {
 
     }
 
-    private record state(Digest hash, AgedMessage.Builder msg, Digest from) {};
+    private record state(Digest hash, AgedMessage.Builder msg, Digest from) {}
 
     private static final Logger log = LoggerFactory.getLogger(ReliableBroadcaster.class);
 
@@ -386,10 +386,10 @@ public class ReliableBroadcaster {
     private final Executor                                         exec;
     private final RingCommunications<Member, ReliableBroadcast>    gossiper;
     private final SigningMember                                    member;
+    private final RbcMetrics                                       metrics;
     private final Parameters                                       params;
     private final Map<UUID, Consumer<Integer>>                     roundListeners  = new ConcurrentHashMap<>();
     private final AtomicBoolean                                    started         = new AtomicBoolean();
-    private final RbcMetrics                                       metrics;
 
     public ReliableBroadcaster(Context<Member> context, SigningMember member, Parameters parameters, Executor exec,
                                Router communications, RbcMetrics metrics) {
@@ -467,11 +467,10 @@ public class ReliableBroadcaster {
         if (!started.compareAndSet(false, true)) {
             return;
         }
-        Duration initialDelay = duration.plusMillis(Entropy.nextBitsStreamInt((int) Math.max(1,
-                                                                                             duration.toMillis() * 2)));
+        var initialDelay = Entropy.nextBitsStreamLong(duration.toMillis());
         log.info("Starting Reliable Broadcaster[{}] for {}", context.getId(), member.getId());
         comm.register(context.getId(), new Service());
-        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay.toMillis(), TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> oneRound(duration, scheduler), initialDelay, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
