@@ -401,8 +401,8 @@ abstract public class AbstractLifecycleTest {
         return l -> {
             try {
                 final var check = checkpointer.apply(l);
-                checkpointOccurred.countDown();
                 checkpointHeight.compareAndSet(null, l.add(1));
+                checkpointOccurred.countDown();
                 return check;
             } catch (Throwable e) {
                 e.printStackTrace();

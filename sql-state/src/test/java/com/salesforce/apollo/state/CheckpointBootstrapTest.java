@@ -6,6 +6,7 @@
  */
 package com.salesforce.apollo.state;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.TimeUnit;
@@ -38,6 +39,7 @@ public class CheckpointBootstrapTest extends AbstractLifecycleTest {
         checkpointOccurred.await(30, TimeUnit.SECONDS);
 
         ULong chkptHeight = checkpointHeight.get();
+        assertNotNull(chkptHeight, "Null checkpoint height!");
         System.out.println("Checkpoint at height: " + chkptHeight);
 
         assertTrue(Utils.waitForCondition(10_000, 1_000, () -> {
