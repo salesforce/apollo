@@ -16,7 +16,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
@@ -28,7 +28,7 @@
     <logger name="com.salesforce.apollo.choam.ViewAssembly" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
-    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Producer" level="warn" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
     <logger name="com.salesforce.apollo.choam.support.TxDataSource" level="info" additivity="false">

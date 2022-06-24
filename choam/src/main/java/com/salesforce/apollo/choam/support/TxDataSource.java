@@ -68,15 +68,17 @@ public class TxDataSource implements DataSource {
             current.interrupt();
         }
         blockingThread = null;
-        if (metrics != null) {
-            metrics.dropped(processing.size(), validations.size());
-        }
-        log.trace("Closed with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
-                  processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
+        log.warn("Closing with remaining txns: {}({}:{}) validations: {} reassemblies: {} on: {}", processing.size(),
+                 processing.added(), processing.taken(), validations.size(), reassemblies.size(), member);
     }
 
     public void drain() {
         draining.set(true);
+        if (metrics != null) {
+            metrics.dropped(processing.size(), validations.size());
+        }
+        log.warn("Draining with remaining txns: {}({}:{}) on: {}", processing.size(), processing.added(),
+                 processing.taken(), member);
     }
 
     @Override

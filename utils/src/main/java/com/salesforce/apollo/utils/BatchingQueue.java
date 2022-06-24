@@ -31,6 +31,9 @@ public class BatchingQueue<T> {
         }
 
         private boolean addEvent(T event) {
+            if (taken == limit) {
+                return false;
+            }
             if (events.size() == batchSize) {
                 if (!reapCurrentBatch()) {
                     log.trace("rejecting event size: {} added: {} taken: {}", size, added, taken);
@@ -81,7 +84,7 @@ public class BatchingQueue<T> {
         this.sizer = sizer;
         this.currentBatch = createNewBatch();
         lock = new ReentrantLock();
-        added = 0;
+        added = 1;
         taken = 0;
     }
 
@@ -100,7 +103,7 @@ public class BatchingQueue<T> {
             oldBatches.clear();
             currentBatch.clear();
             size = 0;
-            added = 0;
+            added = 1;
             taken = 0;
         } finally {
             lock.unlock();
@@ -110,9 +113,6 @@ public class BatchingQueue<T> {
     public boolean offer(T event) {
         lock.lock();
         try {
-            if (added == limit || taken == limit) {
-                return false;
-            }
             return currentBatch.addEvent(event);
         } finally {
             lock.unlock();
@@ -129,12 +129,12 @@ public class BatchingQueue<T> {
     }
 
     public List<T> take(Duration timeout) throws InterruptedException {
-        if (taken == limit) {
-            log.trace("Batch limit achieved size: {} added: {} taken: {}", size, added, taken);
-            return null;
-        }
         lock.lock();
         try {
+            if (taken == limit) {
+                log.trace("Batch limit achieved size: {} added: {} taken: {}", size, added, taken);
+                return null;
+            }
             List<T> batch;
             if (oldBatches.isEmpty() && !currentBatch.events.isEmpty()) {
                 batch = new ArrayList<>(currentBatch.events);
@@ -146,6 +146,7 @@ public class BatchingQueue<T> {
                 return batch;
 
             }
+            taken++;
         } finally {
             lock.unlock();
         }
@@ -154,12 +155,10 @@ public class BatchingQueue<T> {
         lock.lock();
         try {
             if (batch == null) {
-                taken++;
                 log.trace("No events to take, size: {} added: {} taken: {}", size, added, taken);
                 return null;
             }
             size -= batch.size();
-            taken++;
             log.trace("Taking events: {} new size: {} added: {} taken: {}", batch.size(), size, added, taken);
             return batch;
         } finally {
@@ -185,21 +184,13 @@ public class BatchingQueue<T> {
     }
 
     private boolean reapCurrentBatch() {
-        lock.lock();
-        try {
-            if (added == limit || taken == limit) {
-                return false;
-            }
-            if (currentBatch.events.isEmpty()) {
-                return true;
-            }
-
-            oldBatches.offer(new ArrayList<>(currentBatch.events));
-            added++;
-            currentBatch.clear();
-            return added < limit;
-        } finally {
-            lock.unlock();
+        if (added >= limit || taken == limit) {
+            return false;
         }
+
+        oldBatches.offer(new ArrayList<>(currentBatch.events));
+        added++;
+        currentBatch.clear();
+        return added <= limit;
     }
 }

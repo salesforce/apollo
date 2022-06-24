@@ -200,7 +200,7 @@ public class Producer {
         lastEpoch = ep.getNumberOfEpochs() - 1;
 
         // Number of rounds we can provide data for
-        final var blocks = ep.getEpochLength() - 6;
+        final var blocks = ep.getEpochLength() - 2;
         final int maxElements = blocks * lastEpoch;
         final var name = "Producer" + getViewId() + params().member().getId().toString();
         ds = new TxDataSource(params.member(), maxElements, params.metrics(), producerParams.maxBatchByteSize(),
