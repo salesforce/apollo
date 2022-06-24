@@ -14,11 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -63,16 +61,14 @@ public class MembershipTests {
 //        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
     }
 
-    private Map<Digest, AtomicInteger> blocks;
-    private Map<Digest, CHOAM>         choams;
-    private List<SigningMember>        members;
-    private Map<Digest, Router>        routers;
+    private Map<Digest, CHOAM>  choams;
+    private List<SigningMember> members;
+    private Map<Digest, Router> routers;
 
     @AfterEach
     public void after() throws Exception {
         shutdown();
         members = null;
-        blocks = null;
     }
 
     @Test
@@ -121,18 +117,26 @@ public class MembershipTests {
         transactioneer.start();
         assertTrue(countdown.await(30, TimeUnit.SECONDS), "Could not submit transaction");
 
-        var target = blocks.values().stream().mapToInt(l -> l.get()).max().getAsInt();
+        var target = choams.values()
+                           .stream()
+                           .map(l -> l.currentHeight())
+                           .filter(h -> h != null)
+                           .mapToInt(u -> u.intValue())
+                           .max()
+                           .getAsInt();
 
         routers.get(testSubject.getId()).start();
         choams.get(testSubject.getId()).start();
-        final var targetMet = Utils.waitForCondition(30_000, 1_000,
-                                                     () -> blocks.get(testSubject.getId()).get() >= target);
-        assertTrue(targetMet, "Expecting: " + target + " completed: " + blocks.get(testSubject.getId()).get());
+        final var targetMet = Utils.waitForCondition(30_000, 1_000, () -> {
+            final var currentHeight = choams.get(testSubject.getId()).currentHeight();
+            return currentHeight != null && currentHeight.intValue() >= target;
+        });
+        assertTrue(targetMet,
+                   "Expecting: " + target + " completed: " + choams.get(testSubject.getId()).currentHeight());
 
     }
 
     public SigningMember initialize(int checkpointBlockSize, int cardinality) throws Exception {
-        blocks = new ConcurrentHashMap<>();
         var context = new ContextImpl<>(DigestAlgorithm.DEFAULT.getOrigin(), cardinality, 0.2, 3);
 
         var params = Parameters.newBuilder()
@@ -168,13 +172,10 @@ public class MembershipTests {
             return comm;
         }));
         choams = members.stream().collect(Collectors.toMap(m -> m.getId(), m -> {
-            var recording = new AtomicInteger();
-            blocks.put(m.getId(), recording);
 
             final TransactionExecutor processor = new TransactionExecutor() {
                 @Override
                 public void endBlock(ULong height, Digest hash) {
-                    recording.incrementAndGet();
                 }
 
                 @SuppressWarnings({ "unchecked", "rawtypes" })

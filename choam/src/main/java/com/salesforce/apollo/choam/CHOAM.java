@@ -746,6 +746,11 @@ public class CHOAM {
     public Context<Member> context() {
         return params.context();
     }
+    
+    public ULong currentHeight() {
+        final var c = head.get();
+        return c == null ? null : c.height();
+    }
 
     public Combine.Transitions getCurrentState() {
         return transitions.fsm().getCurrentState();
