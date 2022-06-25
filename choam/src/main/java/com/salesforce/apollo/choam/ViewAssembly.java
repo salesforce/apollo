@@ -71,6 +71,7 @@ public class ViewAssembly {
                          .stream()
                          .filter(p -> p.validations.size() == nextAssembly.size())
                          .count() == nextAssembly.size()) {
+                cancelSlice.set(true);
                 log.debug("Certifying slate: {} of: {} on: {}", proposals.size(), nextViewId, params().member());
                 transitions.certified();
             }
@@ -201,30 +202,32 @@ public class ViewAssembly {
     }
 
     void complete() {
+        cancelSlice.set(true);
+        if (slate.size() < params().context().majority()) {
+            proposals.values()
+                     .stream()
+                     .filter(p -> p.validations.size() >= view.context().majority())
+                     .sorted(Comparator.comparing(p -> p.member.getId()))
+                     .forEach(p -> slate.put(p.member(), joinOf(p)));
+            if (slate.size() >= params().context().majority()) {
+                log.debug("Complete.  Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+            } else {
+                log.error("Failed completion, election required: {} slate: {} of: {} on: {}",
+                          params().context().majority() + 1,
+                          proposals.values()
+                                   .stream()
+                                   .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
+                                   .toList(),
+                          nextViewId, params().member());
+                transitions.failed();
+            }
+        }
         log.debug("View Assembly: {} completed with: {} members on: {}", nextViewId, slate.size(),
                   params().member().getId());
     }
 
     void finalElection() {
-        cancelSlice.set(true);
-        proposals.values()
-                 .stream()
-                 .filter(p -> p.validations.size() >= view.context().majority())
-                 .sorted(Comparator.comparing(p -> p.member.getId()))
-                 .forEach(p -> slate.put(p.member(), joinOf(p)));
-        if (slate.size() >= params().context().majority()) {
-            cancelSlice.set(true);
-            log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
-            transitions.complete();
-        } else {
-            log.error("Failed election, required: {} slate: {} of: {} on: {}", params().context().majority() + 1,
-                      proposals.values()
-                               .stream()
-                               .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
-                               .toList(),
-                      nextViewId, params().member());
-            transitions.failed();
-        }
+        transitions.complete();
     }
 
     Consumer<List<Reassemble>> inbound() {

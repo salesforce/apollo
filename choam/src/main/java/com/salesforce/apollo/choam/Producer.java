@@ -143,11 +143,11 @@ public class Producer {
             assembly.set(new ViewAssembly(nextViewId, view, r -> addReassemble(r), comms) {
                 @Override
                 public void complete() {
+                    super.complete();
                     log.debug("View reconfiguration: {} gathered: {} complete on: {}", nextViewId, getSlate().size(),
                               params().member().getId());
                     assembled.set(true);
                     Producer.this.transitions.viewComplete();
-                    super.complete();
                 }
             });
             assembly.get().start();

@@ -57,6 +57,7 @@ import com.salesforce.apollo.choam.Parameters.RuntimeParameters;
 import com.salesforce.apollo.choam.Producer;
 import com.salesforce.apollo.choam.Session;
 import com.salesforce.apollo.choam.ViewAssembly;
+import com.salesforce.apollo.choam.support.TxDataSource;
 import com.salesforce.apollo.comm.LocalRouter;
 import com.salesforce.apollo.comm.Router;
 import com.salesforce.apollo.comm.ServerConnectionCache;
@@ -95,6 +96,7 @@ abstract public class AbstractLifecycleTest {
         ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Producer.class)).setLevel(Level.TRACE);
         ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Committee.class)).setLevel(Level.TRACE);
         ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Fsm.class)).setLevel(Level.TRACE);
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(TxDataSource.class)).setLevel(Level.TRACE);
     }
 
     static {
@@ -365,6 +367,9 @@ abstract public class AbstractLifecycleTest {
                                .setGossipDuration(Duration.ofMillis(10))
                                .setCheckpointBlockDelta(checkpointBlockSize())
                                .setCheckpointSegmentSize(128);
+
+//        params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
+        params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
 
         return params;
     }

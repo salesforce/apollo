@@ -155,6 +155,8 @@ public class MembershipTests {
                                                               .setMaxBatchCount(10_000)
                                                               .build())
                                .setCheckpointBlockDelta(checkpointBlockSize);
+        params.getDrainPolicy().setInitialBackoff(Duration.ofMillis(1)).setMaxBackoff(Duration.ofMillis(1));
+        params.getProducer().ethereal().setNumberOfEpochs(2).setEpochLength(20);
 
         var entropy = SecureRandom.getInstance("SHA1PRNG");
         entropy.setSeed(new byte[] { 6, 6, 6 });

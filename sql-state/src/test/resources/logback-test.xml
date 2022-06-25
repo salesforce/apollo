@@ -37,11 +37,11 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.support.Bootstrapper" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
  
@@ -53,7 +53,7 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.Producer" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.choam.Producer" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
@@ -61,11 +61,15 @@
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.choam.CHOAM" level="warn" additivity="false">
+    <logger name="com.salesforce.apollo.choam.CHOAM" level="trace" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 
-    <logger name="com.salesforce.apollo.ethereal" level="info" additivity="false">
+    <logger name="com.salesforce.apollo.ethereal" level="trace" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
+    <logger name="com.salesforce.apollo.ethereal.memberships" level="info" additivity="false">
         <appender-ref ref="STDOUT" />
     </logger>
 

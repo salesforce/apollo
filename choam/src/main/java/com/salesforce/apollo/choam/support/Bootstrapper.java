@@ -115,9 +115,10 @@ public class Bootstrapper {
     }
 
     private void anchor(AtomicReference<ULong> start, ULong end) {
+        final var randomCut = randomCut(params.digestAlgorithm());
+        log.trace("Anchoring from: {} to: {} cut: {} on: {}", start.get(), end, randomCut, params.member().getId());
         new RingIterator<>(params.gossipDuration(), params.context(), params.member(), params.scheduler(), comms,
-                           params.exec()).iterate(randomCut(params.digestAlgorithm()),
-                                                  (link, ring) -> anchor(link, start, end),
+                           params.exec()).iterate(randomCut, (link, ring) -> anchor(link, start, end),
                                                   (tally, futureSailor, destination) -> completeAnchor(futureSailor,
                                                                                                        start, end,
                                                                                                        destination),
@@ -128,7 +129,7 @@ public class Bootstrapper {
         log.debug("Attempting Anchor completion ({} to {}) with: {} on: {}", start, end, link.getMember().getId(),
                   params.member().getId());
         long seed = Entropy.nextBitsStreamLong();
-        BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+        BloomFilter<ULong> blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks() * 2,
                                                                         params.combine().falsePositiveRate());
 
         start.set(store.firstGap(start.get(), end));
@@ -188,18 +189,21 @@ public class Bootstrapper {
         }
         try {
             Blocks blocks = futureSailor.get().get();
-            log.debug("View chain completion reply ({} to {}) from: {} on: {}", start.get(), end,
-                      destination.member().getId(), params.member().getId());
+            log.debug("Anchor chain completion reply ({} to {}) blocks: {} from: {} on: {}", start.get(), end,
+                      blocks.getBlocksCount(), destination.member().getId(), params.member().getId());
             blocks.getBlocksList()
                   .stream()
                   .map(cb -> new HashedCertifiedBlock(params.digestAlgorithm(), cb))
-                  .peek(cb -> log.trace("Adding view completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
+                  .peek(cb -> log.trace("Adding anchor completion: {} block[{}] from: {} on: {}", cb.height(), cb.hash,
                                         destination.member().getId(), params.member().getId()))
                   .forEach(cb -> store.put(cb));
         } catch (InterruptedException e) {
-            log.debug("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
+            Thread.currentThread().interrupt();
+            return false;
         } catch (ExecutionException e) {
-            log.debug("Error counting vote from: {} on: {}", destination.member().getId(), params.member().getId());
+            log.debug("Error anchoring from: {} on: {}", destination.member().getId(), params.member().getId(),
+                      e.getCause());
+            return true;
         }
         if (store.firstGap(start.get(), end).equals(end)) {
             validateAnchor();
@@ -257,7 +261,7 @@ public class Bootstrapper {
         log.debug("Attempting view chain completion ({} to {}) with: {} on: {}", start.get(), end,
                   link.getMember().getId(), params.member().getId());
         long seed = Entropy.nextBitsStreamLong();
-        ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks(),
+        ULongBloomFilter blocksBff = new BloomFilter.ULongBloomFilter(seed, params.bootstrap().maxViewBlocks() * 2,
                                                                       params.combine().falsePositiveRate());
         start.set(store.lastViewChainFrom(start.get()));
         store.viewChainFrom(start.get(), end).forEachRemaining(h -> blocksBff.add(h));

@@ -80,7 +80,7 @@ public class ReliableBroadcaster {
             private int             bufferSize         = 1500;
             private int             deliveredCacheSize = 1_000;
             private DigestAlgorithm digestAlgorithm    = DigestAlgorithm.DEFAULT;
-            private double          falsePositiveRate  = 0.0125;
+            private double          falsePositiveRate  = 0.00125;
             private int             maxMessages        = 500;
 
             public Parameters build() {

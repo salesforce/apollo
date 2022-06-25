@@ -104,11 +104,20 @@ public interface Dag {
             return read(() -> {
                 var decoded = decode(id);
                 if (decoded.epoch() != epoch) {
+                    log.trace("Does not contain: {} wrong epoch: {} on: {}", decoded, epoch, config.logLabel());
                     return null;
                 }
                 var fiber = heightUnits.getFiber(decoded.height());
+                if (fiber == null) {
+                    log.trace("Does not contain: {} no height fiber on: {}", decoded, config.logLabel());
+                    return false;
+                }
+                if (fiber.get(decoded.creator()).isEmpty()) {
+                    log.trace("Does not contain: {} on: {}", decoded, config.logLabel());
+                    return false;
+                }
 
-                return fiber == null ? false : !fiber.get(decoded.creator()).isEmpty();
+                return true;
             });
         }
 
@@ -195,6 +204,7 @@ public interface Dag {
                 updateUnitsOnLevel(unit);
                 units.put(unit.hash(), unit);
                 updateMaximal(unit);
+                log.trace("Inserted: {}:{} on: {}", v.hash(), v, config.logLabel());
                 for (var hook : postInsert) {
                     hook.accept(unit);
                 }
@@ -405,6 +415,8 @@ public interface Dag {
             final var parentsByCreator = su.get(creator);
             if (parentsByCreator.isEmpty()) {
                 parentsByCreator.add(u);
+            } else {
+                parentsByCreator.add(0, u);
             }
         }
 
@@ -413,7 +425,13 @@ public interface Dag {
                 levelUnits.extendBy(10);
             }
             var su = levelUnits.getFiber(u.level());
-            su.get(u.creator()).add(u);
+            var creator = u.creator();
+            final var parentsByCreator = su.get(creator);
+            if (parentsByCreator.isEmpty()) {
+                parentsByCreator.add(u);
+            } else {
+                parentsByCreator.add(0, u);
+            }
 
         }
     }

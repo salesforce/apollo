@@ -196,7 +196,7 @@ public class Adder {
         locked(() -> {
             assert u.creator() == conf.pid();
             round = u.height();
-            log.trace("Producing unit: {} on: {}", u, conf.logLabel());
+            log.trace("Producing unit: {}:{} on: {}", u.hash(), u, conf.logLabel());
             final var wpu = new Waiting(u.toPreUnit(), u.toPreUnit_s());
             checkIfMissing(wpu);
             checkParents(wpu);
@@ -545,6 +545,8 @@ public class Adder {
                     log.trace("Waiting: {} for parent: {} on: {}", wp, par, conf.logLabel());
                 } else {
                     if (!dag.contains(parentID)) {
+                        log.trace("Missing: {} for: {} not found in DAG on: {}", PreUnit.decode(parentID), wp,
+                                  conf.logLabel());
                         wp.incMissing();
                         registerMissing(parentID, wp);
                     }
