@@ -78,9 +78,49 @@ public interface Reconfiguration {
             }
         },
         PROTOCOL_FAILURE {
+            @Override
+            public Transitions assembled() {
+                return null;
+            }
+
+            @Override
+            public Transitions certified() {
+                return null;
+            }
+
+            @Override
+            public Transitions complete() {
+                return null;
+            }
+
+            @Override
+            public Transitions election() {
+                return null;
+            }
+
+            @Override
+            public Transitions failed() {
+                return null;
+            }
+
+            @Override
+            public Transitions gathered() {
+                return null;
+            }
+
+            @Override
+            public Transitions nominated() {
+                return null;
+            }
+
             @Entry
             public void terminate() {
                 context().failed();
+            }
+
+            @Override
+            public Transitions validation() {
+                return null;
             }
         },
         RECONFIGURE {
@@ -118,7 +158,7 @@ public interface Reconfiguration {
         }
 
         default Transitions complete() {
-            throw fsm().invalidTransitionOn();
+            return Reconfigure.RECONFIGURE;
         }
 
         default Transitions election() {

@@ -89,7 +89,7 @@ public class Producer {
             if (dropped != 0) {
                 log.warn("Dropped txns: {} on: {}", dropped, params().member().getId());
             }
-            assembly.get().election();
+            assembly.get().finalElection();
             if (assembled.get()) {
                 assembled();
             }

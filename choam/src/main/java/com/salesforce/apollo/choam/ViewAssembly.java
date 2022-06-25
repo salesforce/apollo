@@ -110,6 +110,7 @@ public class ViewAssembly {
 
         @Override
         public void failed() {
+            stop();
             log.error("Failed view assembly for: {} on: {}", nextViewId, params().member());
         }
 
@@ -204,8 +205,26 @@ public class ViewAssembly {
                   params().member().getId());
     }
 
-    void election() {
-        transitions.election();
+    void finalElection() {
+        cancelSlice.set(true);
+        proposals.values()
+                 .stream()
+                 .filter(p -> p.validations.size() >= view.context().majority())
+                 .sorted(Comparator.comparing(p -> p.member.getId()))
+                 .forEach(p -> slate.put(p.member(), joinOf(p)));
+        if (slate.size() >= params().context().majority()) {
+            cancelSlice.set(true);
+            log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
+            transitions.complete();
+        } else {
+            log.error("Failed election, required: {} slate: {} of: {} on: {}", params().context().majority() + 1,
+                      proposals.values()
+                               .stream()
+                               .map(p -> String.format("%s:%s", p.member.getId(), p.validations.size()))
+                               .toList(),
+                      nextViewId, params().member());
+            transitions.failed();
+        }
     }
 
     Consumer<List<Reassemble>> inbound() {

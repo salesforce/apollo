@@ -358,7 +358,7 @@ abstract public class AbstractLifecycleTest {
                                                                 .build())
                                .setProducer(ProducerParameters.newBuilder()
                                                               .setGossipDuration(Duration.ofMillis(10))
-                                                              .setBatchInterval(Duration.ofMillis(100))
+                                                              .setBatchInterval(Duration.ofMillis(10))
                                                               .setMaxBatchByteSize(1024 * 1024)
                                                               .setMaxBatchCount(3000)
                                                               .build())
