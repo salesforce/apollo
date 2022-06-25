@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -84,6 +85,7 @@ public class Creator {
     private final Config                               conf;
     private final DataSource                           ds;
     private final AtomicInteger                        epoch      = new AtomicInteger(0);
+    private final AtomicBoolean                        epochDone  = new AtomicBoolean();
     private final AtomicReference<EpochProofBuilder>   epochProof = new AtomicReference<>();
     private final Function<Integer, EpochProofBuilder> epochProofBuilder;
     private final Queue<Unit>                          lastTiming;
@@ -207,6 +209,7 @@ public class Creator {
         while (timingUnit != null) {
             final int e = epoch.get();
             if (timingUnit.epoch() == e) {
+                epochDone.set(true);
                 log.trace("Finished, last epoch timing unit: {} level: {} on: {}", timingUnit, level, conf.logLabel());
                 return epochProof.get().buildShare(timingUnit);
             }
@@ -240,6 +243,10 @@ public class Creator {
             log.trace("Candidate not set on: {}", conf.logLabel());
             return null;
         }
+        if (epochDone.get()) {
+            log.trace("Epoch finished : {} on: {}", unit, conf.logLabel());
+            return null;
+        }
         final int l = unit.level();
         log.trace("Ready to create epoch: {} candidate level: {} on: {}", epoch.get(), l, conf.logLabel());
         return buildParents();
@@ -256,6 +263,7 @@ public class Creator {
         for (int i = 0; i < conf.nProc(); i++) {
             candidates.set(i, null);
         }
+        epochDone.set(false);
     }
 
     /**
