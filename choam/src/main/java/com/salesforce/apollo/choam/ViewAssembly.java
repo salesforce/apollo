@@ -95,6 +95,7 @@ public class ViewAssembly {
                      .sorted(Comparator.comparing(p -> p.member.getId()))
                      .forEach(p -> slate.put(p.member(), joinOf(p)));
             if (slate.size() >= params().context().majority()) {
+                cancelSlice.set(true);
                 log.debug("Electing slate: {} of: {} on: {}", slate.size(), nextViewId, params().member());
                 transitions.complete();
             } else {
