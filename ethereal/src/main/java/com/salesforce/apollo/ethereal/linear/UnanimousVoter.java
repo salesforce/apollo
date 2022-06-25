@@ -61,13 +61,11 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
                 AtomicReference<Vote> decision = new AtomicReference<>(Vote.UNDECIDED);
 
                 var commonVote = voter.lazyCommonVote(level);
-                voter.dag.iterateUnitsOnLevel(level, primes -> {
-                    for (var v : primes) {
-                        Vote vDecision = decide(v);
-                        if (vDecision != Vote.UNDECIDED && vDecision == commonVote.get()) {
-                            decision.set(vDecision);
-                            return false;
-                        }
+                voter.dag.iterateUnitsOnLevel(level, prime -> {
+                    Vote vDecision = decide(prime);
+                    if (vDecision != Vote.UNDECIDED && vDecision == commonVote.get()) {
+                        decision.set(vDecision);
+                        return false;
                     }
                     return true;
                 });
@@ -231,12 +229,12 @@ public record UnanimousVoter(Dag dag, Unit uc, Map<Digest, Vote> votingMemo, Str
             return Vote.UNDECIDED;
         }
         if (roundDiff == 3) {
-            log.trace("Common vote level: {} is asked on the zero vote round diff: {} on: {}", level, 3, logLabel);
+            log.trace("Common vote level: {} is asked on the zero vote round diff: {} on: {}", level, level, logLabel);
             return Vote.UNPOPULAR;
         }
-        if (roundDiff <= 3) {
-            log.trace("Common vote popular level: {} as round diff: {} is <= than the determinist prefix: {} on: {}",
-                      level, roundDiff, 3, logLabel);
+        if (roundDiff <= DETERMINISTIC_VOTE_PREFIX) {
+            log.trace("Common vote popular level: {} as round diff: {} is <= than the deterministic prefix: {} on: {}",
+                      level, roundDiff, DETERMINISTIC_VOTE_PREFIX, logLabel);
             return Vote.POPULAR;
         }
         if (roundDiff % 2 == 1) {

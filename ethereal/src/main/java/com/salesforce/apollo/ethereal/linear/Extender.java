@@ -124,11 +124,9 @@ public class Extender {
                                                                                          logLabel)));
     }
 
-    private List<Unit> permutation(int level, List<List<Unit>> unitsOnLevel, Unit previousTU) {
+    private List<Unit> permutation(int level, List<Unit> unitsOnLevel, Unit previousTU) {
         final var pidOrder = pidOrder(level, previousTU);
-        List<Unit> permutation = pidOrder.stream()
-                                         .map(s -> unitsOnLevel.get(s).isEmpty() ? null : unitsOnLevel.get(s).get(0))
-                                         .toList();
+        List<Unit> permutation = pidOrder.stream().map(s -> unitsOnLevel.get(s)).toList();
         if (log.isTraceEnabled()) {
             log.trace("CRP level: {} permutation: {} pidOrder: {} previous: {} on: {}", level,
                       permutation.stream().map(e -> e == null ? null : e.shortString()).toList(), pidOrder,

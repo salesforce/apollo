@@ -37,11 +37,9 @@ public class DagTest {
         for (short pid = 0; pid < dag.nProc(); pid++) {
             result.put(pid, new HashMap<>());
         }
-        dag.iterateMaxUnitsPerProcess(units -> {
-            for (Unit u : units) {
-                if (!traversed.contains(u.hash())) {
-                    traverse(u, traversed, result);
-                }
+        dag.iterateMaxUnitsPerProcess(u -> {
+            if (u != null && !traversed.contains(u.hash())) {
+                traverse(u, traversed, result);
             }
         });
         return result;

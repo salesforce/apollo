@@ -269,7 +269,7 @@ public interface Unit extends PreUnit {
      */
     default int computeForkingHeight(Dag dag) {
         if (dealing()) {
-            if (dag.maximalUnitsPerProcess().get(creator()).size() > 0) {
+            if (dag.maximalUnitsPerProcess().get(creator()) != null) {
                 return -1;
             } else {
                 return Integer.MAX_VALUE;
@@ -278,11 +278,9 @@ public interface Unit extends PreUnit {
         var u = predecessor();
         if (u instanceof unitInDag predecessor) {
             var found = false;
-            for (Unit v : dag.maximalUnitsPerProcess().get(creator())) {
-                if (v.equals(predecessor)) {
-                    found = true;
-                    break;
-                }
+            Unit v = dag.maximalUnitsPerProcess().get(creator());
+            if (predecessor.equals(v)) {
+                found = true;
             }
             if (found) {
                 return predecessor.forkingHeight;
